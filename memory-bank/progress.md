@@ -45,6 +45,14 @@
 
 ## Phase 3: Tools, Memory, and Refinement
 
+- **[COMPLETED] Step 3.0: Restructure Config/Data Directories**
+  - Separated static configuration (`/config`) from dynamic runtime data (`/data`).
+  - Static agent definitions (base context, prompts) now reside in `/config/agents/<agent_name>/`.
+  - Dynamic agent data (outputs, memory) will reside in `/data/agents/<agent_name>/`.
+  - Updated `config/settings.yaml` with new paths (`config.base_dir`, `config.agents_dir`, etc.).
+  - Refactored `ContextManager` to load static agent context from the new config path.
+  - Updated `ContextManager` tests (`temp_dirs` fixture, assertions) to match the new structure.
+
 - **[ ] Step 3.1: File Writing Tool**
   - Define a mechanism/format for the LLM to request writing to a file (e.g., function call signature, specific output format like JSON/XML).
   - Implement a `FileWriterTool` class/function (e.g., in `src/tools/file_writer.py`) that takes `filename` and `content` (potentially `mode` like 'append'/'overwrite').

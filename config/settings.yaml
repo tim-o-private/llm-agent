@@ -8,11 +8,15 @@ llm:
   temperature: 0.7
   max_tokens: 2048
 
+config:
+  base_dir: config/
+  agents_dir: agents/ # Static agent definitions (prompts, base context)
+
 data:
-  base_dir: data/
-  global_context_dir: global_context/
-  agents_dir: agents/
-  tools_dir: tools/
+  base_dir: data/     # Base for dynamic runtime data
+  global_context_dir: global_context/ # Dynamic global context (if any)
+  agents_dir: agents/ # Dynamic agent data (memory, outputs, cache)
+  tools_dir: tools/   # Dynamic tool data/cache
 
 cli:
   default_command: ask
