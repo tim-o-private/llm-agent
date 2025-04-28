@@ -1,0 +1,7 @@
+project_details:
+  name: Test Project Alpha
+  goal: Verify context integration in llm-agent.
+  key_fact: "The secret codeword for Project Alpha is 'zircon'."
+relevant_notes:
+  - Context should be passed as a system message.
+  - The LLM should be able to recall information from this context. 

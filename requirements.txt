@@ -1,0 +1,6 @@
+python-dotenv>=1.0.0
+PyYAML>=6.0
+langchain>=0.3.24
+langchain-google-genai>=2.0.10,<2.1.0
+click>=8.0.0
+pytest>=8.0.0

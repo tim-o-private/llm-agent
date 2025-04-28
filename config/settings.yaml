@@ -1,0 +1,22 @@
+app:
+  name: Local LLM Terminal Environment
+  version: 0.1.0
+
+llm:
+  provider: gemini
+  model: gemini-1.5-flash
+  temperature: 0.7
+  max_tokens: 2048
+
+data:
+  base_dir: data/
+  global_context_dir: global_context/
+  agents_dir: agents/
+  tools_dir: tools/
+
+cli:
+  default_command: ask
+
+logging:
+  level: INFO
+  file: logs/app.log
