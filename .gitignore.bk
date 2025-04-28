@@ -1,0 +1,5 @@
+.venv/
+__pycache__/
+*.pyc
+config/settings.yaml # If you store sensitive info directly in settings.yaml
+.env # Important if you use a .env file for API keys
