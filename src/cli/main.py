@@ -179,7 +179,7 @@ def load_agent_executor(agent_name: str, effective_log_level: int) -> AgentExecu
         'model': config_loader.get('llm.model', 'gemini-1.5-flash'),
         'google_api_key': config_loader.get('GOOGLE_API_KEY'),
         'temperature': config_loader.get('llm.temperature', 0.7),
-        'convert_system_message_to_human': True # Still needed for Gemini
+        # 'convert_system_message_to_human': True # Removed - likely deprecated/unnecessary
     }
     if agent_meta.get('model_parameters'):
         llm_settings.update(agent_meta['model_parameters'])
