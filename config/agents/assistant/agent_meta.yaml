@@ -1,0 +1,7 @@
+description: "A helpful general-purpose AI assistant."
+model_parameters: 
+  temperature: 0.75
+tools: 
+  - file_management # Enable the toolkit
+prompt:
+  system_message_file: "system_prompt.md" 
