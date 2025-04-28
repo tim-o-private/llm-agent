@@ -53,23 +53,33 @@
   - Refactored `ContextManager` to load static agent context from the new config path.
   - Updated `ContextManager` tests (`temp_dirs` fixture, assertions) to match the new structure.
 
-- **[ ] Step 3.1: File Writing Tool**
-  - Define a mechanism/format for the LLM to request writing to a file (e.g., function call signature, specific output format like JSON/XML).
-  - Implement a `FileWriterTool` class/function (e.g., in `src/tools/file_writer.py`) that takes `filename` and `content` (potentially `mode` like 'append'/'overwrite').
-  - Ensure the tool writes files *only* within a safe, agent-specific directory (e.g., `data/agents/<agent_name>/output/`). Handle path validation and errors.
-  - Modify the main application flow (`cli/main.py` or `LLMInterface`) to:
-    - Inform the LLM about the tool's availability and usage.
-    - Detect tool use requests in the LLM response.
-    - Parse arguments (filename, content) from the response.
-    - Execute the `FileWriterTool`.
-    - Optionally, report the execution outcome (success/failure) back to the LLM.
-  - Add tests for the `FileWriterTool`.
+- **[COMPLETED] Step 3.1: File Writing Tool**
+  - Decided to use LangChain's built-in `FileManagementToolkit` instead of a custom tool.
+  - Added `load_tools` function in `cli/main.py`.
+  - When `file_management` is listed in an agent's `agent_meta.yaml` (`tools` list), `load_tools` instantiates `FileManagementToolkit` with `root_dir` set to the agent-specific output directory (`data/agents/<agent_name>/output/`) for sandboxing.
+  - Ensured the `AgentExecutor` in `load_agent_executor` is created with the loaded tools.
+  - Verified via manual testing in the `chat` REPL that the agent can successfully use the `write_file` tool from the toolkit to write a file within its designated output directory.
 
-- **[ ] Step 3.2: Memory Implementation (Placeholder)**
-  - Design and implement conversation history storage.
+- **[IN PROGRESS] Step 3.2: Interactive REPL Implementation**
+  - Created new `chat` command in `src/cli/main.py`.
+  - Implemented agent loading (`load_agent_executor`) which reads `agent_meta.yaml`, loads the specified system prompt, combines it with other static context files loaded via `ContextManager`, creates LLM instance, and builds `AgentExecutor` using `create_tool_calling_agent`.
+  - Integrated `prompt_toolkit` for user input with history.
+  - Implemented REPL loop handling user input, `/exit`, and `/agent <name>` commands.
+  - Implemented per-agent in-memory conversation history (`ConversationBufferMemory`) using a dictionary, allowing state persistence when switching agents.
+  - **TODO:** Integrate and test specific tools (starting with File Writing). 
 
-- **[ ] Step 3.3: Tool Loading/Discovery (Placeholder)**
-  - Implement a way to load tools dynamically based on configuration or agent needs.
+- **[ ] Step 3.3: Memory Implementation (Placeholder)**
+  - Design and implement conversation history storage compatible with the REPL loop and AgentExecutor.
 
-- **[ ] Step 3.4: Refine Context Formatting/Prompting (Placeholder)**
+- **[ ] Step 3.4: Tool Loading/Discovery (Placeholder)**
+  - Implement a way to load tools dynamically based on configuration or agent needs within the REPL/AgentExecutor setup.
+
+- **[ ] Step 3.5: Refine Context Formatting/Prompting (Placeholder)**
   - Improve how context is presented to the LLM.
+
+- **[ ] Step 3.6: Optimize Memory Usage (Placeholder)**
+  - Investigate strategies for managing long-term conversation memory (e.g., `ConversationSummaryBufferMemory`, `ConversationTokenBufferMemory`, custom summarization via LLM) to prevent excessive RAM usage in long sessions.
+
+- **[ ] Step 3.7: Address LangChain Warnings (Low Priority)**
+  - Investigate `LangChainDeprecationWarning` for `ConversationBufferMemory` and `UserWarning` for `convert_system_message_to_human`.
+  - Update to newer patterns/settings if appropriate and feasible to suppress warnings without breaking functionality.

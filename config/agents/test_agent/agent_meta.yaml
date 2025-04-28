@@ -1,0 +1,14 @@
+description: "A model aware of a secret password."
+model_parameters: 
+  temperature: 0.75
+tools: [] # Explicitly set to empty list
+  # - file_management # No tools active yet
+prompt:
+  system_message_file: "system_prompt.md" 
+project_details:
+  name: Test Agent Alpha # Renamed for consistency
+  goal: Verify context integration in llm-agent.
+  key_fact: "The secret codeword for Agent Alpha is 'zircon'."
+relevant_notes:
+  - Context should be passed as a system message.
+  - The LLM should be able to recall information from this context. 
