@@ -60,13 +60,15 @@
   - Ensured the `AgentExecutor` in `load_agent_executor` is created with the loaded tools.
   - Verified via manual testing in the `chat` REPL that the agent can successfully use the `write_file` tool from the toolkit to write a file within its designated output directory.
 
-- **[IN PROGRESS] Step 3.2: Interactive REPL Implementation**
+- **[COMPLETED] Step 3.2: Interactive REPL Implementation**
   - Created new `chat` command in `src/cli/main.py`.
   - Implemented agent loading (`load_agent_executor`) which reads `agent_meta.yaml`, loads the specified system prompt, combines it with other static context files loaded via `ContextManager`, creates LLM instance, and builds `AgentExecutor` using `create_tool_calling_agent`.
   - Integrated `prompt_toolkit` for user input with history.
   - Implemented REPL loop handling user input, `/exit`, and `/agent <name>` commands.
-  - Implemented per-agent in-memory conversation history (`ConversationBufferMemory`) using a dictionary, allowing state persistence when switching agents.
-  - **TODO:** Integrate and test specific tools (starting with File Writing). 
+  - Implemented per-agent in-memory conversation history (`ConversationBufferMemory`) using a dictionary, allowing state persistence when switching agents during a session.
+  - Integrated configurable logging (`--log-level` option) and controlled `AgentExecutor` verbosity.
+  - Integrated ContextManager loading into agent loading process.
+  - *Note:* Specific unit/integration tests for REPL state and agent loading are deferred.
 
 - **[ ] Step 3.3: Memory Implementation (Placeholder)**
   - Design and implement conversation history storage compatible with the REPL loop and AgentExecutor.
