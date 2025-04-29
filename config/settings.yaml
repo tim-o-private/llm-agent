@@ -4,7 +4,7 @@ app:
 
 llm:
   provider: gemini
-  model: gemini-1.5-flash
+  model: gemini-2.5-flash-preview-04-17
   temperature: 0.7
   max_tokens: 2048
 
