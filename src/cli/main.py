@@ -259,7 +259,9 @@ def load_agent_executor(agent_name: str, effective_log_level: int) -> AgentExecu
         prompt_parts.append(system_prompt_content)
         
     full_system_prompt = "\n\n".join(prompt_parts).strip()
-    logger.debug(f"Combined global context, agent config, and system prompt.")
+    logger.debug(f"--- Full System Prompt for Agent '{agent_name}' START ---")
+    logger.debug(full_system_prompt)
+    logger.debug(f"--- Full System Prompt for Agent '{agent_name}' END ---")
 
     # Ensure the prompt isn't empty if context loading somehow failed
     if not full_system_prompt:
@@ -286,8 +288,8 @@ def load_agent_executor(agent_name: str, effective_log_level: int) -> AgentExecu
     agent_executor = AgentExecutor(
         agent=agent, 
         tools=tools, 
-        verbose=executor_verbose,
-        handle_parsing_errors=True
+        verbose=executor_verbose, 
+        handle_parsing_errors=True # Re-enable error handling
     )
     logger.info(f"Agent executor created for '{agent_name}'.")
 
