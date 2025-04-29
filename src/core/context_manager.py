@@ -20,17 +20,16 @@ class ContextManager:
         self.base_data_dir = self.config.get('data.base_dir', 'data/')
         
         # Specific directories
-        # Global context (currently dynamic - could be moved to config if static)
+        # Global context path
         self.global_context_dir = os.path.join(
             self.base_data_dir, 
             self.config.get('data.global_context_dir', 'global_context/')
         )
-        # Static agent definitions
+        # Agent config/data dirs (still needed for path construction elsewhere potentially, keep for now)
         self.config_agents_dir = os.path.join(
             self.base_config_dir,
             self.config.get('config.agents_dir', 'agents/')
         )
-        # Dynamic agent data (will be used later for memory/output)
         self.data_agents_dir = os.path.join(
             self.base_data_dir, 
             self.config.get('data.agents_dir', 'agents/')
@@ -90,24 +89,25 @@ class ContextManager:
 
     def get_context(self, agent_name: str | None = None) -> Tuple[Dict, str]:
         """
-        Gathers context from global (data) and optional agent (config) directories.
+        Gathers context ONLY from the global directory.
+        Agent-specific context loading is handled elsewhere.
 
         Args:
-            agent_name: The name of the agent subdirectory under config/agents/
-                        or None to load only global context.
+            agent_name: This argument is now ignored, kept for compatibility?
+                        Consider removing if call sites are updated.
 
         Returns:
             A tuple containing:
-            - A dictionary with the raw context data ('global', 'agent_static').
-            - A formatted string suitable for passing to the LLM.
+            - A dictionary with the raw global context data ('global').
+            - A formatted string of the global context suitable for LLM.
         """
-        # Keys reflect the source: 'global' (from data), 'agent_static' (from config)
-        # Later, we might add 'agent_dynamic' (from data)
-        raw_context = {'global': {}, 'agent_static': {}} 
+        if agent_name:
+             logger.warning("ContextManager.get_context called with agent_name, but it now only loads global context. Agent-specific loading is handled elsewhere.")
+
+        raw_context = {'global': {}} 
         formatted_context_parts = []
 
         # --- Load Global Context (from Data dir) --- 
-        # TODO: Re-evaluate if global context should be static (config) or dynamic (data)
         logger.info(f"Loading global context from: {self.global_context_dir}")
         global_context_data = self._read_context_files(self.global_context_dir)
         raw_context['global'] = global_context_data
@@ -115,31 +115,16 @@ class ContextManager:
             formatted_context_parts.append(
                 self._format_context(global_context_data, "Global Context")
             )
+        else:
+             logger.info("No global context files found.")
 
-        # --- Load Static Agent Context (from Config dir) ---
-        if agent_name:
-            agent_config_dir = os.path.join(self.config_agents_dir, agent_name)
-            logger.info(f"Loading agent static context from: {agent_config_dir}")
-            agent_static_context_data = self._read_context_files(agent_config_dir)
-            raw_context['agent_static'] = agent_static_context_data # Use new key
-            if agent_static_context_data:
-                 formatted_context_parts.append(
-                    # Title clarifies it's the agent's base definition
-                    self._format_context(agent_static_context_data, f"Agent Definition: {agent_name}") 
-                )
-            else:
-                # Log warning if agent config dir specified but no context found
-                logger.warning(f"Agent static context directory specified ({agent_config_dir}) but no valid context files found.")
-                # Add a note to the formatted context
-                formatted_context_parts.append(f"## Agent Definition: {agent_name}\n\nNo static context files found for this agent definition.\n")
-        
-        # --- Load Dynamic Agent Context (from Data dir) --- 
-        # TODO: Implement loading dynamic context (e.g., memory) from self.data_agents_dir
+        # --- REMOVED Agent Static Context Loading ---
+        # --- REMOVED Agent Data Context Loading ---
 
-        # Combine formatted parts
+        # Combine formatted parts (will only contain global context now)
         full_formatted_context = "\n".join(formatted_context_parts).strip()
         
-        logger.debug(f"Raw context loaded: {raw_context}")
-        logger.debug(f"Formatted context: \n{full_formatted_context}")
+        logger.debug(f"Raw global context loaded: {raw_context}")
+        logger.debug(f"Formatted global context: \n{full_formatted_context}")
 
         return raw_context, full_formatted_context
