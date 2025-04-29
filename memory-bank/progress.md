@@ -74,12 +74,12 @@
   - Integrated ContextManager loading into agent loading process.
   - *Note:* Specific unit/integration tests for REPL state and agent loading are deferred.
 
-- **[COMPLETED] Step 3.3: Agent Read/Write & Context Tools**
-  - Modified `load_tools` to scope `file_management` tool to `data/agents/<agent_name>/`.
-  - Added `read_config_tool` using `FileManagementToolkit` scoped read-only to `config/agents/<agent_name>/`, renamed to `read_agent_configuration_file`.
-  - Modified `ContextManager` to load `agent_data_context.md` from `data/agents/<agent_name>/`.
-  - Updated `load_agent_executor` to use full formatted context from `ContextManager`.
-  - Relies on prompt instructions for write permissions.
+- **[COMPLETED] Step 3.3: Agent Context Refactor & Tools**
+  - Renamed agent config file to `agent_config.yaml`.
+  - Simplified context loading: Only global context (`data/global_context/`) and the agent's specified system prompt (`config/agents/<name>/system_prompt.md`) are loaded automatically.
+  - Agent config details (`description`, etc. from `agent_config.yaml`) are formatted and added to the prompt.
+  - Added `read_config_tool` (read-only access to `config/agents/<name>/`) and updated `file_management` tool (R/W access to `data/agents/<name>/`).
+  - Agents rely on prompt instructions + tools to access other context files (e.g., `data/agents/<name>/agent_prompt.md`).
 
 - **[COMPLETED] Step 3.4: Memory Persistence**
   - Implemented saving/loading of conversation history to JSON (`data/agents/<agent_name>/memory/chat_history.json`).
@@ -105,7 +105,7 @@
   - Add integration tests for tool use.
 
 - **[ ] Documentation**
-  - Update README with detailed usage, configuration, etc.
+  - Update README (Done for current state, keep updated).
 
 - **[ ] Optimize Memory Usage (Low Priority)**
   - Investigate strategies for managing long-term conversation memory (e.g., Summarization, Token Buffers).

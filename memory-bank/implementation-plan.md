@@ -139,18 +139,22 @@ The plan is broken down into phases, starting with core components and building 
     -   Added configurable logging (`--log-level`, `--verbose`) controlling both standard logs and `AgentExecutor` verbosity.
 -   **Testing:** Verified manually. Specific unit/integration tests for REPL state deferred.
 
-**Step 3.4: Agent Configuration Read/Write Tools [COMPLETED]**
-- **Goal:** Allow agents to read their own static configuration files and write to their designated data directory.
-- **Files:** `src/cli/main.py` (in `load_tools`), agent configs (`agent_meta.yaml`), `config/settings.yaml`.
+**Step 3.4: Agent Configuration & Context Refactor [COMPLETED]**
+- **Goal:** Simplify context loading and agent configuration.
+- **Files:** `src/cli/main.py`, `src/core/context_manager.py`, agent configs (`agent_config.yaml`, `system_prompt.md`).
 - **Key Functionality:**
-    - Modified `load_tools` in `src/cli/main.py`:
-        - **Write Access:** Updated the `file_management` tool key scope to the agent's specific data directory: `data/agents/<agent_name>/`.
-        - **Read-Only Config Access:** Added handling for `read_config_tool: true` in `agent_meta.yaml` to instantiate `FileManagementToolkit` scoped read-only to `config/agents/<agent_name>/`, renaming the tool to `read_agent_configuration_file`.
-    - Updated `ContextManager` to load `agent_data_context.md` from `data/agents/<agent_name>/`.
-    - Updated `load_agent_executor` to use the full formatted context from `ContextManager` directly.
-    - **Permission Prompting:** Relied on instructions within the agent's system prompt.
-    - **Agent-Specific Permissions:** Deferred.
-- **Testing:** Manually tested via REPL.
+    - Renamed agent config file to `agent_config.yaml`.
+    - Modified `load_agent_executor`:
+        - Loads structured config (tools, params) from `agent_config.yaml`.
+        - Loads the single system prompt file specified in `agent_config.yaml`.
+        - Calls `ContextManager` to get *only* formatted global context.
+        - Formats descriptive keys from `agent_config.yaml` (e.g., description, project_details) as context.
+        - Combines formatted global context, formatted agent config details, and the system prompt content for the final system prompt.
+    - Modified `ContextManager` to only load and format files from the global context directory (`data/global_context/`). Automatic loading of other agent config/data files was removed.
+    - Added `read_config_tool` allowing agents to read files from their config dir if needed (e.g., `agent_config.yaml`, other `.md` files).
+    - Added `file_management` tool allowing agents to read/write files in their data dir (e.g., `agent_prompt.md`).
+    - Agents rely on instructions in their system prompt to use tools for accessing non-automatically loaded context.
+- **Testing:** Manually tested loading, prompt construction, and tool-based file access.
 
 **Step 3.5: Memory Persistence [COMPLETED]**
 
@@ -184,10 +188,9 @@ The plan is broken down into phases, starting with core components and building 
 -   **File(s):** `src/cli/main.py` (prompt creation), agent prompt files.
 
 **Agent Self-Correction/Improvement (Using Data Dir)**
-
--   **Goal:** Allow agents to suggest modifications or store learned preferences in their data directory.
--   **File(s):** Requires careful implementation of file I/O tools (Step 3.2, Step 4.1), prompt engineering.
--   **Key Functionality:** Use the `read_configuration_file` tool (read-only access to `/config`) and the standard `write_file` tool (scoped write access to `/data/agents/<agent_name>/output/` or a dedicated `/data/agents/<agent_name>/editable_state.yaml`) to allow the agent to read its base prompt, read/write its current editable state, and save *suggestions* or *new state* to the designated editable file in the data directory. Core prompt changes remain manual.
+- **Goal:** Allow agents to suggest modifications or store learned preferences in their data directory (e.g., `agent_prompt.md`).
+- **Files:** Requires file I/O tools, prompt engineering.
+- **Key Functionality:** Use `read_agent_configuration_file` (read-only config) and `file_system_write_file` / `file_system_read_file` (R/W data) to allow the agent to read its base prompt/config, read/write `agent_prompt.md`, and save suggestions or state. Core prompt changes remain manual.
 
 ### Refinement, Testing, and Documentation
 
