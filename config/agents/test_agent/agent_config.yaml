@@ -1,8 +1,9 @@
 description: "A model aware of a secret password."
 model_parameters: 
   temperature: 0.75
-tools: [] # Explicitly set to empty list
-  # - file_management # No tools active yet
+tools:
+  - file_management # Grants R/W access to data/agents/test_agent/
+  - read_config_tool # Grants Read access to config/agents/test_agent/
 prompt:
   system_message_file: "system_prompt.md" 
 project_details:

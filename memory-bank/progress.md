@@ -42,8 +42,12 @@
   - `LLMInterface` uses LangChain's `SystemMessage` to include the `system_context` in the messages list sent to the Gemini model (using `convert_system_message_to_human=True`).
   - Verified with a live test using an agent context file (`data/agents/test_agent/context.yaml`) and querying information contained within it.
   - Corrected path configuration in `config/settings.yaml` to ensure context files are loaded from the correct directories (e.g., `data/agents/<name>/`).
+- **[COMPLETED] Step 2.4: Integrate Agent Executor Pattern**
+  - Added `load_agent_executor` function to load agent config, prompt, tools (via `load_tools`), and context.
+  - Uses `create_tool_calling_agent` and `AgentExecutor`.
+  - Integrated `ContextManager` loading into this process.
 
-## Phase 3: Tools, Memory, and Refinement
+## Phase 3: REPL, Tools, and Memory
 
 - **[COMPLETED] Step 3.0: Restructure Config/Data Directories**
   - Separated static configuration (`/config`) from dynamic runtime data (`/data`).
@@ -53,7 +57,7 @@
   - Refactored `ContextManager` to load static agent context from the new config path.
   - Updated `ContextManager` tests (`temp_dirs` fixture, assertions) to match the new structure.
 
-- **[COMPLETED] Step 3.1: File Writing Tool**
+- **[COMPLETED] Step 3.1: File I/O Tools (Initial - Write Only)**
   - Decided to use LangChain's built-in `FileManagementToolkit` instead of a custom tool.
   - Added `load_tools` function in `cli/main.py`.
   - When `file_management` is listed in an agent's `agent_meta.yaml` (`tools` list), `load_tools` instantiates `FileManagementToolkit` with `root_dir` set to the agent-specific output directory (`data/agents/<agent_name>/output/`) for sandboxing.
@@ -70,18 +74,42 @@
   - Integrated ContextManager loading into agent loading process.
   - *Note:* Specific unit/integration tests for REPL state and agent loading are deferred.
 
-- **[ ] Step 3.3: Memory Implementation (Placeholder)**
-  - Design and implement conversation history storage compatible with the REPL loop and AgentExecutor.
+- **[COMPLETED] Step 3.3: Agent Read/Write & Context Tools**
+  - Modified `load_tools` to scope `file_management` tool to `data/agents/<agent_name>/`.
+  - Added `read_config_tool` using `FileManagementToolkit` scoped read-only to `config/agents/<agent_name>/`, renamed to `read_agent_configuration_file`.
+  - Modified `ContextManager` to load `agent_data_context.md` from `data/agents/<agent_name>/`.
+  - Updated `load_agent_executor` to use full formatted context from `ContextManager`.
+  - Relies on prompt instructions for write permissions.
 
-- **[ ] Step 3.4: Tool Loading/Discovery (Placeholder)**
-  - Implement a way to load tools dynamically based on configuration or agent needs within the REPL/AgentExecutor setup.
+- **[COMPLETED] Step 3.4: Memory Persistence**
+  - Implemented saving/loading of conversation history to JSON (`data/agents/<agent_name>/memory/chat_history.json`).
+  - Used `message_to_dict` and `messages_from_dict` for serialization/deserialization.
+  - Refactored saving logic into `save_agent_memory` helper.
+  - History is saved on clean exit and before agent switching via `/agent` command.
 
-- **[ ] Step 3.5: Refine Context Formatting/Prompting (Placeholder)**
+## Phase 4: Backlog / Future Work
+
+- **[NEXT] Implement Additional Tools**
+  - Identify and integrate tools like web search (e.g., Tavily), external document readers, etc.
+  - Define custom tools if needed.
+  - Update `load_tools` to handle new tool configurations.
+
+- **[ ] Refine Context Formatting/Prompting**
   - Improve how context is presented to the LLM.
 
-- **[ ] Step 3.6: Optimize Memory Usage (Placeholder)**
-  - Investigate strategies for managing long-term conversation memory (e.g., `ConversationSummaryBufferMemory`, `ConversationTokenBufferMemory`, custom summarization via LLM) to prevent excessive RAM usage in long sessions.
+- **[ ] Agent Self-Correction/Improvement**
+  - Explore allowing agents to modify their state/preferences within their data directory.
 
-- **[ ] Step 3.7: Address LangChain Warnings (Low Priority)**
-  - Investigate `LangChainDeprecationWarning` for `ConversationBufferMemory` and `UserWarning` for `convert_system_message_to_human`.
-  - Update to newer patterns/settings if appropriate and feasible to suppress warnings without breaking functionality.
+- **[ ] Comprehensive Testing**
+  - Add unit tests for REPL state, agent loading.
+  - Add integration tests for tool use.
+
+- **[ ] Documentation**
+  - Update README with detailed usage, configuration, etc.
+
+- **[ ] Optimize Memory Usage (Low Priority)**
+  - Investigate strategies for managing long-term conversation memory (e.g., Summarization, Token Buffers).
+
+- **[ ] Address LangChain Warnings (Low Priority)**
+  - Investigate `LangChainDeprecationWarning` for `ConversationBufferMemory`.
+  - Update to newer patterns if appropriate.
