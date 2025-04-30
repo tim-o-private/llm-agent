@@ -5,9 +5,9 @@ alwaysApply: false
 ---
 # Project Structure and Requirements
 
-ALWAYS read the contents of the files in /PRDs before writing any code.
-The main product requirements and technical stack are described in [prd.md](mdc:PRDs/prd.md) and [techstack.md](mdc:PRDs/techstack.md).
-After adding a major feature or completing a milestone, update [prd.md](mdc:PRDs/prd.md) and [progress.md](mdc:memory-bank/progress.md).
+ALWAYS read the contents of the files in /memory-bank before writing any code.
+The main product requirements and technical stack are described in [prd.md](mdc:memory-bank/prd.md) and [techstack.md](mdc:memory-bank/techstack.md).
+After adding a major feature or completing a milestone, update [prd.md](mdc:memory-bank/prd.md) and [progress.md](mdc:memory-bank/progress.md).
 
 When adding new tools or capabilities (e.g., file I/O, web search, API calls):
  1. First, search for existing, suitable LangChain tools or integrations.
@@ -16,7 +16,7 @@ When adding new tools or capabilities (e.g., file I/O, web search, API calls):
 
 ## Directory Layout (Conceptual)
 
-- `data/`: User-managed context files (Markdown, YAML)
+- `data/`: Agent-manageable context files (Markdown, YAML)
   - `agents/`: Context and other files to define specific agent behavior
   - `calendar/`: Local calendar data and scheduling preferences
   - `global_context/`: Personal/global context files (bio, communication style, limitations)
@@ -26,7 +26,7 @@ When adding new tools or capabilities (e.g., file I/O, web search, API calls):
   - `managers/`: Project and calendar management modules
   - `cli/`: Command-line interface entry point
   - `utils/`: Helper utilities (config loading, Google auth)
-- `config/`: Application configuration (YAML)
+- `config/`: Application configuration (YAML). Agents cannot directly edit these files.
 - `scripts/`: Utility scripts (setup, migration, sync)
 - `tests/`: Test suite
 - `.gitignore`: Untracked files

@@ -89,12 +89,12 @@
 
 ## Phase 4: REPL Enhancements and Tool Expansion
 
-- **[ ] Step 4.1: Refactor chat helper functions into `src/utils/chat_helpers.py`**
+- **[COMPLETED] Step 4.1: Refactor chat helper functions into `src/utils/chat_helpers.py`**
   - Move `get_memory_file_path` and `save_agent_memory`.
   - Create `src/utils/chat_helpers.py`.
   - Update imports/calls in `main.py`.
 
-- **[ ] Step 4.2: Implement session summary generation and saving**
+- **[COMPLETED] Step 4.2: Implement session summary generation and saving**
   - Create `generate_and_save_summary` helper in `chat_helpers.py`.
   - Add `/summarize` command to REPL.
   - Add automatic summary generation on session exit (`finally` block).
@@ -104,7 +104,16 @@
   - Read `session_summary.md` if it exists at chat start.
   - Print the previous summary to the console.
 
-- **[NEXT] Implement Additional Tools**
+- **[COMPLETED] Step 4.3: Code Refactoring and Organization**
+  - Created path helper module (`src/utils/path_helpers.py`) for standardized path construction
+  - Moved agent loading logic to dedicated module (`src/core/agent_loader.py`)
+  - Enhanced chat helper functions in `src/utils/chat_helpers.py`
+  - Improved configuration management by passing `config_loader` via context
+  - Streamlined CLI interface by removing `ask` command and making `chat` the default
+  - Updated LangChain imports to reduce deprecation warnings
+  - Fixed import errors for `ConversationBufferMemory` and `AgentExecutor`
+
+- **[NEXT] Step 4.4: Implement Additional Tools**
   - Identify and integrate tools like web search (e.g., Tavily), external document readers, etc.
   - Define custom tools if needed.
   - Update `load_tools` to handle new tool configurations.
@@ -127,6 +136,8 @@
 - **[ ] Optimize Memory Usage (Low Priority)**
   - Investigate strategies for managing long-term conversation memory (e.g., Summarization, Token Buffers).
 
-- **[ ] Address LangChain Warnings (Low Priority)**
-  - Investigate `LangChainDeprecationWarning` for `ConversationBufferMemory`.
-  - Update to newer patterns if appropriate.
+- **[PARTIALLY ADDRESSED] Address LangChainDeprecationWarnings**
+  - Updated `ChatMessageHistory` import to use `langchain_community.chat_message_histories`
+  - Kept `ConversationBufferMemory` in `langchain.memory` as it's not available in community package
+  - Kept `AgentExecutor` in `langchain.agents` as it's not available in core package
+  - Some deprecation warnings still remain to be addressed in future updates
