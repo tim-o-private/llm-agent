@@ -172,7 +172,7 @@ The plan is broken down into phases, starting with core components and building 
 
 **Goal:** Improve the chat experience, add more capabilities, and refine existing code.
 
-**Refactor Chat Helpers [NEXT]**
+**Refactor Chat Helpers [COMPLETED]**
 - **Goal:** Improve code organization in `src/cli/main.py`.
 - **Files:** `src/cli/main.py`, `src/utils/chat_helpers.py` (New).
 - **Key Functionality:**
@@ -180,7 +180,7 @@ The plan is broken down into phases, starting with core components and building 
     - Move `get_memory_file_path` and `save_agent_memory` functions from `main.py` to `chat_helpers.py`.
     - Update imports and function calls in `main.py` accordingly.
 
-**Session Summarization [NEXT]**
+**Session Summarization [COMPLETED]**
 - **Goal:** Provide context continuity between chat sessions.
 - **Files:** `src/utils/chat_helpers.py`, `src/cli/main.py`, agent data directories.
 - **Key Functionality:**
@@ -190,6 +190,17 @@ The plan is broken down into phases, starting with core components and building 
     - Call `generate_and_save_summary` automatically in the `finally` block of the `chat` command upon session exit.
     - Print the summary to the console after generation (both on demand and on exit).
     - *Future Enhancement:* Implement logic at the start of the `chat` command to read and display `session_summary.md` if it exists.
+
+**Code Refactoring and Organization [COMPLETED]**
+- **Goal:** Improve code maintainability and reduce complexity.
+- **Files:** `src/utils/path_helpers.py` (New), `src/core/agent_loader.py` (New), `src/cli/main.py`, `src/utils/chat_helpers.py`.
+- **Key Functionality:**
+    - Create `src/utils/path_helpers.py` to extract common path construction logic.
+    - Create `src/core/agent_loader.py` to extract agent loading logic from `main.py`.
+    - Enhance `src/utils/chat_helpers.py` with additional helper functions.
+    - Remove global `config_loader` variable and pass it via Click context.
+    - Remove `ask` command and make `chat` the default command.
+    - Update LangChain imports to reduce deprecation warnings.
 
 **Implement Additional Tools**
 
@@ -201,7 +212,7 @@ The plan is broken down into phases, starting with core components and building 
     -   Update `load_tools` to handle instantiation of new tools based on keys in `agent_meta.yaml`.
 -   **Testing:** Write unit tests for custom tools. Test tool integration manually via REPL.
 
-## Backlog [NEXT]
+## Backlog [COMPLETED]
 
 **Goal:** Add more tools and refine agent behavior. Prioritize based on need.
 

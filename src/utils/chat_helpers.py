@@ -1,60 +1,87 @@
 import os
 import json
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, Tuple, Optional, Any
 
 # Langchain imports needed by helper functions
 from langchain.memory import ConversationBufferMemory
-from langchain_core.messages import message_to_dict
+from langchain_community.chat_message_histories import ChatMessageHistory
+from langchain_core.messages import message_to_dict, messages_from_dict
+import click
+
+# Import path helpers
+from utils.path_helpers import get_agent_memory_dir, get_agent_data_dir
 
 # Type checking imports to avoid circular dependency with main.py or other modules
 if TYPE_CHECKING:
     from langchain.agents import AgentExecutor
     from utils.config_loader import ConfigLoader
+    from core.agent_loader import load_agent_executor
 
 # Get logger for this module
 logger = logging.getLogger(__name__)
 
-# Define config_loader globally ONLY for get_memory_file_path's current structure.
-# Ideally, config_loader would be passed explicitly to get_memory_file_path as well.
-# TODO: Refactor get_memory_file_path to accept config_loader instance.
-try:
-    # Attempt to import and instantiate ConfigLoader for the standalone helper
-    # This might need adjustment based on project structure/entry points
-    from utils.config_loader import ConfigLoader
-    config_loader = ConfigLoader()
-except ImportError:
-    logger.warning("Could not import ConfigLoader in chat_helpers. May affect get_memory_file_path.")
-    config_loader = None # Allow functions to degrade gracefully if needed
+# --- Memory File Path Helpers ---
 
-# --- Memory Handling Helpers ---
-
-def get_memory_file_path(agent_name_for_mem: str) -> str:
+def get_memory_file_path(agent_name_for_mem: str, config_loader: 'ConfigLoader') -> str:
     """Calculates the file path for an agent's chat history JSON file."""
-    # TODO: This function currently relies on a globally loaded config_loader.
-    # It should ideally accept config_loader as an argument for better testability
-    # and explicit dependency management.
-    if not config_loader:
-        # Fallback or raise error if config_loader couldn't be imported/instantiated
-        raise RuntimeError("ConfigLoader instance not available for get_memory_file_path.")
-
-    agent_data_dir = os.path.join(
-        config_loader.get('data.base_dir', 'data/'),
-        config_loader.get('data.agents_dir', 'agents/'),
-        agent_name_for_mem
-    )
-    memory_dir = os.path.join(agent_data_dir, 'memory')
+    memory_dir = get_agent_memory_dir(agent_name_for_mem, config_loader)
     return os.path.join(memory_dir, 'chat_history.json')
 
-def save_agent_memory(agent_name_to_save: str, memory_to_save: ConversationBufferMemory):
-    """Saves the chat history of a specific agent to its JSON file."""
-    # Note: This function calls get_memory_file_path, inheriting its dependency on global config_loader
-    memory_file_to_save = get_memory_file_path(agent_name_to_save)
-    memory_dir = os.path.dirname(memory_file_to_save)
+# --- Memory Management Helpers ---
 
+def get_or_create_memory(
+    agent_name: str, 
+    agent_memories: Dict[str, ConversationBufferMemory], 
+    config_loader: 'ConfigLoader'
+) -> ConversationBufferMemory:
+    """Gets existing memory from file or creates new memory for an agent."""
+    if agent_name in agent_memories:
+        logger.info(f"Reusing in-memory buffer for agent '{agent_name}'")
+        return agent_memories[agent_name]
+
+    # --- Load from file if exists ---
+    memory_file = get_memory_file_path(agent_name, config_loader)
+    loaded_messages = []
+    if os.path.isfile(memory_file):
+        logger.info(f"Attempting to load chat history for '{agent_name}' from {memory_file}")
+        try:
+            with open(memory_file, 'r') as f:
+                data = json.load(f)
+                loaded_messages = messages_from_dict(data)
+            logger.info(f"Successfully loaded {len(loaded_messages)} messages for '{agent_name}'.")
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to decode JSON from {memory_file}: {e}. Starting with empty history.")
+            loaded_messages = [] # Reset on error
+        except IOError as e:
+            logger.error(f"Failed to read memory file {memory_file}: {e}. Starting with empty history.")
+            loaded_messages = [] # Reset on error
+        except Exception as e: # Catch other potential errors during loading/conversion
+             logger.error(f"Unexpected error loading memory from {memory_file}: {e}. Starting with empty history.", exc_info=True)
+             loaded_messages = [] # Reset on error
+    else:
+         logger.info(f"No memory file found at {memory_file} for agent '{agent_name}'. Starting with empty history.")
+
+    # --- Create memory instance using ChatMessageHistory --- 
+    # 1. Create history object with loaded messages
+    chat_history = ChatMessageHistory(messages=loaded_messages)
+    # 2. Create buffer memory, passing the history object
+    new_memory = ConversationBufferMemory(
+        memory_key="chat_history", 
+        return_messages=True,
+        chat_memory=chat_history # Pass the initialized history
+    )
+    logger.debug(f"Initialized memory for '{agent_name}' with {len(loaded_messages)} messages via ChatMessageHistory.")
+
+    agent_memories[agent_name] = new_memory
+    return new_memory
+
+def save_agent_memory(agent_name_to_save: str, memory_to_save: ConversationBufferMemory, config_loader: 'ConfigLoader'):
+    """Saves the chat history of a specific agent to its JSON file."""
+    memory_file_to_save = get_memory_file_path(agent_name_to_save, config_loader)
     try:
         # Ensure memory directory exists
-        os.makedirs(memory_dir, exist_ok=True)
+        os.makedirs(os.path.dirname(memory_file_to_save), exist_ok=True)
 
         # Get messages and convert to list of dicts
         messages = memory_to_save.chat_memory.messages
@@ -75,13 +102,117 @@ def save_agent_memory(agent_name_to_save: str, memory_to_save: ConversationBuffe
     except Exception as e:
          logger.error(f"Unexpected error saving memory for agent '{agent_name_to_save}': {e}", exc_info=True)
 
+# --- Command Processing Helper ---
+
+def process_user_command(
+    user_input: str, 
+    current_agent_name: str, 
+    agent_executor: Optional['AgentExecutor'], 
+    current_memory: Optional[ConversationBufferMemory], 
+    agent_memories: Dict[str, ConversationBufferMemory],
+    config_loader: 'ConfigLoader', 
+    effective_log_level: int
+) -> Tuple[str, Optional['AgentExecutor'], Optional[ConversationBufferMemory], bool]:
+    """Process user commands and return updated state.
+    
+    Returns:
+        Tuple containing (current_agent_name, agent_executor, current_memory, exit_requested)
+    """
+    # Import here to avoid circular imports
+    from core.agent_loader import load_agent_executor
+    
+    if user_input.lower() == '/exit':
+        logger.info("Exit command received. Ending chat session.")
+        click.echo("Exiting chat session.")
+        return current_agent_name, agent_executor, current_memory, True  # Signal to exit
+        
+    elif user_input.lower() == '/summarize':
+        logger.info("User requested session summary.")
+        if agent_executor and current_memory and current_agent_name and config_loader:
+            click.echo("\nGenerating session summary...")
+            summary = generate_and_save_summary(
+                agent_executor, current_memory, current_agent_name, config_loader
+            )
+            click.secho("\n--- Session Summary ---", fg="yellow", bold=True)
+            click.secho(summary, fg="yellow")
+            click.secho("--- End Summary ---\n", fg="yellow", bold=True)
+        elif not config_loader:
+            click.echo("Error: Cannot generate summary. ConfigLoader not available.", err=True)
+        else:
+            click.echo("Error: Cannot generate summary. Agent/memory not loaded.", err=True)
+        return current_agent_name, agent_executor, current_memory, False
+        
+    elif user_input.lower().startswith('/agent '):
+        new_agent_name = user_input[len('/agent '):].strip()
+        if not new_agent_name:
+            click.echo("Error: Please specify an agent name after /agent.")
+            return current_agent_name, agent_executor, current_memory, False
+        
+        if new_agent_name == current_agent_name:
+            click.echo(f"Already using agent: {current_agent_name}")
+            return current_agent_name, agent_executor, current_memory, False
+
+        try:
+            # --- Save previous agent's memory BEFORE switching ---
+            if current_memory and current_agent_name:
+                logger.info(f"Switching agent. Saving current memory for '{current_agent_name}'...")
+                save_agent_memory(current_agent_name, current_memory, config_loader)
+            
+            # --- Load new agent and memory --- 
+            new_memory = get_or_create_memory(new_agent_name, agent_memories, config_loader)
+            new_executor = load_agent_executor(new_agent_name, config_loader, effective_log_level) 
+            
+            # Switch successful
+            logger.info(f"Switching to agent: {new_agent_name}")
+            click.echo(f"Switched to agent: {new_agent_name}")
+            return new_agent_name, new_executor, new_memory, False
+            
+        except (FileNotFoundError, ValueError) as e:
+            logger.warning(f"Failed to switch agent to '{new_agent_name}': {e}")
+            click.echo(f"Error: Could not load agent '{new_agent_name}'. Staying with '{current_agent_name}'.", err=True)
+        except Exception as e:
+            logger.error(f"Unexpected error switching to agent '{new_agent_name}': {e}", exc_info=True)
+            click.echo(f"Error: An unexpected error occurred switching to agent '{new_agent_name}'.", err=True)
+        
+        return current_agent_name, agent_executor, current_memory, False
+    
+    # Regular input to be processed by the agent
+    if not agent_executor or not current_memory:
+        click.echo("Error: Agent executor or memory not loaded. Cannot process query.", err=True)
+        return current_agent_name, agent_executor, current_memory, False
+        
+    try:
+        # --- Manually load variables from memory --- 
+        loaded_memory_vars = current_memory.load_memory_variables({}) 
+        logger.debug(f"Manually loaded memory for {current_agent_name}: {loaded_memory_vars}")
+
+        # --- Manually pass chat_history to invoke --- 
+        response = agent_executor.invoke({
+            "input": user_input, 
+            "chat_history": loaded_memory_vars.get("chat_history", [])
+        }) 
+        
+        output = response.get('output', 'Error: No output found.')
+        
+        # --- Manually save context back to memory object --- 
+        current_memory.save_context({"input": user_input}, {"output": output})
+        logger.debug(f"Manually saved context for {current_agent_name}: input='{user_input}', output='{output[:50]}...'")
+
+        # Use secho for colored output
+        click.secho(f"{output}", fg='cyan')
+    except Exception as e:
+        logger.error(f"Error during agent execution: {e}", exc_info=True)
+        click.echo(f"Error processing query: {e}", err=True)
+        
+    return current_agent_name, agent_executor, current_memory, False
+
 # --- Session Summary Helper ---
 
 def generate_and_save_summary(
     agent_executor: 'AgentExecutor',
     memory: ConversationBufferMemory,
     agent_name: str,
-    config_loader: 'ConfigLoader' # Explicitly require config_loader here
+    config_loader: 'ConfigLoader'
 ) -> str:
     """Generates a session summary using the agent and saves it to a file."""
     if not agent_executor or not memory:
@@ -121,12 +252,7 @@ def generate_and_save_summary(
         logger.info(f"Received summary from agent '{agent_name}'. Length: {len(summary_text)}")
 
         # --- Save the summary to a dedicated file ---
-        agent_data_dir = os.path.join(
-            config_loader.get('data.base_dir', 'data/'),
-            config_loader.get('data.agents_dir', 'agents/'),
-            agent_name,
-            memory,
-        )
+        agent_data_dir = get_agent_data_dir(agent_name, config_loader)
         summary_file_path = os.path.join(agent_data_dir, 'session_log.md')
 
         try:
@@ -142,4 +268,4 @@ def generate_and_save_summary(
         logger.error(f"Error generating or saving session summary for agent '{agent_name}': {e}", exc_info=True)
         # Keep the default error message in summary_text
 
-    return summary_text 
+    return summary_text

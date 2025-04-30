@@ -24,7 +24,8 @@ This document outlines the requirements for building a local, terminal-based env
 
 ## 4. User Stories / Features (Initial Ideas)
 
-* As a user, I want to define different project contexts by creating directories and files (Markdown notes, YAML tasks) within a `data/projects/` folder.
+* As a user, I want to define different configuration and agent contexts by creating directories and files (Markdown notes, YAML tasks) within a `config/` folder. Contents of this folder should be read only to agents.
+* As a user, I want agents I create to be able to read and write to files within a `data/` folder. This is so that they can update their own context as needed.
 * As a user, I want to define global context (e.g., personal bio, communication style, personal limitations) in files within a `data/global_context/` folder, such as `personal_bio.md` and `personal_limitations.md`.
 * As a user, I want to interact with a global assistant able to understand and interact with different project contexts depending on the task.
 * As a user, I want to ask the LLM questions or give instructions via the terminal, and have the system automatically load the relevant project context based on the current working directory by default, with the option to specify a different project context via a command-line argument. Global context should always be loaded.

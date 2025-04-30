@@ -80,7 +80,7 @@ This document summarizes the key technologies and tools selected for the Local L
 
 The project will follow a modular structure with clear separation of concerns:
 
-* `data/`: User-managed context files.
+* `data/`: Agent-managed context files.
 * `src/`: Python source code (core, managers, cli, utils).
 * `config/`: Application configuration files.
 * `scripts/`: Utility scripts.
