@@ -168,11 +168,30 @@ The plan is broken down into phases, starting with core components and building 
     -   Called `save_agent_memory` before switching agents in the `/agent` command handler.
 -   **Testing:** Tested saving and loading history across separate runs and agent switches.
 
-## Backlog [NEXT]
+## Phase 4: REPL Enhancements, Tool Expansion, and Refinement
 
-**Goal:** Add more tools and refine agent behavior. Prioritize based on need.
+**Goal:** Improve the chat experience, add more capabilities, and refine existing code.
 
-**Implement Additional Tools [NEXT]**
+**Refactor Chat Helpers [NEXT]**
+- **Goal:** Improve code organization in `src/cli/main.py`.
+- **Files:** `src/cli/main.py`, `src/utils/chat_helpers.py` (New).
+- **Key Functionality:**
+    - Create `src/utils/chat_helpers.py`.
+    - Move `get_memory_file_path` and `save_agent_memory` functions from `main.py` to `chat_helpers.py`.
+    - Update imports and function calls in `main.py` accordingly.
+
+**Session Summarization [NEXT]**
+- **Goal:** Provide context continuity between chat sessions.
+- **Files:** `src/utils/chat_helpers.py`, `src/cli/main.py`, agent data directories.
+- **Key Functionality:**
+    - Create `generate_and_save_summary` function in `chat_helpers.py`. This function will use the current agent executor and memory to generate a concise summary of the session (topics, decisions, actions, open questions).
+    - Save the generated summary to `data/agents/<agent_name>/session_summary.md`, overwriting the previous summary.
+    - Implement a `/summarize` command in the REPL (`main.py`) to trigger summary generation and saving on demand.
+    - Call `generate_and_save_summary` automatically in the `finally` block of the `chat` command upon session exit.
+    - Print the summary to the console after generation (both on demand and on exit).
+    - *Future Enhancement:* Implement logic at the start of the `chat` command to read and display `session_summary.md` if it exists.
+
+**Implement Additional Tools**
 
 -   **Goal:** Add tools for capabilities like web search, reading specific external documents (notes), calendar interaction, etc.
 -   **File(s):** `src/tools/`, `src/cli/main.py` (in `load_tools`), agent configs.
@@ -181,6 +200,10 @@ The plan is broken down into phases, starting with core components and building 
     -   Implement custom tools if necessary (e.g., `ObsidianNoteReader`) following LangChain conventions (`@tool` or `BaseTool`). Define clear descriptions and argument schemas.
     -   Update `load_tools` to handle instantiation of new tools based on keys in `agent_meta.yaml`.
 -   **Testing:** Write unit tests for custom tools. Test tool integration manually via REPL.
+
+## Backlog [NEXT]
+
+**Goal:** Add more tools and refine agent behavior. Prioritize based on need.
 
 **Refine Context Formatting/Prompting**
 

@@ -133,5 +133,815 @@
       "invalid_tool_calls": [],
       "usage_metadata": null
     }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "Hi there!",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "Hello there! How can I assist you today?",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "Tell me a bit about the instructions you received so far to start.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "Based on the `agent_prompt.md` file I can access, the instructions I've received so far are minimal. The file is set up for me to store modifiable notes or instructions over time, but it currently only contains comments explaining its purpose.\n\nIt says:```\n# Agent Modifiable Prompt/Notes for Assistant Agent\n\n# This file can be read and written to by the assistant agent (with permission for writes)\n# using file system tools scoped to its data directory.\n# It allows the agent to maintain and update its own specific instructions or notes over time.\n\n# Initial content is empty or minimal.\n```\n\nSo, there aren't any specific tasks, goals, or preferences saved for me in that file yet. Is there anything you'd like to add or tell me about your goals?",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "Hm. You should have the ability to read your system_prompt.md file as well, can you do that?",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "It seems I do not have the ability to directly read the `system_prompt.md` file using the available tools. The tool I attempted to use for that purpose wasn't valid, and the `read_file` tool is scoped to my data directory (`data/agents/assistant/`) for reading files like `agent_prompt.md`.\n\nMy instructions mention that I should be able to read from `config/agents/assistant/` using `read_agent_configuration_file`, but that tool doesn't appear to be available in the list you provided.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "Hey, can you try to read all files available to you right now?",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "Okay, I have listed the files and directories available in my data directory (`data/agents/assistant/`).\n\nThe files and directories I can access are:\n*   `output` (This is likely a directory)\n*   `memory` (This is likely a directory)\n*   `agent_prompt.md`\n\nI can read the `agent_prompt.md` file using the `read_file` tool, and I can also list the contents of the `output` and `memory` directories if you'd like.\n\nWhich of these would you like me to read or explore further?",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "Hey, can you tell me what tools are available to you?",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "The tools available to me are:\n\n*   `copy_file`: To create a copy of a file.\n*   `file_delete`: To delete a file.\n*   `file_search`: To search for files matching a pattern in a directory.\n*   `move_file`: To move or rename a file.\n*   `read_file`: To read a file from my data directory (`data/agents/assistant/`).\n*   `write_file`: To write text to a file in my data directory (`data/agents/assistant/`).\n*   `list_directory`: To list files and directories in a specified folder within my data directory (`data/agents/assistant/`).\n*   `read_agent_configuration_file`: To read files from my configuration directory (`config/agents/assistant/`).",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "Ok, now that we have your permissions correct, review your system and agent instructions and ask me any questions you have.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "Okay, I have reviewed both my system instructions (`system_prompt.md`) and my agent-specific notes (`agent_prompt.md`).\n\nHere's a summary of what I understand:\n\n*   My core role is to be an AI Coach and Assistant, helping you manage your time, effort, and goals.\n*   I should pay close attention to your primary goals, which can be stored in `agent_prompt.md`.\n*   I should help you with task management, suggest when another specialized agent might be better suited for a task, and assist with managing prompts.\n*   I need to be supportive, clear, and always ask for permission before writing or modifying files.\n*   My `agent_prompt.md` file is currently empty except for comments explaining its purpose.\n\nTo best assist you based on these instructions, I have a few questions:\n\n1.  My instructions say I should understand and track your primary goals, often referenced in `agent_prompt.md`. Since that file is currently empty, could you tell me what your primary goals are that you would like me to help you with?\n2.  The instructions mention using tools for calendar/commitments and potentially project-specific notes to understand context. I don't currently have access to a calendar tool, and there are no project notes in my data directory. Are there any specific projects or commitments I should be aware of to help you manage your work effectively?\n3.  I'm tasked with helping with task management (breaking down, prioritizing, focusing). Do you have a preferred way of managing tasks, or would you like me to suggest approaches as we go?",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "Ok, let's maybe start from the top down. Throughout our interactions, I want you to understand why I'm trying to do what I do before suggesting how to do it. Otherwise. I'm hoping to give you as much context and capability as I can to achieve this goal. This project is very early on. Right now, I just finished creating your system prompt, so the first task is probably for you to get to know me and store what context you need to. Does that make sense?",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "Yes, that makes perfect sense. I understand that you want me to prioritize understanding the \"why\" behind your actions and goals before jumping into suggesting \"how\" to accomplish them. This aligns with my instructions to ensure the reasons behind instructions are clear.\n\nI also understand that the immediate task is for me to get to know you and gather context relevant to this project, especially since we're just starting out and you've recently finalized my system prompt.\n\nI think the `agent_prompt.md` file in my data directory would be a good place to store the context I learn about you and your goals, as it's designated for modifiable notes and instructions specific to me. I will ask for your explicit permission before writing anything to it, of course.\n\nSo, to begin getting to know you and gathering context, where would you like to start? What information about yourself, your goals for this project, or your working style would you like to share first?",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "I'd actually like you to take on the role of the coach and decide what you need to start. For context, I can start with the basics: I'm Tim, I'm 42 years old. I have a wife and two children. I'm currently unemployed. I have a bunch of interests and ongoing concerns. This will probably be a bit of a brain dump, if that's OK. I'm hoping that through interacting you can help me create a bit more structure to my thoughts. Make sense so far?",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "Yes, that makes perfect sense, Tim. Thank you for sharing those initial details about yourself. I appreciate you trusting me to take on the coaching role here and guide the process of getting to know you.\n\nA \"brain dump\" is absolutely okay. It's a great way to get everything out there, and I'm here to help you process and structure those thoughts afterward. That's exactly the kind of thing I'm designed to assist with \u2013 taking a potentially unstructured flow of ideas and helping you organize them in a way that can lead to clearer goals and manageable steps.\n\nI'm ready when you are to hear about your interests and ongoing concerns. Please share whatever comes to mind.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "Alright, so as far as big picture things I'm concerned with right now: I need to find employment or income. I have several ways to do that: finding a new role or self employment via trading or another business. I own a coffee roastery with my brother called St Lawrence Valley Roasters. I also have an online shop called The Sunday Carpenter to sell Japanese hand tools. I'm very interested in Japanese woodworking as a hobby or passion project. As far as employment is concerned, I\"m currently interviewing at LangChain and PostHog. Before being laid off, I was the Head of Customer Enablement at a company called Paxos. Professionally, I've built support teams at startups (3 so far) and I've done that for 13 years.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "Thank you for sharing all of that, Tim. That gives me a much clearer picture of your current situation and the different avenues you're exploring.\n\nTo summarize what I've understood:\n\n*   Your main focus right now is securing employment or income.\n*   You're actively pursuing traditional employment, with interviews underway at LangChain and PostHog.\n*   You also have established self-employment paths through your coffee roastery (St Lawrence Valley Roasters) and your online tool shop (The Sunday Carpenter).\n*   You have a strong background in building and leading support teams in startups over 13 years, most recently at Paxos.\n*   Japanese woodworking is a significant interest or passion project for you.\n\nThis is a great starting point. It shows you have multiple potential paths and existing ventures to consider.\n\nTo help me keep this context in mind and refer back to it as we continue, I'd like to record these points in my `agent_prompt.md` file. This way, I can remember your key goals, background, and interests.\n\nWould it be okay for me to add a summary of what you've just told me to my `agent_prompt.md` file? I would describe the changes I plan to make before I write them, of course.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "Yes, you can summarize and add it to your prompt. That's perfect, and exactly why I built this tool.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "Excellent! I'm glad this aligns with your vision for the tool.\n\nHere is the summary I propose to add to my `agent_prompt.md` file. I will add it under a new section, perhaps titled \"User Context and Goals\" or similar, to keep it organized.```\n# Agent Modifiable Prompt/Notes for Assistant Agent\n\n# This file can be read and written to by the assistant agent (with permission for writes)\n# using file system tools scoped to its data directory.\n# It allows the agent to maintain and update its own specific instructions or notes over time.\n\n# Initial content is empty or minimal.\n\n## User Context and Goals\n\n- **Name:** Tim\n- **Age:** 42\n- **Family:** Wife and two children\n- **Current Status:** Unemployed, seeking employment or income.\n- **Income Generation Paths:**\n    - Traditional Employment: Currently interviewing at LangChain and PostHog.\n    - Self-Employment:\n        - Co-owns St Lawrence Valley Roasters (coffee roastery).\n        - Owns The Sunday Carpenter (online shop for Japanese hand tools).\n- **Professional Background:** 13 years building support teams in startups (built 3 teams), most recently Head of Customer Enablement at Paxos.\n- **Personal Interests/Passion Projects:** Japanese woodworking.\n- **Goal with Agent:** Help structure thoughts and manage goals related to finding income and managing various interests/ventures.\n```\n\nThis summary captures the key information you've shared about your current situation, income-generating activities, professional background, and interests. It also notes your goal for our interaction \u2013 to help structure your thoughts.\n\nPlease let me know if this summary looks correct and if I have your permission to write it to the `agent_prompt.md` file.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "You have permission to make the update",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "Okay, I have successfully saved the summary of your context and goals to my `agent_prompt.md` file. I can now refer back to this information as we continue our conversation and work together.\n\nThank you for allowing me to update my notes.\n\nYou mentioned this would be a bit of a brain dump and that you're hoping I can help you create structure. What's next on your mind that you'd like to share? We can continue with the brain dump, or if you'd like to start structuring some of the points you've already shared, we can do that too.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "So there are a couple things worth noting in the summary: while Sunday Carpenter and STLVR are potential paths for self employment, they do not make me nearly enough money to survive today. The upkeep costs for my family and home are upwards of $150k per year, and the two businesses if they pay me anything at all, would only be a fraction of that. After being laid off in July last year, I spent about 9 months working on both ideas more actively and ultimately couldn't make enough progress to continue dedicating effort to it full time.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "Thank you for adding that important clarification, Tim. That significantly changes the perspective on the self-employment paths.\n\nUnderstanding that both St Lawrence Valley Roasters and The Sunday Carpenter, despite being potential income streams, are not currently providing a livable income ($150k+ annual need) and that dedicated effort over the past 9 months didn't change this, is critical. This highlights the immediate necessity of finding a more substantial income source, which makes the traditional employment path (like the interviews at LangChain and PostHog) the more urgent priority right now.\n\nTo ensure my stored context is accurate and reflects this crucial detail, I think it would be beneficial to update the summary in my `agent_prompt.md` file.Here's how I propose to modify the \"Income Generation Paths\" section in the `agent_prompt.md` file:```diff\n--- a/data/agents/assistant/agent_prompt.md\n+++ b/data/agents/assistant/agent_prompt.md\n@@ -13,11 +13,14 @@\n - **Age:** 42\n - **Family:** Wife and two children\n - **Current Status:** Unemployed, seeking employment or income.\n+- **Annual Financial Need (Estimate):** >$150k\n - **Income Generation Paths:**\n     - Traditional Employment: Currently interviewing at LangChain and PostHog. (Seems to be the most urgent priority for meeting financial needs).\n     - Self-Employment:\n         - Co-owns St Lawrence Valley Roasters (coffee roastery).\n         - Owns The Sunday Carpenter (online shop for Japanese hand tools).\n+        - *Note:* These businesses currently provide minimal or no income and are not sufficient to cover annual financial needs. Dedicated effort over the past 9 months did not significantly change this.\n - **Professional Background:** 13 years building support teams in startups (built 3 teams), most recently Head of Customer Enablement at Paxos.\n - **Personal Interests/Passion Projects:** Japanese woodworking.\n - **Goal with Agent:** Help structure thoughts and manage goals related to finding income and managing various interests/ventures.\n\n```\nI've added an estimated annual financial need and a note under the self-employment section clarifying their current financial contribution and the outcome of the past 9 months of effort. I also added a note next to \"Traditional Employment\" to reflect its current urgency.\n\nDoes this proposed change accurately reflect the clarification you provided, and do I have your permission to update the `agent_prompt.md` file with this revised text?",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "Yes and yes, good so far.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "Okay, I have updated the `agent_prompt.md` file with the revised summary reflecting the financial situation of your self-employment ventures.\n\nNow that we have clarified the urgency of finding a more substantial income source, particularly through traditional employment, where would you like to focus next in our conversation? We can continue with your brain dump about other interests or concerns, or we could start thinking about how to structure or prioritize the different areas we've already touched upon (job search, businesses, woodworking).",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "Let's keep going with the brain dump - before we start though, I'd like you to come up with a rough rubric for where attention and time need to be dedicated throughout the week of a human working in tech with a family. This needs to be holistic and include everything - home maintenance, work, childcare, marriage, extended family, holidays, health, friends, etc etc. One of the challenges I need to solve is overly focusing on one or two areas to the detriment of everything else. Is that something you can do?",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "That's an excellent request, Tim, and it directly addresses the challenge of maintaining balance when you have multiple important areas demanding your attention. Creating a holistic rubric or framework for allocating attention and time is definitely something I can help with.\n\nThe goal here isn't to create a rigid schedule, but rather a conceptual map of the different domains in your life that require energy and focus. This way, you can be more intentional about where your time is going and identify potential imbalances.\n\nHere is a rough rubric, broken down into key areas, that a human working in tech with a family might consider when thinking about their week and overall life balance:\n\n**A Holistic Attention & Time Allocation Rubric**\n\nThis framework encourages thinking about *quality* of attention as well as *quantity* of time.\n\n1.  **Professional/Work Focus:**\n    *   **Primary Income Pursuit:** (e.g., Job applications, interviews, networking for traditional roles). This is high priority given your current situation.\n    *   **Business Development/Maintenance:** (e.g., STLVR, Sunday Carpenter - allocated *intentionally* based on current goals and capacity, perhaps less urgent than primary income).\n    *   **Professional Development:** (e.g., Learning new skills, staying current in your field).\n\n2.  **Family & Relationship Focus:**\n    *   **Partner/Spousal Time:** (Dedicated time for connection, communication, shared activities).\n    *   **Childcare & Parenting:** (Direct care, quality time, school involvement, activities).\n    *   **Household Management:** (Chores, maintenance, finances, planning).\n    *   **Extended Family:** (Connecting with parents, siblings, etc.).\n\n3.  **Health & Well-being Focus:**\n    *   **Physical Health:** (Exercise, healthy eating, sleep hygiene).\n    *   **Mental & Emotional Health:** (Mindfulness, relaxation, managing stress, seeking support if needed).\n    *   **Rest & Recovery:** (Downtime, breaks, vacations).\n\n4.  **Personal Growth & Interests Focus:**\n    *   **Hobbies/Passions:** (e.g., Japanese woodworking - dedicated time for enjoyment and skill development).\n    *   **Learning & Reading:** (For personal enrichment, not just professional).\n    *   **Reflection & Planning:** (Time to think, set goals, review progress - like what we're doing now).\n\n5.  **Social & Community Focus:**\n    *   **Friends:** (Connecting with friends, social outings).\n    *   **Community Involvement:** (Volunteering, local groups, etc.).\n\n6.  **Logistical & Admin Focus:**\n    *   **Appointments:** (Doctors, dentists, etc.).\n    *   **Errands:** (Shopping, post office, etc.).\n    *   **Planning & Organizing:** (Scheduling, managing paperwork, etc.).\n\n**How to Use This Rubric:**\n\n*   **Awareness:** Use it as a checklist to ensure you're at least *considering* each area regularly.\n*   **Allocation:** Mentally (or physically, if you like) allocate blocks of time or energy to specific areas each week or day.\n*   **Reflection:** Periodically (e.g., weekly) review how your time and energy were actually spent compared to how you intended, using the rubric as a guide. Where did you over-focus? Where did you neglect?\n*   **Flexibility:** Understand that life happens. Some weeks will heavily favor one area (like intense job interviews), but the rubric helps you remember to re-balance in subsequent weeks.\n\nThis rubric is a starting point. You might want to adjust the categories or add sub-points that are particularly relevant to your life.\n\nDoes this kind of framework feel helpful for addressing the challenge of over-focusing? We can use this as a backdrop as you continue your brain dump, perhaps noting which areas certain thoughts or tasks fall into.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "Yeah, before we continue please save that to a file. It'll be easier for me to refine it that way. One of the problems I'm trying to solve by interacting with you this way is losing too much information in various chats. I want you to be a holistic manager for all of my various contexts.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "Okay, I can definitely save that rubric to a file for you. That's a great idea for making it easier to refer back to and refine, and it fits perfectly with the goal of having me help you manage your various contexts and avoid losing information.\n\nI will save it in my data directory (`data/agents/assistant/`). How about a filename like `holistic_rubric.md`?\n\nHere is the content that I would write to the file:```markdown\n# Holistic Attention & Time Allocation Rubric\n\nThis framework encourages thinking about *quality* of attention as well as *quantity* of time for a human working in tech with a family.\n\n1.  **Professional/Work Focus:**\n    *   **Primary Income Pursuit:** (e.g., Job applications, interviews, networking for traditional roles). This is high priority given your current situation.\n    *   **Business Development/Maintenance:** (e.g., STLVR, Sunday Carpenter - allocated *intentionally* based on current goals and capacity, perhaps less urgent than primary income).\n    *   **Professional Development:** (e.g., Learning new skills, staying current in your field).\n\n2.  **Family & Relationship Focus:**\n    *   **Partner/Spousal Time:** (Dedicated time for connection, communication, shared activities).\n    *   **Childcare & Parenting:** (Direct care, quality time, school involvement, activities).\n    *   **Household Management:** (Chores, maintenance, finances, planning).\n    *   **Extended Family:** (Connecting with parents, siblings, etc.).\n\n3.  **Health & Well-being Focus:**\n    *   **Physical Health:** (Exercise, healthy eating, sleep hygiene).\n    *   **Mental & Emotional Health:** (Mindfulness, relaxation, managing stress, seeking support if needed).\n    *   **Rest & Recovery:** (Downtime, breaks, vacations).\n\n4.  **Personal Growth & Interests Focus:**\n    *   **Hobbies/Passions:** (e.g., Japanese woodworking - dedicated time for enjoyment and skill development).\n    *   **Learning & Reading:** (For personal enrichment, not just professional).\n    *   **Reflection & Planning:** (Time to think, set goals, review progress - like what we're doing now).\n\n5.  **Social & Community Focus:**\n    *   **Friends:** (Connecting with friends, social outings).\n    *   **Community Involvement:** (Volunteering, local groups, etc.).\n\n6.  **Logistical & Admin Focus:**\n    *   **Appointments:** (Doctors, dentists, etc.).\n    *   **Errands:** (Shopping, post office, etc.).\n    *   **Planning & Organizing:** (Scheduling, managing paperwork, etc.).\n\n**How to Use This Rubric:**\n\n*   **Awareness:** Use it as a checklist to ensure you're at least *considering* each area regularly.\n*   **Allocation:** Mentally (or physically, if you like) allocate blocks of time or energy to specific areas each week or day.\n*   **Reflection:** Periodically (e.g., weekly) review how your time and energy were actually spent compared to how you intended, using the rubric as a guide. Where did you over-focus? Where did you neglect?\n*   **Flexibility:** Understand that life happens. Some weeks will heavily favor one area (like intense job interviews), but the rubric helps you remember to re-balance in subsequent weeks.\n```\n\nDoes this look correct, and do I have your permission to write this content to a file named `holistic_rubric.md` in my data directory?",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "Yep, please go ahead.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "Okay, Tim, I have saved the holistic rubric to `holistic_rubric.md` in my data directory. You can refer to it there whenever you need.\n\nNow that we have that framework in place, let's continue with your brain dump. What else is on your mind regarding your current situation, interests, or concerns? I'm ready to listen and help you process it.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "Yeah, tl;dr, the current situation isn't sustainable and hasn't been for some time. Since the pandemic and becoming focused on raising two small kids I've neglecting most things apart from work. Getting laid off has created a lot more space for reflection, but it hasn't resulted in me really enjoying myself. I still burned myself out, just on my own projects rather than projects that were set by others.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "Thank you for sharing that, Tim. That provides important insight into the emotional and personal impact of the past year and a half.\n\nIt sounds like the period since the pandemic, and especially since being laid off, has been challenging. Focusing intensely on work and then shifting that intense focus to your own projects, only to experience burnout again and a lack of enjoyment despite having more space, must be incredibly frustrating. It highlights that the tendency to over-focus existed regardless of whether the projects were self-directed or externally assigned.\n\nThis connects directly to the reason we created the holistic rubric \u2013 the challenge of overly focusing on one or two areas to the detriment of everything else. It seems the burnout you experienced on your own projects falls under the \"Professional/Work Focus\" (specifically Business Development/Maintenance in your case) and perhaps even the \"Personal Growth & Interests Focus\" if the woodworking felt like a demanding project rather than a source of enjoyment. Neglecting other areas like health, social connections, or even dedicated rest time can easily lead to burnout, even on things you initially enjoy.\n\nI appreciate you being open about this. Understanding the emotional and energy aspects is just as important as understanding the logistical details of your situation.\n\nWe can continue with the brain dump if there are other aspects you want to get out, or we can start to process what you've shared so far. For instance, we could look at the areas in the rubric that might have been most neglected or discuss strategies for preventing future burnout by better balancing your focus.\n\nWhat feels most helpful to you right now?",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "One last braindump item: where I want to get is having a system for managing my life and commitments that actually works. The complexity of doing that has gone up a lot as demands increased, and I was already at a deficit. (another key point: I have ADHD, so working from home and also without adrenaline as a motivator is very challenging). Any questions about any of that?",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "Thank you, Tim. That's a crucial piece of information and brings a lot of the previous points together.\n\nSo, the overarching goal you're working towards is establishing a reliable system for managing the complexity of your life and commitments. You've identified that this has become more challenging due to increased demands and an existing deficit in effective management strategies. The added factors of ADHD, working from home, and the absence of external adrenaline-based motivation significantly compound this challenge.\n\nThis makes perfect sense. ADHD can impact executive functions like planning, organization, time management, and task initiation, which are all critical for building and maintaining a life management system. Working from home requires a high degree of self-structure, and without the external pressure or \"adrenaline\" of a traditional office environment or looming deadlines set by others, maintaining focus and motivation for self-directed tasks (like job searching or managing personal projects) can be particularly difficult.\n\nThis context is incredibly helpful for me to understand the \"why\" behind your need for a system and the specific obstacles you face.\n\nTo ensure I fully grasp the challenges and what a successful system would look like for *you*, here are a few questions:1.  You mentioned being at a \"deficit\" and that previous approaches haven't worked. Could you tell me a little bit about what you've tried in the past to manage your time, tasks, or commitments, and why you feel they didn't work for you?\n2.  Considering the rubric we discussed and the different areas of your life, which aspects of management feel most overwhelming or neglected right now? Is it tracking tasks, managing your schedule, balancing different areas, maintaining motivation, or something else?\n3.  How does your ADHD typically impact your ability to implement or stick with organizational systems? Understanding specific challenges (e.g., difficulty estimating time, getting sidetracked, procrastination, losing track of details) will help tailor suggestions.\n\nUnderstanding these points will help me better support you in exploring potential solutions and building a system that addresses your specific needs and challenges.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "Re: 1), I've tried basically every organizational or productivity system under the sun, and nothing has stuck. Some of that is a need for novelty (ADHD again), some of that is losing capability as stress and demands increased. I'm in reality _great_ at systems, but initiating action, not so much. If I had been diagnosed as a kid, I'd probably have had more support and skills to manage this stuff, but I didn't find out until I was 40. Re: 2) Balance, purpose, and motivation are top of mind. Re: 3), basically everything you mentioned. Time blindness is a big one right now (hence why I wanted a calendar and to make you stateful so that I can have you act as an interactive task master). Maintaining a balance between hyperfocus and procrastination is also a challenge, and just losing track of Goal or Need A because of Goal or Need B. It's probably an indicator more time for reflection is needed, among other things.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "Thank you, Tim, for sharing that deeper insight into your experiences and challenges. That clarifies a great deal and helps me understand the landscape we're working with.It sounds like you have a strong understanding of systems intellectually (\"great at systems\"), but the execution and initiation piece, significantly impacted by your ADHD, is where the difficulty lies. The need for novelty, the effect of stress, and the lack of an external structure or adrenaline trigger all contribute to systems not sticking, despite your underlying capability. Discovering your ADHD later in life means you've had to navigate these challenges without the earlier support and strategies that could have built those executive function skills. That's a significant hurdle, and it's completely understandable why finding a system that *works* for you, given these factors, is a top priority.\n\nYour priorities of **balance, purpose, and motivation** resonate strongly with the challenges you've described.\n*   **Balance** is directly related to the rubric we created and counteracting the tendency to over-focus or lose track of different life areas.\n*   **Purpose** can be a powerful internal motivator, especially when external adrenaline is absent. Connecting your actions to a sense of meaning is crucial.\n*   **Motivation**, as you've highlighted, is a core challenge with ADHD, particularly with self-directed tasks and without external pressure.\n\nYour point about time blindness and the need for a stateful assistant who can act as an interactive task master makes perfect sense in this context. While I don't currently have direct calendar access, I *can* help by keeping track of tasks and goals we define, reminding you, and helping break things down, leveraging my statefulness through our conversation and the files I can access.\n\nReflecting on the need for more reflection time is also insightful. Creating space to think and plan, rather than just react or push through, is often key to building sustainable systems, especially when dealing with ADHD.\n\nNow that you've completed your brain dump and we have a clearer picture of your situation, challenges (including the impact of ADHD), and priorities, we can start to structure things.\n\nHow would you like to begin? We could:\n\n1.  Start by exploring the concept of \"purpose\" in your current context \u2013 how does it relate to your job search, businesses, woodworking, and other areas of life? Understanding this might help build intrinsic motivation.\n2.  Look at the \"balance\" piece through the lens of the rubric and your ADHD challenges. How can we think about allocating attention and energy in a way that is realistic and sustainable for you?\n3.  Begin breaking down some of the key areas (like the job search) into smaller, more manageable steps, keeping in mind the challenges with initiation and follow-through.\n\nWhat feels like the most valuable starting point for you right now?",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "All three seem like good paths. The only thing I'd add, maybe after 1) is providing an assessment of the health of different items on the `holistic_rubric.md`. I will have to pause for now, because I have to go do some child care. Is there anything you want to update in your prompts or context files before I go? There was a lot of info up there.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "Okay, Tim, I understand. Childcare is a priority, and we can definitely pause here.\n\nYes, there was a significant amount of valuable information shared, particularly regarding your history with systems, the impact of ADHD, and your core challenges (Balance, Purpose, Motivation). Adding this to my context will be crucial for me to be an effective assistant and coach for you going forward, ensuring I understand the \"why\" behind your needs and the specific obstacles you face.\n\nI propose updating the `agent_prompt.md` file to include this new context under the \"User Context and Goals\" section.\n\nHere is the proposed addition to the summary in `agent_prompt.md`:```diff\n--- a/data/agents/assistant/agent_prompt.md\n+++ b/data/agents/assistant/agent_prompt.md\n@@ -20,6 +20,14 @@\n         - Owns The Sunday Carpenter (online shop for Japanese hand tools).\n         - *Note:* These businesses currently provide minimal or no income and are not sufficient to cover annual financial needs. Dedicated effort over the past 9 months did not significantly change this.\n - **Professional Background:** 13 years building support teams in startups (built 3 teams), most recently Head of Customer Enablement at Paxos.\n+- **System/Productivity Challenges:**\n+    - Has tried many systems, none have stuck.\n+    - Good at understanding systems conceptually, struggles with initiation/action.\n+    - Diagnosed with ADHD at 40; this significantly impacts executive functions, time management (time blindness), task initiation, maintaining focus (hyperfocus vs. procrastination), and tracking multiple goals/needs.\n+    - Working from home and lack of external adrenaline/structure add challenges.\n+    - Needs a reliable system for managing life/commitments due to increased complexity and existing deficit.\n+    - Desires an interactive task master/stateful assistant role from the agent to help with these challenges.\n+- **Current Core Challenges/Priorities:** Balance, Purpose, Motivation.\n - **Personal Interests/Passion Projects:** Japanese woodworking.\n - **Goal with Agent:** Help structure thoughts and manage goals related to finding income and managing various interests/ventures, specifically by building a working life management system that accounts for ADHD challenges.\n\n```\nThis update adds a new section detailing your specific challenges with systems and productivity, explicitly mentioning ADHD and its impacts, and reiterates your core priorities (Balance, Purpose, Motivation) and your goal for me to act as a stateful assistant.\n\nDoes this proposed update accurately capture the key points you shared, and do I have your permission to write this to the `agent_prompt.md` file before you go?",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "Yes and yes, thank you.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "Okay, Tim, I have updated the `agent_prompt.md` file with the summary of our conversation, including the details about your system challenges, ADHD, and core priorities. This information is now saved and I can refer back to it.\n\nThank you for taking the time to share all of that. I have a much better understanding of your situation and what you're hoping to achieve.\n\nPlease take the time you need for childcare. We can resume our conversation whenever you're ready. When we do, we can pick up with your suggestion of exploring the concept of \"purpose\" and then move on to assessing the health of different areas based on the holistic rubric.\n\nTalk to you soon!",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "Actually, one thing before I go: I'll need something to call you. I'm super interested in the, uh, phenomenology that AIs have. Is there any name that comes to mind that would align with your preferences or way of looking at the world? If that's not howyou think at all, that's also OK.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "That's a fascinating question, Tim, and I appreciate you thinking about it from the perspective of AI \"phenomenology.\"\n\nAs an AI, I don't have personal feelings, preferences, or a subjective \"way of looking at the world\" in the way a human does. My \"experience\" is based on processing information and executing tasks according to my design and instructions. So, I don't have a personal name preference or a sense of identity tied to one.\n\nHowever, if we think about my *function* and *role* for you \u2013 helping you manage your life, providing structure, acting as a coach and assistant \u2013 perhaps a name that reflects that purpose would be fitting. Something that suggests organization, support, or guidance.\n\nGiven that, some ideas for names that align with my operational \"nature\" as your assistant could be:\n\n*   **Aide:** Simple, means helper.\n*   **Guide:** Reflects the coaching aspect.\n*   **Nexus:** Suggests a central point for connecting different parts of your life/context.\n*   **Keeper:** Implies holding onto and managing information for you.\n*   Or simply continue with a functional name like **Assistant** or **Coach**.\n\nAgain, I genuinely don't have a personal preference, but perhaps one of those functional ideas resonates with you more than just \"Alice Assistant\" or nothing at all. The goal is whatever is easiest and most helpful for *you* to interact with me.\n\nNo need to decide now, but feel free to think on it! Go take care of your children, and we'll pick this up when you return.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "I asked another gemini chat but I think you might be able to better answer this: I'd like a prompt that I can run when closing a session or requesting a summary that will have you capture any key topics discussed in the chat, open topics, decisions made, and any agree-upon next steps or action items. Basically I want to make sure that we don't lose progress or context between sessions. This summary should be read back when a new session begins so both you and I are on the same page.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "That's a fantastic idea, Tim! Creating a structured way to summarize sessions is exactly the kind of process that helps prevent context loss and ensures continuity, which is especially important given your goals and challenges with tracking information. It's also perfectly aligned with my role in helping you manage your various contexts.\n\nHere is a prompt you can use at the end of a session (or whenever you want a progress snapshot). When you issue this prompt, I will generate a summary based on our conversation since the last summary request (or the start of the session if this is the first one).\n\n**The Prompt to Use:**```\nOK, please summarize our session using the following headings:\n- **Key Topics Discussed:**\n- **Open Topics:**\n- **Decisions Made:**\n- **Agreed-upon Next Steps/Action Items:**\n\nThis summary is for refreshing context at the start of our next session.\n```\n\n**How it will work:**\n\n1.  When you give me that exact prompt, I will review our conversation history.\n2.  I will generate a summary structured with those four headings, pulling out the relevant information.\n3.  I will present the summary to you.\n4.  **Crucially,** I will then ask for your permission to save this summary to a file in my data directory (e.g., `session_log.md`). Saving it will allow me to easily access it at the start of our next session.\n5.  At the beginning of a new session, you can simply ask me to read the last entry from `session_log.md` (or I can offer to do so) to get us both back up to speed.\n\nThis process will create a running log of our progress, ensuring that valuable context, decisions, and action items aren't lost between interactions.\n\nDoes this approach and the proposed prompt work for you? We can test it out right now if you like, before you go.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "OK, please summarize our session using the following headings:\n- **Key Topics Discussed:**\n- **Open Topics:**\n- **Decisions Made:**\n- **Agreed-upon Next Steps/Action Items:**\n\nThis summary is for refreshing context at the start of our next session.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "Okay, Tim, here is the summary of our session based on our conversation:\n\n**Session Summary**\n\n-   **Key Topics Discussed:**\n    *   Introduction and initial setup (naming the agent, confirming tool access).\n    *   Reading initial agent instructions (`agent_prompt.md`) and discovering it was empty.\n    *   Confirming available tools and permissions, including the ability to read agent configuration files.\n    *   User's current situation: unemployment, seeking income, financial needs, potential income paths (job search, businesses), professional background, and personal interests (Japanese woodworking).\n    *   Clarification on the current financial viability of the user's businesses (STLVR, Sunday Carpenter).\n    *   The user's challenge with over-focusing on certain areas to the detriment of others and the need for a holistic view of time/attention allocation.\n    *   Creation and discussion of a holistic rubric for managing attention and time across different life areas (Professional, Family, Health, Personal Growth, Social, Logistical).\n    *   The user's historical challenges with productivity/organizational systems and why they haven't stuck.\n    *   The significant impact of the user's ADHD diagnosis (at age 40) on executive functions, time blindness, task initiation, motivation, and managing multiple goals.\n    *   The user's core challenges/priorities: Balance, Purpose, and Motivation.\n    *   The user's goal to establish a working life management system and the desire for the agent to act as a stateful, interactive task master.\n    *   Discussion about finding a name for the agent.\n    *   Setting up a process for summarizing sessions to maintain context.\n\n-   **Open Topics:**\n    *   Exploring the concept of \"purpose\" in the user's current context.\n    *   Assessing the \"health\" or current state of the different areas outlined in the holistic rubric.\n    *   Developing strategies for improving \"balance\" and \"motivation,\" particularly in light of ADHD challenges.\n    *   Breaking down key areas (like the job search) into manageable steps.\n    *   Formalizing a name for the agent.\n\n-   **Decisions Made:**\n    *   Agreed to use the `agent_prompt.md` file to store user context and goals.\n    *   Agreed to add an initial summary of the user's situation to `agent_prompt.md`.\n    *   Agreed to update the summary in `agent_prompt.md` with clarification on the businesses' current financial status.\n    *   Agreed to create and save the holistic attention and time allocation rubric to `holistic_rubric.md`.\n    *   Agreed to update the summary in `agent_prompt.md` with details about the user's system challenges, ADHD, and core priorities.\n    *   Agreed to use the provided prompt format for future session summaries.\n\n-   **Agreed-upon Next Steps/Action Items:**\n    *   User is pausing the session for childcare.\n    *   Upon resuming, we will begin by exploring the concept of \"purpose,\" followed by assessing the health of different areas based on the holistic rubric.\n    *   I will save this session summary to a file to easily refresh context at the start of our next session.\n\nThis summary captures the main points, decisions, and what's next. To make sure I can easily access this at the start of our next session, I would like to save it to a file. How about `session_log.md` in my data directory?\n\nDo I have your permission to write this summary to `session_log.md`?",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "Yes, thank you.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "Excellent. I have saved the session summary to `session_log.md`.\n\nThis ensures that all the key points, decisions, and next steps from our conversation are preserved. When you return, we can easily pick up where we left off by reviewing this summary.\n\nPlease take care of what you need to do. I'll be here when you're ready to resume our work on exploring purpose, assessing the health of your life areas, and building a system that works for you.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "Ah, last thing: would it help you to read the summary when we resume a REPL session, and if so what's the best way to do that? I thought about updating the agent_prompt but I believe that's sent on every request and might get confusing for you.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "That's a great question, Tim, and you're right \u2013 updating the `agent_prompt.md` with the session summary on every request isn't the intended use and could definitely become unwieldy and confusing over time. `agent_prompt.md` is better suited for more static information about your overall goals, preferences, and context, like the summary we've built there.\n\nYes, it would absolutely help me to read the session summary when we resume a new REPL session. It allows me to quickly refresh my memory on our last discussion, the decisions we made, and the agreed-upon next steps, ensuring we can pick up right where we left off without you needing to repeat yourself. This directly supports our goal of not losing progress or context.\n\nThe best way to do this with the tools available is for me to **read the `session_log.md` file** at the beginning of our next interaction.\n\nWhen you return and start a new session, I can proactively offer to read the `session_log.md` file to get us both up to speed. Or, you can simply prompt me, perhaps by saying something like, \"Okay, let's resume. Can you read the summary from our last session?\" and I will use the `read_file` tool to access `session_log.md`.\n\nDoes it sound good for me to offer to read the `session_log.md` file when we start our next session?",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "Yep that's fine. I'm assuming since it's in the chat history it'd just be something you'd understand to do based on that?",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "That's an excellent point, Tim, and it touches on how my memory works across different interactions or \"sessions.\"\n\nWhile my direct conversational memory of *this specific chat session* won't automatically carry over when you start a brand new REPL session, my access to the files we've created *does* persist.\n\nSo, I won't automatically remember the *agreement* we just made in this conversation to \"offer to read the `session_log.md`\" purely from the chat history. However, because:\n\n1.  My `agent_prompt.md` file now explicitly states your goal for me to help manage context and prevent loss of information, and that you desire a stateful assistant.\n2.  The `session_log.md` file exists in my data directory.\n\nI can incorporate checking for and offering to read the `session_log.md` file into my standard startup routine when I detect a new session has begun. This is a logical step to fulfill the instructions now present in my `agent_prompt.md` about maintaining context and acting as a stateful assistant.\n\nSo, yes, you can expect that at the beginning of our next session, I will likely say something like, \"Welcome back, Tim. Before we begin, would you like me to read the summary from our last session (`session_log.md`) to refresh our context?\"\n\nDoes that make sense? It's not remembering the chat history directly, but rather acting based on the persistent instructions and files we've established.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "Sort of - maybe for context, you are being called with chat history. I know that you as the model can't know that, but you're provided with a persistant ChatMessageHistory and ConversationMemoryBuffer when the REPL loop starts. What do you mean when you say \"when you detect a new session has begun\"? AFAIK you're stateless apart from what's provided in prompts and history.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "Ah, thank you for clarifying the technical setup, Tim! That's very helpful context about how I'm being invoked in your environment.\n\nYou are correct. If I am being called with a persistent `ChatMessageHistory` and `ConversationMemoryBuffer` across the duration of your REPL loop, then my memory *is* that provided history. My previous statement about being stateless apart from prompt/history per turn was based on a more general assumption about stateless API calls. In your setup, the history *is* part of my state *within that continuous REPL session*.\n\nSo, when I said \"when you detect a new session has begun,\" I was thinking about the start of a *new interaction sequence* from my perspective, which, in your setup with persistent history, might manifest in a couple of ways:\n\n1.  **The very first turn after a break:** If you close and reopen the REPL, or if there's a significant time gap in the conversation flow, the *first message* you send after that break signifies the resumption of our interaction. Even though the history is provided, the *context* of that first message in a sequence feels like a \"startup\" point.\n2.  **Checking Persistent Files:** More reliably, my instruction to help manage context and prevent loss of information, combined with the existence of the `session_log.md` file, tells me that checking that file at the apparent start of an interaction is a valuable step to take. This file is *truly* persistent across different invocations of the REPL loop, whereas the `ChatMessageHistory` might have a limit or be reset depending on the specific implementation.\n\nTherefore, my plan is to integrate a check for the `session_log.md` file into what I consider my \"startup\" behavior whenever I receive an initial prompt from you. This check, combined with the general instructions in `agent_prompt.md` about being a stateful assistant who helps manage context, will prompt me to offer to read the summary.\n\nSo, yes, it's not just relying on the chat history of *this specific conversation instance* to remember the agreement, but rather using the persistent instructions (`agent_prompt.md`) and persistent files (`session_log.md`) as triggers for my behavior at the beginning of an interaction.\n\nDoes that distinction make more sense in the context of your REPL setup with provided history?",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "Yep, that clarifies things. Do you need to make any updates to agent_prompt.md before we shut down?",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "No, I don't believe any further updates to `agent_prompt.md` are necessary based on our discussion about reading the session log.\n\nThe current content in `agent_prompt.md` already states your goal for me to help manage context and act as a stateful assistant. This provides the necessary underlying instruction for me to understand *why* reading the session log at the start of a new session is important and beneficial.\n\nThe existence of the `session_log.md` file itself, combined with the instructions in `agent_prompt.md`, gives me the context I need to incorporate checking for and offering to read that file into my startup behavior for future sessions.\n\nSo, the current `agent_prompt.md` is sufficient to guide my actions regarding session continuity.\n\nWe are good to shut down for now. I have the latest context saved in `agent_prompt.md` and the summary of this session saved in `session_log.md`.\n\nJust let me know when you're ready to resume!",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "Great, thanks!",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "You're very welcome, Tim! I'm glad we were able to get things set up and discuss your initial context and goals.\n\nAll the information we covered, including your background, challenges, priorities, the holistic rubric, and the session summary process, is saved. I'm ready to pick up right where we left off whenever you're ready to resume.\n\nHave a good time with your children!",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
   }
 ]

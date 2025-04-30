@@ -87,12 +87,29 @@
   - Refactored saving logic into `save_agent_memory` helper.
   - History is saved on clean exit and before agent switching via `/agent` command.
 
-## Phase 4: Backlog / Future Work
+## Phase 4: REPL Enhancements and Tool Expansion
+
+- **[ ] Step 4.1: Refactor chat helper functions into `src/utils/chat_helpers.py`**
+  - Move `get_memory_file_path` and `save_agent_memory`.
+  - Create `src/utils/chat_helpers.py`.
+  - Update imports/calls in `main.py`.
+
+- **[ ] Step 4.2: Implement session summary generation and saving**
+  - Create `generate_and_save_summary` helper in `chat_helpers.py`.
+  - Add `/summarize` command to REPL.
+  - Add automatic summary generation on session exit (`finally` block).
+  - Save summary to `data/agents/<agent_name>/session_summary.md`.
+
+- **[ ] Step 4.3: Display previous session summary on chat start (Placeholder)**
+  - Read `session_summary.md` if it exists at chat start.
+  - Print the previous summary to the console.
 
 - **[NEXT] Implement Additional Tools**
   - Identify and integrate tools like web search (e.g., Tavily), external document readers, etc.
   - Define custom tools if needed.
   - Update `load_tools` to handle new tool configurations.
+
+## Phase 5: Backlog / Future Work
 
 - **[ ] Refine Context Formatting/Prompting**
   - Improve how context is presented to the LLM.

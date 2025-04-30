@@ -12,6 +12,12 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 from utils.config_loader import ConfigLoader
 from core.context_manager import ContextManager
 from core.llm_interface import LLMInterface
+# Import chat helper functions
+from utils.chat_helpers import (
+    get_memory_file_path,
+    save_agent_memory,
+    generate_and_save_summary
+)
 
 # --- Langchain Agent Imports ---
 from langchain.memory import ConversationBufferMemory, ChatMessageHistory
@@ -295,45 +301,6 @@ def load_agent_executor(agent_name: str, effective_log_level: int) -> AgentExecu
 
     return agent_executor
 
-# --- Helper function to get memory file path (moved up for use in save) ---
-def get_memory_file_path(agent_name_for_mem: str) -> str:
-    agent_data_dir = os.path.join(
-        config_loader.get('data.base_dir', 'data/'), 
-        config_loader.get('data.agents_dir', 'agents/'), 
-        agent_name_for_mem
-    )
-    memory_dir = os.path.join(agent_data_dir, 'memory')
-    return os.path.join(memory_dir, 'chat_history.json')
-
-# --- Helper function to save a single agent's memory ---
-def save_agent_memory(agent_name_to_save: str, memory_to_save: ConversationBufferMemory):
-    """Saves the chat history of a specific agent to its JSON file."""
-    memory_file_to_save = get_memory_file_path(agent_name_to_save)
-    memory_dir = os.path.dirname(memory_file_to_save)
-    
-    try:
-        # Ensure memory directory exists
-        os.makedirs(memory_dir, exist_ok=True)
-        
-        # Get messages and convert to list of dicts
-        messages = memory_to_save.chat_memory.messages
-        if not messages:
-            logger.info(f"No history to save for agent '{agent_name_to_save}'. Skipping file write.")
-            return # Return if no messages
-
-        messages_as_dict_list = [message_to_dict(msg) for msg in messages]
-        
-        # Write to JSON file
-        logger.info(f"Saving {len(messages)} messages for agent '{agent_name_to_save}' to {memory_file_to_save}")
-        with open(memory_file_to_save, 'w') as f:
-            json.dump(messages_as_dict_list, f, indent=2)
-        logger.info(f"Successfully saved history for '{agent_name_to_save}'.")
-
-    except IOError as e:
-         logger.error(f"Failed to write memory file {memory_file_to_save} for agent '{agent_name_to_save}': {e}")
-    except Exception as e:
-         logger.error(f"Unexpected error saving memory for agent '{agent_name_to_save}': {e}", exc_info=True)
-
 # --- 'chat' Command (REPL) ---
 @cli.command()
 @click.option(
@@ -363,10 +330,13 @@ def chat(ctx, agent: str, verbose: bool):
     click.echo(f"Starting interactive chat with agent '{agent}'. Type /exit to quit.")
     click.echo("Other commands: /agent <name>")
 
+    # Access the global config_loader instance (needed by generate_and_save_summary)
+    global config_loader 
+
     current_agent_name = agent
     agent_executor = None
-    agent_memories: Dict[str, ConversationBufferMemory] = {} 
-    current_memory = None 
+    agent_memories: Dict[str, ConversationBufferMemory] = {}
+    current_memory = None
 
     def get_or_create_memory(agent_name: str) -> ConversationBufferMemory:
         """Gets existing memory from file or creates new memory for an agent."""
@@ -454,7 +424,26 @@ def chat(ctx, agent: str, verbose: bool):
                 click.echo("Exiting chat session.")
                 break
             
-            if user_input.lower().startswith('/agent '):
+            # --- Add /summarize command ---
+            elif user_input.lower() == '/summarize':
+                 logger.info("User requested session summary.")
+                 if agent_executor and current_memory and current_agent_name and config_loader:
+                     click.echo("\nGenerating session summary...")
+                     # Use imported helper
+                     summary = generate_and_save_summary(
+                         agent_executor, current_memory, current_agent_name, config_loader
+                     )
+                     click.secho("\n--- Session Summary ---", fg="yellow", bold=True)
+                     click.secho(summary, fg="yellow")
+                     click.secho("--- End Summary ---\n", fg="yellow", bold=True)
+                 elif not config_loader:
+                     click.echo("Error: Cannot generate summary. ConfigLoader not available.", err=True)
+                 else:
+                      click.echo("Error: Cannot generate summary. Agent/memory not loaded.", err=True)
+                 continue # Go back to prompt after showing summary
+            # --- End /summarize command ---
+
+            elif user_input.lower().startswith('/agent '):
                 new_agent_name = user_input[len('/agent '):].strip()
                 if not new_agent_name:
                     click.echo("Error: Please specify an agent name after /agent.")
@@ -474,6 +463,7 @@ def chat(ctx, agent: str, verbose: bool):
                     # --- Save previous agent's memory BEFORE switching ---
                     if current_memory and current_agent_name:
                          logger.info(f"Switching agent. Saving current memory for '{current_agent_name}'...")
+                         # Use imported helper
                          save_agent_memory(current_agent_name, current_memory)
                     # --------------------------------------------------
 
@@ -514,7 +504,8 @@ def chat(ctx, agent: str, verbose: bool):
                 current_memory.save_context({"input": user_input}, {"output": output})
                 logger.debug(f"Manually saved context for {current_agent_name}: input='{user_input}', output='{output[:50]}...'")
 
-                click.echo(f"\n{output}")
+                # Use secho for colored output
+                click.secho(f"{output}", fg='cyan')
             except Exception as e:
                 logger.error(f"Error during agent execution: {e}", exc_info=True)
                 click.echo(f"Error processing query: {e}", err=True)
@@ -526,13 +517,33 @@ def chat(ctx, agent: str, verbose: bool):
         logger.error(f"An unexpected error occurred during chat: {e}", exc_info=True)
         click.echo(f"\nAn unexpected error occurred: {e}", err=True)
     finally:
+        # --- Generate and Save Final Summary ---
+        if agent_executor and current_memory and current_agent_name and config_loader:
+             logger.info("Generating final session summary before exit...")
+             click.echo("\nGenerating final session summary...")
+             # Use imported helper
+             summary = generate_and_save_summary(
+                 agent_executor, current_memory, current_agent_name, config_loader
+             )
+             # Only print if summary generation didn't return an error message starting with "Error:"
+             if summary and not summary.startswith("Error:"):
+                 click.secho("\n--- Final Session Summary ---", fg="yellow", bold=True)
+                 click.secho(summary, fg="yellow")
+                 click.secho("--- End Summary ---\n", fg="yellow", bold=True)
+             elif summary: # Print error if summary generation failed but returned something
+                 click.secho(f"\n{summary}\n", fg="red") # Print summary generation errors in red
+             # Otherwise, if summary is empty, log warning handled in helper
+        elif not config_loader:
+             logger.warning("Could not generate final summary: ConfigLoader not available.")
+
         # --- Save all memories on exit using the helper function ---
         logger.info("Chat session ending. Saving chat histories...")
         for agent_name_to_save, memory_to_save in agent_memories.items():
+             # Use imported helper
              save_agent_memory(agent_name_to_save, memory_to_save) # Call helper
         
         logger.info("Finished saving chat histories.")
-        pass 
+        pass # Keep the pass here
 
 # --- Entry Point ---
 if __name__ == '__main__':
