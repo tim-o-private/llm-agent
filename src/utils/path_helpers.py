@@ -1,21 +1,56 @@
 import os
+import sys
 from typing import TYPE_CHECKING
 
 # Type checking imports to avoid circular dependency
 if TYPE_CHECKING:
     from utils.config_loader import ConfigLoader
 
+# New function to determine base path
+def get_base_path():
+    """ Get the base path for the application, handling bundled exe. """
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        # Running in a PyInstaller bundle (e.g., --onedir or --onefile temporary)
+        # For --onedir, _MEIPASS is the bundled directory
+        # For --onefile, _MEIPASS is a temporary directory
+        # In both cases, we want the directory containing the executable for relative data/config
+        return os.path.dirname(sys.executable) # Return dir of executable itself
+        # return sys._MEIPASS # Keep original note, but use dirname(sys.executable)
+    else:
+        # Running as a normal script
+        # Assume this script (path_helpers.py) is in src/utils/
+        # Go up two levels to get the project root where config/ and data/ are
+        return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 def get_agent_data_dir(agent_name: str, config_loader: 'ConfigLoader') -> str:
     """Get the data directory path for a specific agent."""
-    base_data_dir = config_loader.get('data.base_dir', 'data/')
+    base_data_dir_rel = config_loader.get('data.base_dir', 'data/')
     agents_data_subdir = config_loader.get('data.agents_dir', 'agents/')
-    return os.path.join(base_data_dir, agents_data_subdir, agent_name)
+    # Use get_base_path()
+    return os.path.join(get_base_path(), base_data_dir_rel, agents_data_subdir, agent_name)
+
+def get_task_list_dir(agent_name: str, config_loader: 'ConfigLoader') -> str:
+    """Get the task list directory path.
+    If 'data.task_list_dir' in the global config is an absolute path, it is used directly.
+    Otherwise, it's treated as relative to the application's base path and the agent_name is appended.
+    Note: Agent name is NOT appended if the path is absolute.
+    """
+    base_task_list_dir = config_loader.get('data.task_list_dir', '')
+    if os.path.isabs(base_task_list_dir):
+        # If the configured path is absolute, use it directly
+        return base_task_list_dir
+    else:
+        # Otherwise, join it with the application's base path and append agent name
+        return os.path.join(get_base_path(), base_task_list_dir, agent_name)
 
 def get_agent_config_dir(agent_name: str, config_loader: 'ConfigLoader') -> str:
     """Get the configuration directory path for a specific agent."""
-    base_config_dir = config_loader.get('config.base_dir', 'config/')
+    base_config_dir_rel = config_loader.get('config.base_dir', 'config/')
     agents_config_subdir = config_loader.get('config.agents_dir', 'agents/')
-    return os.path.join(base_config_dir, agents_config_subdir, agent_name)
+    # Use get_base_path()
+    # Note: Agent config is bundled WITH the app via --add-data 'config:config'
+    # So the base for *agent* config is relative to the app base path.
+    return os.path.join(get_base_path(), base_config_dir_rel, agents_config_subdir, agent_name)
 
 def get_agent_config_file_path(agent_name: str, config_loader: 'ConfigLoader') -> str:
     """Get the path to an agent's configuration file."""
@@ -31,3 +66,19 @@ def get_agent_output_dir(agent_name: str, config_loader: 'ConfigLoader') -> str:
     """Get the output directory path for a specific agent."""
     agent_data_dir = get_agent_data_dir(agent_name, config_loader)
     return os.path.join(agent_data_dir, 'output')
+
+# Added function to get the base config directory (for settings.yaml)
+def get_config_base_dir(config_loader: 'ConfigLoader') -> str:
+    """Get the base config directory path."""
+    base_config_dir_rel = config_loader.get('config.base_dir', 'config/')
+    return os.path.join(get_base_path(), base_config_dir_rel)
+
+# Added function to get the base data directory (for global context, etc.)
+def get_data_base_dir(config_loader: 'ConfigLoader') -> str:
+    """Get the base data directory path."""
+    base_data_dir_rel = config_loader.get('data.base_dir', 'data/')
+    return os.path.join(get_base_path(), base_data_dir_rel)
+
+# Note: Might need to update other parts of the code (e.g., ContextManager)
+# that construct paths using config values directly without path_helpers.
+# Also need to update ConfigLoader to use get_base_path() for loading settings.yaml.

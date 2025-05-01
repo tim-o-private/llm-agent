@@ -4,5 +4,6 @@ model_parameters:
 tools: 
   - file_management
   - read_config_tool # Enable the toolkit
+  - task_list_management
 prompt:
   system_message_file: "system_prompt.md" 

@@ -4,6 +4,8 @@ import yaml
 from typing import Dict, List, Tuple
 from utils.config_loader import ConfigLoader
 from core.file_parser import read_markdown, read_yaml
+# Import path helpers
+from utils.path_helpers import get_data_base_dir, get_config_base_dir
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -15,26 +17,30 @@ class ContextManager:
     """
     def __init__(self, config: ConfigLoader):
         self.config = config
-        # Base directories
-        self.base_config_dir = self.config.get('config.base_dir', 'config/')
-        self.base_data_dir = self.config.get('data.base_dir', 'data/')
         
-        # Specific directories
-        # Global context path
+        # Get absolute base directories using path helpers
+        # These helpers use get_base_path() internally
+        base_data_path = get_data_base_dir(self.config)
+        base_config_path = get_config_base_dir(self.config)
+
+        # Store the absolute base paths if needed elsewhere, though maybe not
+        # self.base_config_dir_abs = base_config_path
+        # self.base_data_dir_abs = base_data_path
+
+        # Construct absolute paths for specific directories
         self.global_context_dir = os.path.join(
-            self.base_data_dir, 
+            base_data_path, 
             self.config.get('data.global_context_dir', 'global_context/')
         )
-        # Agent config/data dirs (still needed for path construction elsewhere potentially, keep for now)
         self.config_agents_dir = os.path.join(
-            self.base_config_dir,
+            base_config_path,
             self.config.get('config.agents_dir', 'agents/')
         )
         self.data_agents_dir = os.path.join(
-            self.base_data_dir, 
+            base_data_path, 
             self.config.get('data.agents_dir', 'agents/')
         )
-        # TODO: Add paths for tools config/data when needed
+        # TODO: Add paths for tools config/data when needed (using base_data_path or base_config_path)
 
     def _read_context_files(self, directory: str) -> Dict[str, str | Dict]:
         """Reads all .md and .yaml/.yml files in a directory."""
