@@ -17,6 +17,7 @@ data:
   global_context_dir: global_context/ # Dynamic global context (if any)
   agents_dir: agents/ # Dynamic agent data (memory, outputs, cache)
   tools_dir: tools/   # Dynamic tool data/cache
+  task_list_dir: /home/tim/github/obsidian/Personal/Task List
 
 cli:
   default_command: ask

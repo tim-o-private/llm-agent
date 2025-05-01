@@ -100,10 +100,6 @@
   - Add automatic summary generation on session exit (`finally` block).
   - Save summary to `data/agents/<agent_name>/session_summary.md`.
 
-- **[ ] Step 4.3: Display previous session summary on chat start (Placeholder)**
-  - Read `session_summary.md` if it exists at chat start.
-  - Print the previous summary to the console.
-
 - **[COMPLETED] Step 4.3: Code Refactoring and Organization**
   - Created path helper module (`src/utils/path_helpers.py`) for standardized path construction
   - Moved agent loading logic to dedicated module (`src/core/agent_loader.py`)
@@ -113,12 +109,24 @@
   - Updated LangChain imports to reduce deprecation warnings
   - Fixed import errors for `ConversationBufferMemory` and `AgentExecutor`
 
-- **[NEXT] Step 4.4: Implement Additional Tools**
+- **[ON HOLD] Step 4.5: Compile Application into Executable**
+  - [X] Modify `src/utils/path_helpers.py` to handle bundled paths (`get_base_path`).
+  - [X] Modify `src/utils/config_loader.py` to use `get_base_path`.
+  - [X] Review code for direct path manipulations (use helpers instead).
+  - [ ] Use PyInstaller to create a single executable file (`--onedir` initially).
+  - [ ] Configure PyInstaller to handle dependencies and data files (`--add-data 'config:config'). - *Issue: `config` dir not being bundled correctly.* 
+  - [ ] Test executable in clean environment.
+  - [ ] Document build and installation process.
+  - [ ] Consider creating installation packages (e.g., .deb for Ubuntu) - *Deferred*
+  - [ ] Create build scripts for different platforms (Linux, macOS) - *Deferred*
+  - *Note: Task paused due to unresolved issues with PyInstaller's `--add-data` not correctly bundling the config directory. Needs further investigation or potentially manual .spec file editing.* 
+
+
+## Phase 5: Backlog / Future Work
+- **[ ] Implement Additional Tools**
   - Identify and integrate tools like web search (e.g., Tavily), external document readers, etc.
   - Define custom tools if needed.
   - Update `load_tools` to handle new tool configurations.
-
-## Phase 5: Backlog / Future Work
 
 - **[ ] Refine Context Formatting/Prompting**
   - Improve how context is presented to the LLM.

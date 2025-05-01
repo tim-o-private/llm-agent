@@ -11,7 +11,7 @@ from langchain_community.agent_toolkits.file_management.toolkit import FileManag
 
 from utils.config_loader import ConfigLoader
 from core.context_manager import ContextManager
-from utils.path_helpers import get_agent_data_dir, get_agent_config_dir, get_agent_config_file_path
+from utils.path_helpers import get_agent_data_dir, get_agent_config_dir, get_agent_config_file_path, get_task_list_dir
 
 logger = logging.getLogger(__name__)
 
@@ -22,15 +22,33 @@ def load_tools(tool_names: List[str], agent_name: str, config_loader: ConfigLoad
     # Get agent-specific paths using helper functions
     agent_data_dir = get_agent_data_dir(agent_name, config_loader)
     agent_config_dir = get_agent_config_dir(agent_name, config_loader)
-    
+    task_list_dir = get_task_list_dir(agent_name, config_loader)
     # Ensure agent data directory exists
     os.makedirs(agent_data_dir, exist_ok=True)
+    # Ensure task list directory exists
+    os.makedirs(task_list_dir, exist_ok=True)
 
     # --- Standard File Management Tool (Write Access to Data Dir) ---
     if "file_management" in tool_names:
         logger.info(f"Loading FileManagementToolkit (Read/Write) scoped to: {agent_data_dir}")
         toolkit = FileManagementToolkit(root_dir=agent_data_dir)
         tools.extend(toolkit.get_tools())
+    
+    if "task_list_management" in tool_names:
+        logger.info(f"Loading TaskListManagementToolkit (Read/Write) scoped to: {task_list_dir}")
+        toolkit = FileManagementToolkit(root_dir=task_list_dir, selected_tools=["read_file", "write_file"])
+        task_tools = toolkit.get_tools()
+        # Rename tools for clarity and to avoid collisions
+        renamed_task_tools = []
+        for tool in task_tools:
+            if tool.name == "read_file":
+                tool.name = "read_task_list_file"
+                tool.description = f"Reads a file from the agent's task list directory ({task_list_dir}). Use for accessing task details."
+            elif tool.name == "write_file":
+                tool.name = "write_task_list_file"
+                tool.description = f"Writes a file to the agent's task list directory ({task_list_dir}). Use for creating or updating tasks."
+            renamed_task_tools.append(tool)
+        tools.extend(renamed_task_tools)
 
     # --- Read-Only Config Access Tool ---
     if "read_config_tool" in tool_names:
