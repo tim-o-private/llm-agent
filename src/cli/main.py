@@ -2,46 +2,27 @@ import click
 import os
 import logging
 import yaml
-import json
-from typing import List, Dict, Any, Optional
-
-# Add src to path for direct script execution (optional, depends on setup)
+from typing import Dict
+from langchain.memory import ConversationBufferMemory
+from prompt_toolkit import prompt as prompt_toolkit_prompt
+from prompt_toolkit.history import InMemoryHistory
+# Hack. Remove after packaging.
 import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../src')))
-
+# End hack
 from utils.config_loader import ConfigLoader
-from core.context_manager import ContextManager
-from core.llm_interface import LLMInterface
 from core.agent_loader import load_agent_executor
-
-# Import chat helper functions
 from utils.chat_helpers import (
-    get_memory_file_path,
     save_agent_memory,
     generate_and_save_summary,
     get_or_create_memory,
     process_user_command
 )
 
-# --- Langchain Agent Imports ---
-from langchain.memory import ConversationBufferMemory
-from langchain.agents import AgentExecutor
-from langchain_core.tools import BaseTool
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import messages_from_dict
-from langchain_community.chat_message_histories import ChatMessageHistory
-
-# --- Input Handling Imports ---
-from prompt_toolkit import prompt as prompt_toolkit_prompt
-from prompt_toolkit.history import InMemoryHistory
-
 # --- Basic Logging Setup ---
 # Set format only, level will be set dynamically
 logging.basicConfig(format='[%(asctime)s] %(levelname)s [%(name)s] - %(message)s')
 logger = logging.getLogger(__name__) # Get root logger or specific module logger
-
-# No global config_loader - now passed via context
 
 # --- CLI Command Group ---
 @click.group(invoke_without_command=True)
@@ -71,12 +52,6 @@ def cli(ctx, log_level):
     if ctx.invoked_subcommand is None:
         ctx.invoke(chat)
 
-# 'ask' command removed - using 'chat' as the primary interface
-
-# --- Agent Loading Logic ---
-
-# Agent loading logic is now in core/agent_loader.py
-
 # --- 'chat' Command (REPL) ---
 @cli.command()
 @click.option(
@@ -94,7 +69,6 @@ def cli(ctx, log_level):
 def chat(ctx, agent: str, verbose: bool):
     """Start an interactive chat session (REPL) with an agent."""
     
-    # Determine effective log level
     effective_log_level = logging.DEBUG if verbose else ctx.obj['LOG_LEVEL']
     if verbose:
         # Note: We set the root logger level here, affecting all modules
@@ -122,8 +96,8 @@ def chat(ctx, agent: str, verbose: bool):
         # --- Load initial agent and memory ---
         # 1. Get/Create memory first
         current_memory = get_or_create_memory(current_agent_name, agent_memories, config_loader)
-        # 2. Load executor (now doesn't take memory)
-        agent_executor = load_agent_executor(current_agent_name, config_loader, effective_log_level)
+        # 2. Load executor, passing the created memory object
+        agent_executor = load_agent_executor(current_agent_name, config_loader, effective_log_level, current_memory)
 
     except (FileNotFoundError, ValueError, yaml.YAMLError, IOError) as e:
         logger.error(f"Failed to load initial agent '{current_agent_name}': {e}")

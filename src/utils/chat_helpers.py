@@ -158,9 +158,10 @@ def process_user_command(
                 logger.info(f"Switching agent. Saving current memory for '{current_agent_name}'...")
                 save_agent_memory(current_agent_name, current_memory, config_loader)
             
-            # --- Load new agent and memory --- 
+            # --- Load new agent and memory ---
             new_memory = get_or_create_memory(new_agent_name, agent_memories, config_loader)
-            new_executor = load_agent_executor(new_agent_name, config_loader, effective_log_level) 
+            # Pass the new_memory object to load_agent_executor
+            new_executor = load_agent_executor(new_agent_name, config_loader, effective_log_level, new_memory)
             
             # Switch successful
             logger.info(f"Switching to agent: {new_agent_name}")
@@ -179,24 +180,16 @@ def process_user_command(
     # Regular input to be processed by the agent
     if not agent_executor or not current_memory:
         click.echo("Error: Agent executor or memory not loaded. Cannot process query.", err=True)
+        # Ensure we return the memory object even if executor is missing
         return current_agent_name, agent_executor, current_memory, False
-        
-    try:
-        # --- Manually load variables from memory --- 
-        loaded_memory_vars = current_memory.load_memory_variables({}) 
-        logger.debug(f"Manually loaded memory for {current_agent_name}: {loaded_memory_vars}")
 
-        # --- Manually pass chat_history to invoke --- 
-        response = agent_executor.invoke({
-            "input": user_input, 
-            "chat_history": loaded_memory_vars.get("chat_history", [])
-        }) 
-        
+    try:
+        # --- Invoke directly. AgentExecutor handles memory now. ---
+        response = agent_executor.invoke({"input": user_input})
+
         output = response.get('output', 'Error: No output found.')
-        
-        # --- Manually save context back to memory object --- 
-        current_memory.save_context({"input": user_input}, {"output": output})
-        logger.debug(f"Manually saved context for {current_agent_name}: input='{user_input}', output='{output[:50]}...'")
+
+        # --- No manual save_context needed --- 
 
         # Use secho for colored output
         click.secho(f"{output}", fg='cyan')
@@ -238,15 +231,8 @@ def generate_and_save_summary(
     summary_text = "Error: Could not generate summary." # Default error message
     try:
         logger.info(f"Requesting session summary from agent '{agent_name}'...")
-        # Load history manually
-        loaded_memory_vars = memory.load_memory_variables({})
-        history_messages = loaded_memory_vars.get("chat_history", [])
-
-        # Invoke agent with summary prompt and history
-        response = agent_executor.invoke({
-            "input": summary_prompt,
-            "chat_history": history_messages
-        })
+        # --- Invoke directly for summary. AgentExecutor handles memory. ---
+        response = agent_executor.invoke({"input": summary_prompt})
 
         summary_text = response.get('output', 'Error: Agent did not provide summary output.')
         logger.info(f"Received summary from agent '{agent_name}'. Length: {len(summary_text)}")

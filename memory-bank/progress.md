@@ -1,151 +1,119 @@
-# Project Progress
+# Project Progress Log: Local LLM Terminal Environment
 
-## Phase 1: Core Foundation
+This document tracks the development progress of the Local LLM Terminal Environment project.
+
+## Current Focus
+
+- Working on Phase 4: REPL Enhancements, Tool Expansion, and Refinement - specifically focusing on implementing additional tools and getting visibility/token use.
+
+## Completed Steps
+
+### Phase 1: Core Foundation
 
 - **[COMPLETED] Step 1.1: Configuration Loading**
-  - Implemented `ConfigLoader` class in `src/utils/config_loader.py`.
-  - Loads settings from `config/settings.yaml` and `.env`.
-  - Prioritizes environment variables.
-  - Added tests in `tests/utils/test_config_loader.py`.
+    - Implemented `ConfigLoader` class in `src/utils/config_loader.py`.
+    - Loads settings from `config/settings.yaml` and `.env`.
+    - Prioritizes environment variables.
+    - Added tests in `tests/utils/test_config_loader.py`.
 
 - **[COMPLETED] Step 1.2: Context Management (Data Structure)**
-  - Defined `ContextManager` class in `src/core/context_manager.py`.
-  - Initial implementation focuses on loading context from files.
-  - Handles global context and agent-specific contexts (`<agent_name>`).
-  - Base directory configurable via `settings.yaml` (`data.base_dir`, `data.agents_dir`).
-  - Added basic tests in `tests/core/test_context_manager.py`.
+    - Defined `ContextManager` class in `src/core/context_manager.py`.
+    - Initial implementation focuses on loading context from files.
+    - Handles global context and agent-specific contexts (`<agent_name>`).
+    - Base directory configurable via `settings.yaml` (`data.base_dir`, `data.agents_dir`).
+    - Added basic tests in `tests/core/test_context_manager.py`.
 
 - **[COMPLETED] Step 1.3: LLM Interface**
-  - Created `LLMInterface` class in `src/core/llm_interface.py`.
-  - Uses LangChain and `langchain-google-genai`.
-  - Configures model name, temperature, and API key via `ConfigLoader`.
-  - Provides `generate_text` method.
-  - Added basic tests in `tests/core/test_llm_interface.py`.
+    - Created `LLMInterface` class in `src/core/llm_interface.py`.
+    - Uses LangChain and `langchain-google-genai`.
+    - Configures model name, temperature, and API key via `ConfigLoader`.
+    - Provides `generate_text` method.
+    - Added basic tests in `tests/core/test_llm_interface.py`.
 
-## Phase 2: CLI and Core Logic
 
-- **[COMPLETED] Step 2.1: Basic CLI Structure (`ask` command)**
-  - Implemented initial CLI using `click` in `src/cli/main.py`.
-  - Created a basic `ask` command that takes a query.
-  - Instantiates `ConfigLoader`, `ContextManager`, and `LLMInterface`.
-  - Calls `LLMInterface.generate_text` with the query (handling context via `ContextManager`).
-  - Prints the LLM response.
-  - Added tests in `tests/cli/test_main.py` mocking dependencies.
-- **[COMPLETED] Step 2.2: Context Switching Logic**
-  - Modified `ask` command in `src/cli/main.py` to accept an optional `--agent <name>` (`-a <name>`) flag using `click.option` with `type=str`.
-  - If `--agent` is given, the provided `<name>` is passed to `ContextManager.get_context`.
-  - If `--agent` is *not* given, `None` is passed to `ContextManager.get_context`, indicating that only global context should be used.
-  - Removed the requirement for automatic context detection based on CWD/Git.
+### Phase 2: CLI and Agent Framework Setup
+
+- **[COMPLETED] Step 2.1: Basic CLI Structure (towards `chat`)**
+    - Implemented initial CLI structure using `click` in `src/cli/main.py` (originally as `ask`, later refactored into `chat`).
+    - Laid groundwork for instantiating `ConfigLoader`, `ContextManager`, and `LLMInterface`.
+    - Tested basic command invocation and dependency mocking.
+
+- **[COMPLETED] Step 2.2: Context Switching Logic (Agent Selection)**
+    - Added logic to accept an optional `--agent <name>` (`-a <name>`) flag.
+    - Ensured the agent name (or `None` for global-only) was passed to `ContextManager` for context loading.
+    - Removed early ideas about automatic context detection based on CWD/Git, favoring explicit agent selection.
+
 - **[COMPLETED] Step 2.3: Integrating Context into LLM Prompts**
-  - `ContextManager.get_context` returns both raw and formatted context.
-  - The `ask` command in `src/cli/main.py` passes the `formatted_context` string to `LLMInterface.generate_text` via the `system_context` parameter.
-  - `LLMInterface` uses LangChain's `SystemMessage` to include the `system_context` in the messages list sent to the Gemini model (using `convert_system_message_to_human=True`).
-  - Verified with a live test using an agent context file (`data/agents/test_agent/context.yaml`) and querying information contained within it.
-  - Corrected path configuration in `config/settings.yaml` to ensure context files are loaded from the correct directories (e.g., `data/agents/<name>/`).
-- **[COMPLETED] Step 2.4: Integrate Agent Executor Pattern**
-  - Added `load_agent_executor` function to load agent config, prompt, tools (via `load_tools`), and context.
-  - Uses `create_tool_calling_agent` and `AgentExecutor`.
-  - Integrated `ContextManager` loading into this process.
+    - Ensured `ContextManager.get_context` provided formatted context.
+    - Integrated passing the `formatted_context` string to `LLMInterface` (initially for simple calls, later adapted for Agent system prompts).
+    - Verified context inclusion using LangChain's `SystemMessage` mechanism.
 
-## Phase 3: REPL, Tools, and Memory
+- **[COMPLETED] Step 2.4: Introduce Agent Executor Pattern**
+    - Adopted the LangChain Agent Executor pattern for more complex interactions involving tools and memory, used by the `chat` command.
+    - Added `load_agent_executor` function, handling agent config, system prompt, context, LLM, tools, and creating the `AgentExecutor`.
+
+
+### Phase 3: REPL, Tools, and Memory
 
 - **[COMPLETED] Step 3.0: Restructure Config/Data Directories**
-  - Separated static configuration (`/config`) from dynamic runtime data (`/data`).
-  - Static agent definitions (base context, prompts) now reside in `/config/agents/<agent_name>/`.
-  - Dynamic agent data (outputs, memory) will reside in `/data/agents/<agent_name>/`.
-  - Updated `config/settings.yaml` with new paths (`config.base_dir`, `config.agents_dir`, etc.).
-  - Refactored `ContextManager` to load static agent context from the new config path.
-  - Updated `ContextManager` tests (`temp_dirs` fixture, assertions) to match the new structure.
+    - Separated static configuration (`/config`) from dynamic runtime data (`/data`).
+    - Static agent definitions now reside in `/config/agents/<agent_name>/`.
+    - Dynamic agent data will reside in `/data/agents/<agent_name>/`.
+    - Updated `settings.yaml` and `ContextManager`.
 
 - **[COMPLETED] Step 3.1: File I/O Tools (Initial - Write Only)**
-  - Decided to use LangChain's built-in `FileManagementToolkit` instead of a custom tool.
-  - Added `load_tools` function in `cli/main.py`.
-  - When `file_management` is listed in an agent's `agent_meta.yaml` (`tools` list), `load_tools` instantiates `FileManagementToolkit` with `root_dir` set to the agent-specific output directory (`data/agents/<agent_name>/output/`) for sandboxing.
-  - Ensured the `AgentExecutor` in `load_agent_executor` is created with the loaded tools.
-  - Verified via manual testing in the `chat` REPL that the agent can successfully use the `write_file` tool from the toolkit to write a file within its designated output directory.
+    - Used LangChain's built-in `FileManagementToolkit`.
+    - Scoped write access to `/data/agents/<agent_name>/output/`.
 
 - **[COMPLETED] Step 3.2: Interactive REPL Implementation**
-  - Created new `chat` command in `src/cli/main.py`.
-  - Implemented agent loading (`load_agent_executor`) which reads `agent_meta.yaml`, loads the specified system prompt, combines it with other static context files loaded via `ContextManager`, creates LLM instance, and builds `AgentExecutor` using `create_tool_calling_agent`.
-  - Integrated `prompt_toolkit` for user input with history.
-  - Implemented REPL loop handling user input, `/exit`, and `/agent <name>` commands.
-  - Implemented per-agent in-memory conversation history (`ConversationBufferMemory`) using a dictionary, allowing state persistence when switching agents during a session.
-  - Integrated configurable logging (`--log-level` option) and controlled `AgentExecutor` verbosity.
-  - Integrated ContextManager loading into agent loading process.
-  - *Note:* Specific unit/integration tests for REPL state and agent loading are deferred.
+    - Created `chat` command using `prompt_toolkit`.
+    - Implemented main loop, `/exit`, `/agent` commands.
+    - Implemented per-agent in-memory conversation history (`ConversationBufferMemory`).
+    - Added configurable logging.
 
 - **[COMPLETED] Step 3.3: Agent Context Refactor & Tools**
-  - Renamed agent config file to `agent_config.yaml`.
-  - Simplified context loading: Only global context (`data/global_context/`) and the agent's specified system prompt (`config/agents/<name>/system_prompt.md`) are loaded automatically.
-  - Agent config details (`description`, etc. from `agent_config.yaml`) are formatted and added to the prompt.
-  - Added `read_config_tool` (read-only access to `config/agents/<name>/`) and updated `file_management` tool (R/W access to `data/agents/<name>/`).
-  - Agents rely on prompt instructions + tools to access other context files (e.g., `data/agents/<name>/agent_prompt.md`).
+    - Renamed agent config file to `agent_config.yaml`.
+    - Simplified context loading (global + system prompt auto-loaded).
+    - Added `read_config_tool` and updated `file_management` tool for accessing other files via agent.
+    - Agents rely on prompt instructions + tools for accessing non-auto-loaded context.
 
 - **[COMPLETED] Step 3.4: Memory Persistence**
-  - Implemented saving/loading of conversation history to JSON (`data/agents/<agent_name>/memory/chat_history.json`).
-  - Used `message_to_dict` and `messages_from_dict` for serialization/deserialization.
-  - Refactored saving logic into `save_agent_memory` helper.
-  - History is saved on clean exit and before agent switching via `/agent` command.
-
-## Phase 4: REPL Enhancements and Tool Expansion
-
-- **[COMPLETED] Step 4.1: Refactor chat helper functions into `src/utils/chat_helpers.py`**
-  - Move `get_memory_file_path` and `save_agent_memory`.
-  - Create `src/utils/chat_helpers.py`.
-  - Update imports/calls in `main.py`.
-
-- **[COMPLETED] Step 4.2: Implement session summary generation and saving**
-  - Create `generate_and_save_summary` helper in `chat_helpers.py`.
-  - Add `/summarize` command to REPL.
-  - Add automatic summary generation on session exit (`finally` block).
-  - Save summary to `data/agents/<agent_name>/session_summary.md`.
-
-- **[COMPLETED] Step 4.3: Code Refactoring and Organization**
-  - Created path helper module (`src/utils/path_helpers.py`) for standardized path construction
-  - Moved agent loading logic to dedicated module (`src/core/agent_loader.py`)
-  - Enhanced chat helper functions in `src/utils/chat_helpers.py`
-  - Improved configuration management by passing `config_loader` via context
-  - Streamlined CLI interface by removing `ask` command and making `chat` the default
-  - Updated LangChain imports to reduce deprecation warnings
-  - Fixed import errors for `ConversationBufferMemory` and `AgentExecutor`
-
-- **[ON HOLD] Step 4.5: Compile Application into Executable**
-  - [X] Modify `src/utils/path_helpers.py` to handle bundled paths (`get_base_path`).
-  - [X] Modify `src/utils/config_loader.py` to use `get_base_path`.
-  - [X] Review code for direct path manipulations (use helpers instead).
-  - [ ] Use PyInstaller to create a single executable file (`--onedir` initially).
-  - [ ] Configure PyInstaller to handle dependencies and data files (`--add-data 'config:config'). - *Issue: `config` dir not being bundled correctly.* 
-  - [ ] Test executable in clean environment.
-  - [ ] Document build and installation process.
-  - [ ] Consider creating installation packages (e.g., .deb for Ubuntu) - *Deferred*
-  - [ ] Create build scripts for different platforms (Linux, macOS) - *Deferred*
-  - *Note: Task paused due to unresolved issues with PyInstaller's `--add-data` not correctly bundling the config directory. Needs further investigation or potentially manual .spec file editing.* 
+    - Implemented saving/loading of conversation history to JSON (`data/agents/<agent_name>/memory/chat_history.json`).
+    - Used `message_to_dict` and `messages_from_dict`.
+    - Refactored saving logic into `save_agent_memory` helper.
+    - History is saved on clean exit and before agent switching.
 
 
-## Phase 5: Backlog / Future Work
-- **[ ] Implement Additional Tools**
-  - Identify and integrate tools like web search (e.g., Tavily), external document readers, etc.
-  - Define custom tools if needed.
-  - Update `load_tools` to handle new tool configurations.
+### Phase 4: REPL Enhancements, Tool Expansion, and Refinement
 
-- **[ ] Refine Context Formatting/Prompting**
-  - Improve how context is presented to the LLM.
+- **[COMPLETED] Refactor Chat Helpers**
+    - Moved `get_memory_file_path` and `save_agent_memory` to `src/utils/chat_helpers.py`.
 
-- **[ ] Agent Self-Correction/Improvement**
-  - Explore allowing agents to modify their state/preferences within their data directory.
+- **[COMPLETED] Session Summarization**
+    - Created `generate_and_save_summary` helper.
+    - Added `/summarize` command.
+    - Added automatic summary generation on session exit.
+    - Saved summary to `data/agents/<agent_name>/session_summary.md`.
 
-- **[ ] Comprehensive Testing**
-  - Add unit tests for REPL state, agent loading.
-  - Add integration tests for tool use.
+- **[COMPLETED] Code Refactoring and Organization**
+    - Created `src/utils/path_helpers.py`.
+    - Created `src/core/agent_loader.py`.
+    - Enhanced `src/utils/chat_helpers.py`.
+    - Passed `config_loader` via Click context.
+    - Removed `ask` command, made `chat` default.
+    - Updated LangChain imports.
 
-- **[ ] Documentation**
-  - Update README (Done for current state, keep updated).
 
-- **[ ] Optimize Memory Usage (Low Priority)**
-  - Investigate strategies for managing long-term conversation memory (e.g., Summarization, Token Buffers).
+## Notes & Decisions
 
-- **[PARTIALLY ADDRESSED] Address LangChainDeprecationWarnings**
-  - Updated `ChatMessageHistory` import to use `langchain_community.chat_message_histories`
-  - Kept `ConversationBufferMemory` in `langchain.memory` as it's not available in community package
-  - Kept `AgentExecutor` in `langchain.agents` as it's not available in core package
-  - Some deprecation warnings still remain to be addressed in future updates
+- Decided to prioritize YAML for structured data due to readability, but will keep JSON in mind for API ingest later (as per PRD).
+- Confirmed `--no-sandbox` is needed for Cursor AppImage on Ubuntu 24.04 (development environment note).
+- Decided to use LangChain's built-in `FileManagementToolkit` instead of a custom tool for initial file I/O.
+- Removed early ideas about automatic context detection based on CWD/Git, favoring explicit agent selection via `--agent` flag.
+- Formalized separation of static config (`/config`) and dynamic data (`/data`).
+- Simplified automatic context loading to global + system prompt only.
+- Implemented tool sandboxing to restrict agent file access.
+- Implemented per-agent memory persistence using JSON.
+- Implemented session summarization for context continuity.
+- Refactored code into helper modules (`path_helpers`, `agent_loader`, `chat_helpers`).
+- Addressed some LangChain deprecation warnings, but some remain.
