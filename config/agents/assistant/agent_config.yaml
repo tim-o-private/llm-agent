@@ -7,3 +7,5 @@ tools:
   - task_list_management
 prompt:
   system_message_file: "system_prompt.md" 
+data:
+  task_list_dir: "/home/tim/github/obsidian/Personal/Task List"

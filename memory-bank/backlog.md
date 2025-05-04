@@ -1,0 +1,188 @@
+- Backlog Item: Implement Additional Agent Tools
+    - Description: Add new tools to agents for enhanced capabilities like web search, reading specific external documents (e.g., Obsidian notes), calendar interaction, etc.
+    - User Story: As a user, I want my agent to be able to search the web so that I can get up-to-date information or context. As a user, I want my agent to access my calendar so it can help me manage my schedule.
+    - Notes / Questions:
+        - Identify needed tools (e.g., `langchain_community.tools.tavily_search.TavilySearchResults`).
+        - Implement custom tools if necessary (e.g., `ObsidianNoteReader`, Calendar Tool) following LangChain conventions. Define clear descriptions and argument schemas.
+        - Update `load_tools` in `src/core/agent_loader.py` to handle instantiation based on `agent_config.yaml`.
+        - Define how calendar interaction should work (read-only? create events?). Requires OAuth setup.
+        - How to handle API keys/auth for new tools (e.g., Tavily, Google Calendar)? Store in `.env`.
+        - Need tests for custom tools and integration tests for tool usage in agents.
+    - Priority: High
+    - Status: Needs Refinement
+
+- Backlog Item: Add Visibility for Tool Calls and Token Usage
+    - Description: Provide feedback to the user within the REPL about which tools the agent is using and the estimated token count for interactions.
+    - User Story: As a user, I want to see when the agent uses tools and how many tokens are consumed so that I understand its actions and costs.
+    - Notes / Questions:
+        - Configure LangChain verbosity (`verbose=True`?) or add custom logging/callbacks.
+        - How to reliably access token usage from `langchain-google-genai`? Need research.
+        - How to display this info cleanly in the REPL without cluttering the conversation? Maybe a separate panel or a command?
+        - Need to test the accuracy of token reporting.
+    - Priority: Medium
+    - Status: Needs Refinement
+
+- Backlog Item: Refine Context Formatting and Prompting
+    - Description: Improve how context (static, dynamic memory, tool outputs) is structured and presented in the prompt sent to the LLM for better reasoning and performance.
+    - User Story: As a developer/user, I want the prompt structure to be optimized so that the LLM understands the context better and provides more relevant responses.
+    - Notes / Questions:
+        - Experiment with different prompt templating strategies (e.g., clearer section headings, specific ordering).
+        - How does LangChain's AgentExecutor format tool output in the prompt? Can it be customized?
+        - Review and potentially update system prompts in agent configurations.
+        - This might be an ongoing iterative process.
+    - Priority: Medium
+    - Status: Needs Refinement
+
+- Backlog Item: Enable Agent Self-Correction/Improvement
+    - Description: Allow agents to suggest modifications to their own behavior or store learned preferences/notes within their dedicated data directory.
+    - User Story: As a user, I want the agent to learn from our interactions or allow me to teach it preferences so that it becomes more helpful over time.
+    - Notes / Questions:
+        - Requires careful prompt engineering to instruct the agent on how/when to suggest changes or save notes.
+        - Relies on file I/O tools (`read_config_tool`, `file_system_write_file`, `file_system_read_file`) being available and working correctly.
+        - Need to ensure the agent only writes to its designated data directory (`data/agents/<agent_name>/`). Core prompt/config changes remain manual.
+        - How to prevent the agent from overwriting critical data or getting into loops?
+    - Priority: Low
+    - Status: Idea
+
+- Backlog Item: Comprehensive Testing
+    - Description: Add more extensive unit and integration tests covering agent loading, REPL state management, command handling, and agent execution with various tool calls.
+    - User Story: As a developer, I want comprehensive tests so that I can refactor code and add features confidently without introducing regressions.
+    - Notes / Questions:
+        - Focus on `src/cli/main.py`, `src/core/agent_loader.py`, `src/utils/chat_helpers.py`.
+        - Requires mocking LLM responses and tool executions effectively.
+        - Integration tests should cover common user flows (starting chat, switching agents, using tools, exiting).
+    - Priority: Medium
+    - Status: Needs Refinement
+
+- Backlog Item: Update Documentation (README)
+    - Description: Enhance the `README.md` file with detailed usage instructions for the `chat` command, agent configuration, available tools, setup steps, and examples.
+    - User Story: As a new user/developer, I want clear documentation so that I can easily understand how to set up and use the application.
+    - Notes / Questions:
+        - Include sections on installation, configuration (`settings.yaml`, `.env`), agent structure (`config/agents/`), chat commands (`/exit`, `/agent`, `/summarize`), and available tools.
+    - Priority: Medium
+    - Status: Needs Refinement
+
+- Backlog Item: Optimize Long-Term Memory Usage
+    - Description: Investigate and potentially implement strategies like conversation summarization or token buffers to manage context efficiently for very long chat sessions, preventing excessive token usage or context window limitations.
+    - User Story: As a user engaging in long conversations, I want the agent to retain relevant context without exceeding token limits so that the interaction remains coherent and cost-effective.
+    - Notes / Questions:
+        - Research LangChain's memory modules (e.g., `ConversationSummaryBufferMemory`, `VectorStoreRetrieverMemory`).
+        - How to trigger summarization? Automatically based on token count? Manually via command?
+        - Where to store summaries? In the memory JSON? Separate file?
+        - Evaluate trade-offs between context fidelity and token savings.
+    - Priority: Low
+    - Status: Idea
+
+- Backlog Item: Address LangChain Deprecation Warnings
+    - Description: Perform a full audit of the codebase to identify and update any remaining LangChain imports or usage patterns that trigger deprecation warnings.
+    - User Story: As a developer, I want the codebase to use up-to-date library patterns so that it remains maintainable and compatible with future LangChain versions.
+    - Notes / Questions:
+        - Run the application and tests, noting all warnings.
+        - Consult LangChain documentation for recommended replacements.
+        - Requires careful testing after changes.
+        - Some warnings might require specific `langchain-community`, `langchain-core`, etc. installs.
+    - Priority: Low
+    - Status: Needs Refinement
+
+- Backlog Item: Improve Logging Implementation
+    - Description: Refactor logging setup to use a dedicated application logger instead of modifying the root logger. Ensure consistent use of logger levels (e.g., `logger.error` for exceptions).
+    - User Story: As a developer, I want structured and configurable logging so that I can effectively debug issues and monitor application behavior.
+    - Notes / Questions:
+        - Implement logger configuration in `src/cli/main.py` or a dedicated logging utility.
+        - Configure logger format and output (file/console) based on `settings.yaml`.
+        - Replace `print` statements used for error reporting (e.g., in `file_parser.py`) with `logger.error`.
+    - Priority: Medium
+    - Status: Needs Refinement (Code Review Follow-up)
+
+- Backlog Item: Enhance Error Handling
+    - Description: Improve the granularity of error handling, especially during agent loading, and provide more informative messages to the user.
+    - User Story: As a user, I want clear error messages when something goes wrong (e.g., agent config missing) so that I can understand and fix the problem.
+    - Notes / Questions:
+        - Review error handling in `src/cli/main.py` and `src/core/agent_loader.py`.
+        - Add specific exception types and catch blocks.
+        - Clarify behavior if `agent_config_dir` is missing when `read_config_tool` is required.
+    - Priority: Medium
+    - Status: Needs Refinement (Code Review Follow-up)
+
+- Backlog Item: Refactor for Code Clarity and Readability
+    - Description: Apply various refactoring suggestions to improve code structure, reduce complexity, and enhance maintainability.
+    - User Story: As a developer, I want the code to be clean and easy to understand so that maintenance and future development are efficient.
+    - Notes / Questions:
+        - Return dataclass/dict from `process_user_command` (`main.py`, `chat_helpers.py`).
+        - Abstract tool configuration/renaming logic in `load_tools` (`agent_loader.py`).
+        - Refine LLM parameter handling (`agent_loader.py`).
+        - Make prompt construction from `agent_config` more explicit (`agent_loader.py`).
+        - Clean up `ContextManager` (docstring, unused elements).
+        - Remove unnecessary `pass` (`main.py`).
+    - Priority: Medium
+    - Status: Needs Refinement (Code Review Follow-up)
+
+- Backlog Item: Standardize Memory Management
+    - Description: Investigate using standard LangChain `AgentExecutor` memory integration instead of the current manual load/save mechanism in `chat_helpers.py`. If manual is necessary, document why.
+    - User Story: As a developer, I want memory management to follow standard patterns so that it's easier to understand and integrate with other LangChain features.
+    - Notes / Questions:
+        - Can LangChain's memory persistence handle saving to specific agent directories?
+        - Does it integrate seamlessly with `prompt_toolkit` REPL structure?
+        - Ensure summary prompt aligns with available tools if using integrated memory (`chat_helpers.py`).
+    - Priority: Medium
+    - Status: Needs Refinement (Code Review Follow-up)
+
+- Backlog Item: Implement Proper Packaging
+    - Description: Replace the `sys.path` hack in tests and potentially the main entry point with a standard Python packaging setup (e.g., using `pyproject.toml` and `setuptools`).
+    - User Story: As a developer, I want a standard packaging structure so that imports work correctly without hacks and the project is easier to build and distribute.
+    - Notes / Questions:
+        - Requires creating `pyproject.toml` or `setup.py`.
+        - Adjust imports in `tests/` and potentially `src/`.
+        - Ensure `pip install -e .` works for development.
+    - Priority: Medium
+    - Status: Needs Refinement (Code Review Follow-up)
+
+- Backlog Item: Improve REPL User Experience (UX)
+    - Description: Enhance the REPL interface with features like command auto-completion.
+    - User Story: As a user, I want command auto-completion in the REPL so that I can easily discover and use commands like `/agent` or `/exit`.
+    - Notes / Questions:
+        - Implement using `prompt_toolkit.completion.WordCompleter` or similar for known commands (`/exit`, `/agent`, `/summarize`).
+        - Could potentially extend to agent name completion.
+    - Priority: Low
+    - Status: Needs Refinement (Code Review Follow-up)
+
+- Backlog Item: Compile Application into Executable (ON HOLD)
+    - Description: Create a standalone executable using PyInstaller for easier distribution.
+    - User Story: As a user, I want a single executable file so that I can run the application without needing to install Python or dependencies manually.
+    - Notes / Questions:
+        - Task paused due to unresolved issues with PyInstaller's `--add-data` not correctly bundling the `config` directory. Needs further investigation or manual `.spec` file editing.
+        - Requires modifying path handling (`src/utils/path_helpers.py`, `src/utils/config_loader.py`) to work with bundled resources (`sys._MEIPASS`).
+        - Testing needed in a clean environment.
+    - Priority: Low
+    - Status: Deferred
+
+- Backlog Item: Enable Agent to Summarize Specific Files
+    - Description: Allow the user to ask the agent to read and summarize a specific Markdown file.
+    - User Story: As a user, I want to ask the agent "summarize notes/project_alpha.md" so that I can quickly get the key points from that file.
+    - Notes / Questions:
+        - Requires the agent to have a file reading tool.
+        - Needs prompt engineering to handle the request format and instruct the agent to use the tool and perform summarization.
+        - How to specify the file path? Relative to workspace? Relative to agent data?
+    - Priority: High
+    - Status: Ready for PRD
+
+- Backlog Item: Implement Piping/Chaining Functionality
+    - Description: Allow the output of one command or agent interaction to be used as input or context for a subsequent command or interaction. Support standard input (stdin) piping for CLI commands.
+    - User Story: As a user, I want to pipe the output of a command (e.g., `ls`) or an agent response into another agent interaction so that I can build workflows or provide context efficiently. As a user, I want to pipe text directly into the chat command via stdin.
+    - Notes / Questions:
+        - How to handle piping within the REPL? A special command or syntax?
+        - For CLI piping (`echo "foo" | chat ...`), need to detect stdin and incorporate it into the initial prompt/context.
+        - If both stdin and a command-line argument are provided, the argument should take precedence (as per PRD convention). Need warning message.
+        - Requires changes to `src/cli/main.py`.
+    - Priority: Medium
+    - Status: Ready for PRD
+
+- Backlog Item: Add Support for Reading/Parsing JSON Files
+    - Description: Enable the application (either through context loading or agent tools) to read and understand data from JSON files.
+    - User Story: As a user, I want to provide context in JSON format (e.g., exported data) or have the agent read JSON files so that structured data can be utilized.
+    - Notes / Questions:
+        - Update `src/core/file_parser.py` to handle `.json` files.
+        - Decide if JSON should be automatically loaded as context like Markdown/YAML or only accessed via tools. PRD suggests YAML is preferred for user-edited context, JSON mainly for ingested data.
+        - Agent tools might need specific instructions on how to interpret/use JSON data.
+    - Priority: Medium
+    - Status: Ready for PRD

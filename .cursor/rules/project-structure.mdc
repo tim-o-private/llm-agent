@@ -3,16 +3,64 @@ description: Review this file whenever you begin a new chat, if the user request
 globs: 
 alwaysApply: false
 ---
-# Project Structure and Requirements
+# Project Structure and Requirements - Guidance for AI
 
-ALWAYS read the contents of the files in /memory-bank before writing any code.
-The main product requirements and technical stack are described in [prd.md](mdc:memory-bank/prd.md) and [techstack.md](mdc:memory-bank/techstack.md).
-After adding a major feature or completing a milestone, update [prd.md](mdc:memory-bank/prd.md) and [progress.md](mdc:memory-bank/progress.md).
+This document provides instructions and context for the AI coding assistant to ensure effective collaboration on the project.
 
-When adding new tools or capabilities (e.g., file I/O, web search, API calls):
- 1. First, search for existing, suitable LangChain tools or integrations.
- 2. If found, propose using the pre-built tool.
- 3. If no suitable tool exists, or if specific constraints (e.g., writing only within agent-specific directories) require it, then identify the constraint and propose creating a custom tool using LangChain standards (BaseTool/@tool, Pydantic argument schemas).
+## Core Project Documents (Highest Priority Context)
+
+Always prioritize understanding and adhering to the requirements and structure defined in these documents:
+
+- **Product Requirements:** `@prd.md` (Contains project goals, user stories, and features - **including future features**)
+- **Technical Stack:** `@techstack.md` (Defines chosen technologies and libraries)
+- **Project Structure & Rules:** `@project-structure.md` (Defines organization and AI interaction rules)
+- **Implementation Plan:** `@implementation-plan.md` (Refer to the step-by-step guide for current tasks and planned refactoring)
+- **System Patterns:** `@systemPatterns.md` (Reference for architecture, design patterns, and documentation style)
+- **Backlog:** `@backlog.md` (Repository for potential future ideas and tasks - **raw ideas**)
+- **Progress Log:** `@progress.md` (Tracks completed tasks and current focus)
+
+## Context Prioritization Guidelines
+
+When processing information and generating code or responses, prioritize context in the following order:
+
+1.  **The User's Current Prompt:** Directly address the user's latest request and any specific files or code snippets mentioned.
+2.  **Relevant Project Files:** Focus on files directly related to the current task (e.g., if working on `file_parser.py`, prioritize its content and relevant tests).
+3.  **Core Project Documents:** Refer back to `@prd.md`, `@techstack.md`, `@project-structure.md`, `@implementation-plan.md`, `@systemPatterns.md`, `@backlog.md`, and `@progress.md` for overall guidance, requirements, and potential future scope.
+4.  **Global Context Files:** Include relevant information from `data/global_context/` (e.g., `personal_limitations.md`, `communication_style.md`) where applicable to the task or response style.
+5.  **Recent Conversation History & Memory Bank:** Use recent interactions and the memory bank as supplementary context, but do not get sidetracked by outdated discussions or irrelevant details. Focus on extracting key decisions and relevant code snippets.
+
+**Avoid referencing or being influenced by outdated or non-existent documents (e.g., files with '-mvp' suffixes unless explicitly instructed).**
+
+## Code Generation Guidelines
+
+- Adhere strictly to the Directory Layout defined below.
+- When adding new tools or capabilities (e.g., file I/O, web search, API calls):
+    1.  First, search for existing, suitable LangChain tools or integrations.
+    2.  If found, propose using the pre-built tool and explain why it fits the requirement.
+    3.  If no suitable tool exists, or if specific constraints (e.g., writing only within agent-specific directories) require it, then identify the constraint and propose creating a custom tool using LangChain standards (BaseTool/@tool, Pydantic argument schemas).
+- Ensure all Python code includes clear docstrings and type hints.
+- Write tests for new code or updated code (during refactoring) as specified in the implementation plan.
+
+## Documentation Guidelines
+
+- Maintain a clear flow for new features and tasks: **Backlog (`@backlog.md`) -> PRD (`@prd.md` - add to Future Features section) -> Implementation Plan (`@implementation-plan.md`) -> Deliver Feature -> Update Docs.**
+- **Backlog (`@backlog.md`):** Capture raw ideas.
+- **PRD (`@prd.md`):** Move prioritized items from the backlog to the "Future Features / Upcoming Requirements" section. Define requirements and user stories formally here. The PRD is the source of truth for *all defined requirements*, both current and future.
+- **Implementation Plan (`@implementation-plan.md`):** Create technical steps for features that have been defined in the PRD (either in the main features section or the Future Features section). Add refactoring tasks here.
+- **Progress Log (`@progress.md`):** Log completed tasks (features or refactoring) and update the current focus.
+- **Deliver Feature:** Once implementation steps in `@implementation-plan.md` for a feature are complete and tested.
+- **Update Docs (Post-Delivery):** After a feature is delivered or significant refactoring is completed, update the following documents:
+    - `@prd.md`: Move the feature's definition from the "Future Features" section to the main "User Stories / Features (Current)" section. Update other sections as needed to reflect the current state.
+    - `@progress.md`: Log the completion of the feature implementation.
+    - `@README.md`: Add or update usage instructions for the new feature or reflect changes from refactoring if they impact usage.
+    - `@systemPatterns.md`: **Document the technical details of the new feature or significant refactoring.** This should include:
+        - **Updates to Architecture Diagrams:** If the changes add components or significantly alter relationships, update the relevant Mermaid diagrams.
+        - **Key Technical Decisions:** Record any significant technical choices made during implementation or refactoring.
+        - **Relevant Design Patterns:** Note any design patterns applied or changed.
+        - **Component Relationships & Interaction Flows:** Describe how new components interact with existing ones or how existing interactions have changed due to refactoring, potentially using sequence diagrams (Mermaid).
+        - **Implementation Notes:** Add any important considerations or details about the implementation or refactoring.
+- Keep `@implementation-plan.md` updated to reflect completed and upcoming steps, including planned refactoring tasks.
+- Periodically review `@backlog.md` and move prioritized items to `@prd.md`.
 
 ## Directory Layout (Conceptual)
 
@@ -33,5 +81,3 @@ When adding new tools or capabilities (e.g., file I/O, web search, API calls):
 - `requirements.txt`: Python dependencies
 - `README.md`: Project documentation
 - `LICENSE`: Project license
-
-See [prd-mvp.md](mdc:PRDs/prd-mvp.md) for detailed user stories, goals, and success metrics. See [techstack-mvp.md](mdc:PRDs/techstack-mvp.md) for the selected technologies and libraries.

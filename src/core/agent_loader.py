@@ -8,6 +8,7 @@ from langchain_core.tools import BaseTool
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.agent_toolkits.file_management.toolkit import FileManagementToolkit
+from langchain.memory import ConversationBufferMemory
 
 from utils.config_loader import ConfigLoader
 from core.context_manager import ContextManager
@@ -71,11 +72,11 @@ def load_tools(tool_names: List[str], agent_name: str, config_loader: ConfigLoad
     logger.debug(f"Loaded tools for agent '{agent_name}': {[tool.name for tool in tools] if tools else 'None'}")
     return tools
 
-def load_agent_executor(agent_name: str, config_loader: ConfigLoader, effective_log_level: int) -> AgentExecutor:
-    """Loads agent configuration and creates an AgentExecutor (without attached memory)."""
+def load_agent_executor(agent_name: str, config_loader: ConfigLoader, effective_log_level: int, memory: ConversationBufferMemory) -> AgentExecutor:
+    """Loads agent configuration and creates an AgentExecutor integrated with memory."""
     # Determine executor verbosity based on overall log level
     executor_verbose = effective_log_level <= logging.DEBUG
-    logger.info(f"Loading agent executor for: {agent_name} (verbose={executor_verbose}). Memory will be handled manually.")
+    logger.info(f"Loading agent executor for: {agent_name} (verbose={executor_verbose}) with provided memory.")
     
     # Get agent config file path using helper
     config_file_path = get_agent_config_file_path(agent_name, config_loader)
@@ -185,9 +186,10 @@ def load_agent_executor(agent_name: str, config_loader: ConfigLoader, effective_
     agent_executor = AgentExecutor(
         agent=agent, 
         tools=tools, 
+        memory=memory,
         verbose=executor_verbose, 
         handle_parsing_errors=True
     )
-    logger.info(f"Agent executor created for '{agent_name}'.")
+    logger.info(f"Agent executor created for '{agent_name}' and linked with memory.")
 
     return agent_executor
