@@ -26,17 +26,18 @@ This document outlines the requirements for building a local, terminal-based env
 
 ## 1.4 User Stories / Features (Initial Ideas)
 
-* As a user, I want to define different agent configurations (prompts, tools) and base context by creating directories and files within a `/config/agents/<agent_name>/` folder. Global context (e.g., personal bio) resides in `/data/global_context/`.
-* As a user, I want agents I interact with (via the `chat` command) to be able to read and write files within their dedicated data directory (`/data/agents/<agent_name>/`) for tasks like saving output or managing intermediate state.
+* As a user, I want to define different agent configurations (prompts, tools, specific LLM params) and base context by creating directories and files within a `/config/agents/<agent_name>/` folder. Tool capabilities and their scopes (e.g., read project files, write to memory bank) should be declaratively defined in the agent's YAML using a `tools_config` structure.
+* As a user, I want agents I interact with (via the `chat` command) to be able to read and write files based on the scopes defined in their `tools_config`. For example, an 'assistant' agent might only write to `/data/agents/assistant/output/`, while an 'architect' agent might read the whole project but only write to `/memory-bank/`.
 * As a user, I want to define global context (e.g., personal bio, communication style, personal limitations) in files within a `data/global_context/` folder, such as `personal_bio.md` and `personal_limitations.md`. Global context should always be loaded for the active agent.
 * As a user, I want to interact with different configured agents via a REPL interface (`chat` command).
 * As a user, I want to ask the LLM questions or give instructions via the terminal REPL, and have the system automatically load the relevant agent context (global + agent-specific config/prompt). I want to be able to switch between agents using a command like `/agent <name>`.
-* As a user, I want the LLM agent to be able to read and understand the content of its configuration files (e.g., system prompt) and potentially read files from its data directory using provided tools.
+* As a user, I want the LLM agent to be able to read and understand the content of its configuration files (e.g., system prompt) and potentially read files from other directories (like its data directory or the project root) using specifically configured and named tools (e.g., `read_agent_configuration_file`, `read_project_file`).
 * As a user, I want to ask the LLM to help me structure my day or week based on my calendar events and project tasks defined in the files.
 * As a user, I want to be able to ask the LLM to summarize the key points from a specific Markdown notes file.
 * As a user, I want to easily switch between different configured agents in the terminal REPL using a command.
 * As a user, I want to be able to pipe the output of one LLM interaction as input or additional context for a subsequent interaction, enabling chaining of commands or "assistant" capabilities.
 * As a user, I want my API key for the LLM to be stored securely using environment variables.
+* As a developer/user, I want a dedicated 'Architect' agent that can assist me in defining, refining, and grooming project backlog items, ensuring alignment with the project's established architecture, goals, and documentation standards.
 
 ## 5. Technical Considerations
 
@@ -94,10 +95,11 @@ This document outlines the requirements for building a local, terminal-based env
 - **LLM Prompt Engineering:**
   - Prompts sent to the LLM must always include explicit section headings.
   - Each CLI command/agent can define its own prompt template as needed.
-- **File Writing/Editing:**
+- **File Writing/Editing & Tool Sandboxing:**
   - Agents use tools (like LangChain's `FileManagementToolkit`) to interact with files.
-  - Tool usage should be sandboxed to the agent's specific data directory (`/data/agents/<agent_name>/output/` or similar) for safety.
-  - Confirmation for file writing might be handled by the agent's reasoning or specific tool implementation if needed. (Removed terminal diff requirement as tool handles writing).
+  - Tool usage (read/write/list permissions and target directories) is defined declaratively per-tool within the agent's `tools_config` in its YAML file.
+  - Each configured tool is explicitly associated with a `scope` (e.g., `AGENT_DATA`, `MEMORY_BANK`, `PROJECT_ROOT`) which determines the directory the underlying toolkit operates on, providing clear sandboxing.
+  - Tool descriptions in the config should clearly state the scope and intended use (e.g., "Writes ONLY to the memory bank directory ({scope_path})").
 - **Google Calendar Integration:**
   - Calendar sync will overwrite the local YAML after user confirmation.
   - No fixed YAML schema for events yet; to be defined during implementation.
@@ -129,8 +131,8 @@ your_llm_env/
 │           └── session_summary.md # Summary of last session
 ├── src/                   # Python source code
 │   ├── core/              # Core functionalities
-│   │   ├── agent_loader.py # Loads and configures AgentExecutor
-│   │   ├── llm_interface.py # Handles base communication with LLM APIs
+│   │   ├── agent_loader.py # Loads agent config (including tools_config) and constructs AgentExecutor
+│   │   ├── llm_interface.py # Handles base communication with LLM APIs (Potentially refactored/simplified)
 │   │   ├── file_parser.py   # Reads/writes different file types
 │   │   └── context_manager.py # Gathers global context
 │   ├── cli/               # Command Line Interface handling

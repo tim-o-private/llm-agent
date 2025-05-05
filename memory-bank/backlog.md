@@ -1,3 +1,61 @@
+- Backlog Item: Create "Architect" Agent
+    - Description: Create a specialized AI agent designed to assist the user in defining, refining, and grooming backlog items. This agent will be deeply aware of the project's current state, architecture, and historical decisions to ensure new ideas are coherent with the overall project direction and documented comprehensively enough for seamless transition to implementation by other agents.
+    - User Stories:
+        - As a user, I can chat with a dedicated "architect" agent via the terminal REPL.
+        - As a user, I want this agent to have read and write access to all files in the memory-bank (project directory).
+        - As a user, I want this agent to maintain awareness of the project's current state by prioritizing core documentation (@prd.md, @systemPatterns.md, @backlog.md, @progress.md) and its own persistent chat history.
+        - As a user, I want to discuss new feature ideas or requirements with the "architect" agent through a brainstorming conversation. 
+        - As a user, I want the "architect" agent to guide me through defining new backlog items by asking clarifying questions based on the required backlog item structure.
+        - As a user, I want the "architect" agent to translate our discussion into a comprehensive backlog item written in the standard @backlog.md format.
+        - As a user, I want the "architect" agent to help groom the existing @backlog.md by assisting with re-prioritization, identifying related items, suggesting breaking down large items, marking items as deferred/duplicates, and prompting for more detail on items marked "Needs Refinement."
+        - As a user, I want the "architect" agent to proactively identify potential conflicts or inconsistencies between new ideas/refined backlog items and the project's overall goals (@prd.md) or established architecture/patterns (@systemPatterns.md).
+        - As a user, I want the "architect" agent to suggest technical approaches or constraints for backlog items to ensure consistency and coherence across implementations.
+    - Definition & Refinement Guidance (for the Architect Agent): When defining or refining a backlog item, ensure the following aspects are considered and documented within the item where applicable:
+        - Problem/Goal: What specific problem does this address, or what is the desired outcome?
+        - User Value: Why is this important from a user's perspective? (Should align with User Story) 
+        - Functional Requirements: What should the system do?
+        - Non-Functional Considerations: Any performance, security, usability, etc., considerations?
+        - Potential Technical Approach / Constraints: Initial thoughts on how this might be implemented, specific technologies to consider or avoid, known technical challenges. This is where the architect's guidance on consistency and elegance comes in.
+        - Dependencies: Does this item depend on other backlog items or existing features? Are there other items that depend on this one?
+        - Rough Effort Estimate: A very rough initial guess (e.g., Small, Medium, Large, or T-shirt size). This will be refined later.
+        - Criteria for "Ready for PRD": What needs to be known or decided before this item can be moved from the backlog to the "Future Features" section of the PRD?
+    - Notes / Questions (Specific to this item's implementation):
+        - How will the agent maintain persistent memory of its own decision-making process across sessions, in addition to relying on systemPatterns.md, progress.md, and its chat history?
+        - What specific tools will this agent need beyond file read/write? (e.g., a tool to summarize content, a tool to analyze document structure).
+        How will the agent's prompt be structured to balance brainstorming flexibility with the need to guide towards a structured output format?
+    - Priority: High
+    - Status: Needs Refinement (This backlog item itself needs refinement based on the notes/questions above)
+    - Files Impacted (Conceptual):
+        - src/cli/main.py (New agent command/loading)
+        - config/agents/architect/ (New agent config directory)
+        - data/agents/architect/ (New agent data directory)
+        - src/core/agent_loader.py (Update to load this agent)
+        - src/utils/chat_helpers.py (Potential updates for grooming commands)
+        - src/tools/ (New tools for analyzing/summarizing docs, if needed)
+        - @backlog.md (Agent will read and write to this)
+        - @prd.md, @systemPatterns.md, @progress.md (Agent will read these for context)
+
+- Backlog Item: Avoid redundant summarization
+    - Description: Sessions are currently summarized periodically by the agent and at the close of the session. That potentially means we're making multiple updates in very short sessions.
+    - User Stories: 
+        - As a user, I want agents to independently maintain their own memory without approval.
+        - As a user, I want to avoid rewriting memory if recent decisions or updates have already been made.
+    - Notes / Questions:
+        - Need to ensure that agents can't independently edit other files.
+        - Can we alter the summarization prompt called at session close to only add items that are not currently on the summary?
+    - Files impacted: TBD
+    - Status: Needs refinement
+
+- Backlog Item: Add Visibility for Tool Calls and Token Usage
+    - Description: Create a log of tokens used for input and output.
+    - User Story: As a user, I want to review how many tokens are consumed so that I estimate costs.
+    - Notes / Questions
+        - How to reliably access token usage from `langchain-google-genai`? Need research.
+        - Need to verify the accuracy of token reporting.
+    - Priority: Medium
+    - Files impacted: TBD
+    - Status: Needs Refinement
+
 - Backlog Item: Implement Additional Agent Tools
     - Description: Add new tools to agents for enhanced capabilities like web search, reading specific external documents (e.g., Obsidian notes), calendar interaction, etc.
     - User Story: As a user, I want my agent to be able to search the web so that I can get up-to-date information or context. As a user, I want my agent to access my calendar so it can help me manage my schedule.
@@ -9,17 +67,6 @@
         - How to handle API keys/auth for new tools (e.g., Tavily, Google Calendar)? Store in `.env`.
         - Need tests for custom tools and integration tests for tool usage in agents.
     - Priority: High
-    - Status: Needs Refinement
-
-- Backlog Item: Add Visibility for Tool Calls and Token Usage
-    - Description: Provide feedback to the user within the REPL about which tools the agent is using and the estimated token count for interactions.
-    - User Story: As a user, I want to see when the agent uses tools and how many tokens are consumed so that I understand its actions and costs.
-    - Notes / Questions:
-        - Configure LangChain verbosity (`verbose=True`?) or add custom logging/callbacks.
-        - How to reliably access token usage from `langchain-google-genai`? Need research.
-        - How to display this info cleanly in the REPL without cluttering the conversation? Maybe a separate panel or a command?
-        - Need to test the accuracy of token reporting.
-    - Priority: Medium
     - Status: Needs Refinement
 
 - Backlog Item: Refine Context Formatting and Prompting
@@ -186,3 +233,26 @@
         - Agent tools might need specific instructions on how to interpret/use JSON data.
     - Priority: Medium
     - Status: Ready for PRD
+
+- Backlog Item: Centralized and Parameterized Tool Definition
+    - Description: Refactor the agent tool loading mechanism to support defining tools centrally and assigning them to agents with specific parameters via configuration. This aims to improve tool reusability across agents and simplify the configuration process as the number of agents and tools grows. Instead of embedding tool instantiation logic with specific scopes directly in `load_tools` for each agent type or defining near-identical tools multiple times, tools should be defined once and parameterized during assignment.
+    - User Stories:
+        - As a developer, I want to define a tool (e.g., a file system tool, a web search tool) once in a central location or registry.
+        - As a developer, I want to assign a centrally defined tool to an agent via its `agent_config.yaml`.
+        - As a developer, I want to provide specific parameters to the assigned tool instance via the agent's configuration (e.g., setting the `root_dir` or read/write scopes for a file tool, API keys for a web tool).
+        - As a developer, I want the `agent_loader.py` to dynamically instantiate the assigned tools with their specified parameters based on the agent's configuration.
+    - Functional Requirements:
+        - Introduce a mechanism for registering or defining available tools (e.g., a tool registry dictionary mapping tool names/types to classes, potentially loaded from a separate config file).
+        - Update `agent_config.yaml` structure to allow assigning tools from the registry and providing parameters (e.g., a list of tool objects with `name`, `type`, and `params` keys).
+        - Refactor `src/core/agent_loader.py::load_tools` to read the new configuration format, look up tool classes/factories in the registry, and instantiate them with the provided parameters.
+        - Ensure existing tool functionality (like renaming for clarity) is still supported.
+    - Non-Functional Considerations: Maintainability, Scalability, Configuration Clarity.
+    - Potential Technical Approach / Constraints:
+        - Could involve a dictionary mapping tool type strings to tool classes or factory functions in `agent_loader.py` or a dedicated `tool_registry.py`.
+        - Need to define a clear schema for the tool configuration section within `agent_config.yaml`.
+        - Requires careful handling of parameter passing and validation during tool instantiation.
+    - Dependencies: Depends on having multiple agents and tools where the benefit of reuse becomes significant. Builds upon the existing `agent_loader.py` structure.
+    - Rough Effort Estimate: Medium (Requires significant refactoring of configuration and loading logic).
+    - Criteria for "Ready for PRD": Clear definition of the desired configuration schema for tools in `agent_config.yaml` and the structure of the tool registry.
+    - Priority: Medium (Becomes more important as more agents/tools are added).
+    - Status: Needs Refinement
