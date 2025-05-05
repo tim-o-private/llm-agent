@@ -120,12 +120,10 @@ graph TD
     CLI[CLI] --> AgentLoader[Agent Loader]
     CLI --> ChatHelpers[Chat Helpers]
     AgentLoader --> ContextManager[Context Manager]
-    AgentLoader --> LLMInterface[LLM Interface]
     AgentLoader --> PathHelpers[Path Helpers]
     ChatHelpers --> PathHelpers
     ContextManager --> FileParser[File Parser]
     ContextManager --> ConfigLoader[Config Loader]
-    LLMInterface --> ConfigLoader
     PathHelpers --> ConfigLoader
 ```
 
@@ -142,11 +140,12 @@ graph TD
 3. **LLMInterface**
    - Initializes and configures the LLM
    - Provides methods for generating text responses
+   - **Note:** This might be simplified or integrated directly into `AgentLoader` / LangChain's `AgentExecutor` setup depending on final implementation. The primary LLM setup now happens within `load_agent_executor`.
 
 4. **AgentLoader**
-   - Loads agent configuration
-   - Creates and configures AgentExecutor instances
-   - Loads tools based on agent configuration
+   - Loads agent configuration (`agent_config.yaml`), including the detailed `tools_config` structure.
+   - Creates and configures AgentExecutor instances.
+   - Loads tools based on the `tools_config`, instantiating required toolkits (e.g., `FileManagementToolkit`) with specified scopes (resolved via `PathHelpers`) and applying configured tool names and descriptions. Handles efficient toolkit instantiation.
 
 5. **ChatHelpers**
    - Manages conversation memory
@@ -188,21 +187,36 @@ sequenceDiagram
     participant ConfigLoader
     participant ContextManager
     participant LLM
+    participant PathHelpers
+    participant FileManagementToolkit # Example Toolkit
     
-    CLI->>AgentLoader: load_agent_executor(agent_name, config_loader)
+    CLI->>AgentLoader: load_agent_executor(agent_name, config_loader, memory)
     AgentLoader->>PathHelpers: Get agent config path
-    AgentLoader->>AgentLoader: Load agent_config.yaml
-    AgentLoader->>AgentLoader: Configure LLM
-    AgentLoader->>AgentLoader: load_tools(tool_names, agent_name)
-    AgentLoader->>ContextManager: get_context(None)
-    ContextManager->>ContextManager: Load global context
-    ContextManager-->>AgentLoader: Return formatted context
-    AgentLoader->>AgentLoader: Format agent config as context
-    AgentLoader->>AgentLoader: Load system prompt
-    AgentLoader->>AgentLoader: Combine contexts
-    AgentLoader->>AgentLoader: Create prompt template
-    AgentLoader->>AgentLoader: Create tool-calling agent
-    AgentLoader->>AgentLoader: Create AgentExecutor
+    AgentLoader->>AgentLoader: Load agent_config.yaml (including tools_config)
+    AgentLoader->>AgentLoader: Configure LLM (e.g., ChatGoogleGenerativeAI)
+    AgentLoader->>AgentLoader: load_tools(tools_config, agent_name)
+        AgentLoader->>AgentLoader: Group tools_config by (ToolkitClass, ScopeSymbol)
+        loop For each unique (ToolkitClass, ScopeSymbol)
+            AgentLoader->>PathHelpers: Resolve ScopeSymbol to scope_path (e.g., get_memory_bank_dir)
+            AgentLoader->>FileManagementToolkit: Instantiate toolkit(root_dir=scope_path, selected_tools=needed_original_names)
+            FileManagementToolkit-->>AgentLoader: Return base tool instances
+        end
+        AgentLoader->>AgentLoader: Map base tools by (Toolkit, Scope, OriginalName)
+        loop For each tool in original tools_config
+            AgentLoader->>AgentLoader: Find base tool
+            AgentLoader->>AgentLoader: Apply final name and description override
+            AgentLoader->>AgentLoader: Add configured tool to list
+        end
+    AgentLoader-->>AgentLoader: Return list of configured tools
+    AgentLoader->>ContextManager: get_context(None) # Global context
+    ContextManager->>ContextManager: Load global context files
+    ContextManager-->>AgentLoader: Return formatted global context
+    AgentLoader->>AgentLoader: Format relevant agent config keys as context
+    AgentLoader->>AgentLoader: Get system prompt (inline or from file)
+    AgentLoader->>AgentLoader: Combine contexts into full system prompt
+    AgentLoader->>AgentLoader: Create prompt template (ChatPromptTemplate)
+    AgentLoader->>AgentLoader: Create tool-calling agent (create_tool_calling_agent)
+    AgentLoader->>AgentLoader: Create AgentExecutor(agent, tools, memory)
     AgentLoader-->>CLI: Return AgentExecutor
 ```
 
@@ -258,25 +272,26 @@ sequenceDiagram
     participant User
     participant CLI
     participant AgentExecutor
-    participant Tool
+    participant SpecificTool # e.g., read_project_file
+    participant FileManagementToolkit # Underlying Toolkit instance
     participant FileSystem
     
     User->>CLI: Enter input requiring tool
     CLI->>AgentExecutor: Invoke with input
-    AgentExecutor->>AgentExecutor: Parse input
-    AgentExecutor->>AgentExecutor: Decide to use tool
-    AgentExecutor->>Tool: Call tool with arguments
+    AgentExecutor->>AgentExecutor: Parse input, history, prompt
+    AgentExecutor->>LLM: Predict next action (tool call)
+    LLM-->>AgentExecutor: Decide to use tool (e.g., read_project_file) with args
+    AgentExecutor->>SpecificTool: Call tool.invoke(args) # Matches configured tool name
     
-    alt File Management Tool
-        Tool->>FileSystem: Read/write file in agent data dir
-        FileSystem-->>Tool: Return result
-    else Read Config Tool
-        Tool->>FileSystem: Read file in agent config dir
-        FileSystem-->>Tool: Return result
-    end
+    # Internal Tool Logic (Example: File Management)
+    SpecificTool->>FileManagementToolkit: Execute underlying method (e.g., read_file)
+    FileManagementToolkit->>FileSystem: Perform action in SCOPED directory (e.g., read from project root)
+    FileSystem-->>FileManagementToolkit: Return result/status
+    FileManagementToolkit-->>SpecificTool: Return result
     
-    Tool-->>AgentExecutor: Return tool result
-    AgentExecutor->>AgentExecutor: Generate response with tool result
+    SpecificTool-->>AgentExecutor: Return tool result
+    AgentExecutor->>LLM: Provide tool result for next step
+    LLM-->>AgentExecutor: Generate final response based on tool result
     AgentExecutor-->>CLI: Return final response
     CLI->>User: Display response
 ```
@@ -296,9 +311,10 @@ sequenceDiagram
    - Agent-specific data is stored in data/agents/<agent_name>/
 
 3. **Tool Sandboxing**
-   - Agents can only read files from their config directory
-   - Agents can read and write files in their data directory
-   - This prevents agents from accessing files outside their scope
+   - Tool file system access is defined declaratively in `agent_config.yaml` via the `tools_config` section.
+   - Each tool is configured with a `scope` (e.g., `PROJECT_ROOT`, `MEMORY_BANK`, `AGENT_DATA`, `AGENT_CONFIG`, `TASK_LIST`) which resolves to a specific directory path.
+   - The underlying toolkit (e.g., `FileManagementToolkit`) is instantiated with this specific `root_dir`, inherently limiting its operations to that path and its subdirectories.
+   - This configuration-driven approach defines the sandbox for each tool explicitly.
 
 4. **Error Handling**
    - Comprehensive error handling for file operations

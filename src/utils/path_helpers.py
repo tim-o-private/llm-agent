@@ -79,6 +79,13 @@ def get_data_base_dir(config_loader: 'ConfigLoader') -> str:
     base_data_dir_rel = config_loader.get('data.base_dir', 'data/')
     return os.path.join(get_base_path(), base_data_dir_rel)
 
+# Added function to get the memory-bank directory path
+def get_memory_bank_dir(config_loader: 'ConfigLoader') -> str:
+    """Get the absolute path to the memory-bank directory, assumed to be at the project root."""
+    # Assuming memory-bank is always at the root, alongside src/, config/, data/
+    # If its location can be configured, this would need adjustment.
+    return os.path.join(get_base_path(), 'memory-bank')
+
 # Note: Might need to update other parts of the code (e.g., ContextManager)
 # that construct paths using config values directly without path_helpers.
 # Also need to update ConfigLoader to use get_base_path() for loading settings.yaml.
