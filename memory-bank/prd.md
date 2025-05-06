@@ -38,6 +38,10 @@ This document outlines the requirements for building a local, terminal-based env
 * As a user, I want to be able to pipe the output of one LLM interaction as input or additional context for a subsequent interaction, enabling chaining of commands or "assistant" capabilities.
 * As a user, I want my API key for the LLM to be stored securely using environment variables.
 * As a developer/user, I want a dedicated 'Architect' agent that can assist me in defining, refining, and grooming project backlog items, ensuring alignment with the project's established architecture, goals, and documentation standards.
+*   As a developer, I want to refactor the project structure for proper Python packaging and module imports to eliminate import hacks and improve maintainability.
+*   As a developer, I want to investigate and fix the failing Pytest suite to ensure code quality and enable confident refactoring.
+*   As a project maintainer, I want to prepare the project for public release by scrubbing all sensitive data (like `memory-bank/` contents and chat logs) to protect privacy.
+*   As a developer, I want to implement a CI/CD pipeline using GitHub Actions to automatically run Pytests on Pull Requests and block merges if tests fail, ensuring code stability.
 
 ## 5. Technical Considerations
 

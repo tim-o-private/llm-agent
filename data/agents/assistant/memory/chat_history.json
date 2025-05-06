@@ -3103,5 +3103,32 @@
       "invalid_tool_calls": [],
       "usage_metadata": null
     }
+  },
+  {
+    "type": "human",
+    "data": {
+      "content": "You have been asked to summarize our session based on our conversation history. Please summarize our session using the following headings:\n- **Key Topics Discussed:**\n- **Open Topics:**\n- **Decisions Made:**\n- **Agreed-upon Next Steps/Action Items:**\nThis summary is for refreshing context at the start of our next session.IMPORTANT: This response will be written to file by script and retrieved on startup.You do not need to include any introductory phrases like 'Okay, here is the summary...'",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": null,
+      "example": false
+    }
+  },
+  {
+    "type": "ai",
+    "data": {
+      "content": "**Key Topics Discussed:**\n- Resuming the session and automatically reading the previous session summary from `session_log.md` based on the updated `agent_prompt.md` instruction.\n- Confirming the immediate next step from the previous session (user filling in `scheduled_tasks.md`).\n- User inquiry regarding the rough token count of the context provided to the agent and agent's inability to provide this metric.\n- User stating intention to work offline on completing the `scheduled_tasks.md` table.\n\n**Open Topics:**\n- Exploring the concept of \"purpose\" and strategies for improving \"motivation\".\n- Breaking down tasks into manageable steps.\n- Formalizing a name for the agent.\n- Discussing the components of an effective planning system for ADHD and brainstorming specific tools/approaches.\n- Testing symlink access from the agent's data directory to the Obsidian vault file.\n- Reviewing the completed `scheduled_tasks.md` table with estimated times and priorities.\n- Allocating and scheduling tasks from `scheduled_tasks.md` based on target weekly hours.\n\n**Decisions Made:**\n- Agent automatically read `session_log.md` at the start of the session based on the previous session's decision and `agent_prompt.md` update.\n- Confirmed that the next step is for the user to fill in the `scheduled_tasks.md` table.\n\n**Agreed-upon Next Steps/Action Items:**\n- The user is working offline to fill in the \"Estimated Time (mins)\" and \"Priority\" columns in the `scheduled_tasks.md` table.\n- Upon the user's return, the agent will review the updated `scheduled_tasks.md` table.\n- Following the review, the next step will be to proceed with allocating and scheduling tasks based on the target weekly hours and the information in the table.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": null,
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+    }
   }
 ]

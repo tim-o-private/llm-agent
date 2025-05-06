@@ -14,9 +14,9 @@ from langchain.memory import ConversationBufferMemory
 # Added JSON import for potential future use, though not strictly needed for this change
 import json 
 
-from src.utils.config_loader import ConfigLoader
+from utils.config_loader import ConfigLoader
 # from core.context_manager import ContextManager # Not currently used
-from src.utils.path_helpers import (
+from utils.path_helpers import (
     get_agent_data_dir, get_agent_config_dir, get_agent_config_file_path, 
     get_task_list_dir, get_memory_bank_dir, get_base_path, # Assuming get_agent_config_dir and get_task_list_dir are also here implicitly or imported elsewhere
 )

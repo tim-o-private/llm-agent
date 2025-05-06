@@ -2,9 +2,12 @@ import os
 import yaml
 from dotenv import load_dotenv
 from typing import Any, Optional
+import logging
 
 # Import the helper function
-from src.utils.path_helpers import get_base_path
+from utils.path_helpers import get_base_path
+
+logger = logging.getLogger(__name__)
 
 class ConfigLoader:
     """
