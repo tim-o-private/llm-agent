@@ -1,7 +1,7 @@
 import os
 import logging
 import yaml
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 from utils.config_loader import ConfigLoader
 from core.file_parser import read_markdown, read_yaml
 # Import path helpers
@@ -42,8 +42,12 @@ class ContextManager:
         )
         # TODO: Add paths for tools config/data when needed (using base_data_path or base_config_path)
 
-    def _read_context_files(self, directory: str) -> Dict[str, str | Dict]:
-        """Reads all .md and .yaml/.yml files in a directory."""
+    def _read_context_files(self, directory: str) -> Dict[str, Union[str, Dict]]:
+        """Reads all .md and .yaml files in a directory, returning their content.
+
+        YAML files are parsed into dictionaries. Markdown files are read as strings.
+        Subdirectories are processed recursively, creating nested dictionaries.
+        """
         context_data = {}
         if not os.path.isdir(directory):
             logger.warning(f"Context directory not found: {directory}")
