@@ -19,7 +19,6 @@ graph TD
     subgraph "Core Layer (src/core/)"
         context_manager[ContextManager]
         llm_interface[LLMInterface]
-        file_parser[File Parser]
         agent_loader[Agent Loader]
     end
     
@@ -121,8 +120,8 @@ graph TD
     CLI --> ChatHelpers[Chat Helpers]
     AgentLoader --> ContextManager[Context Manager]
     AgentLoader --> PathHelpers[Path Helpers]
+    AgentLoader --> ConfigLoader[Config Loader]
     ChatHelpers --> PathHelpers
-    ContextManager --> FileParser[File Parser]
     ContextManager --> ConfigLoader[Config Loader]
     PathHelpers --> ConfigLoader
 ```
@@ -134,21 +133,24 @@ graph TD
    - Provides access to configuration values via dot notation
 
 2. **ContextManager**
-   - Loads and formats context from global context directory
-   - Formats context data into structured strings for LLM consumption
+   - Loads and formats context **only** from the global context directory (`data/global_context/`).
+   - **Note:** Agent-specific context (like system prompts or config details) is now loaded directly by `AgentLoader`.
 
 3. **LLMInterface**
    - Initializes and configures the LLM
    - Provides methods for generating text responses
-   - **Note:** This might be simplified or integrated directly into `AgentLoader` / LangChain's `AgentExecutor` setup depending on final implementation. The primary LLM setup now happens within `load_agent_executor`.
+   - **Note:** This class is currently unused. The primary LLM setup (`ChatGoogleGenerativeAI`) happens directly within `load_agent_executor` in `AgentLoader`.
 
 4. **AgentLoader**
-   - Loads agent configuration (`agent_config.yaml`), including the detailed `tools_config` structure.
-   - Creates and configures AgentExecutor instances.
-   - Loads tools based on the `tools_config`, instantiating required toolkits (e.g., `FileManagementToolkit`) with specified scopes (resolved via `PathHelpers`) and applying configured tool names and descriptions. Handles efficient toolkit instantiation.
+   - Loads agent-specific configuration (`agent_config.yaml`) and system prompt (`system_prompt.md` or inline) directly using `PathHelpers` and `yaml`. Handles multiple prompt definition formats.
+   - Loads and configures tools based on the agent's `tools_config`, handling efficient toolkit instantiation per scope and applying custom names/descriptions.
+   - Configures the LLM (`ChatGoogleGenerativeAI`) based on global and agent-specific settings (Note: `convert_system_message_to_human=True` is no longer used).
+   - Creates the prompt object using `ChatPromptTemplate.from_messages`.
+   - Creates the agent using `create_tool_calling_agent`.
+   - Creates and returns the final `AgentExecutor` instance, integrating the agent, tools, and memory.
 
 5. **ChatHelpers**
-   - Manages conversation memory
+   - Manages conversation memory (loading, saving via JSON)
    - Processes user commands
    - Generates and saves session summaries
 
@@ -157,8 +159,7 @@ graph TD
    - Ensures consistent directory structure access
 
 7. **FileParser**
-   - Reads and parses Markdown and YAML files
-   - Handles file-related errors
+   - **Note:** This component was previously documented but does not exist in the current codebase. File reading/parsing (e.g., for YAML configs, Markdown prompts) is handled directly where needed (e.g., in `ConfigLoader`, `AgentLoader`).
 
 ## Critical Implementation Paths
 
@@ -185,15 +186,15 @@ sequenceDiagram
     participant CLI
     participant AgentLoader
     participant ConfigLoader
-    participant ContextManager
     participant LLM
     participant PathHelpers
-    participant FileManagementToolkit # Example Toolkit
+    participant FileSystem
     
     CLI->>AgentLoader: load_agent_executor(agent_name, config_loader, memory)
     AgentLoader->>PathHelpers: Get agent config path
-    AgentLoader->>AgentLoader: Load agent_config.yaml (including tools_config)
-    AgentLoader->>AgentLoader: Configure LLM (e.g., ChatGoogleGenerativeAI)
+    AgentLoader->>FileSystem: Read agent_config.yaml
+    AgentLoader->>YAML: Parse agent_config.yaml
+    AgentLoader->>AgentLoader: Configure LLM (e.g., ChatGoogleGenerativeAI, w/o convert_system_message)
     AgentLoader->>AgentLoader: load_tools(tools_config, agent_name)
         AgentLoader->>AgentLoader: Group tools_config by (ToolkitClass, ScopeSymbol)
         loop For each unique (ToolkitClass, ScopeSymbol)
@@ -208,13 +209,11 @@ sequenceDiagram
             AgentLoader->>AgentLoader: Add configured tool to list
         end
     AgentLoader-->>AgentLoader: Return list of configured tools
-    AgentLoader->>ContextManager: get_context(None) # Global context
-    ContextManager->>ContextManager: Load global context files
-    ContextManager-->>AgentLoader: Return formatted global context
-    AgentLoader->>AgentLoader: Format relevant agent config keys as context
-    AgentLoader->>AgentLoader: Get system prompt (inline or from file)
-    AgentLoader->>AgentLoader: Combine contexts into full system prompt
-    AgentLoader->>AgentLoader: Create prompt template (ChatPromptTemplate)
+    AgentLoader->>PathHelpers: Get system prompt file path (if not inline)
+    AgentLoader->>FileSystem: Read system_prompt.md (if applicable)
+    AgentLoader->>AgentLoader: Load previous session summary (if exists)
+    AgentLoader->>AgentLoader: Prepend summary to loaded system prompt string
+    AgentLoader->>AgentLoader: Create prompt (ChatPromptTemplate.from_messages)
     AgentLoader->>AgentLoader: Create tool-calling agent (create_tool_calling_agent)
     AgentLoader->>AgentLoader: Create AgentExecutor(agent, tools, memory)
     AgentLoader-->>CLI: Return AgentExecutor
@@ -303,12 +302,12 @@ sequenceDiagram
    - Each agent has its own memory file
    - Memory is loaded on agent initialization
    - Memory is saved on agent switch and application exit
+   - Session summaries are loaded from `session_log.md` and prepended to the system prompt on agent load.
 
 2. **Context Loading**
-   - Global context is loaded from data/global_context/
-   - Agent configuration is loaded from config/agents/<agent_name>/
-   - System prompt is loaded from config/agents/<agent_name>/system_prompt.md
-   - Agent-specific data is stored in data/agents/<agent_name>/
+   - Global context is loaded by `ContextManager` from `data/global_context/`.
+   - Agent configuration (`agent_config.yaml`) and system prompts (`system_prompt.md` or inline) are loaded directly by `AgentLoader` from `config/agents/<agent_name>/`.
+   - Agent-specific runtime data (memory, outputs, summaries) is stored in `data/agents/<agent_name>/`.
 
 3. **Tool Sandboxing**
    - Tool file system access is defined declaratively in `agent_config.yaml` via the `tools_config` section.
@@ -325,3 +324,10 @@ sequenceDiagram
    - Configuration can be overridden via environment variables
    - Default values are provided for missing configuration
    - Agent-specific configuration can override global settings
+
+### 6. Post-Revert Notes (2025-05-05)
+- The `convert_system_message_to_human=True` parameter for `ChatGoogleGenerativeAI` was removed due to deprecation warnings and potential contribution to agent looping/API errors.
+- Agent creation was reverted from `create_react_agent` to `create_tool_calling_agent`. This requires the prompt to be structured using `ChatPromptTemplate.from_messages` but does *not* require explicit `{tools}` or `{tool_names}` placeholders within the system prompt text itself.
+- The `load_tools` function was refined to group tool requirements by toolkit instance (class and scope) before instantiation for efficiency.
+- The prompt loading logic in `AgentLoader` was updated to handle multiple formats (direct `system_prompt` key, `prompt` as string/dict).
+- The attempt to add token/tool visibility via a custom callback handler was reverted due to instability and API errors; this feature is currently on hold.

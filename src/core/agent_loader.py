@@ -1,22 +1,31 @@
 import os
 import logging
 import yaml
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Type
 from collections import defaultdict
 
-from langchain.agents import AgentExecutor, create_tool_calling_agent
+from langchain.agents import AgentExecutor, create_tool_calling_agent, create_react_agent
 from langchain_core.tools import BaseTool
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder, PromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.agent_toolkits.file_management.toolkit import FileManagementToolkit
+from langchain_community.tools import DuckDuckGoSearchRun
 from langchain.memory import ConversationBufferMemory
+# Added JSON import for potential future use, though not strictly needed for this change
+import json 
 
-from utils.config_loader import ConfigLoader
-from core.context_manager import ContextManager
-from utils.path_helpers import (
+from src.utils.config_loader import ConfigLoader
+# from core.context_manager import ContextManager # Not currently used
+from src.utils.path_helpers import (
     get_agent_data_dir, get_agent_config_dir, get_agent_config_file_path, 
-    get_task_list_dir, get_memory_bank_dir, get_base_path
+    get_task_list_dir, get_memory_bank_dir, get_base_path, # Assuming get_agent_config_dir and get_task_list_dir are also here implicitly or imported elsewhere
 )
+# Remove the incorrect import
+# from utils.file_parser import load_prompt_template_from_file 
+
+# Type hint for callback handlers if needed
+# Remove BaseCallbackHandler import if no longer needed
+# from langchain_core.callbacks.base import BaseCallbackHandler 
 
 logger = logging.getLogger(__name__)
 
@@ -29,267 +38,353 @@ SCOPE_TO_PATH_FUNC = {
     "PROJECT_ROOT": lambda _agent_name, config: get_base_path(), # Project root doesn't depend on agent name
 }
 
-def load_tools(tools_config: Dict[str, Dict[str, Any]], agent_name: str, config_loader: ConfigLoader) -> List[BaseTool]:
-    """Loads and configures tool instances based on the tools_config dictionary from agent config."""
-    loaded_tools = []
-    # Group configs by the toolkit instance they require (toolkit_cls, scope_symbol)
-    # This avoids creating the same toolkit multiple times
-    toolkit_instances_needed = defaultdict(list)
-    for final_tool_name, config in tools_config.items():
-        toolkit_cls_name = config.get('toolkit')
-        scope_symbol = config.get('scope')
-        if not toolkit_cls_name or not scope_symbol:
-            logger.warning(f"Skipping tool '{final_tool_name}' due to missing 'toolkit' or 'scope' in config.")
+# --- Tool Loading --- 
+
+TOOLKIT_MAPPING: Dict[str, Type[BaseTool]] = {
+    "FileManagementToolkit": FileManagementToolkit,
+    # Add other toolkits here as needed
+}
+
+SCOPE_MAPPING: Dict[str, callable] = {
+    "PROJECT_ROOT": get_base_path, # Use get_base_path for project root
+    "AGENT_DATA": get_agent_data_dir, # Requires agent_name and config_loader
+    "MEMORY_BANK": get_memory_bank_dir, # Requires config_loader
+    "AGENT_CONFIG": get_agent_config_dir, # Added AGENT_CONFIG scope
+    "TASK_LIST": get_task_list_dir,    # Added TASK_LIST scope
+}
+
+def load_tools(
+    agent_name: str,
+    tools_config: Dict[str, Dict[str, Any]], 
+    config_loader: ConfigLoader
+) -> List[BaseTool]:
+    """Loads and configures tools based on agent's tools_config."""
+    loaded_tools: List[BaseTool] = []
+    # Group tool configs by the required toolkit instance (class_name, scope_symbol)
+    required_instance_tools = defaultdict(lambda: {'configs': [], 'original_names': set()})
+
+    if not tools_config:
+        logger.warning(f"No tools_config found for agent '{agent_name}'. No tools will be loaded.")
+        return []
+
+    # First pass: Group configurations and collect required original names per instance
+    for tool_name, tool_details in tools_config.items():
+        toolkit_key = tool_details.get('toolkit')
+        scope_key = tool_details.get('scope')
+        original_name = tool_details.get('original_name')
+
+        if not all([tool_name, toolkit_key, scope_key, original_name]):
+            logger.error(f"Skipping invalid tool entry '{tool_name}' in {agent_name} config: {tool_details}. Missing required fields (toolkit, scope, original_name) or empty tool name key.")
             continue
-        # Key by (class name, scope symbol) to group requirements for the same toolkit instance
-        instance_key = (toolkit_cls_name, scope_symbol)
-        toolkit_instances_needed[instance_key].append((final_tool_name, config))
-
-    # Instantiate toolkits and collect tools
-    instantiated_toolkits = {}
-    base_tools_map = {}
-
-    for (toolkit_cls_name, scope_symbol), configs_for_instance in toolkit_instances_needed.items():
-        logger.debug(f"Processing toolkit instance: {toolkit_cls_name} scoped to {scope_symbol}")
         
-        # Get the actual toolkit class (only FileManagementToolkit supported for now)
-        if toolkit_cls_name != "FileManagementToolkit":
-            logger.warning(f"Unsupported toolkit class '{toolkit_cls_name}' specified for scope {scope_symbol}. Skipping.")
-            continue
-        toolkit_cls = FileManagementToolkit
+        instance_key = (toolkit_key, scope_key)
+        required_instance_tools[instance_key]['configs'].append((tool_name, tool_details))
+        required_instance_tools[instance_key]['original_names'].add(original_name)
 
-        # Resolve the scope symbol to an actual path
-        path_func = SCOPE_TO_PATH_FUNC.get(scope_symbol)
-        if not path_func:
-            logger.warning(f"Unknown scope symbol '{scope_symbol}' for toolkit {toolkit_cls_name}. Skipping.")
+    # Second pass: Instantiate toolkits and configure tools
+    toolkit_instances = {}
+    for instance_key, instance_data in required_instance_tools.items():
+        toolkit_key, scope_key = instance_key
+        original_names_list = list(instance_data['original_names'])
+        configs = instance_data['configs']
+
+        # --- Get Scope Path --- 
+        scope_func = SCOPE_MAPPING.get(scope_key)
+        if not scope_func:
+            # This check might be redundant if the first pass catches it, but safe to keep
+            logger.error(f"Invalid scope '{scope_key}' for toolkit '{toolkit_key}' in agent '{agent_name}'. Available scopes: {list(SCOPE_MAPPING.keys())}")
             continue
         
-        scope_path = "unknown" # Initialize scope_path
+        scope_path = "unknown"
         try:
-            # The lambda functions now handle the argument mismatch correctly
-            # No need for the explicit if scope_symbol == "PROJECT_ROOT" check here anymore
-            scope_path = path_func(agent_name, config_loader)
-                
-            os.makedirs(scope_path, exist_ok=True) # Ensure directory exists
-            logger.info(f"Instantiating {toolkit_cls_name} scoped to '{scope_symbol}' ({scope_path})")
+            # Pass necessary arguments based on scope function requirements
+            if scope_key == "AGENT_DATA":
+                scope_path = scope_func(agent_name, config_loader)
+            elif scope_key == "AGENT_CONFIG": # Handle AGENT_CONFIG path
+                 scope_path = scope_func(agent_name, config_loader)
+            elif scope_key == "TASK_LIST":    # Handle TASK_LIST path (might not need agent_name? depends on helper)
+                 # Assuming get_task_list_dir might only need config_loader or be global
+                 try:
+                     scope_path = scope_func(config_loader=config_loader)
+                 except TypeError:
+                     try: 
+                         scope_path = scope_func(agent_name=agent_name, config_loader=config_loader)
+                     except TypeError:
+                          scope_path = scope_func() # Try calling with no args
+            elif scope_key == "MEMORY_BANK":
+                scope_path = scope_func(config_loader)
+            else: # PROJECT_ROOT 
+                scope_path = scope_func()
+            
+            # Ensure directory exists if it's supposed to be writable (optional, depends on tool use)
+            # os.makedirs(scope_path, exist_ok=True) 
         except Exception as e:
-            logger.error(f"Error resolving or creating path for scope '{scope_symbol}' (Path: {scope_path}): {e}. Skipping toolkit.")
+            logger.error(f"Error getting scope path for '{scope_key}' for toolkit '{toolkit_key}' in agent '{agent_name}': {e}", exc_info=True)
             continue
 
-        # Determine required original tools for this instance
-        # Collect all unique `original_name`s needed from this toolkit instance
-        required_original_names = set()
-        for _final_tool_name, config in configs_for_instance:
-            original_name = config.get('original_name')
-            if original_name:
-                required_original_names.add(original_name)
+        # --- Get Toolkit Class --- 
+        toolkit_class = TOOLKIT_MAPPING.get(toolkit_key)
+        if not toolkit_class:
+            logger.error(f"Invalid toolkit '{toolkit_key}' for scope '{scope_key}' in agent '{agent_name}'. Available toolkits: {list(TOOLKIT_MAPPING.keys())}")
+            continue
+
+        # --- Instantiate Toolkit --- 
+        toolkit_instance = None
+        try:
+            # Instantiate the toolkit with the determined root_dir and ALL required tools for this instance
+            if toolkit_key == "FileManagementToolkit":
+                toolkit_instance = toolkit_class(root_dir=scope_path, selected_tools=original_names_list)
+                logger.info(f"Instantiated toolkit '{toolkit_key}' for scope '{scope_key}' ({scope_path}) requesting tools: {original_names_list}")
             else:
-                # If original_name is missing, we can't map it. Log a warning.
-                logger.warning(f"Tool config for '{_final_tool_name}' is missing 'original_name'. Cannot load this tool.")
-        
-        if not required_original_names:
-            logger.warning(f"No valid tool configurations with 'original_name' found for {toolkit_cls_name} scoped to {scope_symbol}. Skipping toolkit instance.")
-            continue
-
-        # Instantiate the toolkit with the specific tools needed
-        try:
-            toolkit_instance = toolkit_cls(
-                root_dir=scope_path,
-                selected_tools=list(required_original_names) # Pass only the needed base tools
-            )
-            # Store the instance if needed elsewhere, though maybe not necessary
-            instantiated_toolkits[(toolkit_cls_name, scope_symbol)] = toolkit_instance
-            
-            # Get the base tools from the instance and map them by original name
-            base_tools = toolkit_instance.get_tools()
-            for tool in base_tools:
-                # Map by (toolkit_cls_name, scope_symbol, original_tool_name)
-                base_tools_map[(toolkit_cls_name, scope_symbol, tool.name)] = tool
-                logger.debug(f" Retrieved base tool: {tool.name} from {toolkit_cls_name}/{scope_symbol}")
-
+                # Fallback for other toolkits - might need refinement based on their constructors
+                toolkit_instance = toolkit_class() 
+                logger.warning(f"Toolkit '{toolkit_key}' instantiated without specific scope/tool selection logic. Review if needed.")
+            toolkit_instances[instance_key] = toolkit_instance
         except Exception as e:
-            logger.error(f"Failed to instantiate or get tools from {toolkit_cls_name} scoped to {scope_path}: {e}")
-            # Continue to next toolkit instance if one fails
-            continue
+            logger.error(f"Failed to instantiate toolkit '{toolkit_key}' for scope '{scope_key}' with tools {original_names_list}: {e}", exc_info=True)
+            continue # Skip processing tools for this failed instance
 
-    # Configure and add tools to the final list based on the original config
-    for final_tool_name, config in tools_config.items():
-        toolkit_cls_name = config.get('toolkit')
-        scope_symbol = config.get('scope')
-        original_name = config.get('original_name')
-
-        # Find the corresponding base tool we retrieved earlier
-        base_tool_key = (toolkit_cls_name, scope_symbol, original_name)
-        base_tool = base_tools_map.get(base_tool_key)
-
-        if base_tool:
-            # Clone or modify the base tool
-            # NOTE: Modifying in place might affect other tools if not careful,
-            # but LangChain tools are often just dataclasses. Let's modify name/desc directly.
-            configured_tool = base_tool # Start with the base tool
+        # --- Configure and Add Individual Tools from this Instance --- 
+        if not toolkit_instance:
+            continue # Skip if instantiation failed
             
-            # Override name
-            configured_tool.name = final_tool_name
+        try:
+            available_tools_map = {t.name: t for t in toolkit_instance.get_tools()}
+        except Exception as e:
+             logger.error(f"Failed to get tools from toolkit instance {toolkit_key}/{scope_key}: {e}", exc_info=True)
+             continue # Skip this instance if get_tools fails
+
+        for tool_name, tool_details in configs:
+            original_name = tool_details.get('original_name')
+            description_override = tool_details.get('description')
             
-            # Override description if provided
-            if 'description' in config:
-                # Format description with scope path if placeholder exists
-                scope_path = "unknown" # Default
-                path_func = SCOPE_TO_PATH_FUNC.get(scope_symbol)
-                if path_func:
-                    try:
-                        # Call the path_func (lambda handles args) to get path for description
-                        scope_path = path_func(agent_name, config_loader)
-                    except Exception:
-                        pass # Keep default "unknown"
+            base_tool = available_tools_map.get(original_name)
+            if not base_tool:
+                logger.error(f"Tool '{original_name}' not found within instantiated toolkit '{toolkit_key}' for scope '{scope_key}'. Available: {list(available_tools_map.keys())}")
+                continue # Skip this specific tool configuration
+            
+            # Apply Customizations (Name, Description)
+            # IMPORTANT: Assume BaseTool properties (name, description) are mutable. If not, need to wrap/recreate.
+            try:
+                final_tool = base_tool # For now, modify in place
+                final_tool.name = tool_name # Override the name
                 
-                configured_tool.description = config['description'].format(scope_path=scope_path)
-            
-            logger.debug(f"Adding configured tool: '{configured_tool.name}' (Original: {original_name}, Scope: {scope_symbol})")
-            loaded_tools.append(configured_tool)
-        else:
-            # Log if we couldn't find the base tool (e.g., due to earlier errors)
-            if toolkit_cls_name and scope_symbol and original_name: # Only log if config was valid
-                logger.warning(f"Could not find base tool for config: {final_tool_name} (Toolkit: {toolkit_cls_name}, Scope: {scope_symbol}, Original: {original_name})")
+                # Apply description override ONLY if it exists AND does NOT contain the placeholder
+                if description_override and '{scope_path}' not in description_override:
+                     logger.debug(f"Applying description override for tool '{tool_name}' (without scope path).")
+                     final_tool.description = description_override
+                elif description_override:
+                     logger.debug(f"Skipping description override for tool '{tool_name}' because it contains '{{scope_path}}' and formatting is disabled.")
+                # else: no description override specified in config
 
-    logger.info(f"Final loaded tools for agent '{agent_name}': {[tool.name for tool in loaded_tools] if loaded_tools else 'None'}")
+                loaded_tools.append(final_tool)
+                logger.info(f"Configured tool '{final_tool.name}' (originally '{original_name}') from '{toolkit_key}' scope '{scope_key}'.")
+            except Exception as e:
+                 logger.error(f"Error applying configuration to tool '{tool_name}' (from '{original_name}'): {e}", exc_info=True)
+
     return loaded_tools
 
-def load_agent_executor(agent_name: str, config_loader: ConfigLoader, effective_log_level: int, memory: ConversationBufferMemory) -> AgentExecutor:
-    """Loads agent configuration and creates an AgentExecutor integrated with memory."""
-    # Determine executor verbosity based on overall log level
-    executor_verbose = effective_log_level <= logging.DEBUG
-    logger.info(f"Loading agent executor for: {agent_name} (verbose={executor_verbose}) with provided memory.")
-    
-    # Get agent config file path using helper
-    config_file_path = get_agent_config_file_path(agent_name, config_loader)
-    agent_config_dir = get_agent_config_dir(agent_name, config_loader)
+# --- Agent Loading --- 
 
-    if not os.path.isdir(agent_config_dir) or not os.path.isfile(config_file_path):
-        raise FileNotFoundError(f"Agent configuration directory or config file not found for '{agent_name}' at {agent_config_dir}")
+def load_agent_executor(
+    agent_name: str,
+    config_loader: ConfigLoader,
+    log_level: int, # Keep log level for potential LLM/internal use
+    memory: ConversationBufferMemory,
+    # Remove callbacks parameter
+    # callbacks: Optional[List[BaseCallbackHandler]] = None 
+) -> AgentExecutor:
+    """Loads agent configuration, LLM, prompt, tools, and creates an AgentExecutor."""
+    logger.info(f"Loading agent executor for: {agent_name}")
 
-    # Load agent meta configuration
-    agent_config = None
+    # --- 1. Load Agent Configuration --- 
     try:
-        with open(config_file_path, 'r') as f:
+        # Construct the path to the agent's config file
+        agent_config_path = get_agent_config_file_path(agent_name, config_loader)
+        if not os.path.isfile(agent_config_path):
+            raise FileNotFoundError(f"Agent configuration file not found at: {agent_config_path}")
+        
+        # Load the agent-specific YAML file
+        with open(agent_config_path, 'r') as f:
             agent_config = yaml.safe_load(f)
-        logger.debug(f"Loaded agent config: {agent_config}")
-    except yaml.YAMLError as e:
-        logger.error(f"Error parsing agent config file {config_file_path}: {e}")
-        raise
-    except IOError as e:
-        logger.error(f"Error reading agent config file {config_file_path}: {e}")
-        raise
-
-    # --- Load LLM --- 
-    # Use global LLM settings by default, override with agent specifics if provided
-    llm_settings = {
-        'model': config_loader.get('llm.model', 'gemini-1.5-flash'),
-        'google_api_key': config_loader.get('GOOGLE_API_KEY'),
-        'temperature': config_loader.get('llm.temperature', 0.7),
-    }
-    if agent_config.get('model_parameters'):
-        llm_settings.update(agent_config['model_parameters'])
-        logger.debug(f"Overriding LLM settings with agent specifics: {agent_config['model_parameters']}")
-    
-    if not llm_settings.get('google_api_key'):
-        raise ValueError("Google API Key not found. Please set GOOGLE_API_KEY in your .env file or settings.")
-
-    llm = ChatGoogleGenerativeAI(**{k: v for k, v in llm_settings.items() if k != 'google_api_key'}, google_api_key=llm_settings['google_api_key']) 
-
-    # --- Load Tools --- 
-    # Read the new tools_config structure
-    agent_tools_config = agent_config.get('tools_config', {}) 
-    logger.debug(f"Tools config found for '{agent_name}': {list(agent_tools_config.keys())}")
-    if not isinstance(agent_tools_config, dict):
-        logger.error(f"'tools_config' in {config_file_path} must be a dictionary (mapping). Found: {type(agent_tools_config)}")
-        agent_tools_config = {} # Use empty config to prevent crash
+        if not agent_config: # Handle empty or invalid YAML
+             raise ValueError(f"Agent configuration file is empty or invalid: {agent_config_path}")
         
-    tools = load_tools(agent_tools_config, agent_name, config_loader) # Pass the config dict
+        logger.debug(f"Loaded agent config for '{agent_name}': {agent_config}")
+    except FileNotFoundError:
+        logger.error(f"Agent configuration file not found for agent: {agent_name}")
+        raise
+    except Exception as e:
+        logger.error(f"Error loading agent configuration for '{agent_name}': {e}", exc_info=True)
+        raise ValueError(f"Invalid configuration for agent '{agent_name}'.")
 
-    # --- Load Static Context & Create Prompt --- 
-    # Check if agent uses system_prompt directly from YAML or a file
-    system_prompt_content = ""
+    # --- 2. Load LLM Configuration --- 
+    try:
+        llm_config = agent_config.get('llm', {}) # Get LLM specific settings
+        global_llm_config = config_loader.get('llm', {}) # Get global LLM settings
+        
+        # Merge global and agent-specific LLM settings (agent overrides global)
+        merged_llm_config = {**global_llm_config, **llm_config} 
+        
+        model_name = merged_llm_config.get('model', 'gemini-pro') # Default if not specified anywhere
+        temperature = float(merged_llm_config.get('temperature', 0.7))
+        api_key = config_loader.get('GOOGLE_API_KEY') # Get from global/env
+
+        if not api_key:
+            raise ValueError("Google API Key (GOOGLE_API_KEY) not found in configuration.")
+            
+        # Add safety settings if specified in agent config
+        safety_settings = merged_llm_config.get('safety_settings')
+        
+        llm_params = {
+            'model': model_name,
+            'google_api_key': api_key,
+            'temperature': temperature,
+            # 'convert_system_message_to_human': True # REMOVED - Deprecated
+        }
+        if safety_settings:
+            # TODO: Convert string keys/values from YAML to HarmCategory/HarmBlockThreshold enums
+            # This requires importing them and having a mapping
+            # Example: safety_settings_enum = {HarmCategory[k]: HarmBlockThreshold[v] for k, v in safety_settings.items()}
+            # llm_params['safety_settings'] = safety_settings_enum
+            logger.warning("Safety settings loading from config not fully implemented yet (enum conversion needed). Ignoring safety_settings for now.")
+            # For now, just pass the raw dict, might error or be ignored by langchain
+            # llm_params['safety_settings'] = safety_settings
+
+        llm = ChatGoogleGenerativeAI(**llm_params)
+        logger.info(f"Initialized LLM: {model_name} with temp={temperature}")
+        # TODO: Set log level for LLM if possible/needed via langchain settings?
+
+    except (KeyError, ValueError, TypeError) as e:
+        logger.error(f"Error processing LLM configuration for '{agent_name}': {e}", exc_info=True)
+        raise ValueError(f"Invalid LLM configuration for agent '{agent_name}'.")
+    except Exception as e:
+         logger.error(f"Unexpected error initializing LLM for '{agent_name}': {e}", exc_info=True)
+         raise
+
+    # --- 3. Load Prompt Template --- 
+    # Check for direct system_prompt key first
     if 'system_prompt' in agent_config:
-        system_prompt_content = agent_config['system_prompt']
-        logger.debug(f"Using inline system prompt from agent_config.yaml for '{agent_name}'")
-    elif agent_config.get('prompt', {}).get('system_message_file'):
-        # Load base system prompt specified in config file
-        system_prompt_file = agent_config['prompt']['system_message_file']
-        system_prompt_path = os.path.join(agent_config_dir, system_prompt_file)
-        try:
-            with open(system_prompt_path, 'r') as f:
-                system_prompt_content = f.read()
-            logger.debug(f"Loaded system prompt from file: {system_prompt_path}")
-        except IOError as e:
-            logger.error(f"Error reading system prompt file {system_prompt_path}: {e}")
-            raise # Re-raise the error as it's critical
+        prompt_template_str = agent_config['system_prompt']
+        logger.info(f"Using direct 'system_prompt' key from config for agent '{agent_name}'.")
     else:
-         # Raise error if neither inline prompt nor file path is provided
-         error_msg = f"Agent '{agent_name}' config file must contain either 'system_prompt' string or 'prompt.system_message_file' path."
-         logger.error(error_msg)
-         raise ValueError(error_msg)
+        # Fallback to checking the 'prompt' key (string or dict)
+        prompt_config = agent_config.get('prompt', {})
+        prompt_template_str = None
 
-    # Load ONLY global context using ContextManager
-    logger.debug("Loading global context...")
-    context_manager = ContextManager(config=config_loader)
-    raw_global_context, formatted_global_context = context_manager.get_context(agent_name=None)
-    
-    # Format the loaded agent_config dictionary itself as context
-    # Exclude keys we don't want in the prompt
-    config_to_format = {k: v for k, v in agent_config.items() if k not in [
-        'prompt', 'model_parameters', 'tools', 'tools_config', 'name', 
-        'description', 'system_prompt', 'llm_config_key', 'data' # Also exclude 'data' if present
-    ]}
-    formatted_agent_config = ""
-    if config_to_format:
-        logger.debug(f"Formatting agent config details: {config_to_format.keys()}")
-        formatted_agent_config = context_manager._format_context(
-            config_to_format, 
-            f"Agent Configuration: {agent_name}"
-        )
-    
-    # --- Combine global context, agent config, and system prompt --- 
-    prompt_parts = []
-    # Decide order - System prompt first is common
-    if system_prompt_content:
-        prompt_parts.append(system_prompt_content)
-    if formatted_global_context:
-        prompt_parts.append(formatted_global_context)
-    if formatted_agent_config:
-        prompt_parts.append(formatted_agent_config)
+        if isinstance(prompt_config, str): # Simple case: prompt is just a filename
+            prompt_file = prompt_config
+            # Construct full path relative to agent config dir
+            agent_config_dir = get_agent_config_dir(agent_name, config_loader)
+            prompt_file_path = os.path.join(agent_config_dir, prompt_file)
+            try:
+                with open(prompt_file_path, 'r') as f:
+                    prompt_template_str = f.read()
+                logger.info(f"Loaded prompt template from file: {prompt_file_path}")
+            except FileNotFoundError:
+                logger.error(f"Prompt template file '{prompt_file_path}' not found for agent '{agent_name}'.")
+                raise
+            except Exception as e:
+                logger.error(f"Error loading prompt template from '{prompt_file_path}' for agent '{agent_name}': {e}", exc_info=True)
+                raise ValueError(f"Invalid prompt file '{prompt_file_path}' for agent '{agent_name}'.")
+        elif isinstance(prompt_config, dict): # Structured prompt config
+            # Check for inline template first
+            if 'template' in prompt_config:
+                prompt_template_str = prompt_config['template']
+                logger.info(f"Using inline prompt template from config for agent '{agent_name}'.")
+                # TODO: How to get input_variables if specified inline?
+                # Maybe require explicit input_variables list in this case?
+                # input_variables = prompt_config.get('input_variables', []) 
+            # Fallback to system_message_file
+            elif 'system_message_file' in prompt_config:
+                prompt_file = prompt_config.get('system_message_file')
+                # Construct full path relative to agent config dir
+                agent_config_dir = get_agent_config_dir(agent_name, config_loader)
+                prompt_file_path = os.path.join(agent_config_dir, prompt_file)
+                try:
+                    with open(prompt_file_path, 'r') as f:
+                        prompt_template_str = f.read()
+                    logger.info(f"Loaded prompt template from file specified in config: {prompt_file_path}")
+                except FileNotFoundError:
+                    logger.error(f"Prompt template file '{prompt_file_path}' (from config) not found for agent '{agent_name}'.")
+                    raise
+                except Exception as e:
+                    logger.error(f"Error loading prompt template from '{prompt_file_path}' (from config) for agent '{agent_name}': {e}", exc_info=True)
+                    raise ValueError(f"Invalid prompt file '{prompt_file_path}' (from config) for agent '{agent_name}'.")
+            else:
+                # Neither inline template nor system_message_file found in dict
+                logger.error(f"Invalid prompt configuration for agent '{agent_name}'. Neither 'system_prompt' key nor valid 'prompt' config (string filename or dict with 'template'/'system_message_file') found.")
+                raise ValueError(f"Invalid prompt configuration for agent '{agent_name}'.")
+        else:
+            logger.error(f"Invalid 'prompt' type in config for agent '{agent_name}': {type(prompt_config)}. Expected string or dict.")
+            raise ValueError(f"Invalid prompt configuration type for agent '{agent_name}'.")
+
+    # --- Load Previous Session Summary (if exists) --- 
+    # logger.info("Temporarily disabling previous session summary loading for debugging.")
+    # Re-enable summary loading
+    agent_data_dir = get_agent_data_dir(agent_name, config_loader)
+    summary_file_path = os.path.join(agent_data_dir, 'session_log.md')
+    previous_summary = ""
+    try:
+        if os.path.exists(summary_file_path):
+            with open(summary_file_path, 'r') as f:
+                previous_summary = f.read()
+            if previous_summary:
+                logger.info(f"Loaded previous session summary from {summary_file_path}")
+                # Prepend to the main prompt template string
+                prompt_template_str = f"PREVIOUS SESSION SUMMARY:\n{previous_summary}\n\n---\n\nCURRENT SESSION PROMPT:\n{prompt_template_str}"
+                logger.debug("Prepended previous summary to system prompt.")
+    except IOError as e:
+        logger.warning(f"Could not read previous session summary file {summary_file_path}: {e}")
+    except Exception as e:
+        logger.error(f"Unexpected error loading previous summary from {summary_file_path}: {e}", exc_info=True)
+
+    # --- Create PromptTemplate Instance --- 
+    try:
+        if not prompt_template_str:
+            raise ValueError("Prompt template string could not be loaded or determined.")
         
-    full_system_prompt = "\n\n---\n\n".join(prompt_parts).strip() # Use separator for clarity
-    logger.debug(f"--- Full System Prompt for Agent '{agent_name}' START ---")
-    logger.debug(full_system_prompt)
-    logger.debug(f"--- Full System Prompt for Agent '{agent_name}' END ---")
+        # Revert to creating a ChatPromptTemplate suitable for tool calling agent
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", prompt_template_str), # Use the loaded content as system message
+            MessagesPlaceholder(variable_name="chat_history", optional=True),
+            ("human", "{input}"),
+            MessagesPlaceholder(variable_name="agent_scratchpad"),
+        ])
+    except Exception as e:
+         logger.error(f"Failed to create PromptTemplate for agent '{agent_name}': {e}", exc_info=True)
+         raise ValueError(f"Invalid prompt template structure for agent '{agent_name}'.")
 
-    # Ensure the prompt isn't empty
-    if not full_system_prompt:
-         logger.error(f"Context loading resulted in an empty system prompt for agent '{agent_name}'. Check context files and logs.")
-         raise ValueError(f"Failed to construct a valid system prompt for agent '{agent_name}'. Context appears empty.")
+    # --- 4. Load Tools --- 
+    tools_config = agent_config.get('tools_config', {}) # Restore config usage
+    
+    tools = load_tools(agent_name, tools_config, config_loader)
+    logger.info(f"Loaded {len(tools)} tools for agent '{agent_name}': {[t.name for t in tools]}")
 
-    # Gemini requires specific prompt structuring for tool use
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", full_system_prompt), 
-        MessagesPlaceholder(variable_name="chat_history", optional=True),
-        ("human", "{input}"),
-        MessagesPlaceholder(variable_name="agent_scratchpad"),
-    ])
-    logger.debug(f"Created ChatPromptTemplate for agent '{agent_name}'")
+    # --- 5. Create Agent --- 
+    try:
+        # Switch back to create_tool_calling_agent
+        agent = create_tool_calling_agent(llm, tools, prompt)
+        logger.debug(f"Created tool-calling agent for '{agent_name}'")
+    except Exception as e:
+        logger.error(f"Failed to create tool-calling agent for '{agent_name}': {e}", exc_info=True)
+        raise RuntimeError(f"Could not create agent '{agent_name}'.")
 
-    # --- Create Agent --- 
-    agent = create_tool_calling_agent(llm, tools, prompt)
-    logger.debug("Created tool-calling agent.")
-
-    # --- Create Agent Executor --- 
-    agent_executor = AgentExecutor(
-        agent=agent, 
-        tools=tools, 
-        memory=memory,
-        verbose=executor_verbose, 
-        handle_parsing_errors=True
-    )
-    logger.info(f"Agent executor created for '{agent_name}' and linked with memory.")
+    # --- 6. Create Agent Executor --- 
+    try:
+        agent_executor = AgentExecutor(
+            agent=agent,
+            tools=tools,
+            memory=memory,
+            verbose=False, # Disable LangChain AgentExecutor verbose output
+            handle_parsing_errors=True, # Add basic handling for parsing errors
+            max_iterations=agent_config.get('max_iterations', 15), # Configurable max iterations
+            # Remove callbacks argument
+            # callbacks=callbacks # Pass the callbacks list here
+        )
+        logger.info(f"Created Agent Executor for '{agent_name}' with memory and {len(tools)} tools.")
+    except Exception as e:
+        logger.error(f"Failed to create Agent Executor for '{agent_name}': {e}", exc_info=True)
+        raise RuntimeError(f"Could not create agent executor for '{agent_name}'.")
 
     return agent_executor

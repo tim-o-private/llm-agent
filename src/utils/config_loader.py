@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from typing import Any, Optional
 
 # Import the helper function
-from utils.path_helpers import get_base_path
+from src.utils.path_helpers import get_base_path
 
 class ConfigLoader:
     """

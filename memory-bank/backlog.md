@@ -24,7 +24,7 @@
         - What specific tools will this agent need beyond file read/write? (e.g., a tool to summarize content, a tool to analyze document structure).
         How will the agent's prompt be structured to balance brainstorming flexibility with the need to guide towards a structured output format?
     - Priority: High
-    - Status: Needs Refinement (This backlog item itself needs refinement based on the notes/questions above)
+    - Status: DONE
     - Files Impacted (Conceptual):
         - src/cli/main.py (New agent command/loading)
         - config/agents/architect/ (New agent config directory)
@@ -256,3 +256,36 @@
     - Criteria for "Ready for PRD": Clear definition of the desired configuration schema for tools in `agent_config.yaml` and the structure of the tool registry.
     - Priority: Medium (Becomes more important as more agents/tools are added).
     - Status: Needs Refinement
+
+- Backlog Item: Develop Agent Evaluation Framework using LangSmith
+    - Description: Implement a robust framework using LangSmith for evaluating agent performance, starting with the 'architect' agent's permission adherence and adversarial resistance. This framework will enable systematic testing and a data-driven approach to agent improvement.
+    - User Stories:
+        - As a developer, I want to define evaluation datasets in code to test specific agent behaviors.
+        - As a developer, I want to use LLM-as-judge for nuanced evaluations of agent responses.
+        - As a developer, I want to run evaluation suites against agents and review results in LangSmith.
+        - As a developer, I want the evaluation scripts to be runnable from the project root and handle imports correctly.
+    - Completed (as of 2025-05-06 for 'architect' agent permission tests):
+        - Initial script `langsmith/eval-permissions.py` developed.
+        - Dataset definition for permission adherence tests (`permission_examples`).
+        - LLM-as-judge prompt externalized to `langsmith/judge_prompts/permission_eval_instructions.md`.
+        - Pydantic model `AgentEvaluationStructure` defined for structured judge output.
+        - Switched judge LLM from OpenAI to Gemini (`gemini-1.5-flash-preview-0417`) with structured output.
+        - Resolved Python import path issues for running the script from the project root.
+        - Addressed LangSmith client API changes (e.g., `llm_or_chain_factory`, dataset attribute names).
+        - Fixed prompt input key mismatches (`question` vs. `input`).
+        - Script successfully connects to LangSmith, creates/updates the dataset, and initiates evaluation runs for the 'architect' agent.
+        - Diagnostic script `agentExecutorTest.py` moved to `scripts/scratch/`.
+    - TODOs / Next Steps:
+        - Refine Python path management in `langsmith/eval-permissions.py` (currently uses `sys.path.insert`) to a more robust solution (e.g., editable install with `pyproject.toml`).
+        - Parameterize `langsmith/eval-permissions.py` to easily accept different agent names and test example sets.
+        - Enhance dataset re-creation logic to offer more options than just clearing all examples (e.g., append, conditional clear).
+        - Explore dynamic generation of test examples (e.g., using an LLM).
+        - Ensure all necessary `__init__.py` files are in `src` and its subdirectories for proper packaging.
+        - Expand evaluation to other agents and other capabilities beyond permission handling.
+    - Priority: Medium
+    - Status: In Progress
+    - Files Impacted:
+        - `langsmith/eval-permissions.py`
+        - `langsmith/judge_prompts/permission_eval_instructions.md`
+        - `src/` (for `__init__.py` files)
+        - Potentially `pyproject.toml` or `setup.py` for packaging improvements.

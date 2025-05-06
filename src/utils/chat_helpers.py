@@ -111,10 +111,21 @@ def process_user_command(
     current_memory: Optional[ConversationBufferMemory], 
     agent_memories: Dict[str, ConversationBufferMemory],
     config_loader: 'ConfigLoader', 
-    effective_log_level: int
+    effective_log_level: int,
+    show_tokens: bool
 ) -> Tuple[str, Optional['AgentExecutor'], Optional[ConversationBufferMemory], bool]:
     """Process user commands and return updated state.
     
+    Args:
+        user_input: The input command from the user.
+        current_agent_name: The current agent's name.
+        agent_executor: The current agent's executor.
+        current_memory: The current agent's memory.
+        agent_memories: A dictionary containing all agent memories.
+        config_loader: The configuration loader for the session.
+        effective_log_level: The effective logging level for the session.
+        show_tokens: Flag indicating whether to show token usage.
+
     Returns:
         Tuple containing (current_agent_name, agent_executor, current_memory, exit_requested)
     """
@@ -160,8 +171,13 @@ def process_user_command(
             
             # --- Load new agent and memory ---
             new_memory = get_or_create_memory(new_agent_name, agent_memories, config_loader)
-            # Pass the new_memory object to load_agent_executor
-            new_executor = load_agent_executor(new_agent_name, config_loader, effective_log_level, new_memory)
+            # Pass the new_memory object and the callback handler to load_agent_executor
+            new_executor = load_agent_executor(
+                new_agent_name, 
+                config_loader, 
+                effective_log_level, 
+                new_memory,
+            )
             
             # Switch successful
             logger.info(f"Switching to agent: {new_agent_name}")
@@ -193,6 +209,32 @@ def process_user_command(
 
         # Use secho for colored output
         click.secho(f"{output}", fg='cyan')
+
+        # --- Display Token Usage if flag is set ---
+        if show_tokens:
+            # Log the full response for debugging the first time
+            logger.debug(f"Full agent response dictionary: {response}") 
+            
+            # Attempt to extract token usage (keys might vary based on LLM/Langchain version)
+            token_usage = None
+            if 'llm_output' in response and isinstance(response['llm_output'], dict):
+                 # Standard Langchain location?
+                 token_usage = response['llm_output'].get('token_usage') 
+            elif 'usage_metadata' in response: 
+                 # Another possible location (seen with some Google integrations)
+                 token_usage = response.get('usage_metadata')
+
+            if token_usage:
+                # Format the token usage nicely 
+                # Example: {'prompt_tokens': 50, 'completion_tokens': 100, 'total_tokens': 150}
+                usage_str = ", ".join([f"{k.replace('_tokens','').capitalize()}: {v}" for k, v in token_usage.items()])
+                click.secho(f"[Tokens: {usage_str}]", fg='bright_black') # Use dim color
+            else:
+                 # Log if usage info wasn't found where expected
+                 logger.debug("Token usage information not found in response['llm_output']['token_usage'] or response['usage_metadata'].")
+
+        # Agent processing complete, continue REPL loop
+        return current_agent_name, agent_executor, current_memory, False
     except Exception as e:
         logger.error(f"Error during agent execution: {e}", exc_info=True)
         click.echo(f"Error processing query: {e}", err=True)
@@ -217,12 +259,12 @@ def generate_and_save_summary(
 
 
     summary_prompt = (
-        "You have been asked to summarize our session. Please begin by reviewing `session_log.md.`"
-        "After reviewing, summarize our session and provide an update for the session log using the following headings:"
-        "- **Key Topics Discussed:**"
-        "- **Open Topics:**"
-        "- **Decisions Made:**"
-        "- **Agreed-upon Next Steps/Action Items:**"
+        "You have been asked to summarize our session based on our conversation history. "
+        "Please summarize our session using the following headings:\n"
+        "- **Key Topics Discussed:**\n"
+        "- **Open Topics:**\n"
+        "- **Decisions Made:**\n"
+        "- **Agreed-upon Next Steps/Action Items:**\n"
         "This summary is for refreshing context at the start of our next session."
         "IMPORTANT: This response will be written to file by script and retrieved on startup." 
         "You do not need to include any introductory phrases like 'Okay, here is the summary...'"
