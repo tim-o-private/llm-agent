@@ -27,7 +27,7 @@ def temp_env_file():
     os.remove(f.name)
 
 def test_loads_yaml_and_env(temp_settings_file, temp_env_file, monkeypatch):
-    loader = ConfigLoader(settings_path=temp_settings_file, dotenv_path=temp_env_file)
+    loader = ConfigLoader(settings_rel_path=temp_settings_file, dotenv_rel_path=temp_env_file)
     # Should get env var first
     assert loader.get('llm.model') == 'env-model'
     assert loader.get('app.name') == 'EnvApp'
@@ -37,12 +37,12 @@ def test_loads_yaml_and_env(temp_settings_file, temp_env_file, monkeypatch):
     assert loader.get('llm.unknown', default='x') == 'x'
 
 def test_missing_yaml(monkeypatch, temp_env_file):
-    loader = ConfigLoader(settings_path='nonexistent.yaml', dotenv_path=temp_env_file)
+    loader = ConfigLoader(settings_rel_path='nonexistent.yaml', dotenv_rel_path=temp_env_file)
     # Should not error, just use env or default
     assert loader.get('llm.model', default='foo') == 'foo' or loader.get('llm.model') == 'env-model'
 
 def test_missing_env_and_yaml(monkeypatch):
     monkeypatch.delenv('LLM_MODEL', raising=False)
     monkeypatch.delenv('APP_NAME', raising=False)
-    loader = ConfigLoader(settings_path='nonexistent.yaml', dotenv_path='nonexistent.env')
+    loader = ConfigLoader(settings_rel_path='nonexistent.yaml', dotenv_rel_path='nonexistent.env')
     assert loader.get('llm.model', default='bar') == 'bar' 
