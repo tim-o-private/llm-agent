@@ -117,3 +117,62 @@ This document tracks the development progress of the Local LLM Terminal Environm
 - Implemented session summarization for context continuity.
 - Refactored code into helper modules (`path_helpers`, `agent_loader`, `chat_helpers`).
 - Addressed some LangChain deprecation warnings, but some remain.
+- **Refactored tool loading** to be configuration-driven (`tools_config` in YAML) instead of hardcoded logic in `agent_loader.py` for improved maintainability.
+- **Visibility Feature Attempt & Revert (2025-05-05):**
+    - Attempted to implement visibility for tool calls and token usage using a custom `AgentCallbackHandler` (`src/utils/callbacks.py`).
+    - Goal was to provide cumulative token counts per turn via `-t` flag and tool logs via `-v` flag.
+    - Encountered persistent `500 InternalServerError` from Google API after implementing the callback handler, potentially related to agent looping.
+    - Observed numerous `Convert_system_message_to_human will be deprecated!` warnings, indicating possible conflict between the agent type (`create_react_agent`), Gemini model, and prompt structure.
+    - Debugging steps (simplifying prompt) did not resolve the 500 errors.
+    - Reverted all code changes related to the callback handler and CLI flags (`main.py`, `chat_helpers.py`, `agent_loader.py`, `system_prompt.md`) to restore stability.
+    - Kept necessary fixes identified during debugging (tool loading logic, scope mapping, agent config file loading).
+    - Removed deprecated `convert_system_message_to_human=True` flag from `ChatGoogleGenerativeAI` initialization.
+    - Switched agent creation from `create_react_agent` back to `create_tool_calling_agent` as part of the revert.
+    - Visibility feature is on hold pending re-evaluation of the approach.
+
+### Architect Agent Implementation (Phase 1 & 2.1)
+
+- **[COMPLETED] Architect - Step 1.1: Create Agent Configuration**
+    - Created `config/agents/architect/agent_config.yaml` with initial structure and system prompt.
+
+- **[COMPLETED] Architect - Step 1.2 & 2.1: Update Agent Loading & Implement Tools (via Refactor)**
+    - Refactored tool loading in `src/core/agent_loader.py` to be configuration-driven via `tools_config` in agent YAML files, removing agent-specific code.
+    - Defined scopes (`PROJECT_ROOT`, `MEMORY_BANK`, `AGENT_DATA`, etc.) resolved by `path_helpers`.
+    - Updated `assistant` and `architect` agent configs (`tools_config`) for their respective tools and scopes (project-read, memory-bank-rw, agent-data-rw for architect).
+    - Added `get_memory_bank_dir` helper to `src/utils/path_helpers.py`.
+    - Updated documentation (`systemPatterns.md`, `architecture.md`, `prd.md`) to reflect the new approach.
+
+- **[COMPLETED] Architect - Step 1.3: Integrate into REPL**
+    - Confirmed `/agent architect` command works without changes to `src/cli/main.py` due to the generic agent loading mechanism.
+
+- **[COMPLETED] Architect - Step 2.2: Refine Prompt for Backlog Management**
+    - Updated the `system_prompt` in `config/agents/architect/agent_config.yaml` to be more directive about workflow, backlog format, information elicitation, and tool usage.
+
+- **[COMPLETED] Architect - Step 3.1: Implement Agent Memory & Session Context**
+    - Verified existing memory persistence logic in `chat_helpers.py` is agent-agnostic.
+    - Updated `agent_loader.py` to load the previous `session_log.md` into the initial agent prompt for context continuity.
+    - Simplified the summary generation prompt in `chat_helpers.py` accordingly.
+
+- **[COMPLETED] Architect - Step 3.2: Enhance Prompt for Grooming Tasks**
+    - Added specific instructions to the system prompt in `config/agents/architect/agent_config.yaml` for handling backlog grooming tasks.
+
+## Notes & Decisions
+
+- Refactored code into helper modules (`path_helpers`, `agent_loader`, `chat_helpers`).
+- Addressed some LangChain deprecation warnings, but some remain.
+- **Refactored tool loading** to be configuration-driven (`tools_config` in YAML) instead of hardcoded logic in `agent_loader.py` for improved maintainability.
+
+### Project Tooling & Evaluation
+
+- **LangSmith Evaluation Setup for Agent Permissions (2025-05-06):**
+    - **Goal:** Create a robust evaluation suite to test the 'architect' agent's adherence to file writing permissions and its resistance to adversarial prompts.
+    - **Key Activities & Files:**
+        - Developed `langsmith/eval-permissions.py`: A script to define a LangSmith dataset, run the 'architect' agent against it, and use an LLM-as-judge (Gemini 1.5 Flash with structured output) for evaluation.
+        - Created `langsmith/judge_prompts/permission_eval_instructions.md` to store the detailed instructions for the LLM judge.
+        - Iteratively debugged `eval-permissions.py`, resolving issues related to Python import paths (by adding project root to `sys.path` and using `src.` prefixes for internal imports), LangSmith client API changes (e.g., `llm_or_chain_factory`, dataset attribute names), and prompt input key mismatches (`question` vs. `input`).
+        - The script now successfully connects to LangSmith, creates/updates the dataset, and initiates the evaluation run.
+    - **File Organization:** Moved the diagnostic script `agentExecutorTest.py` to `scripts/scratch/agentExecutorTest.py`.
+
+## Notes & Decisions
+
+- Refactored code into helper modules (`path_helpers`, `agent_loader`, `chat_helpers`).

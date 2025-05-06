@@ -43,12 +43,17 @@ When processing information and generating code or responses, prioritize context
 
 ## Documentation Guidelines
 
-- Maintain a clear flow for new features and tasks: **Backlog (`@backlog.md`) -> PRD (`@prd.md` - add to Future Features section) -> Implementation Plan (`@implementation-plan.md`) -> Deliver Feature -> Update Docs.**
+- Maintain a clear flow for new features and tasks: **Backlog (`@backlog.md`) -> PRD (`@prd.md` - add to Future Features section) -> Implementation Plan (`@implementation-plan.md`) -> Develop Feature (New Branch, Commits, PR) -> Deliver Feature -> Update Docs ***
 - **Backlog (`@backlog.md`):** Capture raw ideas.
 - **PRD (`@prd.md`):** Move prioritized items from the backlog to the "Future Features / Upcoming Requirements" section. Define requirements and user stories formally here. The PRD is the source of truth for *all defined requirements*, both current and future.
 - **Implementation Plan (`@implementation-plan.md`):** Create technical steps for features that have been defined in the PRD (either in the main features section or the Future Features section). Add refactoring tasks here.
 - **Progress Log (`@progress.md`):** Log completed tasks (features or refactoring) and update the current focus.
-- **Deliver Feature:** Once implementation steps in `@implementation-plan.md` for a feature are complete and tested.
+
+- **Develop Feature (New Branch, Commits, PR):**
+    - **Branch Creation:** When starting work on a new item from the `@implementation-plan.md` (which originated from `@backlog.md` and was defined in `@prd.md`), create a new Git branch. A suggested naming convention is `feature/<item-id>-<short-description>` or `bugfix/<item-id>-<short-description>`.
+    - **Commits:** Make regular, atomic commits to this branch as milestones or significant sub-tasks within the implementation plan are completed. Commit messages should be clear and reference the relevant task or issue ID if applicable.
+    - **Pull Request (PR):** Once all implementation steps for the backlog item are complete and tested locally, push the feature branch to the remote repository and open a Pull Request (PR) against the main development branch (e.g., `main` or `develop`). The PR description should summarize the changes and link to the relevant backlog item or PRD feature.
+- **Deliver Feature:** Once implementation steps in `@implementation-plan.md` for a feature are complete and tested, and the corresponding PR has been reviewed and merged.
 - **Update Docs (Post-Delivery):** After a feature is delivered or significant refactoring is completed, update the following documents:
     - `@prd.md`: Move the feature's definition from the "Future Features" section to the main "User Stories / Features (Current)" section. Update other sections as needed to reflect the current state.
     - `@progress.md`: Log the completion of the feature implementation.

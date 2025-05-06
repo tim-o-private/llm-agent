@@ -65,8 +65,14 @@ def cli(ctx, log_level):
     is_flag=True,
     help='Enable verbose logging (overrides --log-level).'
 )
+@click.option(
+    '--show-tokens', '-t',
+    is_flag=True,
+    default=False, # Default to not showing tokens
+    help='Display token usage after each agent response.'
+)
 @click.pass_context # Pass context to command function
-def chat(ctx, agent: str, verbose: bool):
+def chat(ctx, agent: str, verbose: bool, show_tokens: bool):
     """Start an interactive chat session (REPL) with an agent."""
     
     effective_log_level = logging.DEBUG if verbose else ctx.obj['LOG_LEVEL']
@@ -97,7 +103,12 @@ def chat(ctx, agent: str, verbose: bool):
         # 1. Get/Create memory first
         current_memory = get_or_create_memory(current_agent_name, agent_memories, config_loader)
         # 2. Load executor, passing the created memory object
-        agent_executor = load_agent_executor(current_agent_name, config_loader, effective_log_level, current_memory)
+        agent_executor = load_agent_executor(
+            current_agent_name, 
+            config_loader, 
+            effective_log_level, 
+            current_memory,
+        )
 
     except (FileNotFoundError, ValueError, yaml.YAMLError, IOError) as e:
         logger.error(f"Failed to load initial agent '{current_agent_name}': {e}")
@@ -132,7 +143,8 @@ def chat(ctx, agent: str, verbose: bool):
             # Process user commands and regular input
             current_agent_name, agent_executor, current_memory, exit_requested = process_user_command(
                 user_input, current_agent_name, agent_executor, current_memory, 
-                agent_memories, config_loader, effective_log_level
+                agent_memories, config_loader, effective_log_level,
+                show_tokens=show_tokens # Pass the flag value
             )
             
             if exit_requested:
