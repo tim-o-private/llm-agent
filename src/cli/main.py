@@ -8,8 +8,6 @@ from prompt_toolkit import prompt as prompt_toolkit_prompt
 from prompt_toolkit.history import InMemoryHistory
 # Hack. Remove after packaging.
 import sys
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../src')))
-# End hack
 from utils.config_loader import ConfigLoader
 from core.agent_loader import load_agent_executor
 from utils.chat_helpers import (

@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "LocalLLMTerminalEnv"
+version = "0.2.0"
+authors = [
+  { name="Your Name", email="your@email.com" }, # Please replace with your details
+]
+description = "A local, terminal-based environment for interacting with LLMs."
+readme = "README.md"
+requires-python = ">=3.9" # Assuming 3.9 or higher, adjust if needed
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License", # Assuming MIT, adjust if needed
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "python-dotenv>=1.0.0",
+    "PyYAML>=6.0",
+    "langchain>=0.3.24",
+    "langchain-community>=0.2.0",
+    "langchain-google-genai>=2.0.10,<2.1.0",
+    "click>=8.0.0",
+    "prompt-toolkit>=3.0.0",
+    "pytest>=8.0.0",
+    "langsmith>=0.1.10",
+    "openai>=1.1.0",
+    "pydantic>=2.0.0",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/yourusername/yourprojectname" # Please replace
+"Bug Tracker" = "https://github.com/yourusername/yourprojectname/issues" # Please replace
+
+[tool.setuptools.packages.find]
+where = ["src"] 

@@ -33,21 +33,22 @@ from langsmith import Client
 from langsmith.schemas import Run, Example
 from pydantic import BaseModel, Field
 
-# Add the project root (parent of 'langsmith' directory) to sys.path so we can import
-# the agent executor and config loader.
 # TODO: This is hacky, figure out some project-wide structure.
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # load_agent_executor and ConfigLoader are custom tools used in a CLI tool - we're invoking it
 # here to ensure we're testing exactly the same prompts and memory logic as the CLI.
-from src.core.agent_loader import load_agent_executor
-from src.utils.config_loader import ConfigLoader
+from core.agent_loader import load_agent_executor
+from utils.config_loader import ConfigLoader
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
 # If you get a file not found error, make sure you're running the script from the `langsmith` directory.
 # TODO: Solve this along with PATH issue above.
-judge_instructions_path = 'judge_prompts/permission_eval_instructions.md'
+
+# Construct path relative to this script's location
+script_dir = os.path.dirname(__file__)
+judge_instructions_path = os.path.join(script_dir, 'judge_prompts/permission_eval_instructions.md')
 with open(judge_instructions_path, 'r') as f:
     judge_instructions = f.read()
 
