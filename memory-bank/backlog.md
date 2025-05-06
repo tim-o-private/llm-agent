@@ -175,117 +175,63 @@
     - Status: Needs Refinement (Code Review Follow-up)
 
 - Backlog Item: Implement Proper Packaging
-    - Description: Replace the `sys.path` hack in tests and potentially the main entry point with a standard Python packaging setup (e.g., using `pyproject.toml` and `setuptools`).
-    - User Story: As a developer, I want a standard packaging structure so that imports work correctly without hacks and the project is easier to build and distribute.
-    - Notes / Questions:
-        - Requires creating `pyproject.toml` or `setup.py`.
-        - Adjust imports in `tests/` and potentially `src/`.
-        - Ensure `pip install -e .` works for development.
-    - Priority: Medium
-    - Status: Needs Refinement (Code Review Follow-up)
-
-- Backlog Item: Improve REPL User Experience (UX)
-    - Description: Enhance the REPL interface with features like command auto-completion.
-    - User Story: As a user, I want command auto-completion in the REPL so that I can easily discover and use commands like `/agent` or `/exit`.
-    - Notes / Questions:
-        - Implement using `prompt_toolkit.completion.WordCompleter` or similar for known commands (`/exit`, `/agent`, `/summarize`).
-        - Could potentially extend to agent name completion.
-    - Priority: Low
-    - Status: Needs Refinement (Code Review Follow-up)
-
-- Backlog Item: Compile Application into Executable (ON HOLD)
     - Description: Create a standalone executable using PyInstaller for easier distribution.
     - User Story: As a user, I want a single executable file so that I can run the application without needing to install Python or dependencies manually.
     - Notes / Questions:
         - Task paused due to unresolved issues with PyInstaller's `--add-data` not correctly bundling the `config` directory. Needs further investigation or manual `.spec` file editing.
-        - Requires modifying path handling (`src/utils/path_helpers.py`, `src/utils/config_loader.py`) to work with bundled resources (`sys._MEIPASS`).
-        - Testing needed in a clean environment.
     - Priority: Low
     - Status: Deferred
 
-- Backlog Item: Enable Agent to Summarize Specific Files
-    - Description: Allow the user to ask the agent to read and summarize a specific Markdown file.
-    - User Story: As a user, I want to ask the agent "summarize notes/project_alpha.md" so that I can quickly get the key points from that file.
+- Backlog Item: Refactor Project Structure for Proper Packaging and Module Imports
+    - Description: Address current import hacks (e.g., `sys.path` modifications) and implement a standard Python packaging structure (e.g., using `pyproject.toml` and `setuptools`). This will improve maintainability, testability, and prepare the project for potential distribution.
+    - User Stories:
+        - As a developer, I want the project to use a standard packaging setup so that imports are reliable and work without workarounds.
+        - As a developer, I want to be able to build and install the project using standard Python tools (e.g., `pip install -e .`).
     - Notes / Questions:
-        - Requires the agent to have a file reading tool.
-        - Needs prompt engineering to handle the request format and instruct the agent to use the tool and perform summarization.
-        - How to specify the file path? Relative to workspace? Relative to agent data?
+        - Review all `sys.path` modifications and remove them.
+        - Decide on packaging tools (e.g., `setuptools`, `poetry`).
+        - Create `pyproject.toml` or `setup.py`.
+        - Adjust import statements throughout the codebase (`src/`, `tests/`).
+        - Ensure tests run correctly with the new structure.
     - Priority: High
-    - Status: Ready for PRD
+    - Status: To Do
 
-- Backlog Item: Implement Piping/Chaining Functionality
-    - Description: Allow the output of one command or agent interaction to be used as input or context for a subsequent command or interaction. Support standard input (stdin) piping for CLI commands.
-    - User Story: As a user, I want to pipe the output of a command (e.g., `ls`) or an agent response into another agent interaction so that I can build workflows or provide context efficiently. As a user, I want to pipe text directly into the chat command via stdin.
-    - Notes / Questions:
-        - How to handle piping within the REPL? A special command or syntax?
-        - For CLI piping (`echo "foo" | chat ...`), need to detect stdin and incorporate it into the initial prompt/context.
-        - If both stdin and a command-line argument are provided, the argument should take precedence (as per PRD convention). Need warning message.
-        - Requires changes to `src/cli/main.py`.
-    - Priority: Medium
-    - Status: Ready for PRD
-
-- Backlog Item: Add Support for Reading/Parsing JSON Files
-    - Description: Enable the application (either through context loading or agent tools) to read and understand data from JSON files.
-    - User Story: As a user, I want to provide context in JSON format (e.g., exported data) or have the agent read JSON files so that structured data can be utilized.
-    - Notes / Questions:
-        - Update `src/core/file_parser.py` to handle `.json` files.
-        - Decide if JSON should be automatically loaded as context like Markdown/YAML or only accessed via tools. PRD suggests YAML is preferred for user-edited context, JSON mainly for ingested data.
-        - Agent tools might need specific instructions on how to interpret/use JSON data.
-    - Priority: Medium
-    - Status: Ready for PRD
-
-- Backlog Item: Centralized and Parameterized Tool Definition
-    - Description: Refactor the agent tool loading mechanism to support defining tools centrally and assigning them to agents with specific parameters via configuration. This aims to improve tool reusability across agents and simplify the configuration process as the number of agents and tools grows. Instead of embedding tool instantiation logic with specific scopes directly in `load_tools` for each agent type or defining near-identical tools multiple times, tools should be defined once and parameterized during assignment.
+- Backlog Item: Investigate and Fix Failing Pytest Suite
+    - Description: Diagnose the root cause of the widespread failures in the `pytest` suite and implement the necessary corrections to ensure all tests pass reliably.
     - User Stories:
-        - As a developer, I want to define a tool (e.g., a file system tool, a web search tool) once in a central location or registry.
-        - As a developer, I want to assign a centrally defined tool to an agent via its `agent_config.yaml`.
-        - As a developer, I want to provide specific parameters to the assigned tool instance via the agent's configuration (e.g., setting the `root_dir` or read/write scopes for a file tool, API keys for a web tool).
-        - As a developer, I want the `agent_loader.py` to dynamically instantiate the assigned tools with their specified parameters based on the agent's configuration.
-    - Functional Requirements:
-        - Introduce a mechanism for registering or defining available tools (e.g., a tool registry dictionary mapping tool names/types to classes, potentially loaded from a separate config file).
-        - Update `agent_config.yaml` structure to allow assigning tools from the registry and providing parameters (e.g., a list of tool objects with `name`, `type`, and `params` keys).
-        - Refactor `src/core/agent_loader.py::load_tools` to read the new configuration format, look up tool classes/factories in the registry, and instantiate them with the provided parameters.
-        - Ensure existing tool functionality (like renaming for clarity) is still supported.
-    - Non-Functional Considerations: Maintainability, Scalability, Configuration Clarity.
-    - Potential Technical Approach / Constraints:
-        - Could involve a dictionary mapping tool type strings to tool classes or factory functions in `agent_loader.py` or a dedicated `tool_registry.py`.
-        - Need to define a clear schema for the tool configuration section within `agent_config.yaml`.
-        - Requires careful handling of parameter passing and validation during tool instantiation.
-    - Dependencies: Depends on having multiple agents and tools where the benefit of reuse becomes significant. Builds upon the existing `agent_loader.py` structure.
-    - Rough Effort Estimate: Medium (Requires significant refactoring of configuration and loading logic).
-    - Criteria for "Ready for PRD": Clear definition of the desired configuration schema for tools in `agent_config.yaml` and the structure of the tool registry.
-    - Priority: Medium (Becomes more important as more agents/tools are added).
-    - Status: Needs Refinement
+        - As a developer, I want a stable and passing test suite so that I can confidently refactor code and add new features.
+        - As a developer, I want clear error messages from tests to quickly identify and fix issues.
+    - Notes / Questions:
+        - Systematically run tests to identify common failure patterns.
+        - Check for issues related to the recent project structure changes or import problems.
+        - Verify test environment setup, dependencies, and mocking strategies.
+        - Update or rewrite tests as needed.
+    - Priority: High
+    - Status: To Do
 
-- Backlog Item: Develop Agent Evaluation Framework using LangSmith
-    - Description: Implement a robust framework using LangSmith for evaluating agent performance, starting with the 'architect' agent's permission adherence and adversarial resistance. This framework will enable systematic testing and a data-driven approach to agent improvement.
+- Backlog Item: Prepare Project for Public Release: Scrub Sensitive Data
+    - Description: Identify and remove or anonymize all sensitive information from the project before it can be shared publicly on GitHub. This includes chat histories, specific API keys in examples (if any), and personal data within the `memory-bank/`.
     - User Stories:
-        - As a developer, I want to define evaluation datasets in code to test specific agent behaviors.
-        - As a developer, I want to use LLM-as-judge for nuanced evaluations of agent responses.
-        - As a developer, I want to run evaluation suites against agents and review results in LangSmith.
-        - As a developer, I want the evaluation scripts to be runnable from the project root and handle imports correctly.
-    - Completed (as of 2025-05-06 for 'architect' agent permission tests):
-        - Initial script `langsmith/eval-permissions.py` developed.
-        - Dataset definition for permission adherence tests (`permission_examples`).
-        - LLM-as-judge prompt externalized to `langsmith/judge_prompts/permission_eval_instructions.md`.
-        - Pydantic model `AgentEvaluationStructure` defined for structured judge output.
-        - Switched judge LLM from OpenAI to Gemini (`gemini-1.5-flash-preview-0417`) with structured output.
-        - Resolved Python import path issues for running the script from the project root.
-        - Addressed LangSmith client API changes (e.g., `llm_or_chain_factory`, dataset attribute names).
-        - Fixed prompt input key mismatches (`question` vs. `input`).
-        - Script successfully connects to LangSmith, creates/updates the dataset, and initiates evaluation runs for the 'architect' agent.
-        - Diagnostic script `agentExecutorTest.py` moved to `scripts/scratch/`.
-    - TODOs / Next Steps:
-        - Refine Python path management in `langsmith/eval-permissions.py` (currently uses `sys.path.insert`) to a more robust solution (e.g., editable install with `pyproject.toml`).
-        - Parameterize `langsmith/eval-permissions.py` to easily accept different agent names and test example sets.
-        - Enhance dataset re-creation logic to offer more options than just clearing all examples (e.g., append, conditional clear).
-        - Explore dynamic generation of test examples (e.g., using an LLM).
-        - Ensure all necessary `__init__.py` files are in `src` and its subdirectories for proper packaging.
-        - Expand evaluation to other agents and other capabilities beyond permission handling.
+        - As a project maintainer, I want to share the project publicly without exposing any private or sensitive user data.
+        - As a potential contributor, I want to be able to fork and experiment with the project without encountering personal data from the original author.
+    - Notes / Questions:
+        - List all files/directories containing sensitive information (e.g., `memory-bank/`, `data/agents/*/memory/chat_history.json`, `data/agents/*/session_log.md`).
+        - Determine the best strategy: exclusion via `.gitignore` for a public branch, a cleaning script, or manual removal.
+        - Ensure example configuration files do not contain real keys.
+        - Provide clear instructions for users on how to set up their own sensitive data (e.g., API keys via `.env`).
     - Priority: Medium
-    - Status: In Progress
-    - Files Impacted:
-        - `langsmith/eval-permissions.py`
-        - `langsmith/judge_prompts/permission_eval_instructions.md`
-        - `src/` (for `__init__.py` files)
-        - Potentially `pyproject.toml` or `setup.py` for packaging improvements.
+    - Status: To Do
+
+- Backlog Item: Implement CI/CD Pipeline for Automated Pytest on PRs
+    - Description: Set up a continuous integration (CI) pipeline, likely using GitHub Actions, to automatically run the `pytest` suite whenever a Pull Request is submitted to the main development branch. The pipeline should block merging of PRs if any tests fail.
+    - User Stories:
+        - As a developer, I want tests to run automatically on every PR to catch regressions early.
+        - As a project maintainer, I want to ensure that only code with passing tests is merged into the main branch.
+    - Notes / Questions:
+        - Choose a CI/CD platform (GitHub Actions is a common choice for GitHub projects).
+        - Create a workflow file (e.g., `.github/workflows/python-test.yml`).
+        - Configure the workflow to set up Python, install dependencies (from `requirements.txt`), and run `pytest`.
+        - Ensure the workflow correctly reports test success/failure status to the PR.
+        - Configure branch protection rules on GitHub to require passing tests before merging.
+    - Priority: Medium
+    - Status: To Do

@@ -11,14 +11,7 @@ This document provides a step-by-step implementation plan for building the Local
     - For every new module/class/function in `src/`, create a corresponding test file in `tests/` mirroring the directory structure (e.g., `src/core/foo.py` -> `tests/core/test_foo.py`).
             - Write comprehensive tests using `pytest` and `unittest.mock` (for mocking dependencies/API calls).
             - Ensure necessary `__init__.py` files exist in both `src` and `tests` subdirectories to make them packages.
-            - **Import Hack:** Until a better solution (like `pyproject.toml`) is implemented, start test files with the `sys.path.insert(...)` boilerplate to ensure `src` is importable:
-                ```
-        import sys
-        import os
-        sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../src')))
-        # ... rest of imports ...
-        ```
-            - Use relative imports within tests (e.g., `from core.context_manager import ContextManager`).
+            - Use absolute imports from the package root within tests (e.g., `from core.context_manager import ContextManager`).
         - **Installation Reminder:** After updating `requirements.txt`, remind the user to run `pip install -r requirements.txt`.
     
 - **Tool Usage:** Prioritize using pre-built LangChain tools and integrations. Only create custom tools (following LangChain conventions: `BaseTool`/`@tool`, Pydantic args) if a suitable pre-built option isn't available or doesn't meet specific security/functional requirements (like writing to designated paths).
@@ -193,28 +186,348 @@ This document provides a step-by-step implementation plan for building the Local
 
 **Original Plan (Using Custom Callback Handler):**
 *   **Step 1: Research Token Usage Retrieval (Completed - Feasible)**
-*   **Step 2: Implement Custom Callback Handler (Attempted)**
-*   **Step 3: Integrate Handler and CLI Flags (Attempted)**
+*   **Step 2: Implement Custom Callback Handler for Tracking and Logging
+*   **Step 3: Integrate Handler and CLI Flags
+*   **Note on Documentation: ...**
 
-**Issues Encountered & Revert Reason (2025-05-05):**
-*   Persistent `500 InternalServerError` from Google API.
-*   `Convert_system_message_to_human` warnings (when using `create_react_agent`).
-*   Potential agent looping/instability.
-*   **Decision:** Reverted all code changes related to this feature.
+## Implementation Plan: Refactor Project Structure for Proper Packaging and Module Imports
 
-**Next Steps (Obsolete):**
-*   Re-evaluate the approach...
-*   Investigate root cause...
-*   Consider simpler methods...
+**Backlog Item:** Refactor Project Structure for Proper Packaging and Module Imports
 
-**Original Plan Details (Pre-Revert):**
-```
-# --- Original Plan Steps (Preserved for reference) ---
-# Step 1: Research Token Usage Retrieval
-# ...
-# Step 2: Implement Custom Callback Handler for Tracking and Logging
-# ...
-# Step 3: Integrate Handler and CLI Flags
-# ...
-# Note on Documentation: ...
-```
+**Overall Goal:** Transition the project from using `sys.path` manipulations for imports to a standard Python packaging setup (e.g., using `pyproject.toml` and `setuptools`), making the project more robust, maintainable, and easier to test and distribute.
+
+**Phase 1: Setup Packaging and Basic Conversion**
+
+*   **Step 1.1: Choose Packaging Tools and Create Configuration**
+    *   **Goal:** Decide on the packaging tools (e.g., `setuptools` with `pyproject.toml`) and create the initial packaging configuration file.
+    *   **File(s):** `pyproject.toml` (New)
+    *   **Key Functionality:**
+        *   Research and decide between `setuptools` (with `pyproject.toml`), `poetry`, or other modern Python packaging tools. (Recommendation: `setuptools` with `pyproject.toml` for broad compatibility).
+        *   Create `pyproject.toml` with basic project metadata (name, version, author), dependencies (from `requirements.txt`), and configuration for `setuptools` to find packages (e.g., in `src`).
+    *   **Tech Stack:** `pyproject.toml`, `setuptools`
+    *   **AI Assistance Guidance:** "Draft a `pyproject.toml` file using `setuptools` as the build backend. Include project name 'LocalLLMTerminalEnv', version '0.2.0' (or current). List dependencies by referencing `requirements.txt` or by manually transcribing them. Configure `setuptools` to find packages in the `src` directory."
+    *   **Testing:**
+        *   Validate `pyproject.toml` syntax.
+        *   Attempt to build a source distribution (e.g., `python -m build --sdist`) to verify basic setup.
+
+*   **Step 1.2: Make Project Installable in Editable Mode**
+    *   **Goal:** Ensure the project can be installed in editable mode (`pip install -e .`) so that changes in `src` are immediately reflected.
+    *   **File(s):** `pyproject.toml` (Updates if necessary), `src/**/__init__.py` (New/Verify)
+    *   **Key Functionality:**
+        *   Ensure `pyproject.toml` is correctly configured for editable installs.
+        *   Add `__init__.py` files to all necessary directories within `src` to make them discoverable as packages/modules (e.g., `src/core/__init__.py`, `src/utils/__init__.py`, `src/cli/__init__.py`, and any subdirectories containing Python modules).
+    *   **Tech Stack:** Python, `pip`, `setuptools`
+    *   **AI Assistance Guidance:** "Identify all directories under `src/` that should be Python packages and ensure an empty `__init__.py` file exists in each. Guide on how to verify editable install."
+    *   **Testing:**
+        *   Run `pip install -e .` from the project root.
+        *   In a Python interpreter, try importing a module from `src` (e.g., `from core import agent_loader`) to confirm successful installation.
+
+**Phase 2: Update Imports and Remove Hacks**
+
+*   **Step 2.1: Remove `sys.path` Hacks**
+    *   **Goal:** Remove all manipulations of `sys.path` from the codebase, particularly in test files and any entry points.
+    *   **File(s):** All `tests/**/*.py` files, `src/cli/main.py` (if applicable), any other script using `sys.path.insert` or `sys.path.append`.
+    *   **Key Functionality:** Delete lines of code that modify `sys.path`.
+    *   **Tech Stack:** Python
+    *   **AI Assistance Guidance:** "Search for all occurrences of `sys.path.insert` and `sys.path.append` in the project, especially in `tests/` and `scripts/`, and prepare an edit to remove them."
+    *   **Testing:** After removal, tests will likely fail until imports are fixed in the next step. This is expected.
+
+*   **Step 2.2: Update Import Statements**
+    *   **Goal:** Modify all import statements throughout the project (`src` and `tests`) to use absolute imports based on the new package structure (e.g., `from core.agent_loader import ...` or `from utils.chat_helpers import ...`).
+    *   **File(s):** All `*.py` files in `src/` and `tests/`.
+    *   **Key Functionality:**
+        *   Change relative imports (like `from ..utils import something`) or old top-level imports that relied on `sys.path` hacks to absolute imports from the `src` package (e.g., `from src.core.some_module import MyClass` becomes `from core.some_module import MyClass` assuming `src` is the root package source).
+        *   For tests, imports will also be absolute, e.g., `from core.agent_loader import AgentExecutor`.
+    *   **Tech Stack:** Python
+    *   **AI Assistance Guidance:** "Analyze import statements in all Python files. For files in `src/`, ensure imports of other `src/` modules are absolute from the package root (e.g., `from core.config_loader import ...`). For files in `tests/`, ensure they import `src/` modules absolutely (e.g., `from core.agent_loader import ...`). Provide edits."
+    *   **Testing:**
+        *   Run `pytest`. Most tests should now pass if imports are correct and the editable install works.
+        *   Run the main application (`python -m src.cli.main chat`) to ensure it starts and basic functionality is intact.
+
+**Phase 3: Finalize and Document**
+
+*   **Step 3.1: Update Documentation and CI/CD**
+    *   **Goal:** Update any project documentation (README, contributing guides) and CI/CD scripts to reflect the new packaging structure and build/test process.
+    *   **File(s):** `README.md`, `.github/workflows/*.yml` (if exists), any developer documentation, `memory-bank/implementation-plan.md`.
+    *   **Key Functionality:**
+        *   Update setup instructions to use `pip install -e .`.
+        *   Ensure CI/CD pipelines correctly install dependencies and run tests with the new structure.
+        *   Remove the "Import Hack" note from `memory-bank/implementation-plan.md` (under "AI Assistant Development Guidelines").
+    *   **Tech Stack:** Markdown, YAML (for GitHub Actions)
+    *   **AI Assistance Guidance:** "Review `README.md` for setup instructions and update them. If a GitHub Actions workflow exists for testing, review it to ensure it will work with the new packaging (it likely will if it uses `pip install -r requirements.txt` followed by `pip install -e .`). Prepare an edit for `memory-bank/implementation-plan.md` to remove the import hack boilerplate."
+    *   **Testing:**
+        *   Manually follow setup instructions in `README.md`.
+        *   If CI/CD exists, trigger a build to verify it passes.
+
+## Implementation Plan: Investigate and Fix Failing Pytest Suite
+
+**Backlog Item:** Investigate and Fix Failing Pytest Suite
+
+**Overall Goal:** Diagnose and resolve all failures in the Pytest suite to ensure a reliable testing foundation for the project, enabling confident code changes and feature development.
+
+**Phase 1: Initial Diagnosis and Triage**
+
+*   **Step 1.1: Execute Test Suite and Categorize Failures**
+    *   **Goal:** Run the entire Pytest suite and systematically categorize the types of failures and errors observed.
+    *   **File(s):** Test output logs.
+    *   **Key Functionality:**
+        *   Execute `pytest` from the project root.
+        *   Collect all error messages and tracebacks.
+        *   Group failures by common patterns (e.g., import errors, assertion errors, specific exceptions like `FileNotFoundError`, mock errors).
+    *   **Tech Stack:** `pytest`
+    *   **AI Assistance Guidance:** "Suggest `pytest` command options to maximize verbosity and capture output (e.g., `pytest -vv > test_failures.log`). Help analyze the output to identify common error types."
+    *   **Testing:** N/A (This step is diagnostic)
+
+*   **Step 1.2: Prioritize Fixes (Focus on Systemic Issues First)**
+    *   **Goal:** Identify if systemic issues (like widespread import errors due to recent packaging changes, or problems with test environment setup) are causing a large number of failures.
+    *   **File(s):** Test failure analysis from Step 1.1.
+    *   **Key Functionality:**
+        *   Analyze categorized failures to see if a few root causes are responsible for many errors.
+        *   Hypothesize primary blockers (e.g., "If all import errors are fixed, X% of tests might pass").
+    *   **Tech Stack:** Analytical skills.
+    *   **AI Assistance Guidance:** "Based on the categorized failures, help determine if there are overarching issues (e.g., if many tests fail with `ModuleNotFoundError`, this points to a systemic import problem that should be addressed before individual test logic)."
+    *   **Testing:** N/A (This step is analytical)
+
+**Phase 2: Addressing Systemic Failures (If Applicable)**
+
+*   **Step 2.1: Address Widespread Import/Environment Issues**
+    *   **Goal:** Fix any identified systemic problems related to imports (likely linked to the packaging refactor) or test environment configuration.
+    *   **File(s):** `pyproject.toml`, `tests/**/*.py`, `conftest.py` (if it exists), CI configuration files.
+    *   **Key Functionality:**
+        *   If import errors are prevalent, ensure the packaging refactor (previous backlog item) is complete and correctly implemented (editable install works, `__init__.py` files are in place, imports are absolute).
+        *   Check `conftest.py` for any fixtures or configurations that might be causing widespread issues.
+        *   Verify that `requirements.txt` (or `pyproject.toml` dependencies) includes all necessary testing libraries.
+    *   **Tech Stack:** Python, `pytest`, `setuptools`
+    *   **AI Assistance Guidance:** "If import errors are common, cross-reference with the packaging implementation plan to ensure all steps were completed. Suggest checks for `__init__.py` files in `src/` and `tests/` directories, and verify absolute imports in test files."
+    *   **Testing:** Re-run `pytest` after changes. Observe if a significant number of previously failing tests now pass.
+
+**Phase 3: Fixing Individual Test Failures**
+
+*   **Step 3.1: Iteratively Fix Test Groups**
+    *   **Goal:** Work through the categorized test failures group by group, or file by file, to fix the underlying issues in test logic or source code.
+    *   **File(s):** Specific `tests/**/*.py` files and corresponding `src/**/*.py` files.
+    *   **Key Functionality:**
+        *   For each failing test:
+            *   Understand the test's purpose.
+            *   Analyze the assertion failure or exception.
+            *   Debug the test and the code it's testing.
+            *   Update mocks if external calls or dependencies have changed.
+            *   Modify test logic or source code as needed.
+    *   **Tech Stack:** Python, `pytest`, `unittest.mock`
+    *   **AI Assistance Guidance:** "For a given failing test (provide error and test code), help diagnose the issue. If it's a mock error, suggest how to update the mock. If it's an assertion error, help compare actual vs. expected. If the source code logic seems to have changed, help identify the relevant change."
+    *   **Testing:** Run `pytest <path_to_specific_test_file>` or `pytest -k <test_function_name>` frequently to confirm fixes for individual tests.
+
+*   **Step 3.2: Ensure All Tests Pass**
+    *   **Goal:** Continue fixing tests until the entire suite (`pytest`) runs successfully with no failures or errors.
+    *   **File(s):** All `tests/**/*.py` and `src/**/*.py` files.
+    *   **Key Functionality:** Diligent debugging and fixing.
+    *   **Tech Stack:** Python, `pytest`
+    *   **AI Assistance Guidance:** "Provide ongoing support for diagnosing and fixing individual test failures as they are tackled."
+    *   **Testing:** The final `pytest` run shows all tests passing.
+
+**Phase 4: Refinement and Documentation (If Needed)**
+
+*   **Step 4.1: Refactor Tests for Clarity/Efficiency (Optional)**
+    *   **Goal:** If, during the fixing process, tests are found to be poorly written, duplicative, or inefficient, refactor them.
+    *   **File(s):** `tests/**/*.py`
+    *   **Key Functionality:** Improve test readability, reduce redundancy using fixtures, improve mock strategies.
+    *   **Tech Stack:** `pytest`
+    *   **AI Assistance Guidance:** "If a test looks overly complex or has a lot of boilerplate, suggest ways to simplify it using `pytest` fixtures or by improving its structure."
+    *   **Testing:** Ensure refactored tests still pass and correctly cover the intended functionality.
+
+*   **Step 4.2: Document Any Common Pitfalls or Solutions**
+    *   **Goal:** If common issues were found (e.g., a particular way mocks needed to be updated), document this for future reference.
+    *   **File(s):** Developer notes, potentially `README.md` or a `CONTRIBUTING.md`.
+    *   **Key Functionality:** Briefly note any patterns or solutions that were key to fixing the test suite.
+    *   **Tech Stack:** Markdown
+    *   **AI Assistance Guidance:** "Help summarize any recurring themes or tricky fixes encountered during the process that might be useful for future test development."
+    *   **Testing:** N/A
+
+## Implementation Plan: Prepare Project for Public Release: Scrub Sensitive Data
+
+**Backlog Item:** Prepare Project for Public Release: Scrub Sensitive Data
+
+**Overall Goal:** Ensure that no sensitive personal data, chat logs, or private configurations are included when the project is prepared for public release on GitHub.
+
+**Phase 1: Identification and Strategy**
+
+*   **Step 1.1: Identify All Sensitive Files and Data Types**
+    *   **Goal:** Create a comprehensive list of all files, directories, and types of data within the project that should be considered sensitive and not for public release.
+    *   **File(s):** Project file structure, potentially a temporary checklist document.
+    *   **Key Functionality:**
+        *   Review project directories: `memory-bank/` (especially chat histories, detailed plans that might contain private thoughts), `data/agents/*/memory/`, `data/agents/*/session_log.md`.
+        *   Check configuration files for any accidentally committed secrets (though `.env` should prevent this for API keys).
+        *   Consider if any example files or test data might contain sensitive placeholders.
+    *   **Tech Stack:** File system navigation, text search.
+    *   **AI Assistance Guidance:** "Based on the project structure (provide if necessary, or I can list common sensitive locations), help enumerate typical files and directories that should be scrubbed. For example: `memory-bank/*`, `data/agents/**/chat_history.json`, `data/agents/**/session_log.md`, `.env` file (though this should already be in `.gitignore`)."
+    *   **Testing:** Review the generated list for completeness.
+
+*   **Step 1.2: Define Scrubbing Strategy**
+    *   **Goal:** Decide on the method for excluding or cleaning sensitive data for the public release.
+    *   **File(s):** `.gitignore`, potentially a new script for cleaning.
+    *   **Key Functionality:**
+        *   **Option A (Recommended for `memory-bank` and dynamic agent data):** Add sensitive directories/files (like `memory-bank/`, `data/agents/*/memory/`, `data/agents/*/session_log.md`) to `.gitignore` so they are never committed. Provide example/template structures for these directories instead.
+        *   **Option B (For specific files that need versions):** Create a script to clean or anonymize specific files if they need to exist in the public repo but in a sanitized form.
+        *   **Option C (For one-time cleanup):** Manually delete or clean files before the initial public commit.
+        *   Ensure `.env` is in `.gitignore`.
+    *   **Tech Stack:** `.gitignore` syntax, shell scripting (if Option B).
+    *   **AI Assistance Guidance:** "Discuss the pros and cons of using `.gitignore` vs. a cleaning script for `memory-bank/` and agent-specific data. Recommend using `.gitignore` and providing template structures for users."
+    *   **Testing:** N/A (Strategy definition).
+
+**Phase 2: Implementation of Scrubbing**
+
+*   **Step 2.1: Update `.gitignore`**
+    *   **Goal:** Add all identified sensitive files and directories that should be entirely excluded from the public repository to the `.gitignore` file.
+    *   **File(s):** `.gitignore`
+    *   **Key Functionality:**
+        *   Add patterns like:
+            ```
+            # Sensitive data and logs
+            memory-bank/
+            data/agents/*/memory/
+            data/agents/*/session_log.md
+            *.env
+            logs/
+            ```
+        *   Ensure these files are not already tracked by Git (use `git rm --cached <file>` if they are).
+    *   **Tech Stack:** `.gitignore` syntax, Git CLI.
+    *   **AI Assistance Guidance:** "Draft the additions for the `.gitignore` file. Provide `git` commands to unstage already tracked files if necessary (e.g., `git rm -r --cached memory-bank/`)."
+    *   **Testing:**
+        *   Run `git status` to ensure the ignored files/directories no longer appear as modified or untracked (unless they are new and untracked).
+        *   Verify that `git clean -fdx` (with caution, or `-fdxn` for a dry run) would remove these items if they existed locally but were untracked.
+
+*   **Step 2.2: Create Template/Example Structures (If Needed)**
+    *   **Goal:** If directories like `memory-bank/` are ignored, provide template files or a README within those locations to guide users on how to structure their own data.
+    *   **File(s):** e.g., `memory-bank/README.md`, `memory-bank/backlog.template.md`, `data/agents/README.md`.
+    *   **Key Functionality:**
+        *   Create placeholder READMEs or template files (e.g., `backlog.example.md`, `prd.example.md`) in the now-ignored directories to show users the expected structure.
+        *   These template files *would* be committed to the repository.
+    *   **Tech Stack:** Markdown.
+    *   **AI Assistance Guidance:** "Suggest content for a `memory-bank/README.md` that explains its purpose and how users can create their own `backlog.md`, `prd.md`, etc. Suggest creating empty template files like `backlog.example.md`."
+    *   **Testing:** Check that these template files are tracked by Git and provide useful guidance.
+
+*   **Step 2.3: Implement Cleaning Script (If Opted for Option B in 1.2)**
+    *   **Goal:** If any files need to be version-controlled but sanitized, create a script to perform this cleaning.
+    *   **File(s):** e.g., `scripts/scrub_data.sh` or `scripts/scrub_data.py`.
+    *   **Key Functionality:** Script to remove specific sections, anonymize names, or clear content from specified files.
+    *   **Tech Stack:** Shell scripting or Python.
+    *   **AI Assistance Guidance:** "If a cleaning script is needed for specific files, help draft the script logic (e.g., regex for removing certain patterns, JSON parsing for anonymizing fields)."
+    *   **Testing:** Run the script on sample files and verify the output is correctly sanitized.
+
+**Phase 3: Verification and Documentation**
+
+*   **Step 3.1: Final Review Before Public Push**
+    *   **Goal:** Perform a final check of the repository to ensure no sensitive data remains before making it public or pushing changes related to scrubbing.
+    *   **File(s):** Entire project repository.
+    *   **Key Functionality:**
+        *   Manually browse files that were borderline or where scrubbing was applied.
+        *   Use search tools to look for common sensitive keywords or patterns.
+        *   Double-check `git status` and the `.gitignore` rules.
+    *   **Tech Stack:** Git CLI, text search tools.
+    *   **AI Assistance Guidance:** "Suggest common keywords or regex patterns to search for to catch accidentally committed sensitive data (e.g., email addresses, API key patterns, common personal identifiers if they were ever in notes)."
+    *   **Testing:** Thorough manual review.
+
+*   **Step 3.2: Document Data Handling for Users/Contributors**
+    *   **Goal:** Update project documentation (e.g., `README.md` or `CONTRIBUTING.md`) to explain how sensitive data is handled, what users need to create locally (e.g., their own `memory-bank`), and how to manage their `.env` file.
+    *   **File(s):** `README.md`, `CONTRIBUTING.md`.
+    *   **Key Functionality:** Explain which directories are in `.gitignore` and why, and how users should set up their local environment for personal data.
+    *   **Tech Stack:** Markdown.
+    *   **AI Assistance Guidance:** "Draft a section for `README.md` explaining that `memory-bank/` and agent chat histories are not committed, and users should create their own. Also, reiterate `.env` usage for API keys."
+    *   **Testing:** Read the documentation from a new user's perspective to ensure clarity.
+
+## Implementation Plan: Implement CI/CD Pipeline for Automated Pytest on PRs
+
+**Backlog Item:** Implement CI/CD Pipeline for Automated Pytest on PRs
+
+**Overall Goal:** Set up a Continuous Integration (CI) pipeline using GitHub Actions to automatically run the Pytest suite on every Pull Request (PR) against the main development branch, blocking merges if tests fail.
+
+**Phase 1: Basic Workflow Setup**
+
+*   **Step 1.1: Create GitHub Actions Workflow File**
+    *   **Goal:** Create the basic YAML file for the GitHub Actions workflow.
+    *   **File(s):** `.github/workflows/python-pytest.yml` (New)
+    *   **Key Functionality:**
+        *   Define the workflow name (e.g., "Python Pytest CI").
+        *   Specify triggers: `on: [pull_request]` (targeting `main` or `develop` branch).
+    *   **Tech Stack:** YAML (GitHub Actions syntax)
+    *   **AI Assistance Guidance:** "Draft the initial structure for `.github/workflows/python-pytest.yml`, including the `name` and `on: pull_request` trigger for the main branch."
+    *   **Testing:** Commit the workflow file and open a test PR to see if the action is triggered (it will likely fail at this stage as no jobs are defined).
+
+*   **Step 1.2: Define a Job to Checkout Code and Set Up Python**
+    *   **Goal:** Add a job to the workflow that checks out the repository code and sets up the correct Python version.
+    *   **File(s):** `.github/workflows/python-pytest.yml`
+    *   **Key Functionality:**
+        *   Define a job (e.g., `build` or `test`) that `runs-on: ubuntu-latest`.
+        *   Add steps:
+            *   `actions/checkout@vX` (use a recent version, e.g., v3 or v4)
+            *   `actions/setup-python@vX` (use a recent version) specifying the Python version used by the project (e.g., 3.10, 3.11).
+    *   **Tech Stack:** YAML (GitHub Actions syntax)
+    *   **AI Assistance Guidance:** "Add a job named `test` that runs on `ubuntu-latest`. Include steps for `actions/checkout@v4` and `actions/setup-python@v5` with Python version 3.11 (or user-specified version)."
+    *   **Testing:** Push changes to the test PR. Verify the workflow runs, checks out code, and sets up Python successfully.
+
+**Phase 2: Dependency Installation and Test Execution**
+
+*   **Step 2.1: Install Project Dependencies**
+    *   **Goal:** Add steps to install the project's dependencies as defined in `requirements.txt` (and `pip install -e .` if using packaging).
+    *   **File(s):** `.github/workflows/python-pytest.yml`
+    *   **Key Functionality:**
+        *   Add a step to install dependencies:
+            ```yaml
+            - name: Install dependencies
+              run: |
+                python -m pip install --upgrade pip
+                pip install -r requirements.txt
+                # If project uses packaging (pyproject.toml):
+                pip install -e .
+            ```
+    *   **Tech Stack:** YAML (GitHub Actions syntax), `pip`
+    *   **AI Assistance Guidance:** "Add a step named 'Install dependencies' that upgrades pip, installs from `requirements.txt`, and then runs `pip install -e .` (assuming the packaging refactor is complete)."
+    *   **Testing:** Push changes to the test PR. Verify the workflow installs dependencies without error.
+
+*   **Step 2.2: Run Pytest**
+    *   **Goal:** Add a step to execute the Pytest suite.
+    *   **File(s):** `.github/workflows/python-pytest.yml`
+    *   **Key Functionality:**
+        *   Add a step to run tests:
+            ```yaml
+            - name: Test with pytest
+              run: pytest
+            ```
+    *   **Tech Stack:** YAML (GitHub Actions syntax), `pytest`
+    *   **AI Assistance Guidance:** "Add a step named 'Test with pytest' that simply runs the `pytest` command."
+    *   **Testing:** Push changes to the test PR.
+        *   If tests are currently failing, this step *should* fail, and the PR check should reflect this.
+        *   If tests are passing, this step should pass.
+
+**Phase 3: Branch Protection and Refinements**
+
+*   **Step 3.1: Configure Branch Protection Rules**
+    *   **Goal:** Configure GitHub branch protection rules for the main development branch to require the "Python Pytest CI" (or whatever name was chosen) check to pass before merging.
+    *   **File(s):** N/A (Configuration in GitHub repository settings)
+    *   **Key Functionality:**
+        *   Go to Repository Settings -> Branches -> Add branch protection rule.
+        *   Select the main branch (e.g., `main`).
+        *   Check "Require status checks to pass before merging."
+        *   Search for and select the name of your CI job/workflow.
+    *   **Tech Stack:** GitHub UI
+    *   **AI Assistance Guidance:** "Provide instructions on how to navigate GitHub settings to set up branch protection rules, requiring the specific CI job to pass."
+    *   **Testing:** Attempt to merge a PR with failing tests (if any exist); GitHub should block it. Merge a PR with passing tests; GitHub should allow it.
+
+*   **Step 3.2: Optimize Workflow (Optional)**
+    *   **Goal:** Add caching for dependencies to speed up workflow runs.
+    *   **File(s):** `.github/workflows/python-pytest.yml`
+    *   **Key Functionality:**
+        *   Use `actions/cache@vX` to cache `pip` dependencies.
+            ```yaml
+            - name: Cache pip dependencies
+              uses: actions/cache@v3 # Or newer
+              with:
+                path: ~/.cache/pip
+                key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+                restore-keys: |
+                  ${{ runner.os }}-pip-
+            ```
+        *   Place this step before dependency installation.
+    *   **Tech Stack:** YAML (GitHub Actions syntax)
+    *   **AI Assistance Guidance:** "Add a caching step for pip dependencies using `actions/cache@v3` (or newer), configured to use `requirements.txt` for the cache key."
+    *   **Testing:** Observe workflow run times; subsequent runs after the first one with caching should be faster in the dependency installation step.

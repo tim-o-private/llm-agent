@@ -35,7 +35,13 @@ A terminal-based environment for interacting with Large Language Models (LLMs), 
     pip install -r requirements.txt
     ```
 
-4.  **Configure Environment Variables:**
+4.  **Install the project in editable mode:**
+    This step makes the project's modules importable from anywhere within your activated virtual environment, which is necessary for the new packaging structure.
+    ```bash
+    pip install -e .
+    ```
+
+5.  **Configure Environment Variables:**
     *   Create a `.env` file in the project root directory.
     *   Add your Google API key:
         ```dotenv
@@ -43,19 +49,19 @@ A terminal-based environment for interacting with Large Language Models (LLMs), 
         ```
     *   You can obtain a key from [Google AI Studio](https://aistudio.google.com/app/apikey).
 
-5.  **(Optional) Configure Settings:**
+6.  **(Optional) Configure Settings:**
     *   Review and modify `config/settings.yaml` to change default model names, directory paths, etc.
 
 ## Usage
 
-The primary entry point is `src/cli/main.py`.
+The primary entry point is the `src.cli.main` module.
 
 ### Interactive Chat (`chat`)
 
 This is the main way to interact with agents conversationally.
 
 ```bash
-python src/cli/main.py chat [OPTIONS]
+python -m src.cli.main chat [OPTIONS]
 ```
 
 **Options:**
@@ -65,7 +71,7 @@ python src/cli/main.py chat [OPTIONS]
 
 **Example:**
 ```bash
-python src/cli/main.py chat -a test_agent --verbose 
+python -m src.cli.main chat -a test_agent --verbose 
 ```
 
 **In-Chat Commands:**
@@ -77,7 +83,7 @@ python src/cli/main.py chat -a test_agent --verbose
 For non-conversational queries where you provide context via an agent configuration.
 
 ```bash
-python src/cli/main.py ask <QUERY> [OPTIONS]
+python -m src.cli.main ask <QUERY> [OPTIONS]
 ```
 
 **Arguments:**
@@ -90,7 +96,7 @@ python src/cli/main.py ask <QUERY> [OPTIONS]
 
 **Example:**
 ```bash
-python src/cli/main.py ask "What is the secret codeword mentioned in your context?" -a test_agent
+python -m src.cli.main ask "What is the secret codeword mentioned in your context?" -a test_agent
 ```
 
 ## Agent Configuration
