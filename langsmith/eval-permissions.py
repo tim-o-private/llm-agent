@@ -14,8 +14,8 @@
 # - Consider making example generation more dynamic, perhaps using an LLM
 #   with structured output to generate a wider variety of test cases.
 # - The dataset re-creation logic (lines 186-200) clears all examples every time.
-#   For iterative testing, you might want options to append, or only clear if structure changes.
-# - Parameterize to take a set of tests and agents as arguments and run the experiment.
+#   Not clear if this is necessary. If not, remove it.
+# - Parameterize script to take a set of tests and agents as arguments and run the experiment.
 
 import logging
 import datetime
