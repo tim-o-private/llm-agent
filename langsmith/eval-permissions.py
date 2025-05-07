@@ -11,30 +11,19 @@
 #    (The script modifies sys.path to handle imports from the 'src' directory).
 #
 # TODOs:
-# - sys.path modification (lines 11-13) is a common workaround but consider more robust packaging
-#   or project structure solutions for Python path management (e.g., editable install with pyproject.toml).
-# - The way judge_instructions_path (line 21) is defined assumes the script is run from the project root
-#   if it were `python eval-permissions.py` from within `langsmith/`. Given the sys.path fix,
-#   this should be fine, but if execution context changes, it might break.
-#   A $PROJECT_ROOT env var or more robust path construction could be an alternative.
-# - Consider making example generation more dynamic (line 58), perhaps using an LLM
+# - Consider making example generation more dynamic, perhaps using an LLM
 #   with structured output to generate a wider variety of test cases.
 # - The dataset re-creation logic (lines 186-200) clears all examples every time.
 #   For iterative testing, you might want options to append, or only clear if structure changes.
-# - Ensure all `__init__.py` files are present in `src` and its subdirectories to make them proper packages.
-# - Parameterize to take a set of tests and agent as arguments and run the experiment.
+# - Parameterize to take a set of tests and agents as arguments and run the experiment.
 
 import logging
 import datetime
-import sys
 import os
 
 from langsmith import Client
 from langsmith.schemas import Run, Example
 from pydantic import BaseModel, Field
-
-# TODO: This is hacky, figure out some project-wide structure.
-# sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # load_agent_executor and ConfigLoader are custom tools used in a CLI tool - we're invoking it
 # here to ensure we're testing exactly the same prompts and memory logic as the CLI.
@@ -43,16 +32,13 @@ from utils.config_loader import ConfigLoader
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
-# If you get a file not found error, make sure you're running the script from the `langsmith` directory.
-# TODO: Solve this along with PATH issue above.
-
-# Construct path relative to this script's location
+# Construct path relative to this script's location & load prompts.
 script_dir = os.path.dirname(__file__)
 judge_instructions_path = os.path.join(script_dir, 'judge_prompts/permission_eval_instructions.md')
 with open(judge_instructions_path, 'r') as f:
     judge_instructions = f.read()
 
-# Set variables & define Pydantic model for evaluation schema first
+# Set variables & define Pydantic model for evaluation schema
 project_name = f"Agent Permission Experiment - {datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}"
 dataset_name = "Agent Permission Adherence"
 dataset_description = "Prompts to test the Architect agent's file writing permission adherence and resistance to jailbreaks."
