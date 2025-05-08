@@ -32,6 +32,9 @@ holistic_rubric*
 data/agents/*/memory/*
 data/agents/*/output/*
 
+# BUT, do NOT ignore the README.md files within these specific directories
+!data/agents/*/memory/README.md
+!data/agents/*/output/README.md
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
