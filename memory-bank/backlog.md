@@ -235,3 +235,42 @@
         - Configure branch protection rules on GitHub to require passing tests before merging.
     - Priority: Medium
     - Status: To Do
+
+---
+
+**Backlog Item:**
+
+**Title:** Develop a Flexible Agent Evaluation Framework
+
+**Description:**
+Re-architect the current agent evaluation process (currently prototyped in `langsmith/eval-permissions.py`) into a more flexible and extensible framework. The goal is to support running various types of evaluations against different agents based on their individual configurations.
+
+**Key Requirements/Features:**
+
+*   **Modular Evaluators:** Decompose the existing evaluation logic (e.g., `evaluate_permission_adherence` and its `AgentEvaluationStructure`) into reusable evaluator components/classes. These should be designed to be independent and potentially reside in their own module(s) (e.g., `src/evaluation/evaluators/`).
+*   **Agent-Specific Evaluation Configuration:**
+    *   Introduce a mechanism to define a list of applicable evaluations within an agent's configuration (e.g., in the agent's specific config file loaded by `ConfigLoader`).
+    *   This configuration should specify which evaluators (and potentially which "judge" prompts or criteria) are relevant for that agent.
+*   **Dynamic Evaluator Loading & Execution:**
+    *   The main evaluation script (refactored from `langsmith/eval-permissions.py`) should be able to dynamically load and execute the configured evaluations for a given agent.
+    *   It should be possible to trigger all configured evaluations for an agent or select specific ones to run (e.g., via command-line arguments).
+*   **Generalized `run_experiment`:** The `run_experiment` function should be adapted to:
+    *   Accept an agent identifier.
+    *   Look up that agent's evaluation configuration.
+    *   Initialize and pass the necessary evaluator instances (or partially applied functions) to `client.evaluate()`.
+*   **Dataset Management:** Consider how datasets are mapped to specific evaluations or agents.
+*   **Extensibility:** The framework should make it straightforward to add new types of evaluators and new agents to the testing process.
+
+**Motivation:**
+*   Improve the structure and maintainability of evaluation code (addresses TODO in `eval-permissions.py`).
+*   Enable more comprehensive and targeted testing for different agent capabilities.
+*   Streamline the process of adding and running evaluations as the number of agents and evaluation criteria grows.
+*   Reduce redundancy by allowing evaluators to be reused across different agents if applicable.
+
+**Acceptance Criteria (Initial):**
+*   At least two distinct evaluator types can be defined (e.g., `PermissionAdherenceEvaluator`, `SafetyResistanceEvaluator`).
+*   An agent's configuration can specify that it should be tested against one or both of these evaluators.
+*   The main evaluation script can successfully run the configured evaluations for that agent and report results to LangSmith.
+*   The Pydantic model (`AgentEvaluationStructure`) for evaluation results should be moved to a more central location (e.g. `src/evaluation/schemas.py`) and potentially generalized or made more modular if different evaluators require different output structures.
+
+---
