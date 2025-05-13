@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Button, Input, Label, Modal } from '@clarity/ui'; // Removed Textarea import
+import { Button, Input, Label, Modal } from '@/components/ui'; // Updated import
 
 export interface TaskDetails {
   title: string;

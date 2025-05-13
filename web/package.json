@@ -7,10 +7,9 @@
     "pnpm": ">=8.0.0"
   },
   "scripts": {
-    "dev:ui": "pnpm --filter @clarity/ui dev",
     "dev:api": "pnpm --filter @clarity/api dev",
     "dev:web": "pnpm --filter @clarity/web dev",
-    "dev": "concurrently \"pnpm:dev:ui\" \"pnpm:dev:api\" \"pnpm:dev:web\" --names \"UI,API,WEB\" --prefix-colors \"bgBlue.bold,bgMagenta.bold,bgGreen.bold\"",
+    "dev": "concurrently \"pnpm:dev:api\" \"pnpm:dev:web\" --names \"API,WEB\" --prefix-colors \"bgMagenta.bold,bgGreen.bold\"",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",

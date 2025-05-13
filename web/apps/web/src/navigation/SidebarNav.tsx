@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Button } from '@clarity/ui';
+import { Button } from '@/components/ui';
 
 const navLinks = [
   { to: '/dashboard', label: 'Dashboard' },
@@ -14,11 +14,16 @@ export const SidebarNav: React.FC = () => (
         asChild
         key={link.to}
         variant="secondary"
-        className={({ isActive }: any) =>
-          isActive ? 'btn-primary' : ''
-        }
       >
-        <NavLink to={link.to} end>{link.label}</NavLink>
+        <NavLink 
+          to={link.to} 
+          end
+          className={({ isActive }) =>
+            isActive ? 'btn btn-primary' : 'btn btn-secondary'
+          }
+        >
+          {link.label}
+        </NavLink>
       </Button>
     ))}
   </nav>

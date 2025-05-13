@@ -1,5 +1,5 @@
 import React from 'react';
-import { ThemeToggle, Button } from '@clarity/ui';
+import { ThemeToggle, Button } from '@/components/ui';
 import { UserMenu } from '../components/UserMenu';
 import { SidebarNav } from '../navigation/SidebarNav';
 import { ChatPanel } from '../components/ChatPanel';

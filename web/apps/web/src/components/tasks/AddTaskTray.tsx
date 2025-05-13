@@ -1,6 +1,6 @@
 import React, { Fragment, useState } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
-import { Input, Button } from '@clarity/ui'; // Assuming Button and Input are available
+import { Input, Button } from '@/components/ui'; // Updated import
 
 interface AddTaskTrayProps {
   isOpen: boolean;

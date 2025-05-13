@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Button, Input, Label } from '@clarity/ui'; // Removed Modal import
+import { Button, Input, Label } from '@/components/ui'; // Updated import
 import { motion } from 'framer-motion'; // Import motion
 
 interface QuickAddTrayProps {

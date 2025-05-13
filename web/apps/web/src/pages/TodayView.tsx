@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 // AppShell is used via AppLayout in App.tsx, so no direct import here is needed if this page is rendered via <Outlet /> in AppLayout.
 import TaskListGroup from '../components/tasks/TaskListGroup'; // Assuming TaskListGroup is created
-import { TaskCardProps } from '@clarity/ui'; // For mock data type
+import { TaskCardProps } from '@/components/ui'; // Updated import
 import FABQuickAdd from '../components/tasks/FABQuickAdd'; // Import FABQuickAdd
 import QuickAddTray from '../components/tasks/QuickAddTray'; // Import QuickAddTray
 import { AnimatePresence } from 'framer-motion'; // Import AnimatePresence

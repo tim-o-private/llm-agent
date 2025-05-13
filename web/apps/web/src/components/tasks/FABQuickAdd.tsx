@@ -1,5 +1,5 @@
 import React from 'react';
-import { FAB } from '@clarity/ui';
+import { FAB } from '@/components/ui';
 
 interface FABQuickAddProps {
   onClick?: () => void;

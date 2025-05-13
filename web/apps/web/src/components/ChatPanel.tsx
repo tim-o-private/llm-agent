@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useChatStore } from '../stores/useChatStore';
-import { MessageHeader, MessageInput, MessageBubble } from '@clarity/ui'; // Added MessageHeader, MessageInput, MessageBubble
+import { MessageHeader, MessageInput, MessageBubble } from '@/components/ui'; // Updated import
 // Remove Button, Input from @clarity/ui if no longer directly used
 // import { Send } from 'lucide-react'; // Example icon, will be handled by MessageInput
 

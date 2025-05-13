@@ -1,5 +1,5 @@
 import React from 'react';
-import { TaskCard, TaskCardProps } from '@clarity/ui';
+import { TaskCard, TaskCardProps } from '@/components/ui';
 
 interface TaskListGroupProps {
   title: string;

@@ -5,7 +5,7 @@ import { AuthProvider } from './features/auth/AuthProvider';
 import AppShell from './layouts/AppShell';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { Spinner } from '@clarity/ui';
+import { Spinner } from '@/components/ui';
 
 // Lazy load pages for better performance
 const Home = lazy(() => import('./pages/Home'));
