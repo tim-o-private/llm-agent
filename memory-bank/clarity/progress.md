@@ -35,3 +35,4 @@
 - [~] Refactor - UI Merge: Created `web/apps/web/src/components/ui/` and `web/apps/web/src/styles/ui-components.css`.
 - [~] Refactor - UI Merge: Migrated initial styles (e.g., button styles) to `ui-components.css` and updated `main.tsx`.
 - [x] Refactor - UI Merge: Successfully merged `packages/ui` into `apps/web`. All components, hooks, styles, and configurations have been migrated and updated. Project structure simplified.
+- [x] Phase 0.5: Chat Interface - Resolved API connection issues; chat in `CoachPage.tsx` is now functional.
