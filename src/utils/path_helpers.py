@@ -1,6 +1,6 @@
 import os
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 # Type checking imports to avoid circular dependency
 if TYPE_CHECKING:
@@ -22,12 +22,20 @@ def get_base_path():
         # Go up two levels to get the project root where config/ and data/ are
         return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-def get_agent_data_dir(agent_name: str, config_loader: 'ConfigLoader') -> str:
-    """Get the data directory path for a specific agent."""
+def get_agent_data_dir(agent_name: str, config_loader: 'ConfigLoader', user_id: Optional[str] = None) -> str:
+    """Get the data directory path for a specific agent, optionally scoped by user_id."""
     base_data_dir_rel = config_loader.get('data.base_dir', 'data/')
-    agents_data_subdir = config_loader.get('data.agents_dir', 'agents/')
-    # Use get_base_path()
-    return os.path.join(get_base_path(), base_data_dir_rel, agents_data_subdir, agent_name)
+    project_base_path = get_base_path()
+
+    if user_id:
+        # Path for user-specific agent data: data/users/<user_id>/agents/<agent_name>
+        users_data_subdir = config_loader.get('data.users_dir', 'users/') # New config option
+        agents_subdir_within_user = config_loader.get('data.agents_dir_user_scope', 'agents/') # New config option
+        return os.path.join(project_base_path, base_data_dir_rel, users_data_subdir, user_id, agents_subdir_within_user, agent_name)
+    else:
+        # Path for general agent data (CLI or system agents): data/agents/<agent_name>
+        agents_data_subdir = config_loader.get('data.agents_dir', 'agents/')
+        return os.path.join(project_base_path, base_data_dir_rel, agents_data_subdir, agent_name)
 
 def get_task_list_dir(agent_name: str, config_loader: 'ConfigLoader') -> str:
     """Get the task list directory path.
@@ -57,15 +65,15 @@ def get_agent_config_file_path(agent_name: str, config_loader: 'ConfigLoader') -
     agent_config_dir = get_agent_config_dir(agent_name, config_loader)
     return os.path.join(agent_config_dir, 'agent_config.yaml')
 
-def get_agent_memory_dir(agent_name: str, config_loader: 'ConfigLoader') -> str:
-    """Get the memory directory path for a specific agent."""
-    agent_data_dir = get_agent_data_dir(agent_name, config_loader)
-    return os.path.join(agent_data_dir, 'memory')
+def get_agent_memory_dir(agent_name: str, config_loader: 'ConfigLoader', user_id: Optional[str] = None) -> str:
+    """Get the memory directory path for a specific agent, optionally user-scoped."""
+    agent_data_dir = get_agent_data_dir(agent_name, config_loader, user_id)
+    return os.path.join(agent_data_dir, 'memory') # Standardized to 'memory' subdir
 
-def get_agent_output_dir(agent_name: str, config_loader: 'ConfigLoader') -> str:
-    """Get the output directory path for a specific agent."""
-    agent_data_dir = get_agent_data_dir(agent_name, config_loader)
-    return os.path.join(agent_data_dir, 'output')
+def get_agent_output_dir(agent_name: str, config_loader: 'ConfigLoader', user_id: Optional[str] = None) -> str:
+    """Get the output directory path for a specific agent, optionally user-scoped."""
+    agent_data_dir = get_agent_data_dir(agent_name, config_loader, user_id)
+    return os.path.join(agent_data_dir, 'output') # Standardized to 'output' subdir
 
 # Added function to get the base config directory (for settings.yaml)
 def get_config_base_dir(config_loader: 'ConfigLoader') -> str:

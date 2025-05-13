@@ -1,5 +1,5 @@
 description: "A helpful general-purpose AI assistant."
-model_parameters: 
+llm:
   temperature: 0.75
 
 # Updated tools configuration
@@ -25,19 +25,19 @@ tools_config:
     toolkit: FileManagementToolkit
     scope: AGENT_CONFIG
     original_name: read_file
-    description: "Reads a file from the agent's configuration directory ({scope_path}). Use this to read instructions, prompts, or metadata specific to the current agent."
+    description: "Reads a file from the agent's configuration directory. Use this to read instructions, prompts, or metadata specific to the current agent."
 
   # Task List tools (scoped to specific task list dir)
   read_task_list_file:
     toolkit: FileManagementToolkit
     scope: TASK_LIST
     original_name: read_file
-    description: "Reads a file from the agent's task list directory ({scope_path}). Use for accessing task details."
+    description: "Reads a file from the agent's task list directory. Use for accessing task details."
   write_task_list_file:
     toolkit: FileManagementToolkit
     scope: TASK_LIST
     original_name: write_file
-    description: "Writes a file to the agent's task list directory ({scope_path}). Use for creating or updating tasks."
+    description: "Writes a file to the agent's task list directory. Use for creating or updating tasks."
 
 # Old tools list removed
 # tools: 
