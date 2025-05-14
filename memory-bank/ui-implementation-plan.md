@@ -9,6 +9,7 @@ This document outlines the implementation plan for the Clarity web application, 
 ### Goal: Set up project infrastructure and core UI components
 
 #### 1. Project Setup
+- **Status:** Complete
 - **Goal:** Initialize the monorepo structure and development environment
 - **Files:**
   - `web/pnpm-workspace.yaml`
@@ -24,6 +25,7 @@ This document outlines the implementation plan for the Clarity web application, 
 - **Testing:** Verify workspace setup and package dependencies
 
 #### 2. Authentication Foundation
+- **Status:** Complete
 - **Goal:** Implement OAuth authentication flow
 - **Files:**
   - `web/apps/web/src/features/auth/`
@@ -39,6 +41,7 @@ This document outlines the implementation plan for the Clarity web application, 
 - **Testing:** Auth flow testing, token validation, session persistence
 
 #### 3. Core UI Components
+- **Status:** Complete
 - **Goal:** Build foundational UI components
 - **Files:**
   - `web/apps/web/src/components/ui/` (Migrated from `web/packages/ui/src/components/`) ✅
@@ -54,6 +57,7 @@ This document outlines the implementation plan for the Clarity web application, 
 - **Testing:** Component unit tests, accessibility testing
 
 #### 4. Layout & Navigation
+- **Status:** Complete
 - **Goal:** Implement core application layout
 - **Files:**
   - `web/apps/web/src/layouts/AppShell.tsx` (New for AppShell)
@@ -82,6 +86,7 @@ This section details the implementation of the core application shell and naviga
 --- 
 
 **Sub-Item: Implement `AppShell.tsx` Component**
+- **Status:** Complete
 - **Goal:** Create the main application shell component that orchestrates the overall layout including the side navigation, top bar, and main content area. ✅
 - **File(s):** 
   - `web/apps/web/src/layouts/AppShell.tsx` (New)
@@ -101,6 +106,7 @@ This section details the implementation of the core application shell and naviga
 --- 
 
 **Sub-Item: Implement `SideNav.tsx` Component**
+- **Status:** Complete
 - **Goal:** Create the primary side navigation component with links to different sections of the application. ✅
 - **File(s):** 
   - `web/apps/web/src/components/navigation/SideNav.tsx` (New)
@@ -121,6 +127,7 @@ This section details the implementation of the core application shell and naviga
 --- 
 
 **Sub-Item: Implement `TopBar.tsx` Component**
+- **Status:** Complete
 - **Goal:** Create the top bar component to display contextual information like the current date, user streak, and potentially profile/mode indicators. ✅
 - **File(s):** 
   - `web/apps/web/src/components/navigation/TopBar.tsx` (New)
@@ -141,6 +148,7 @@ This section details the implementation of the core application shell and naviga
 --- 
 
 **Sub-Item: Integrate `AppShell`, `SideNav`, and `TopBar`**
+- **Status:** Complete
 - **Goal:** Ensure the `AppShell` correctly incorporates and renders `SideNav` and `TopBar`, and that the main application routing uses `AppShell` to wrap page content. ✅
 - **File(s):** 
   - `web/apps/web/src/layouts/AppShell.tsx`
@@ -157,6 +165,7 @@ This section details the implementation of the core application shell and naviga
   - Test any interaction between `AppShell` and its navigation children (e.g., mobile menu toggle).
 
 #### 5. Specialized Shared UI Components (NEW SECTION)
+- **Status:** Complete
 - **Goal:** Develop more specialized, reusable UI components based on `uiComponents.md`.
 - **Status:** ✅ Completed & Migrated
 - **Files:**
@@ -181,6 +190,7 @@ These components are more specialized than basic atomic components but are inten
 --- 
 
 **Sub-Item: Implement `TaskCard.tsx` Component**
+- **Status:** Complete
 - **Goal:** Create a reusable card component to display task information. ✅ (Implemented, reviewed, migrating)
 - **File(s):**
   - `web/apps/web/src/components/ui/TaskCard.tsx` (Migrating from `web/packages/ui/src/components/TaskCard.tsx`)
@@ -200,6 +210,7 @@ These components are more specialized than basic atomic components but are inten
 --- 
 
 **Sub-Item: Implement `TaskStatusBadge.tsx` Component**
+- **Status:** Complete
 - **Goal:** Create a small, inline badge to display task status (e.g., Upcoming, In Progress, Completed, Skipped). ✅ (Implemented, reviewed, migrating)
 - **File(s):**
   - `web/apps/web/src/components/ui/TaskStatusBadge.tsx` (Migrating from `web/packages/ui/src/components/TaskStatusBadge.tsx`)
@@ -216,6 +227,7 @@ These components are more specialized than basic atomic components but are inten
 --- 
 
 **Sub-Item: Implement `ToggleField.tsx` Component (Generic Toggle)**
+- **Status:** Complete
 - **Goal:** Create a reusable, accessible toggle switch component for settings or boolean preferences. ✅ (Implemented using Headless UI, reviewed, migrating)
 - **File(s):**
   - `web/apps/web/src/components/ui/ToggleField.tsx` (Migrating from `web/packages/ui/src/components/ToggleField.tsx`)
@@ -235,6 +247,7 @@ These components are more specialized than basic atomic components but are inten
 --- 
 
 **Sub-Item: Implement `FAB.tsx` Component (Floating Action Button Base)**
+- **Status:** Complete
 - **Goal:** Create a generic, reusable Floating Action Button component. ✅ (Implemented, reviewed, positioning fixed, migrating)
 - **File(s):**
   - `web/apps/web/src/components/ui/FAB.tsx` (Migrating from `web/packages/ui/src/components/FAB.tsx`)
@@ -250,11 +263,139 @@ These components are more specialized than basic atomic components but are inten
   - Visual verification of appearance and positioning.
   - Tooltip display if implemented.
 
-## Phase 0.5: Core Task Management UI (NEW PHASE)
+## Phase 0.4: Implement scalable design and implementation patterns.
+- **Status:** For Review
+refactor the existing codebase to align with the architectural patterns defined in `memory-bank/clarity/implementationPatterns.md`. The goal is to improve maintainability, reduce redundancy, and increase consistency.
 
+**Reference:** Please refer to `memory-bank/clarity/implementationPatterns.md` for the detailed DOs and DON'Ts for each pattern.
+
+---
+
+### Step 1: Consolidate Application Layout (Pattern 4)
+
+*   **Goal:** Establish a single, clear main application layout component.
+*   **Action:**
+    *   Review `web/apps/web/src/layouts/AppShell.tsx` and `web/apps/web/src/layouts/AppLayout.tsx`.
+    *   Determine which component (`AppLayout.tsx` is the current primary candidate) should serve as the definitive main layout.
+    *   Merge any necessary structure, logic, or components (like the `ChatPanel` if it's part of the layout) from the other file into the chosen layout file.
+    *   Update routing or component usage throughout the application to use only the chosen layout component.
+    *   Delete the redundant layout file (`AppShell.tsx` if `AppLayout.tsx` is chosen).
+*   **Verification:** Ensure the main application structure renders correctly on all routes using the single layout component.
+
+---
+
+### Step 2: Standardize UI Component Primitives & Styling (Patterns 2 & 6)
+
+*   **Goal:** Standardize on Radix UI Primitives for unstyled component behavior, styled consistently using Tailwind CSS, and encapsulate common styling patterns in reusable wrapper components.
+*   **Action:**
+    *   Identify components currently using `@headlessui/react`. For each, find the equivalent Radix UI Primitive (`@radix-ui/react-*`) and replace the Headless UI component.
+    *   Style Radix Primitives using Tailwind CSS. For common or repeated styling combinations, create dedicated wrapper components in `web/apps/web/src/components/ui/` applying styles using the `@apply` directive or `clsx` for conditional classes (as per Pattern 6).
+    *   Audit existing UI components (including those not using Headless UI or Radix) for repeated Tailwind utility combinations. Create or refactor to use standardized wrapper components (Pattern 6) for these patterns to improve reusability and maintainability.
+    *   Ensure accessibility features (keyboard navigation, ARIA attributes) are correctly handled by the Radix Primitives and their wrappers.
+    *   Remove `@headlessui/react` dependency once all usages are replaced.
+    *   Ensure `@radix-ui/themes` and `@radix-ui/colors` are not used and remove dependencies if present.
+*   **Verification:** Test replaced and refactored components for correct behavior, styling, and accessibility. Verify that wrapper components are used appropriately to encapsulate common styling patterns.
+
+---
+
+### Step 3: Centralize Overlay State Management (Pattern 1)
+
+*   **Goal:** Manage all application overlay states (modals, trays) centrally using a Zustand store.
+*   **Action:**
+    *   Ensure `web/apps/web/src/stores/useOverlayStore.ts` Zustand store is implemented with `activeOverlay` state and `openOverlay`/`closeOverlay` actions.
+    *   Ensure an `OverlayManager` component (e.g., in `web/apps/web/src/components/layout/` or similar) reads `useOverlayStore` and conditionally renders overlay components. This manager should be placed high in the component tree (e.g., within the main `AppLayout`).
+    *   Refactor existing components that manage their own modal/tray state (e.g., `TodayView.tsx` for `QuickAddTray` and `TaskDetailTray`, or any other local `useState` for overlays).
+    *   Modify these components to call `useOverlayStore.getState().openOverlay(...)` instead of managing local state.
+    *   Ensure overlay components (e.g., `QuickAddTray`, `TaskDetailTray`) receive `isOpen` and `onClose` props (or similar) from the `OverlayManager` and use the `onClose` prop (or equivalent mechanism) to trigger `useOverlayStore.getState().closeOverlay()`.
+    *   Ensure any data needed by the overlay is passed via the `data` attribute of the `activeOverlay` state.
+*   **Verification:** Test all modals and trays to ensure they open/close correctly and receive necessary data via the centralized store and `OverlayManager`.
+
+---
+
+### Step 4: Centralize API Interaction with React Query (Pattern 5)
+
+*   **Goal:** Encapsulate all Supabase (or other backend) interactions within custom React Query hooks/service functions.
+*   **Action:**
+    *   Create or consolidate API hooks into a dedicated directory (e.g., `web/apps/web/src/api/hooks/`).
+    *   For each data entity (Tasks, User, etc.), create/ensure custom React Query hooks (e.g., `useTasks`, `useCreateTask`, `useUser`) that perform the Supabase calls internally using `useQuery` and `useMutation`.
+    *   Identify and refactor any components or pages that make direct `supabase.from(...)` calls (or direct calls to any other backend client).
+    *   Replace these direct calls with the newly created or existing custom React Query hooks.
+    *   Implement/verify `onSuccess` handlers in mutation hooks to invalidate relevant queries (e.g., `queryClient.invalidateQueries({ queryKey: ['tasks'] })`).
+    *   Ensure components utilize the `isLoading`, `isError`, `error`, and `data` states returned by the React Query hooks for UI updates.
+*   **Verification:** Test all data fetching and mutation operations to ensure they work correctly. Verify that loading, error, and success states are handled appropriately by the UI, and that data caching and automatic UI updates (via query invalidation) are functioning as expected.
+
+---
+
+### Step 5: Refine Animation Strategy (Pattern 3)
+
+*   **Goal:** Ensure animations are simple, purposeful, efficient, and align with design goals, preferring CSS over JavaScript-based animation libraries where possible.
+*   **Action:**
+    *   Identify all usages of `framer-motion` or other animation libraries.
+    *   For each instance, assess if the animation is essential for user experience and if it can be achieved effectively using standard CSS transitions or keyframe animations (potentially defined within Pattern 6 wrapper components or Tailwind utilities).
+    *   Refactor components to use CSS-based animations where appropriate, focusing on simplicity and performance.
+    *   If `framer-motion` (or another library) is retained, ensure its usage is minimal, well-justified by complex animation needs not easily met by CSS, and does not negatively impact performance.
+    *   Remove `framer-motion` dependency if it's no longer needed.
+*   **Verification:** Visually inspect all animations to ensure they are smooth, performant, non-distracting, and contribute positively to the user experience. Test on different devices/browsers if performance is a concern.
+
+---
+
+### Step 6: Implement Consistent Form Management (Pattern 9)
+
+*   **Goal:** Standardize form handling across the application using React Hook Form and Zod for validation to improve consistency and maintainability.
+*   **Action:**
+    *   Identify all forms within the application.
+    *   For forms currently using manual state management (`useState` for fields, errors, etc.) or other form libraries, refactor them to use `react-hook-form`.
+    *   Define validation schemas for these forms using `zod`. Integrate these schemas with `react-hook-form` using `@hookform/resolvers/zod`.
+    *   Ensure form error messages are clearly displayed next to their respective fields, leveraging the standardized error display component (from Pattern 7).
+    *   Abstract form submission logic to use React Query mutation hooks (Pattern 5) where applicable.
+*   **Verification:** Test all refactored forms for correct data submission, comprehensive validation, and clear error handling. Ensure user input is preserved on re-renders where appropriate.
+
+---
+
+### Step 7: Standardize Error Display (Pattern 7)
+
+*   **Goal:** Ensure that errors are displayed to the user in a clear, consistent, and predictable manner throughout the application.
+*   **Action:**
+    *   Create or standardize a reusable `ErrorMessage` component (e.g., `web/apps/web/src/components/ui/ErrorMessage.tsx`) as outlined in Pattern 7. This component should accept error text and allow for appropriate styling.
+    *   Refactor existing components across the application (forms, data display areas, etc.) to use this `ErrorMessage` component for displaying field-level validation errors and general operational errors.
+    *   Ensure error messages are user-friendly, provide context, and are placed logically within the UI.
+    *   For global errors (e.g., critical API failures not tied to a specific interaction), consider a consistent notification or banner system.
+*   **Verification:** Review error displays across various parts of the application (forms, API interactions, etc.) to ensure consistency, clarity, and user-friendliness.
+
+---
+
+### Step 8: Standardize Loading Indicators (Pattern 8)
+
+*   **Goal:** Provide clear, consistent, and non-intrusive feedback to the user when content is loading or an action is in progress.
+*   **Action:**
+    *   Create or standardize reusable loading indicator components, such as a `Spinner` and potentially `SkeletonLoader` components (e.g., in `web/apps/web/src/components/ui/`).
+    *   Refactor components to use these standardized loading indicators.
+    *   Ensure that React Query's `isLoading` and `isFetching` states (Pattern 5) are consistently used to toggle these indicators for data fetching operations.
+    *   For user-initiated actions (e.g., button clicks leading to mutations), ensure that interactive elements (like the button itself) are appropriately disabled and provide loading feedback (e.g., changing button text to "Saving..." and showing a spinner).
+*   **Verification:** Review loading states across the application (initial page loads, data fetching, form submissions) for consistency, clarity, and appropriate placement. Ensure UI elements are correctly disabled during loading states.
+
+---
+
+### Step 9: Accessibility Audit and Refinement (Pattern 10)
+
+*   **Goal:** Ensure the application adheres to core accessibility best practices (WCAG AA as a target) to be usable by people with disabilities.
+*   **Action:**
+    *   Conduct an audit of key components and user flows against the guidelines in Pattern 10. This includes:
+        *   Semantic HTML usage.
+        *   Meaningful `alt` text for images.
+        *   Sufficient color contrast.
+        *   Keyboard navigability and visible focus indicators for all interactive elements.
+        *   Correct use of ARIA attributes where semantic HTML is insufficient (especially for custom components or dynamic content changes).
+    *   Utilize browser developer tools (accessibility inspectors), automated accessibility checkers (e.g., Axe), and perform manual testing using keyboard-only navigation and a screen reader (e.g., VoiceOver, NVDA).
+    *   Refactor components to address identified accessibility issues. Pay special attention to Radix UI components (ensuring they are used correctly), custom interactive elements, forms (labels, error association), and modal dialogs.
+*   **Verification:** Test key user flows using keyboard-only navigation to ensure all functionality is accessible. Test with a screen reader to verify content is announced logically and interactively. Check color contrast ratios. Address any critical or high-impact issues found.
+
+## Phase 0.5: Core Task Management UI (NEW PHASE)
+- **Status:** On Hold
 ### Goal: Implement the primary task viewing and management interface ("Today View")
 
 #### 1. Today View Page (Replaces/Evolves `Dashboard.tsx`)
+- **Status:** Complete
 - **Goal:** Build the main "Today View" screen for daily task management. (Corresponds to `uiPages.md` Issue 1)
 - **Files:**
   - `web/apps/web/src/pages/TodayView.tsx` (New or evolves `Dashboard.tsx`)
@@ -270,6 +411,7 @@ These components are more specialized than basic atomic components but are inten
 - **Testing:** Page-level tests, integration of child components, task rendering, empty state.
 
 #### 2. Add Task Tray (Quick + Detailed View)
+- **Status:** Complete
 - **Goal:** Implement the quick and detailed task addition flow. (Corresponds to `uiPages.md` Issue 2)
 - **Files:**
   - `web/apps/web/src/components/tasks/FABQuickAdd.tsx`
@@ -285,6 +427,7 @@ These components are more specialized than basic atomic components but are inten
 - **Testing:** Component tests for FAB, QuickAddTray, TaskDetailTray. Form validation and submission testing. Animation testing.
 
 #### 3. Chat Interface
+- **Status:** Complete
 - **Goal:** Build the AI coaching chat interface. (Corresponds to `uiPages.md` Issue 6)
 - **Files:**
   - `web/apps/web/src/components/ChatPanel.tsx` (Existing - needs integration)
@@ -309,8 +452,10 @@ These components are more specialized than basic atomic components but are inten
 - **Tech Stack:** React Query, Zustand, FastAPI, WebSocket (Future), Supabase (Future for memory/prompts), TailwindCSS
 - **AI Assistance Guidance:** Implement the new sub-components (`MessageHeader`, `MessageBubble`, `MessageInput`, `CoachCard`). Integrate `ChatPanel` into `CoachPage` with `AppShell`. Ensure chat state management is robust.
 - **Testing:** Chat flow testing, message persistence, component tests for new chat sub-components.
-
+#### 3.5. Refine task pane
+- **Status:** 
 #### 4. Focus Mode Screen & Components (Combines Focus Timer & Focus View, Corresponds to `uiPages.md` Issue 3)
+- **Status:** To Do
 - **Goal:** Build the task execution view (Focus Mode) with integrated timer.
 - **Files:**
   - `web/apps/web/src/pages/FocusModeScreen.tsx` (New)
@@ -328,6 +473,7 @@ These components are more specialized than basic atomic components but are inten
 - **Testing:** Timer accuracy, session tracking, UI interactions for play/pause/complete. `ScratchPadToggle` functionality.
 
 #### 5. Scratch Pad / Brain Dump (Corresponds to `uiPages.md` Issue 4)
+- **Status:** To Do
 - **Goal:** Implement quick capture system (Scratch Pad).
 - **Files:**
   - `web/apps/web/src/components/capture/ScratchOverlay.tsx` (New - likely modal/drawer)
