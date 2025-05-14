@@ -34,8 +34,8 @@ SCOPE_TO_PATH_FUNC = {
     "AGENT_DATA": get_agent_data_dir,
     "AGENT_CONFIG": get_agent_config_dir,
     "TASK_LIST": get_task_list_dir,
-    "MEMORY_BANK": lambda _agent_name, config: get_memory_bank_dir(config), # Use lambda to ignore agent_name
-    "PROJECT_ROOT": lambda _agent_name, config: get_base_path(), # Project root doesn't depend on agent name
+    "MEMORY_BANK": lambda _agent_name, config, user_id=None: get_memory_bank_dir(config), # Use lambda to ignore agent_name
+    "PROJECT_ROOT": lambda _agent_name, config, user_id=None: get_base_path(), # Project root doesn't depend on agent name
 }
 
 # --- Tool Loading --- 
@@ -46,17 +46,18 @@ TOOLKIT_MAPPING: Dict[str, Type[BaseTool]] = {
 }
 
 SCOPE_MAPPING: Dict[str, callable] = {
-    "PROJECT_ROOT": get_base_path, # Use get_base_path for project root
-    "AGENT_DATA": get_agent_data_dir, # Requires agent_name and config_loader
-    "MEMORY_BANK": get_memory_bank_dir, # Requires config_loader
-    "AGENT_CONFIG": get_agent_config_dir, # Added AGENT_CONFIG scope
-    "TASK_LIST": get_task_list_dir,    # Added TASK_LIST scope
+    "PROJECT_ROOT": lambda config_loader=None, agent_name=None, user_id=None: get_base_path(), 
+    "AGENT_DATA": lambda config_loader, agent_name, user_id=None: get_agent_data_dir(agent_name, config_loader, user_id=user_id), 
+    "MEMORY_BANK": lambda config_loader, agent_name=None, user_id=None: get_memory_bank_dir(config_loader),
+    "AGENT_CONFIG": lambda config_loader, agent_name, user_id=None: get_agent_config_dir(agent_name, config_loader), 
+    "TASK_LIST": lambda config_loader, agent_name=None, user_id=None: get_task_list_dir(agent_name, config_loader) if agent_name else get_task_list_dir(None, config_loader) # Simplified example, might need better handling for optional agent_name
 }
 
 def load_tools(
     agent_name: str,
     tools_config: Dict[str, Dict[str, Any]], 
-    config_loader: ConfigLoader
+    config_loader: ConfigLoader,
+    user_id: Optional[str] = None # Add user_id here if tools need user-specific paths
 ) -> List[BaseTool]:
     """Loads and configures tools based on agent's tools_config."""
     loaded_tools: List[BaseTool] = []
@@ -99,9 +100,9 @@ def load_tools(
         try:
             # Pass necessary arguments based on scope function requirements
             if scope_key == "AGENT_DATA":
-                scope_path = scope_func(agent_name, config_loader)
+                scope_path = scope_func(config_loader=config_loader, agent_name=agent_name, user_id=user_id)
             elif scope_key == "AGENT_CONFIG": # Handle AGENT_CONFIG path
-                 scope_path = scope_func(agent_name, config_loader)
+                 scope_path = scope_func(config_loader=config_loader, agent_name=agent_name)
             elif scope_key == "TASK_LIST":    # Handle TASK_LIST path (might not need agent_name? depends on helper)
                  # Assuming get_task_list_dir might only need config_loader or be global
                  try:
@@ -112,7 +113,7 @@ def load_tools(
                      except TypeError:
                           scope_path = scope_func() # Try calling with no args
             elif scope_key == "MEMORY_BANK":
-                scope_path = scope_func(config_loader)
+                scope_path = scope_func(config_loader=config_loader)
             else: # PROJECT_ROOT 
                 scope_path = scope_func()
             
@@ -191,11 +192,10 @@ def load_agent_executor(
     config_loader: ConfigLoader,
     log_level: int, # Keep log level for potential LLM/internal use
     memory: ConversationBufferMemory,
-    # Remove callbacks parameter
-    # callbacks: Optional[List[BaseCallbackHandler]] = None 
+    user_id: Optional[str] = None # Added user_id parameter
 ) -> AgentExecutor:
     """Loads agent configuration, LLM, prompt, tools, and creates an AgentExecutor."""
-    logger.info(f"Loading agent executor for: {agent_name}")
+    logger.info(f"Loading agent executor for: {agent_name}{f' (User: {user_id})' if user_id else ''}")
 
     # --- 1. Load Agent Configuration --- 
     try:
@@ -319,25 +319,25 @@ def load_agent_executor(
             logger.error(f"Invalid 'prompt' type in config for agent '{agent_name}': {type(prompt_config)}. Expected string or dict.")
             raise ValueError(f"Invalid prompt configuration type for agent '{agent_name}'.")
 
-    # --- Load Previous Session Summary (if exists) --- 
-    # logger.info("Temporarily disabling previous session summary loading for debugging.")
-    # Re-enable summary loading
-    agent_data_dir = get_agent_data_dir(agent_name, config_loader)
+    # --- Load Previous Session Summary (USER-SPECIFIC) --- 
+    # Use the MODIFIED get_agent_data_dir with user_id
+    agent_data_dir = get_agent_data_dir(agent_name, config_loader, user_id=user_id)
     summary_file_path = os.path.join(agent_data_dir, 'session_log.md')
     previous_summary = ""
     try:
         if os.path.exists(summary_file_path):
+            # Ensure the directory for user-specific summary is created if it doesn't exist
+            # This should ideally be handled when saving, but good to ensure read doesn't fail if dir is missing.
+            os.makedirs(os.path.dirname(summary_file_path), exist_ok=True)
             with open(summary_file_path, 'r') as f:
                 previous_summary = f.read()
             if previous_summary:
-                logger.info(f"Loaded previous session summary from {summary_file_path}")
-                # Prepend to the main prompt template string
-                prompt_template_str = f"PREVIOUS SESSION SUMMARY:\n{previous_summary}\n\n---\n\nCURRENT SESSION PROMPT:\n{prompt_template_str}"
-                logger.debug("Prepended previous summary to system prompt.")
+                logger.info(f"Loaded previous session summary for user '{user_id}' from {summary_file_path}")
+                prompt_template_str = f"PREVIOUS SESSION SUMMARY FOR THIS USER:\n{previous_summary}\n\n---\n\nCURRENT SESSION PROMPT:\n{prompt_template_str}"
     except IOError as e:
-        logger.warning(f"Could not read previous session summary file {summary_file_path}: {e}")
+        logger.warning(f"Could not read summary file {summary_file_path} for user '{user_id}': {e}")
     except Exception as e:
-        logger.error(f"Unexpected error loading previous summary from {summary_file_path}: {e}", exc_info=True)
+        logger.error(f"Unexpected error loading summary from {summary_file_path} for user '{user_id}': {e}", exc_info=True)
 
     # --- Create PromptTemplate Instance --- 
     try:
@@ -358,8 +358,8 @@ def load_agent_executor(
     # --- 4. Load Tools --- 
     tools_config = agent_config.get('tools_config', {}) # Restore config usage
     
-    tools = load_tools(agent_name, tools_config, config_loader)
-    logger.info(f"Loaded {len(tools)} tools for agent '{agent_name}': {[t.name for t in tools]}")
+    tools = load_tools(agent_name, tools_config, config_loader, user_id=user_id)
+    logger.info(f"Loaded {len(tools)} tools for agent '{agent_name}'{f' (User: {user_id})' if user_id else ''}: {[t.name for t in tools]}")
 
     # --- 5. Create Agent --- 
     try:
@@ -379,10 +379,8 @@ def load_agent_executor(
             verbose=False, # Disable LangChain AgentExecutor verbose output
             handle_parsing_errors=True, # Add basic handling for parsing errors
             max_iterations=agent_config.get('max_iterations', 15), # Configurable max iterations
-            # Remove callbacks argument
-            # callbacks=callbacks # Pass the callbacks list here
         )
-        logger.info(f"Created Agent Executor for '{agent_name}' with memory and {len(tools)} tools.")
+        logger.info(f"Created Agent Executor for '{agent_name}'{f' (User: {user_id})' if user_id else ''}")
     except Exception as e:
         logger.error(f"Failed to create Agent Executor for '{agent_name}': {e}", exc_info=True)
         raise RuntimeError(f"Could not create agent executor for '{agent_name}'.")

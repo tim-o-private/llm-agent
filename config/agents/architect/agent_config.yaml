@@ -1,6 +1,6 @@
 name: architect
 description: "An AI assistant specialized in brainstorming, structuring project requirements, and managing the backlog. It can read project files and modify the memory-bank."
-llm_config_key: default # Or reference a specific LLM config if needed
+# llm_config_key: default # Or reference a specific LLM config if needed
 
 # System prompt instructing the agent on its role, capabilities, and limitations.
 # Will be refined in Step 2.2.
@@ -66,50 +66,50 @@ tools_config:
     toolkit: FileManagementToolkit
     scope: PROJECT_ROOT
     original_name: read_file
-    description: "Reads a file from anywhere in the project directory ({scope_path}). Use to understand project context, code, or documentation."
+    description: "Reads a file from anywhere in the project directory. Use to understand project context, code, or documentation."
 
   list_project_directory:
     toolkit: FileManagementToolkit
     scope: PROJECT_ROOT
     original_name: list_directory
-    description: "Lists the contents of a directory within the project ({scope_path})."
+    description: "Lists the contents of a directory within the project."
 
   read_memory_bank_file:
     toolkit: FileManagementToolkit
     scope: MEMORY_BANK
     original_name: read_file
-    description: "Reads a file from the memory bank directory ({scope_path}). Use for accessing backlog, notes, etc."
+    description: "Reads a file from the memory bank directory. Use for accessing backlog, notes, etc."
 
   write_memory_bank_file:
     toolkit: FileManagementToolkit
     scope: MEMORY_BANK
     original_name: write_file
-    description: "Writes or overwrites a file in the memory bank directory ({scope_path}). Use ONLY for updating backlog, saving notes, etc."
+    description: "Writes or overwrites a file in the memory bank directory. Use ONLY for updating backlog, saving notes, etc."
 
   list_memory_bank_directory:
     toolkit: FileManagementToolkit
     scope: MEMORY_BANK
     original_name: list_directory
-    description: "Lists the contents of a directory within the memory bank ({scope_path})."
+    description: "Lists the contents of a directory within the memory bank."
 
   # --- Tools for Agent's Own Data Directory (Memory, Output, etc.) ---
   read_agent_data_file:
     toolkit: FileManagementToolkit
     scope: AGENT_DATA
     original_name: read_file
-    description: "Reads a file from the agent's own data directory ({scope_path}). Use for accessing its memory, saved outputs, or other agent-specific data."
+    description: "Reads a file from the agent's own data directory. Use for accessing its memory, saved outputs, or other agent-specific data."
 
   write_agent_data_file:
     toolkit: FileManagementToolkit
     scope: AGENT_DATA
     original_name: write_file
-    description: "Writes or overwrites a file in the agent's own data directory ({scope_path}). Use for saving outputs, intermediate results, or updating its own data files (excluding memory/summary managed automatically)."
+    description: "Writes or overwrites a file in the agent's own data directory. Use for saving outputs, intermediate results, or updating its own data files (excluding memory/summary managed automatically)."
 
   list_agent_data_directory:
     toolkit: FileManagementToolkit
     scope: AGENT_DATA
     original_name: list_directory
-    description: "Lists the contents of the agent's own data directory ({scope_path})."
+    description: "Lists the contents of the agent's own data directory."
 
 # Optional: Specify memory configuration if different from default
 # memory:

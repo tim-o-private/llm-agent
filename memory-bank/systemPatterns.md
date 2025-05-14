@@ -1,6 +1,6 @@
 # System Patterns
 
-This document outlines the system architecture, key technical decisions, design patterns, component relationships, and critical implementation paths of the Local LLM Terminal Environment.
+This document outlines the system architecture, key technical decisions, design patterns, component relationships, and critical implementation paths for both the CLI and web applications.
 
 ## System Architecture
 
@@ -8,24 +8,26 @@ The system follows a modular architecture with clear separation of concerns:
 
 ```mermaid
 graph TD
-    CLI[CLI Layer] --> Core[Core Layer]
-    CLI --> Utils[Utilities Layer]
-    Core --> Utils
-    
-    subgraph "CLI Layer (src/cli/)"
-        main.py[main.py - Entry Point]
+    subgraph "CLI Application"
+        CLI[CLI Layer] --> Core[Core Layer]
+        CLI --> Utils[Utilities Layer]
+        Core --> Utils
     end
-    
-    subgraph "Core Layer (src/core/)"
-        context_manager[ContextManager]
-        llm_interface[LLMInterface]
-        agent_loader[Agent Loader]
+
+    subgraph "Web Application"
+        UI[UI Layer] --> State[State Management]
+        UI --> API[API Layer]
+        State --> API
+        API --> Supabase[Supabase Services]
+        API --> LLM[LLM Services]
     end
-    
-    subgraph "Utilities Layer (src/utils/)"
-        config_loader[ConfigLoader]
-        chat_helpers[Chat Helpers]
-        path_helpers[Path Helpers]
+
+    subgraph "Shared Services"
+        Supabase --> Auth[Authentication]
+        Supabase --> DB[(Database)]
+        Supabase --> Storage[File Storage]
+        LLM --> Chat[Chat Model]
+        LLM --> Embed[Embedding Model]
     end
 ```
 
@@ -33,301 +35,338 @@ graph TD
 
 ```
 /
-├── config/                  # Static configuration
-│   ├── settings.yaml        # Global settings
-│   └── agents/              # Agent-specific configurations
-│       └── <agent_name>/    # Per-agent configuration
-│           ├── agent_config.yaml  # Agent configuration
-│           └── system_prompt.md   # Agent system prompt
-├── data/                    # Dynamic runtime data
-│   ├── global_context/      # Global context files
-│   └── agents/              # Agent-specific data
-│       └── <agent_name>/    # Per-agent data
-│           ├── memory/      # Conversation memory
-│           └── output/      # Agent output files
-├── src/                     # Source code
-│   ├── cli/                 # Command-line interface
-│   ├── core/                # Core functionality
-│   └── utils/               # Utility functions
-└── tests/                   # Test files
+├── cli/                    # CLI Application
+│   ├── config/            # Static configuration
+│   ├── data/              # Dynamic runtime data
+│   ├── src/               # Python source code
+│   └── tests/             # CLI tests
+│
+├── web/                    # Web Application
+│   ├── apps/
+│   │   ├── web/          # Main web application
+│   │   └── api/          # Serverless API functions
+│   ├── packages/          # Shared packages
+│   │   ├── ui/           # Shared UI components
+│   │   ├── config/       # Shared configuration
+│   │   └── types/        # Shared TypeScript types
+│   └── tests/            # Frontend tests
+│
+└── docs/                   # Project documentation
 ```
 
 ## Key Technical Decisions
 
-1. **Modular Code Organization**
-   - Clear separation between CLI, core functionality, and utilities
-   - Each module has a single responsibility
-   - Path construction logic centralized in path_helpers.py
-   - Agent loading logic centralized in agent_loader.py
-   - Chat helper functions centralized in chat_helpers.py
+### 1. Modular Code Organization
+- Clear separation between CLI, web UI, and shared services
+- Each module has a single responsibility
+- Shared types and utilities between CLI and web
+- Component-based architecture for UI
+- Monorepo structure for shared code
 
-2. **Configuration Management**
-   - YAML-based configuration with environment variable overrides
-   - Separation of static configuration (config/) from dynamic data (data/)
-   - ConfigLoader class provides a unified interface for accessing configuration
-   - Configuration passed via context rather than global variables
+### 2. State Management
+- React Query for server state
+- Zustand for client state
+- Immutable state updates
+- Optimistic updates for better UX
+- Offline support with sync
 
-3. **LLM Integration**
-   - LangChain framework for LLM interaction
-   - Google Gemini as the initial LLM provider
-   - LLMInterface class encapsulates LLM communication
-   - AgentExecutor pattern for tool-enabled interactions
+### 3. UI Component Architecture
+- Atomic Design principles
+- Headless UI components for accessibility
+- Composition over inheritance
+- Custom hooks for shared logic
+- CSS-in-JS with Tailwind
 
-4. **Memory Management**
-   - Per-agent conversation memory
-   - JSON-based persistence of conversation history
-   - Memory loaded on agent initialization and saved on exit/switch
-   - Session summaries generated and saved for context continuity
+### 4. Data Flow
+- Unidirectional data flow
+- Server state synchronization
+- Real-time updates via Supabase
+- Optimistic UI updates
+- Error boundary handling
 
-5. **Tool Integration**
-   - LangChain's FileManagementToolkit for file operations
-   - Sandboxed file access (agents can only access their own directories)
-   - Read-only access to configuration files
-   - Read-write access to agent data directories
+### 5. Authentication & Authorization
+- OAuth 2.0 with Supabase
+- Row-level security
+- Role-based access control
+- Session management
+- Secure token handling
 
 ## Design Patterns
 
-1. **Dependency Injection**
-   - ConfigLoader passed to components that need it
-   - No global variables for better testability and maintainability
-   - Click context used to pass configuration through CLI commands
+### 1. Frontend Patterns
+- **Container/Presenter Pattern**
+  - Container components handle data and logic
+  - Presenter components handle rendering
+  - Clear separation of concerns
 
-2. **Factory Pattern**
-   - `load_agent_executor` function creates and configures AgentExecutor instances
-   - `load_tools` function creates tool instances based on configuration
+- **Custom Hook Pattern**
+  - Encapsulate reusable logic
+  - Share stateful logic between components
+  - Handle side effects consistently
 
-3. **Strategy Pattern**
-   - Different agents can be loaded with different configurations
-   - Tools are loaded based on agent configuration
+- **Compound Components**
+  - Flexible component composition
+  - Shared context between related components
+  - Reduced prop drilling
 
-4. **Command Pattern**
-   - CLI commands implemented using Click
-   - Each command is a separate function with its own options
+- **Render Props**
+  - Share code between components
+  - Dynamic component rendering
+  - Flexible component composition
 
-5. **Repository Pattern**
-   - ContextManager acts as a repository for context data
-   - Abstracts the details of where and how context is stored
+### 2. State Management Patterns
+- **Command Pattern**
+  - Actions as first-class objects
+  - Undo/redo support
+  - Transaction-like operations
 
-6. **Facade Pattern**
-   - LLMInterface provides a simplified interface to the LangChain framework
-   - Hides the complexity of LLM communication
+- **Observer Pattern**
+  - Real-time updates
+  - Event-driven architecture
+  - Pub/sub for state changes
+
+- **Repository Pattern**
+  - Abstract data access
+  - Consistent data operations
+  - Caching and optimization
+
+### 3. API Patterns
+- **Gateway Pattern**
+  - Single entry point for API calls
+  - Consistent error handling
+  - Request/response transformation
+
+- **Circuit Breaker**
+  - Handle API failures gracefully
+  - Prevent cascading failures
+  - Fallback mechanisms
+
+- **CQRS Pattern**
+  - Separate read and write operations
+  - Optimize for different use cases
+  - Better scalability
 
 ## Component Relationships
 
 ```mermaid
 graph TD
-    CLI[CLI] --> AgentLoader[Agent Loader]
-    CLI --> ChatHelpers[Chat Helpers]
-    AgentLoader --> ContextManager[Context Manager]
-    AgentLoader --> PathHelpers[Path Helpers]
-    AgentLoader --> ConfigLoader[Config Loader]
-    ChatHelpers --> PathHelpers
-    ContextManager --> ConfigLoader[Config Loader]
-    PathHelpers --> ConfigLoader
+    subgraph "UI Layer"
+        Pages[Page Components] --> Layout[Layout Components]
+        Pages --> Features[Feature Components]
+        Features --> UI[UI Components]
+        UI --> Primitives[Primitive Components]
+    end
+
+    subgraph "State Layer"
+        Features --> Queries[React Query]
+        Features --> Store[Zustand Store]
+        Queries --> API[API Client]
+        Store --> API
+    end
+
+    subgraph "API Layer"
+        API --> Supabase[Supabase Client]
+        API --> LLM[LLM Client]
+    end
 ```
 
 ### Key Component Responsibilities
 
-1. **ConfigLoader**
-   - Loads configuration from YAML files and environment variables
-   - Provides access to configuration values via dot notation
+1. **Page Components**
+   - Route handling
+   - Layout composition
+   - Feature composition
+   - Error boundaries
 
-2. **ContextManager**
-   - Loads and formats context **only** from the global context directory (`data/global_context/`).
-   - **Note:** Agent-specific context (like system prompts or config details) is now loaded directly by `AgentLoader`.
+2. **Feature Components**
+   - Business logic
+   - State management
+   - API integration
+   - User interactions
 
-3. **LLMInterface**
-   - Initializes and configures the LLM
-   - Provides methods for generating text responses
-   - **Note:** This class is currently unused. The primary LLM setup (`ChatGoogleGenerativeAI`) happens directly within `load_agent_executor` in `AgentLoader`.
+3. **UI Components**
+   - Presentational logic
+   - Accessibility
+   - Responsive design
+   - Animation
 
-4. **AgentLoader**
-   - Loads agent-specific configuration (`agent_config.yaml`) and system prompt (`system_prompt.md` or inline) directly using `PathHelpers` and `yaml`. Handles multiple prompt definition formats.
-   - Loads and configures tools based on the agent's `tools_config`, handling efficient toolkit instantiation per scope and applying custom names/descriptions.
-   - Configures the LLM (`ChatGoogleGenerativeAI`) based on global and agent-specific settings (Note: `convert_system_message_to_human=True` is no longer used).
-   - Creates the prompt object using `ChatPromptTemplate.from_messages`.
-   - Creates the agent using `create_tool_calling_agent`.
-   - Creates and returns the final `AgentExecutor` instance, integrating the agent, tools, and memory.
-
-5. **ChatHelpers**
-   - Manages conversation memory (loading, saving via JSON)
-   - Processes user commands
-   - Generates and saves session summaries
-
-6. **PathHelpers**
-   - Provides standardized path construction functions
-   - Ensures consistent directory structure access
-
-7. **FileParser**
-   - **Note:** This component was previously documented but does not exist in the current codebase. File reading/parsing (e.g., for YAML configs, Markdown prompts) is handled directly where needed (e.g., in `ConfigLoader`, `AgentLoader`).
+4. **Primitive Components**
+   - Basic building blocks
+   - Headless UI integration
+   - Consistent styling
+   - Reusable patterns
 
 ## Critical Implementation Paths
 
-### 1. CLI Initialization
+### 1. Authentication Flow
 
 ```mermaid
 sequenceDiagram
     participant User
-    participant CLI
-    participant ConfigLoader
-    
-    User->>CLI: Run command
-    CLI->>ConfigLoader: Create instance
-    ConfigLoader->>ConfigLoader: Load settings.yaml
-    ConfigLoader->>ConfigLoader: Load .env
-    CLI->>CLI: Set log level
-    CLI->>CLI: Store ConfigLoader in context
+    participant UI
+    participant Auth
+    participant API
+    participant DB
+
+    User->>UI: Sign in
+    UI->>Auth: OAuth flow
+    Auth->>API: Verify token
+    API->>DB: Get user data
+    DB-->>API: User profile
+    API-->>UI: Auth success
+    UI->>UI: Update state
+    UI-->>User: Redirect to app
 ```
 
-### 2. Agent Loading
+### 2. Task Management Flow
 
 ```mermaid
 sequenceDiagram
-    participant CLI
-    participant AgentLoader
-    participant ConfigLoader
+    participant User
+    participant UI
+    participant Store
+    participant API
+    participant DB
+
+    User->>UI: Create task
+    UI->>Store: Optimistic update
+    Store->>API: Save task
+    API->>DB: Persist task
+    DB-->>API: Confirmation
+    API-->>Store: Update state
+    Store-->>UI: Reflect changes
+    UI-->>User: Show feedback
+```
+
+### 3. AI Coaching Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant UI
+    participant API
     participant LLM
-    participant PathHelpers
-    participant FileSystem
-    
-    CLI->>AgentLoader: load_agent_executor(agent_name, config_loader, memory)
-    AgentLoader->>PathHelpers: Get agent config path
-    AgentLoader->>FileSystem: Read agent_config.yaml
-    AgentLoader->>YAML: Parse agent_config.yaml
-    AgentLoader->>AgentLoader: Configure LLM (e.g., ChatGoogleGenerativeAI, w/o convert_system_message)
-    AgentLoader->>AgentLoader: load_tools(tools_config, agent_name)
-        AgentLoader->>AgentLoader: Group tools_config by (ToolkitClass, ScopeSymbol)
-        loop For each unique (ToolkitClass, ScopeSymbol)
-            AgentLoader->>PathHelpers: Resolve ScopeSymbol to scope_path (e.g., get_memory_bank_dir)
-            AgentLoader->>FileManagementToolkit: Instantiate toolkit(root_dir=scope_path, selected_tools=needed_original_names)
-            FileManagementToolkit-->>AgentLoader: Return base tool instances
-        end
-        AgentLoader->>AgentLoader: Map base tools by (Toolkit, Scope, OriginalName)
-        loop For each tool in original tools_config
-            AgentLoader->>AgentLoader: Find base tool
-            AgentLoader->>AgentLoader: Apply final name and description override
-            AgentLoader->>AgentLoader: Add configured tool to list
-        end
-    AgentLoader-->>AgentLoader: Return list of configured tools
-    AgentLoader->>PathHelpers: Get system prompt file path (if not inline)
-    AgentLoader->>FileSystem: Read system_prompt.md (if applicable)
-    AgentLoader->>AgentLoader: Load previous session summary (if exists)
-    AgentLoader->>AgentLoader: Prepend summary to loaded system prompt string
-    AgentLoader->>AgentLoader: Create prompt (ChatPromptTemplate.from_messages)
-    AgentLoader->>AgentLoader: Create tool-calling agent (create_tool_calling_agent)
-    AgentLoader->>AgentLoader: Create AgentExecutor(agent, tools, memory)
-    AgentLoader-->>CLI: Return AgentExecutor
-```
+    participant DB
 
-### 3. Chat Session Flow
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant CLI
-    participant ChatHelpers
-    participant AgentExecutor
-    participant Memory
-    
-    User->>CLI: Start chat
-    CLI->>ChatHelpers: get_or_create_memory(agent_name)
-    ChatHelpers->>ChatHelpers: Check if memory exists in memory dict
-    ChatHelpers->>ChatHelpers: If not, load from file or create new
-    ChatHelpers-->>CLI: Return memory
-    CLI->>AgentLoader: load_agent_executor(agent_name)
-    AgentLoader-->>CLI: Return executor
-    
-    loop Chat Loop
-        User->>CLI: Enter input
-        CLI->>ChatHelpers: process_user_command(input, agent, memory)
-        alt Command: /exit
-            ChatHelpers-->>CLI: Signal exit
-        else Command: /agent
-            ChatHelpers->>ChatHelpers: Save current memory
-            ChatHelpers->>ChatHelpers: Load new memory
-            ChatHelpers->>AgentLoader: Load new agent
-            ChatHelpers-->>CLI: Return new agent and memory
-        else Command: /summarize
-            ChatHelpers->>AgentExecutor: Generate summary
-            ChatHelpers->>ChatHelpers: Save summary to file
-            ChatHelpers-->>CLI: Return summary
-        else Regular input
-            ChatHelpers->>Memory: Load memory variables
-            ChatHelpers->>AgentExecutor: Invoke with input and history
-            AgentExecutor-->>ChatHelpers: Return response
-            ChatHelpers->>Memory: Save context
-            ChatHelpers-->>CLI: Display output
-        end
-    end
-    
-    CLI->>ChatHelpers: generate_and_save_summary()
-    CLI->>ChatHelpers: save_agent_memory() for all agents
-```
-
-### 4. Tool Usage Flow
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant CLI
-    participant AgentExecutor
-    participant SpecificTool # e.g., read_project_file
-    participant FileManagementToolkit # Underlying Toolkit instance
-    participant FileSystem
-    
-    User->>CLI: Enter input requiring tool
-    CLI->>AgentExecutor: Invoke with input
-    AgentExecutor->>AgentExecutor: Parse input, history, prompt
-    AgentExecutor->>LLM: Predict next action (tool call)
-    LLM-->>AgentExecutor: Decide to use tool (e.g., read_project_file) with args
-    AgentExecutor->>SpecificTool: Call tool.invoke(args) # Matches configured tool name
-    
-    # Internal Tool Logic (Example: File Management)
-    SpecificTool->>FileManagementToolkit: Execute underlying method (e.g., read_file)
-    FileManagementToolkit->>FileSystem: Perform action in SCOPED directory (e.g., read from project root)
-    FileSystem-->>FileManagementToolkit: Return result/status
-    FileManagementToolkit-->>SpecificTool: Return result
-    
-    SpecificTool-->>AgentExecutor: Return tool result
-    AgentExecutor->>LLM: Provide tool result for next step
-    LLM-->>AgentExecutor: Generate final response based on tool result
-    AgentExecutor-->>CLI: Return final response
-    CLI->>User: Display response
+    User->>UI: Request coaching
+    UI->>API: Get context
+    API->>DB: Fetch history
+    DB-->>API: User context
+    API->>LLM: Generate response
+    LLM-->>API: AI response
+    API-->>UI: Update chat
+    UI-->>User: Show message
 ```
 
 ## Implementation Notes
 
-1. **Memory Persistence**
-   - Conversation history is saved as JSON files
-   - Each agent has its own memory file
-   - Memory is loaded on agent initialization
-   - Memory is saved on agent switch and application exit
-   - Session summaries are loaded from `session_log.md` and prepended to the system prompt on agent load.
+### 1. UI Component Guidelines
+- Use TypeScript for type safety
+- Follow atomic design principles
+- Implement accessibility first
+- Use CSS-in-JS with Tailwind
+- Support dark/light themes
 
-2. **Context Loading**
-   - Global context is loaded by `ContextManager` from `data/global_context/`.
-   - Agent configuration (`agent_config.yaml`) and system prompts (`system_prompt.md` or inline) are loaded directly by `AgentLoader` from `config/agents/<agent_name>/`.
-   - Agent-specific runtime data (memory, outputs, summaries) is stored in `data/agents/<agent_name>/`.
+### 2. State Management
+- Use React Query for server state
+- Use Zustand for client state
+- Implement optimistic updates
+- Handle loading states
+- Manage error states
 
-3. **Tool Sandboxing**
-   - Tool file system access is defined declaratively in `agent_config.yaml` via the `tools_config` section.
-   - Each tool is configured with a `scope` (e.g., `PROJECT_ROOT`, `MEMORY_BANK`, `AGENT_DATA`, `AGENT_CONFIG`, `TASK_LIST`) which resolves to a specific directory path.
-   - The underlying toolkit (e.g., `FileManagementToolkit`) is instantiated with this specific `root_dir`, inherently limiting its operations to that path and its subdirectories.
-   - This configuration-driven approach defines the sandbox for each tool explicitly.
+### 3. API Integration
+- Use generated API clients
+- Implement retry logic
+- Handle rate limiting
+- Cache responses
+- Manage offline state
 
-4. **Error Handling**
-   - Comprehensive error handling for file operations
-   - Graceful degradation when files are missing
-   - Detailed logging for debugging
+### 4. Performance Optimization
+- Code splitting
+- Lazy loading
+- Image optimization
+- Bundle analysis
+- Performance monitoring
 
-5. **Configuration Flexibility**
-   - Configuration can be overridden via environment variables
-   - Default values are provided for missing configuration
-   - Agent-specific configuration can override global settings
+### 5. Testing Strategy
+- Unit tests for utilities
+- Component tests
+- Integration tests
+- E2E tests
+- Performance tests
 
-### 6. Post-Revert Notes (2025-05-05)
-- The `convert_system_message_to_human=True` parameter for `ChatGoogleGenerativeAI` was removed due to deprecation warnings and potential contribution to agent looping/API errors.
-- Agent creation was reverted from `create_react_agent` to `create_tool_calling_agent`. This requires the prompt to be structured using `ChatPromptTemplate.from_messages` but does *not* require explicit `{tools}` or `{tool_names}` placeholders within the system prompt text itself.
-- The `load_tools` function was refined to group tool requirements by toolkit instance (class and scope) before instantiation for efficiency.
-- The prompt loading logic in `AgentLoader` was updated to handle multiple formats (direct `system_prompt` key, `prompt` as string/dict).
-- The attempt to add token/tool visibility via a custom callback handler was reverted due to instability and API errors; this feature is currently on hold.
+### 6. Security Considerations
+- Input validation
+- XSS prevention
+- CSRF protection
+- Rate limiting
+- Data encryption
+
+### 7. Accessibility Standards
+- WCAG 2.1 compliance
+- Keyboard navigation
+- Screen reader support
+- Color contrast
+- Focus management
+
+## Web Application Architecture Details
+
+The Clarity web application extends the general system architecture with specific components for delivering the AI coaching experience via a web interface.
+
+```mermaid
+graph TD
+    subgraph "User Browser"
+        WebAppUI["Clarity Web App (React/Vite)"]
+    end
+
+    subgraph "Web Server Infrastructure (Conceptual)"
+        WebAppUI --> ViteDevServer["Vite Dev Server (localhost:3000)"]
+        ViteDevServer --> Proxy
+        Proxy["Proxy (/api)"] --> FastAPIApp["Clarity API (FastAPI on localhost:3001)"]
+    end
+
+    subgraph "Backend Services (Python - llm-agent project)"
+        FastAPIApp --> PythonAgentCore["Python Agent Core (src/core, src/utils)"]
+        PythonAgentCore --> LLMServices["LLM Services (LangChain)"]
+        PythonAgentCore --> AgentData["Agent Data (config/ & data/ users/USER_ID/agents/AGENT_ID)"]
+    end
+
+    Supabase[Supabase Services] --> AuthN["Authentication"]
+    Supabase --> UserDB[(User Database)]
+    WebAppUI --> Supabase
+    FastAPIApp --> Supabase # For user auth verification if needed by API directly
+
+```
+
+### Key Components & Decisions (Web App Focus):
+
+*   **Frontend (`web/apps/web`):** Built with React, Vite, and TypeScript. Uses Zustand for client-state management (e.g., chat panel visibility, messages) and React Query (planned) for server-state. Interacts with `@clarity/ui` for shared UI components.
+*   **UI Package (`web/packages/ui`):** Contains reusable React components, hooks, and styles (TailwindCSS) used by the main web application.
+*   **API Application (`web/apps/api`):**
+    *   A FastAPI (Python) application responsible for handling requests from the web frontend that require interaction with the Python-based LLM agent backend.
+    *   **Current Endpoint:** `/api/chat` (POST) receives user messages and (will) invoke the appropriate LLM agent.
+    *   **Agent Interaction:** This API layer acts as a bridge. It will load and interact with the agent logic from the root `llm-agent/src` directory.
+        *   **Path Management:** Temporarily uses `sys.path` modification (via `.env` and `python-dotenv` in the API app) to locate the `llm-agent/src` modules. Long-term, the `llm-agent` project should be packaged for proper installation.
+        *   **Per-User Agent Instantiation:** The API is designed with the principle of instantiating or managing agent resources (like `AgentExecutor` and its memory) on a per-user basis to ensure data isolation and context awareness. User identification will eventually come from auth tokens.
+*   **AI Coaching Flow (Updated):**
+
+    ```mermaid
+    sequenceDiagram
+        participant User
+        participant WebAppUI as "Clarity Web App (React)"
+        participant FastAPI
+        participant PythonAgentCore as "Python Agent Core"
+        participant LLM
+        participant UserAgentData as "User-Specific Agent Data/Memory"
+
+        User->>WebAppUI: Send Chat Message
+        WebAppUI->>FastAPI: POST /api/chat (message, user_id, agent_id)
+        FastAPI->>PythonAgentCore: Load/get agent for user_id, agent_id (with user_memory)
+        PythonAgentCore-->>UserAgentData: Read/Write Memory
+        PythonAgentCore->>LLM: Process message via AgentExecutor
+        LLM-->>PythonAgentCore: Agent Response
+        PythonAgentCore-->>FastAPI: Return agent response
+        FastAPI-->>WebAppUI: JSON { reply: "..." }
+        WebAppUI->>User: Display AI Reply
+    end
+    ```

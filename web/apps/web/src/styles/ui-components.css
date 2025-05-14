@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Styles moved from the former packages/ui library */
+@layer components {
+  .btn {
+    @apply px-4 py-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-ui-border-focus;
+  }
+  .btn-primary {
+    @apply bg-brand-primary text-text-on-brand hover:bg-brand-primary-hover;
+  }
+  .btn-secondary {
+    @apply bg-ui-element text-text-primary hover:bg-ui-element-hover;
+  }
+  .btn-danger {
+    /* TODO: Consider creating a semantic token like 'status-error-bg' or 'brand-danger' in tailwind.config.js */
+    @apply bg-red-600 text-white hover:bg-red-700;
+  }
+  
+  /* TODO: Add other component base styles from the old packages/ui here */
+  /* Example for a Card component if it existed and had styles defined with @apply */
+  /* .ui-card {
+    @apply bg-ui-background p-gutter rounded-ui-default shadow-md border border-ui-border;
+  } */
+} 
