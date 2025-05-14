@@ -1,5 +1,8 @@
 import React from 'react';
 import { UserMenu } from '../UserMenu'; // Uncommented and ensured named import
+import { ThemeToggle, Button } from '@/components/ui'; // Added ThemeToggle and Button
+import { MessageSquare } from 'lucide-react'; // Added MessageSquare icon
+import { useChatStore } from '../../stores/useChatStore'; // Added useChatStore
 
 const TopBar: React.FC = () => {
   const currentDate = new Date().toLocaleDateString(undefined, {
@@ -8,6 +11,7 @@ const TopBar: React.FC = () => {
     month: 'long',
     day: 'numeric'
   });
+  const { toggleChatPanel, isChatPanelOpen } = useChatStore(); // Get store methods
 
   return (
     <div className="flex-1 px-4 flex justify-between items-center">
@@ -30,14 +34,25 @@ const TopBar: React.FC = () => {
         </div> */}
       </div>
 
-      {/* Right section - Streak, UserMenu */}
-      <div className="ml-4 flex items-center md:ml-6">
+      {/* Right section - Streak, ThemeToggle, ChatPanel Toggle, UserMenu */}
+      <div className="ml-4 flex items-center md:ml-6 space-x-3"> {/* Added space-x-3 for item spacing */}
         {/* Streak Progress Placeholder */}
-        <div className="mr-3">
+        <div className="mr-3"> {/* This mr-3 might be redundant due to space-x-3 on parent */}
           <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Streak:  N/A</span>
           {/* TODO: Add streak icon/progress bar */}
         </div>
         
+        <ThemeToggle /> {/* Added ThemeToggle */}
+
+        <Button 
+          variant="secondary" // Consistent with AppLayout's button style for this
+          onClick={toggleChatPanel} 
+          aria-label={isChatPanelOpen ? 'Close chat panel' : 'Open chat panel'}
+          className="p-2" // Consistent with AppLayout's button style
+        >
+          <MessageSquare size={20} />
+        </Button>
+
         {/* User Menu Integration */}
         <UserMenu />
       </div>

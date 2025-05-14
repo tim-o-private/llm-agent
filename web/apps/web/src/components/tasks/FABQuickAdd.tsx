@@ -1,10 +1,11 @@
 import React from 'react';
 import { FAB } from '@/components/ui';
+import { useOverlayStore } from '../../stores/useOverlayStore'; // Import the overlay store
 
-interface FABQuickAddProps {
-  onClick?: () => void;
-  // className could be added if more specific styling is needed from parent
-}
+// FABQuickAddProps is no longer needed as onClick is handled internally
+// interface FABQuickAddProps {
+//   onClick?: () => void;
+// }
 
 const PlusIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   <svg
@@ -20,13 +21,11 @@ const PlusIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   </svg>
 );
 
-const FABQuickAdd: React.FC<FABQuickAddProps> = ({ onClick }) => {
+const FABQuickAdd: React.FC = () => { // Removed onClick from props
+  const { openOverlay } = useOverlayStore(); // Get openOverlay from the store
+
   const handleClick = () => {
-    if (onClick) {
-      onClick();
-    } else {
-      console.log('FABQuickAdd clicked, no onClick handler provided.');
-    }
+    openOverlay('quickAddTray'); // Open the quickAddTray via the store
   };
 
   return (

@@ -22,7 +22,7 @@ This section maps defined application pages to their route paths, primary compon
 
 | UI State (from Issues)         | Trigger                                          | Key Components (Defined / Existing Primitives)                                       | Implementation Status | Notes                                                                                                   |
 | :----------------------------- | :----------------------------------------------- | :--------------------------------------------------------------------------------- | :-------------------- | :------------------------------------------------------------------------------------------------------ |
-| **Issue 2: Add Task Tray**       | `FABQuickAdd` click                              | `FABQuickAdd`, `QuickAddTray`, `TaskDetailTray` (Primitives: `Button`, `Input`, `Modal`) | Not Implemented       | Generic `Modal.tsx` could be a base for tray if it\'s modal-like. `Input.tsx` and `Button.tsx` are available. |
+| **Issue 2: Add Task Tray**       | `FABQuickAdd` click (opens via `useOverlayStore`). | `FABQuickAdd`, `QuickAddTray`, `TaskDetailTray` (Primitives: `Button`, `Input`, `Modal`) | Not Implemented       | Generic `Modal.tsx` (Radix UI based) is used by `OverlayManager` to render `AddTaskTray.tsx` (which handles both quick and detailed task addition). |
 | **Issue 4: Scratch Pad Overlay** | `ScratchPadToggle` from Focus Mode, global access | `ScratchOverlay`, `ScratchEntryCard` (Primitives: `Input`, `Card`, `Button`)         | Not Implemented       | `Card.tsx` could be a base for `ScratchEntryCard`.                                                        |
 | **Issue 5: Reflection Modal**    | Session end / EOD flow                           | `ReflectionModal`, `MoodPicker`, `TaskOutcomeSelector` (Primitives: `Modal`, `Button`) | Not Implemented       | Generic `Modal.tsx` could be a base for `ReflectionModal`. `Button.tsx` for selectors.                  |
 
@@ -43,8 +43,8 @@ This screen displays a vertical schedule segmented into Morning / Afternoon / Ev
 - `CoachCard` (optional sidebar message)
 
 ### Acceptance Criteria:
-- Tasks are grouped by time blocks (or user-defined group)
-- FAB expands to `QuickAddTray` inline
+- Tasks are displayed in a list.
+- FAB click opens the Add Task Tray via a centralized overlay manager.
 - Empty state prompts user to begin planning
 - Screen is responsive and adheres to low-stim design language
 

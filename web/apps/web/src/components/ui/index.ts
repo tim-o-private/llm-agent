@@ -2,6 +2,7 @@ export * from './Button';
 export * from './Card';
 export * from './Checkbox';
 export * from './CoachCard';
+export * from './ErrorMessage';
 export * from './FAB';
 export * from './Input';
 export * from './Label';

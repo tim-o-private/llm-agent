@@ -13,11 +13,22 @@ export interface ModalProps {
 export const Modal: React.FC<ModalProps> = ({ open, onOpenChange, title, description, children }) => (
   <Dialog.Root open={open} onOpenChange={onOpenChange}>
     <Dialog.Portal>
-      <Dialog.Overlay className="fixed inset-0 bg-black/40 z-40" />
-      <Dialog.Content className={clsx(
-        'fixed z-50 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2',
-        'bg-white dark:bg-gray-900 rounded-lg shadow-lg p-6 w-full max-w-md'
-      )}>
+      <Dialog.Overlay 
+        className={clsx(
+          "fixed inset-0 bg-black/40 z-40",
+          "transition-opacity duration-300 ease-in-out",
+          "data-[state=closed]:opacity-0 data-[state=open]:opacity-100"
+        )}
+      />
+      <Dialog.Content 
+        className={clsx(
+          'fixed z-50 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2',
+          'bg-white dark:bg-gray-900 rounded-lg shadow-lg p-6 w-full max-w-md',
+          "transition-all duration-300 ease-in-out",
+          "data-[state=closed]:opacity-0 data-[state=closed]:scale-95",
+          "data-[state=open]:opacity-100 data-[state=open]:scale-100"
+        )}
+      >
         {title && <Dialog.Title className="text-lg font-bold mb-2">{title}</Dialog.Title>}
         {description && <Dialog.Description className="mb-4 text-gray-500">{description}</Dialog.Description>}
         {children}
