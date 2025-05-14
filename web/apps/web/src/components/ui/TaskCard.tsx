@@ -40,7 +40,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         <div className="flex items-center h-5 mt-0.5 mr-3"> {/* Adjusted margin & alignment slightly */}
           <Checkbox
             checked={completed}
-            onChange={() => onToggleComplete(id)} // Corrected: Checkbox onChange usually doesn't pass value for native, event instead. This is fine for our controlled component.
+            onCheckedChange={() => onToggleComplete(id)}
             aria-label={`Mark task ${title} as ${completed ? 'incomplete' : 'complete'}`}
           />
         </div>
@@ -63,6 +63,12 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 </span>
               )}
             </div>
+          )}
+          {/* Display notes if they exist - simple version */}
+          {notes && (
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {notes}
+            </p>
           )}
         </div>
       </div>

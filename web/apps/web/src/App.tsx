@@ -14,14 +14,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard'));
 const TodayView = lazy(() => import('./pages/TodayView'));
 const CoachPage = lazy(() => import('./pages/CoachPage'));
 
-// Layout component that incorporates AppShell
-const AppLayout: React.FC = () => {
-  return (
-    <AppShell>
-      <Outlet />
-    </AppShell>
-  );
-};
+// AppLayout component is no longer needed as AppShell is the primary layout.
 
 function App() {
   return (
@@ -34,13 +27,15 @@ function App() {
               <Route path="/" element={<Home />} />
               <Route path="/login" element={<Login />} />
 
-              {/* Protected routes wrapped by AppLayout (which includes AppShell) */}
+              {/* Protected routes wrapped by AppShell directly */}
               <Route element={<ProtectedRoute />}>
-                <Route element={<AppLayout />}>
+                {/* Wrap child routes with AppShell and render them via Outlet */}
+                <Route element={<AppShell><Outlet /></AppShell>}> 
                   <Route path="/today" element={<TodayView />} />
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/coach" element={<CoachPage />} />
-                  <Route index element={<TodayView />} />
+                  {/* Default protected route */}
+                  <Route index element={<TodayView />} /> 
                 </Route>
               </Route>
             </Routes>

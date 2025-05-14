@@ -1,56 +1,65 @@
-import React, { useState } from 'react';
-import { Switch } from '@headlessui/react';
+import React from 'react';
+import * as RadixSwitch from '@radix-ui/react-switch'; // Import Radix Switch
 import clsx from 'clsx';
 
 interface ToggleFieldProps {
+  id?: string; // Recommended for associating label
   label: string;
   checked: boolean;
-  onChange: (checked: boolean) => void;
+  onCheckedChange: (checked: boolean) => void; // Changed from onChange to onCheckedChange
   disabled?: boolean;
-  srLabel?: string; // Optional screen-reader only label for the switch itself
-  description?: string; // Optional description text below the label
+  srLabel?: string; // Screen reader label for the switch itself if no visible label
+  description?: string;
+  className?: string; // For the container div
 }
 
 const ToggleField: React.FC<ToggleFieldProps> = ({
+  id,
   label,
   checked,
-  onChange,
+  onCheckedChange,
   disabled = false,
-  srLabel,
+  srLabel, // If an id is provided and connected to a <label htmlFor={id}>, srLabel on Switch might be redundant.
   description,
+  className,
 }) => {
+  const internalId = id || React.useId(); // Generate id if not provided
+
   return (
-    <Switch.Group as="div" className={clsx("flex items-center justify-between", disabled && "opacity-50")}>
-      <span className="flex flex-col">
-        <Switch.Label as="span" className="text-sm font-medium text-gray-900 dark:text-gray-100" passive>
+    <div className={clsx("flex items-center justify-between", disabled && "opacity-50", className)}>
+      <span className="flex flex-col mr-3"> {/* Added mr-3 for spacing */}
+        <label htmlFor={internalId} className="text-sm font-medium text-gray-900 dark:text-gray-100 cursor-pointer">
           {label}
-        </Switch.Label>
+        </label>
         {description && (
-          <Switch.Description as="span" className="text-xs text-gray-500 dark:text-gray-400">
+          <span id={`${internalId}-description`} className="text-xs text-gray-500 dark:text-gray-400">
             {description}
-          </Switch.Description>
+          </span>
         )}
       </span>
-      <Switch
+      <RadixSwitch.Root
+        id={internalId}
         checked={checked}
-        onChange={onChange}
+        onCheckedChange={onCheckedChange}
         disabled={disabled}
+        aria-label={srLabel} // Use srLabel if provided, especially if no <label htmlFor>
+        aria-describedby={description ? `${internalId}-description` : undefined}
         className={clsx(
-          'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800',
-          checked ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-700',
-          disabled && 'cursor-not-allowed'
+          'group relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800',
+          'data-[state=checked]:bg-indigo-600',
+          'data-[state=unchecked]:bg-gray-200 dark:data-[state=unchecked]:bg-gray-700',
+          'data-[disabled]:cursor-not-allowed data-[disabled]:opacity-70' // Adjusted opacity for disabled
         )}
       >
-        <span className="sr-only">{srLabel || label}</span>
-        <span
-          aria-hidden="true"
+        <RadixSwitch.Thumb
           className={clsx(
             'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-            checked ? 'translate-x-5' : 'translate-x-0'
+            'data-[state=checked]:translate-x-5',
+            'data-[state=unchecked]:translate-x-0'
           )}
         />
-      </Switch>
-    </Switch.Group>
+      </RadixSwitch.Root>
+    </div>
   );
 };
 

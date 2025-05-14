@@ -1,23 +1,25 @@
 import React from 'react';
-import { Checkbox as HeadlessCheckbox } from '@headlessui/react'; // Renamed to avoid conflict with component name
-import { CheckIcon } from '@heroicons/react/16/solid';
+import * as RadixCheckbox from '@radix-ui/react-checkbox'; // Import Radix Checkbox
+import { CheckIcon } from '@heroicons/react/16/solid'; // Keep Heroicons for the check mark
 import clsx from 'clsx';
 
 export interface CheckboxProps {
-  checked: boolean;
-  onChange: (checked: boolean) => void;
+  checked: RadixCheckbox.CheckboxProps['checked']; // Use Radix's checked type
+  onCheckedChange: RadixCheckbox.CheckboxProps['onCheckedChange']; // Use Radix's onCheckedChange
+  id?: string; // id is useful for associating with a <label>
   name?: string;
-  value?: string; // Optional, if needed for form submissions
+  value?: string;
   disabled?: boolean;
-  srLabel?: string; // Screen reader label, helpful if no visible label is associated
-  className?: string; // For the outer container/positioning
-  // Add any other props you might need, e.g., for specific styling variants if not covered by className
+  srLabel?: string; // Screen reader label, can be applied as aria-label if no visible label
+  className?: string; // For the RadixCheckbox.Root element for positioning/sizing
+  // Add any other props you might need
 }
 
 export const Checkbox: React.FC<CheckboxProps> = (
   {
     checked,
-    onChange,
+    onCheckedChange,
+    id,
     name,
     value,
     disabled = false,
@@ -26,33 +28,32 @@ export const Checkbox: React.FC<CheckboxProps> = (
   }
 ) => {
   return (
-    <HeadlessCheckbox
+    <RadixCheckbox.Root
+      id={id}
       checked={checked}
-      onChange={onChange}
+      onCheckedChange={onCheckedChange}
       disabled={disabled}
       name={name}
-      value={value}      
+      value={value}
+      aria-label={srLabel} // Apply srLabel as aria-label directly on the root
       className={clsx(
-        'group inline-block size-5 rounded border focus:outline-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-60',
-        'data-[checked]:bg-indigo-600 data-[checked]:border-transparent dark:data-[checked]:bg-indigo-500',
+        'group flex items-center justify-center size-5 rounded border focus:outline-none',
+        'data-[disabled]:cursor-not-allowed data-[disabled]:opacity-60',
+        // Apply styles based on Radix's data-state attribute
+        'data-[state=checked]:bg-indigo-600 data-[state=checked]:border-transparent dark:data-[state=checked]:bg-indigo-500',
         'bg-white border-gray-400 dark:bg-gray-700 dark:border-gray-500',
         'focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800',
-        className // Allows for additional classes to be passed for positioning/sizing etc.
+        className
       )}
     >
-      {/* Screen reader label if provided and useful */}
-      {/* The Headless UI Checkbox itself is a span, so srLabel can be handled by parent <label> or here for standalone cases */}
-      <span className="sr-only">{srLabel}</span>
-      
-      {/* Checkmark icon - visibility controlled by Headless UI state via group-data-checked */}
-      <CheckIcon 
-        className={clsx(
-            'hidden size-4 fill-white group-data-[checked]:block mx-auto my-auto',
-            // If you want the checkmark color to be different from the background in some themes:
-            // checked ? 'text-white' : 'text-transparent' // Example for explicit color control
-        )}
-      />
-    </HeadlessCheckbox>
+      <RadixCheckbox.Indicator className="flex items-center justify-center w-full h-full">
+        <CheckIcon 
+          className={clsx(
+              'size-4 fill-white' // Icon is always present in Indicator, visibility controlled by Radix
+          )}
+        />
+      </RadixCheckbox.Indicator>
+    </RadixCheckbox.Root>
   );
 };
 

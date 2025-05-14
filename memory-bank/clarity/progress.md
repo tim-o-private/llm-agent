@@ -36,3 +36,15 @@
 - [~] Refactor - UI Merge: Migrated initial styles (e.g., button styles) to `ui-components.css` and updated `main.tsx`.
 - [x] Refactor - UI Merge: Successfully merged `packages/ui` into `apps/web`. All components, hooks, styles, and configurations have been migrated and updated. Project structure simplified.
 - [x] Phase 0.5: Chat Interface - Resolved API connection issues; chat in `CoachPage.tsx` is now functional.
+
+- [x] Phase 0.4: Consolidate Application Layout - Merged `AppLayout.tsx` into `AppShell.tsx`, deleted redundant file, updated `App.tsx`.
+- [x] Phase 0.4: Standardize UI Primitives - Replaced `@headlessui/react` with Radix UI for `Checkbox.tsx`, `ToggleField.tsx`. Refactored `AddTaskTray.tsx` to use Radix-based `Modal.tsx`. Removed `@headlessui/react` dependency.
+- [x] Phase 0.4: Centralize Overlay State - Created `useOverlayStore.ts` and `OverlayManager.tsx`. Refactored `FABQuickAdd.tsx` and `TodayView.tsx` to use the store.
+- [x] Phase 0.4: Centralize API Interaction (React Query) - Created `useTaskHooks.ts` (CRUD operations). Refactored `TodayView.tsx` and `AddTaskTray.tsx` to use these hooks. Addressed React Query v5 typing issues.
+- [x] Phase 0.4: Refine Animation Strategy - Updated `Modal.tsx` with CSS-based animations. Deleted old `QuickAddTray.tsx` (Framer Motion version). Removed `framer-motion` dependency.
+- [x] Phase 0.4: Consistent Form Management - Integrated `react-hook-form` and `zod` into `AddTaskTray.tsx` for title validation.
+- [x] Phase 0.4: Standardize Error Display - Created `ErrorMessage.tsx` and used it in `AddTaskTray.tsx`.
+- [x] Phase 0.4: Consolidate UI Component Exports - Added `ErrorMessage.tsx` to `components/ui/index.ts`. Confirmed barrel file usage.
+- [x] Phase 0.4 Troubleshooting: Addressed "relation public.tasks does not exist" with SQL DDL.
+- [x] Phase 0.4 Troubleshooting: Fixed new tasks not appearing by refactoring `TodayView.tsx` to remove time period breakdown and reverting hardcoded `time_period` in `AddTaskTray.tsx`.
+- [x] Phase 0.4 Troubleshooting: Fixed checkbox in `TodayView.tsx` by correcting `TaskCard.tsx` to use `onCheckedChange` for the Radix `Checkbox`. Added notes display to `TaskCard.tsx`.
