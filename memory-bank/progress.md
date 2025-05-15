@@ -223,4 +223,102 @@ This document tracks the active development progress.
 
 **Next Steps:** Conduct the manual keyboard audit using the checklist. Identify and document any issues related to focus visibility, focus order, element activation, keyboard traps, and ARIA attribute usage.
 
-**Overall Task II.2 Status (Keyboard Navigability):** In Progress
+**Overall Task II.2 Status (Keyboard Navigability):** COMPLETED (Initial Audit & Fixes - Advanced shortcuts are future scope)
+
+## IMPLEMENT Mode: UI/UX Enhancements - Drag-and-Drop Task Reordering
+
+**Current Phase:** Task II.3: Drag-and-Drop Task Reordering (within Today View list, using `dnd-kit`)
+
+**Last Major Action:** Successfully debugged and implemented persistence for drag-and-drop reordering. This involved:
+*   Correcting React Query key invalidation in `useUpdateTaskOrder`.
+*   Ensuring the `Task` type in `webApp/src/api/types.ts` includes the `position` field.
+*   Modifying `useFetchTasks` to order by the `position` field.
+*   Verifying keyboard accessibility for drag-and-drop.
+
+**Current Focus:** Core drag-and-drop functionality (including persistence and keyboard accessibility) is now complete.
+
+**Next Steps:** Styling and interaction refinements for drag-and-drop handle and keyboard accessibility are now complete.
+
+**Overall Task II.3 Status (Drag-and-Drop Reordering - Core Functionality):** COMPLETED
+**Overall Task II.3.5 Status (Drag-and-Drop Styling/Interaction Refinements):** COMPLETED
+
+## V. UI Implementation: Fast Task Entry, TaskDetailView, Subtasks (P-P-E-R Phase 1)
+
+**Overall Goal:** Implement core UI features for enhanced task management as defined in `memory-bank/creative/creative-PER-cycle.md` (Fast Task Entry, TaskDetailView, Subtask Display).
+
+**Status:** In Progress
+
+**1. Implement Fast Task Entry Mechanism**
+    *   **Status:** COMPLETED
+    *   **Key Files Created/Modified:**
+        *   `webApp/src/utils/taskParser.ts` (Created)
+        *   `webApp/src/components/features/TodayView/FastTaskInput.tsx` (Created)
+        *   `webApp/src/pages/TodayView.tsx` (Integrated `FastTaskInput`, added hotkey 'T' focusing, and callback for query invalidation).
+        *   `webApp/src/api/hooks/useTaskHooks.ts` (Verified `useCreateTask` suitability).
+        *   `webApp/src/api/types.ts` (Verified `NewTaskData` suitability).
+    *   **Summary:** A `FastTaskInput` component is now at the top of `TodayView`. Pressing 'T' focuses it. It parses input for title, priority (p0-p3), and description (d:/desc:), then calls `useCreateTask`. Task list refreshes on creation.
+
+**2. Implement TaskDetailView**
+    *   **Status:** In Progress (Core modal, form for basic fields, and save implemented)
+    *   **Depends on:** DDL/Types for `Task` (all fields) and Subtasks are complete.
+    *   **Components & Files:**
+        *   `webApp/src/components/features/TaskDetail/TaskDetailView.tsx` (Created: Modal with form for Title, Description, Notes, Status, Priority; Save functionality).
+        *   `webApp/src/api/hooks/useTaskHooks.ts` (Created `useFetchTaskById`; `useUpdateTask` utilized).
+        *   `webApp/src/pages/TodayView.tsx` (Integrated opening `TaskDetailView`, state management, callbacks for update/delete).
+        *   `webApp/src/components/ui/TaskCard.tsx` (Modified to trigger `TaskDetailView` on click).
+    *   **Detailed Steps Progress:**
+        *   **V.2.1. Design `TaskDetailView.tsx` Structure (Modal/Panel):** DONE (Radix Dialog modal structure created).
+        *   **V.2.2. Implement Form Fields:** In Progress (Title, Description, Notes, Status, Priority implemented. Others like due_date, category are pending).
+        *   **V.2.3. Implement Actions:** In Progress (Save implemented. Cancel closes. Delete is pending).
+        *   **V.2.4. Create `useFetchTaskById` hook:** DONE.
+        *   **V.2.5. Integrate Trigger:** DONE (TaskCard click opens detail view).
+        *   **V.2.6. Subtask Management Section:** To Do.
+    *   **Summary:** `TaskDetailView` modal can be opened by clicking a task card. It fetches task data and displays a form with Title, Description, Notes, Status, and Priority. Changes can be saved. Delete functionality and other fields are pending.
+
+**3. Implement Subtask Display in TaskCard**
+    *   **Status:** To Do
+    *   **Depends on:** DDL/Types for Subtasks are complete. `useFetchTasks` can fetch tasks with their subtasks, or subtasks are fetched separately.
+    *   **Components & Files:**
+        *   `webApp/src/components/tasks/TaskCard.tsx` (Modify to display subtask accordion)
+        *   `webApp/src/components/tasks/SubtaskList.tsx` (New component to render list of subtasks)
+        *   `webApp/src/components/tasks/SubtaskCard.tsx` (New, potentially simplified version of `TaskCard` for subtasks)
+        *   `webApp/src/api/hooks/useTaskHooks.ts` (`useFetchTasks` to potentially fetch subtasks).
+    *   **Detailed Steps:**
+        *   **3.1. Modify `useFetchTasks` (Strategy for fetching subtasks):**
+            *   Option A: Fetch parent tasks, then if a task has `parent_task_id IS NULL`, make a separate query for its children where `parent_task_id = parent.id`.
+            *   Option B: Attempt a JOIN in Supabase if possible (e.g., using RPC function) to fetch tasks and their subtasks in a nested structure. This is more complex with RLS.
+            *   Option C (Simpler Start): Fetch all tasks; client-side logic in `TodayView.tsx` groups subtasks under parents based on `parent_task_id`.
+            *   *Initial Recommendation: Option C for simplicity, then optimize if performance suffers.*
+        *   **3.2. Create `SubtaskCard.tsx`:**
+            *   A simpler version of `TaskCard.tsx` for displaying subtasks. Might omit some details or have different actions.
+            *   Subtasks should also be focusable for the P-P-E-R cycle.
+        *   **3.3. Create `SubtaskList.tsx`:**
+            *   Takes an array of subtasks (`Task[]`) as props.
+            *   Renders a list of `SubtaskCard.tsx` components.
+        *   **3.4. Modify `TaskCard.tsx` for Parent Tasks:**
+            *   If `task.subtasks` array is present and not empty (or if client-side grouping indicates subtasks exist):
+                *   Display an accordion toggle icon (e.g., Lucide `ChevronDown`/`ChevronRight`).
+                *   On toggle, render `SubtaskList.tsx` with the subtasks.
+            *   Ensure the parent task itself is not directly "startable" for P-P-E-R if it has subtasks (as per creative doc).
+        *   **3.5. Styling:**
+            *   Ensure clear visual distinction between parent tasks and their subtasks (e.g., indentation, slightly different styling for `SubtaskCard`).
+        *   **3.6. Testing:**
+            *   Parent tasks with subtasks display accordion correctly.
+            *   Subtasks are listed under their parent.
+            *   Accordion expands/collapses.
+            *   Interaction rules (parent not startable if subtasks exist) are followed.
+
+**4. Update API Hooks for Subtasks and `description`**
+    *   **Status:** To Do
+    *   **Files:** `webApp/src/api/hooks/useTaskHooks.ts`
+    *   **Detailed Steps:**
+        *   **4.1. `useCreateTask`:** Modify to accept and save `description` and `parent_task_id` (if creating a subtask).
+        *   **4.2. `useUpdateTask`:** Modify to accept and save `description`, `parent_task_id` (if re-parenting), `subtask_position`.
+        *   **4.3. (If not covered by `useFetchTasks` modifications for subtasks) Create `useFetchSubtasks(parentId: string)` if needed.**
+
+**General Considerations:**
+*   **State Management:** Use Zustand store (`useTaskStore` or a new one) for managing `TodayView` tasks, selected task for detail view, etc. React Query will handle server state.
+*   **Error Handling:** Implement robust error handling and user feedback (e.g., `react-hot-toast`) for all mutations.
+*   **Accessibility:** Ensure all new interactive elements are keyboard accessible and have appropriate ARIA attributes.
+
+This plan will be tracked and updated in `memory-bank/progress.md` as implementation proceeds.

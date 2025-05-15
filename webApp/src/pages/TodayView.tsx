@@ -1,44 +1,198 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+
 import TaskListGroup from '../components/tasks/TaskListGroup';
-import { TaskCardProps } from '@/components/ui';
+import { TaskCard, TaskCardProps } from '@/components/ui/TaskCard';
 import FABQuickAdd from '../components/tasks/FABQuickAdd';
+import { FastTaskInput } from '../components/features/TodayView/FastTaskInput';
+import { TaskDetailView } from '../components/features/TaskDetail/TaskDetailView';
 /* import { useOverlayStore } from '../stores/useOverlayStore'; */
 
-import { useFetchTasks, useUpdateTask } from '../api/hooks/useTaskHooks';
-import type { Task } from '../api/types';
+import { useFetchTasks, useUpdateTask, useUpdateTaskOrder, useCreateFocusSession } from '../api/hooks/useTaskHooks';
+import type { Task, FocusSession } from '../api/types';
 import { Spinner } from '@/components/ui';
+import { useQueryClient } from '@tanstack/react-query';
+import { useAuthStore } from '../features/auth/useAuthStore';
+
+const mapTaskToTaskCardViewModel = (task: Task, onToggle: any, onStart: any, onEdit: (taskId: string) => void): TaskCardProps => ({
+  ...task,
+  onToggleComplete: onToggle,
+  onStartTask: onStart,
+  onEdit: () => onEdit(task.id),
+});
 
 const TodayView: React.FC = () => {
 /*  const { openOverlay } = useOverlayStore(); */
-  const { data: tasks, isLoading: isLoadingTasks, error: fetchTasksError } = useFetchTasks();
+  const queryClient = useQueryClient();
+  const { data: fetchedTasks, isLoading: isLoadingTasks, error: fetchTasksError } = useFetchTasks();
   const { mutate: updateTask } = useUpdateTask();
+  const { mutate: updateTaskOrder } = useUpdateTaskOrder();
+  const { mutate: createFocusSession } = useCreateFocusSession();
+  
+  // Local state for tasks to enable client-side reordering
+  const [displayTasks, setDisplayTasks] = useState<TaskCardProps[]>([]);
+  const [isFastInputFocused, setIsFastInputFocused] = useState(false);
+  const [isDetailViewOpen, setIsDetailViewOpen] = useState(false);
+  const [selectedTaskIdForDetail, setSelectedTaskIdForDetail] = useState<string | null>(null);
 
-  const handleToggleTask = (taskId: string, currentCompletedState: boolean) => {
-    updateTask({ id: taskId, updates: { completed: !currentCompletedState } });
-  };
-/* TODO: Re-implement task detail tray
-  const handleOpenTaskDetailFromCard = (task: Task) => {
-    openOverlay('taskDetailTray', { 
-        taskId: task.id, 
-        initialTitle: task.title, 
-        initialNotes: task.notes, 
-        initialCategory: task.category,
-        initialTimePeriod: task.time_period,
-    });
-  };
-*/
-  const mapTaskToTaskCardProps = (task: Task): TaskCardProps => ({
-    id: task.id,
-    title: task.title,
-    time: task.due_date ? new Date(task.due_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
-    category: task.category || undefined,
-    completed: task.completed,
-    notes: task.notes || undefined,
-    onToggleComplete: () => handleToggleTask(task.id, task.completed),
-  });
+  // Hotkey for FastTaskInput
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 't' || event.key === 'T') {
+        // Check if a modal or another input is active to prevent overriding
+        const activeElement = document.activeElement;
+        if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA' || activeElement.closest('[role="dialog"]'))) {
+          return; // Don't focus fast input if already in an input or modal
+        }
+        event.preventDefault();
+        setIsFastInputFocused(true);
+        // Optionally, reset after a short delay if it was a one-time focus trigger
+        // setTimeout(() => setIsFastInputFocused(false), 100);
+      }
+    };
 
-  const allTasks = tasks?.map(mapTaskToTaskCardProps) || [];
-  const allTasksCount = allTasks.length;
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  // Callback for when FastTaskInput creates a task, to refresh the list
+  const handleTaskCreatedByFastInput = () => {
+    queryClient.invalidateQueries({ queryKey: ['tasks', useAuthStore.getState().user?.id] });
+    setIsFastInputFocused(false); // Optionally de-focus after creation
+  };
+
+  const openTaskDetailView = useCallback((taskId: string) => {
+    setSelectedTaskIdForDetail(taskId);
+    setIsDetailViewOpen(true);
+  }, []);
+
+  const handleTaskUpdated = () => {
+    queryClient.invalidateQueries({ queryKey: ['tasks', useAuthStore.getState().user?.id] });
+    // Optionally, could also invalidate the specific task detail query if needed
+    // queryClient.invalidateQueries({ queryKey: ['tasks', 'detail', selectedTaskIdForDetail] });
+  };
+
+  const handleTaskDeleted = () => {
+    queryClient.invalidateQueries({ queryKey: ['tasks', useAuthStore.getState().user?.id] });
+    setIsDetailViewOpen(false); // Close detail view if task was deleted
+    setSelectedTaskIdForDetail(null);
+  };
+
+  // Memoize handler functions
+  const handleToggleTask = useCallback((taskId: string, currentCompletedState: boolean) => {
+    const newCompletedStatus = !currentCompletedState;
+    const newStatus = newCompletedStatus ? 'completed' : 'pending';
+
+    updateTask(
+      { id: taskId, updates: { completed: newCompletedStatus, status: newStatus } }, 
+      {
+        onSuccess: () => console.log(`Task ${taskId} toggled to ${newCompletedStatus}`),
+        onError: (err: Error) => console.error('[TodayView] Error updating task completion:', err),
+      }
+    );
+  }, [updateTask]);
+
+  const handleStartTask = useCallback((taskId: string) => {
+    console.log(`[TodayView] Attempting to start task: ${taskId}`);
+    updateTask(
+      { id: taskId, updates: { status: 'in_progress' } },
+      {
+        onSuccess: (updatedTask: Task | null) => {
+          console.log(`[TodayView] Task ${taskId} status updated to in_progress. Starting focus session.`);
+          createFocusSession(
+            { task_id: taskId },
+            {
+              onSuccess: (focusSession: FocusSession | null) => {
+                console.log(`[TodayView] Focus session created for task ${taskId}:`, focusSession);
+              },
+              onError: (err: Error) => {
+                console.error('[TodayView] Error creating focus session:', err);
+                // Revert task status if focus session creation failed
+                updateTask(
+                  { id: taskId, updates: { status: 'planning' } },
+                  {
+                    onSuccess: () => console.log(`[TodayView] Task ${taskId} status reverted to planning after focus session failure.`),
+                    onError: (revertError: Error) => console.error("[TodayView] Error reverting task status:", revertError),
+                  }
+                );
+              },
+            }
+          );
+        },
+        onError: (err: Error) => {
+          console.error(`[TodayView] Error updating task status to in_progress for ${taskId}:`, err);
+        },
+      }
+    );
+  }, [updateTask, createFocusSession]);
+
+  useEffect(() => {
+    if (fetchedTasks) {
+      console.log('[TodayView] useEffect triggered. fetchedTasks:', fetchedTasks.map(t => ({id: t.id, title: t.title, position: t.position })));
+      const newDisplayTasks = fetchedTasks.map(task => 
+        mapTaskToTaskCardViewModel(task, handleToggleTask, handleStartTask, openTaskDetailView)
+      );
+      console.log('[TodayView] useEffect setting displayTasks. New displayTasks:', newDisplayTasks.map(t => ({id: t.id, title: t.title })));
+      setDisplayTasks(newDisplayTasks);
+    }
+  }, [fetchedTasks, handleToggleTask, handleStartTask, openTaskDetailView]);
+
+  // When FastInput is focused, then blurred, reset the focus trigger state
+  // This is a simple way to handle it. A more robust way might involve direct ref methods.
+  useEffect(() => {
+    if (!isFastInputFocused && document.activeElement?.tagName !== 'INPUT') {
+        // If the focus state is false and no input is focused, it means we can reset it
+        // This is to ensure that if user clicks away, the state is reset.
+    } else if (isFastInputFocused && document.activeElement?.tagName !== 'INPUT') {
+        // If it was meant to be focused but isn't (e.g. user clicked away immediately)
+        setIsFastInputFocused(false);
+    }
+  }, [isFastInputFocused]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  function handleDragEnd(event: DragEndEvent) {
+    const {active, over} = event;
+    
+    if (over && active.id !== over.id) {
+      setDisplayTasks((items) => {
+        const oldIndex = items.findIndex(item => item.id === active.id);
+        const newIndex = items.findIndex(item => item.id === over.id);
+        const newOrderedItems = arrayMove(items, oldIndex, newIndex);
+        
+        // Prepare data for backend update
+        const taskOrderUpdates = newOrderedItems.map((task, index) => ({
+          id: task.id,
+          position: index, // Use the new index as the position
+        }));
+        console.log('[TodayView] Calling updateTaskOrder with:', taskOrderUpdates); // DEBUGGING
+        updateTaskOrder(taskOrderUpdates);
+        
+        return newOrderedItems;
+      });
+    }
+  }
 
   if (isLoadingTasks) {
     return (
@@ -59,9 +213,15 @@ const TodayView: React.FC = () => {
 
   return (
     <div className="p-4 md:p-6 lg:p-8 h-full flex flex-col">
+      <div className="mb-6">
+        <FastTaskInput 
+            isFocused={isFastInputFocused} 
+            onTaskCreated={handleTaskCreatedByFastInput} 
+        />
+      </div>
       <h1 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">Today's Tasks</h1>
 
-      {allTasksCount === 0 ? (
+      {displayTasks.length === 0 && !isLoadingTasks ? (
         <div className="flex-grow flex flex-col items-center justify-center text-gray-500 dark:text-gray-400">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
@@ -70,9 +230,20 @@ const TodayView: React.FC = () => {
           <p>Add some tasks to get started.</p>
         </div>
       ) : (
-        <div className="flex-grow overflow-y-auto space-y-8">
-          <TaskListGroup title="All Tasks" tasks={allTasks} />
-        </div>
+        <DndContext 
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext 
+            items={displayTasks.map(task => task.id)} // Use array of ids for SortableContext
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="flex-grow overflow-y-auto space-y-8">
+              <TaskListGroup title="All Tasks" tasks={displayTasks} />
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
 
       <FABQuickAdd />
@@ -82,6 +253,14 @@ const TodayView: React.FC = () => {
       >
         {/* Placeholder for CoachCard content */}
       </div>
+
+      <TaskDetailView 
+        taskId={selectedTaskIdForDetail}
+        isOpen={isDetailViewOpen}
+        onOpenChange={setIsDetailViewOpen}
+        onTaskUpdated={handleTaskUpdated}
+        onTaskDeleted={handleTaskDeleted}
+      />
     </div>
   );
 };

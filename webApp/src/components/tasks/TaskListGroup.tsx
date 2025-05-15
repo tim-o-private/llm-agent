@@ -21,12 +21,16 @@ const TaskListGroup: React.FC<TaskListGroupProps> = ({ title, tasks }) => {
         {tasks.map((task) => (
           <TaskCard
             key={task.id}
-            id={task.id}
-            title={task.title}
-            time={task.time}
-            category={task.category}
-            completed={task.completed}
-            onToggleComplete={task.onToggleComplete} // This prop must be passed down from TodayView
+            {...task} // Spread all props from the task object (TaskCardProps)
+            // Individual props below are now redundant due to spread, but ensure onToggleComplete and onStartTask are part of 'task'
+            // id={task.id} 
+            // title={task.title}
+            // category={task.category}
+            // completed={task.completed}
+            // onToggleComplete={task.onToggleComplete}
+            // status={task.status} // Will be spread
+            // priority={task.priority} // Will be spread
+            // onStartTask={task.onStartTask} // Will be spread
           />
         ))}
       </div>

@@ -163,7 +163,7 @@ This file tracks the current tasks, steps, checklists, and component lists for t
         *   **Verification:** Documentation is clear and covers the specified points.
 
 **2. Keyboard Navigability Audit & Implementation**
-    *   **Status:** In Progress (Major fixes complete, detailed component audit pending)
+    *   **Status:** COMPLETED (Initial Audit & Fixes - Advanced shortcuts are future scope)
     *   **Task 2.1: Comprehensive Keyboard Navigation Audit & Fixes** (DONE)
         *   **Action:** Create audit checklist. Perform manual keyboard-only testing. Document findings in `memory-bank/keyboard_nav_audit.md`.
         *   **Fixes Implemented (II.2.1.1 - II.2.1.3):
@@ -172,9 +172,11 @@ This file tracks the current tasks, steps, checklists, and component lists for t
             *   **II.2.1.3:** Global tab order corrected to `TopBar` -> `SideNav` -> Main Content. Logo moved from `SideNav` to `TopBar`.
         *   **Output:** Updated `memory-bank/keyboard_nav_audit.md`. Code changes in `AppShell.tsx`, `SideNav.tsx`, `TopBar.tsx`, `webApp/src/styles/ui-components.css`.
         *   **Verification:** Major keyboard navigation issues in shell and modals resolved.
-    *   **Task 2.2: Implement Fixes for Basic Keyboard Accessibility Issues (Component Level)** (To Do - Part of ongoing audit)
+    *   **Task 2.2: Implement Fixes for Basic Keyboard Accessibility Issues (Component Level)** (DONE - Major components covered during II.2.1 fixes. Remaining minor components to be caught in general testing or future specific audits if issues arise.)
         *   **Action:** Ensure semantic HTML. Add `tabindex="0"` and ARIA for custom interactive elements. Fix focus order (avoid `tabindex > 0`). Ensure visible focus indicators (Tailwind focus rings or Radix defaults) for remaining components like `Checkbox.tsx`, `ToggleField.tsx`, etc.
-    *   **Task 2.3: Ensure Accessibility of Radix UI Components**
+        *   **Output:** Relevant component files updated as part of II.2.1.
+        *   **Verification:** Core interactive UI elements are keyboard accessible.
+    *   **Task 2.3: Ensure Accessibility of Radix UI Components** (DONE - Radix defaults largely respected; custom button styling uses direct outline for focus.)
         *   **Action:** Review Radix UI docs for keyboard patterns. Test Radix components in-app. Ensure custom styling/composition doesn't break their accessibility.
         *   **Output:** Minor code adjustments if needed.
         *   **Verification:** Radix components are fully keyboard operable.
@@ -188,42 +190,55 @@ This file tracks the current tasks, steps, checklists, and component lists for t
         *   **Verification:** Documentation is clear.
 
 **3. Drag-and-Drop Task Reordering (within Today View list, using `dnd-kit`)**
-    *   **Status:** Planning Complete - Ready for Implementation
-    *   **Task 3.1: Adopt `dnd-kit` and Initial Setup**
-        *   **Action:** Install `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/modifiers`. Update `techContext.md` with choice.
-        *   **Output:** `dnd-kit` installed. Docs updated.
-        *   **Verification:** Project builds.
-    *   **Task 3.2: Implement Basic Drag-and-Drop for `TaskCard`s within Today View list**
-        *   **Action:** Wrap `TodayView.tsx` (or task list part) with `dnd-kit` provider. Make `TaskCard.tsx` draggable. Make task list a drop zone. Handle `onDragEnd` to update client-side state (Zustand/React Query cache).
-        *   **Output:** Functional drag-and-drop reordering in the single "Today" list.
-        *   **Verification:** Tasks reorder, state updates. Basic visual feedback.
-    *   **Task 3.3: Implement Keyboard-Accessible Drag-and-Drop (with `dnd-kit` Keyboard sensor)**
-        *   **Action:** Configure `dnd-kit` Keyboard sensor. Implement keyboard controls (Tab to list/card, Space/Enter to pick up/drop, Arrows to move, Esc to cancel). Provide instructions/cues (screen reader announcements).
-        *   **Output:** Keyboard-operable drag-and-drop.
-        *   **Verification:** Test with keyboard only. Screen reader announcements are clear.
-    *   **Task 3.4: Persist Reordered Tasks (Supabase)**
-        *   **Action:** Create/update React Query mutation hook (`useUpdateTaskOrder`) to save new task order (e.g., a `position` field) to Supabase. Call mutation in `onDragEnd`. Implement optimistic updates & error handling.
-        *   **Output:** Task order persists after refresh.
-        *   **Verification:** Reordering updates Supabase. Changes reflected correctly.
-    *   **Task 3.5: Refine Visual Styling and Animations for Drag-and-Drop**
-        *   **Action:** Style drag handle, dragged item appearance, placeholder/drop zone per `style-guide.md`. Implement subtle animations (via `dnd-kit` or CSS).
-        *   **Output:** Visually polished drag-and-drop.
-        *   **Verification:** Animations smooth. Visual feedback clear.
-    *   **Task 3.6: (Future - Optional) Drag-and-Drop Between Different Conceptual Lists/Views**
-        *   **Status:** Future consideration.
+    *   **Status:** COMPLETED
+    *   **Sub-Task 3.1: Install dnd-kit packages** (DONE)
+        *   `pnpm add @dnd-kit/core @dnd-kit/sortable @dnd-kit/modifiers @dnd-kit/utilities`
+    *   **Sub-Task 3.2: Update `techContext.md`** (DONE)
+        *   Added `dnd-kit` to UI libraries.
+    *   **Sub-Task 3.3: Make `TaskCard.tsx` sortable** (DONE)
+        *   Import necessary hooks and components from `dnd-kit`.
+        *   Wrap `TaskCard` with `useSortable`.
+        *   Add `transform`, `transition`, `attributes`, `listeners` props.
+    *   **Sub-Task 3.4: Implement Drag and Drop in `TodayView.tsx`** (DONE)
+        *   Add `DndContext`, `SortableContext`.
+        *   Implement `handleDragEnd` for optimistic updates.
+        *   Add sensors (`PointerSensor`, `KeyboardSensor`).
+    *   **Sub-Task 3.5: Style Drag-and-Drop Interactions** (DONE)
+        *   Add visual cues for dragging (shadow, z-index).
+        *   Add drag handle (`GripVertical` icon) to `TaskCard.tsx`.
+        *   Ensure checkbox and other interactive elements within `TaskCard` remain usable during drag operations and with keyboard.
+        *   Final approach: Listeners exclusively on the drag handle, which is focusable.
+    *   **Sub-Task 3.6: Persist Reordered Task Positions** (DONE)
+        *   **3.6.1 DDL Changes:** (DONE - Applied to Supabase by user)
+            *   Add `position INTEGER` to `public.tasks` in `data/db/ddl.sql`.
+            *   Add `CREATE INDEX IF NOT EXISTS idx_tasks_position ON public.tasks(position);`
+        *   **3.6.2 API Hook (`useUpdateTaskOrder`):** (DONE)
+            *   Create `useUpdateTaskOrder` in `webApp/src/api/hooks/useTaskHooks.ts` to batch update task positions.
+        *   **3.6.3 Integrate API Hook:** (DONE)
+            *   Call `useUpdateTaskOrder` in `handleDragEnd` in `TodayView.tsx`.
+        *   **3.6.4 Update Task Type & Fetch Logic:** (DONE)
+            *   Add `position` to `Task` type in `webApp/src/api/types.ts`.
+            *   Update `useFetchTasks` to order by `position`.
+        *   **3.6.5 Verification & Debugging:** (DONE)
+            *   Fixed `invalidateQueries` key.
+            *   Ensured `displayTasks` updates correctly from `fetchedTasks`.
+            *   Confirmed persistence after refresh.
 
 **4. Cyclical Flow Implementation (Prioritize -> Execute -> Reflect)**
     *   **Status:** Planning Complete - Ready for Implementation (High-level design)
     *   **Task 4.1: Define/Refine Core Data Structures and State for Cyclical Flow**
-        *   **Action:** Review `tasks` model for `status`, `priority`, `position` (for "Today" list order). Define `reflections` model (mood, outcome, notes) and link to tasks/sessions. Update `ddl.sql`. Consider `useCycleStore` (Zustand) for current phase tracking.
-        *   **Output:** Updated DDL. Frontend type definitions.
-        *   **Verification:** Data models support the flow.
-    *   **Task 4.2: Enhance "Today View" for Prioritization (`Prioritize` Phase - "What's Next" Focus)**
-        *   **Goal:** Hub for identifying and focusing on next most important tasks.
-        *   **Action:** UI: Single, stack-ranked list for "Today". `TaskCard` shows title, status, simple priority. Drag-and-drop for reordering. Prominent "Start Task". Empty state prompt.
-        *   **Action:** AI Coach (`CoachCard`): Initial static prompts (welcome, add task, pick top 1-3). Future: AI helps break down tasks, suggests next task (advanced), assists with *optional* time-blocking.
-        *   **Output:** Updated `TodayView.tsx`, `TaskCard.tsx`.
-        *   **Verification:** Today View supports "what's next" prioritization.
+        *   **Status:** Definition Complete - DDL Updated, Ready for API/Type Layer Changes
+        *   **Actions:**
+            *   **DONE:** Reviewed `tasks` model in `techContext.md` and `productContext.md`.
+            *   **DONE:** Updated `data/db/ddl.sql`:
+                *   Added `status TEXT CHECK (status IN ('pending', 'planning', 'in_progress', 'completed', 'skipped', 'deferred')) DEFAULT 'pending' NOT NULL` to `tasks` table.
+                *   Added `priority INTEGER DEFAULT 0 NOT NULL` to `tasks` table.
+                *   Created new `focus_sessions` table (for reflections/execution logs) with fields: `id`, `user_id`, `task_id`, `started_at`, `ended_at`, `duration_seconds`, `notes` (reflection), `mood`, `outcome`, `created_at`, and RLS policies/indexes.
+            *   **Decision:** Will use Zustand for a `useCycleStore` to manage the current P-E-R phase (Prioritize, Execute, Reflect) and related temporary state.
+            *   **Next:** Update TypeScript types (`webApp/src/api/types.ts`) to reflect new/changed DDL fields for `Task` and create a new `FocusSession` type. Update API hooks (`useTaskHooks.ts`, etc.) as needed.
+    *   **Task 4.2: Enhance "Today View" for Prioritization (`Prioritize` Phase)**
+        *   **Status:** Planning - Awaiting UI Mockups/Creative Design
+        *   **Dependencies:** Task 4.1 (DDL/Types for `priority`, `status`)
     *   **Task 4.3: Implement "Focus Mode" (`Execute` Phase)**
         *   **Action:** Build `FocusModeScreen.tsx` (display active task via `FocusHeader.tsx`, integrate `FocusTimer.tsx`, `ScratchPadToggle.tsx` for `ScratchOverlay.tsx`). Navigation for complete/pause/exit.
         *   **Action:** State Management: Update task status to 'in-progress'. Manage timer. Transition to Reflect or TodayView on exit/completion.
@@ -243,43 +258,6 @@ This file tracks the current tasks, steps, checklists, and component lists for t
         *   **Action:** Update `productContext.md` (Core User Journey). Create state flow diagrams if helpful. Update `style-guide.md` with any new UI patterns.
         *   **Output:** Updated documentation.
         *   **Verification:** Documentation clearly explains the flow.
-
-### Existing UI Tasks (from previous plan - to be reviewed/integrated/updated)
-
-*   **Phase 0.5: Core Task Management UI (Status: Review against new plan)**
-    *   ~~Task: Today View Page Implementation~~ (Covered and revised in 4.2)
-    *   Task: Add Task Tray (Quick + Detailed View)
-        *   **Status:** Mostly Complete (Review for alignment with new "Today View" focus, ensure no forced time blocks like M/A/E in quick add).
-    *   Task: Chat Interface Implementation
-        *   **Status:** Mostly Complete (Ensure `CoachCard` from 4.2 integrates well with `ChatPanel` on `TodayView` and `CoachPage`).
-    *   ~~Task: Focus Mode Screen & Components~~ (Covered in 4.3)
-    *   Task: Scratch Pad / Brain Dump
-        *   **Status:** To Do (Integrate with Focus Mode as per 4.3).
-
-*   **Phase 0.4: Implement scalable design and implementation patterns.**
-    *   **Status:** In Progress (Step 9 Pending)
-    *   **Step 9: Accessibility Audit and Refinement (Pattern 10)**
-        *   **Status:** Pending / To Do (Align with tasks in section "2. Keyboard Navigability Audit & Implementation").
-
-*   **Phase 1: AI Coaching & Integrations (v0.2 Beta - Mostly To Do)**
-    *   Task: Nudge System (Align with Task 4.5, focus on "what's next" nudges for v0).
-    *   Task: Google Calendar Integration (Future, post-v0 focus on "what's next").
-    *   Task: Google Docs Integration (Future).
-
-*   **Phase 2: Smart Productivity Layer (v0.3 Beta - Mostly To Do)**
-    *   ~~Task: Reflection Modal & Components~~ (Covered in 4.4)
-    *   Task: Gamification Enhancements (e.g., `StreakCounter`) - (Can be a minor addition to Today View / Reflection).
-
-*   **Phase 3: Application Polish & Configuration (NEW PHASE - To Do)**
-    *   Task: Settings Screen & Components.
-    *   Task: Done List (Task History View).
-
-*   **Phase 0.6: Project Restructure, Deployment Strategy, and Enhanced Chat Server**
-    *   Task: Define and Document Deployment Strategy - **Status: Complete**
-    *   Task: Implement Project Structure Refactor (Web & API paths) - **Status: Complete**
-    *   Task: Enhance `chatServer` Capabilities - **Status: On Hold**
-    *   Task: Update All Project Documentation (Post Restructure) - **Status: Complete**
-    *   Task: Implement and Test Deployment - **Status: To Do**
 
 ## III. Agent Memory & Tooling Enhancement (Supabase Integration)
     *   **Status:** Planning Complete - Ready for Implementation (High-level design)
@@ -383,3 +361,186 @@ This file tracks the current tasks, steps, checklists, and component lists for t
     *   Core UI Components (Complete & Migrated)
     *   Layout & Navigation (AppShell, SideNav, TopBar) (Complete)
     *   Specialized Shared UI Components (TaskCard, TaskStatusBadge, ToggleField, FAB) (Complete & Mig మన)
+
+### Area: Foundational Backend & Data Model for P-E-R
+
+**1. Database Schema Updates for P-E-R** (DONE - User to apply any further pending changes to live DB)
+    *   **Task 1.1: Update `tasks` table** (DONE - DDL Updated)
+        *   Add `status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN (...))`.
+        *   Add `priority INTEGER NOT NULL DEFAULT 0`.
+        *   Add `motivation TEXT`.
+        *   Add `completion_note TEXT`.
+        *   (Deferred: `value_tag`, `linked_doc_url`, `reward_trigger`, `streak_eligible`, `breakdown` (JSON) - for later AI/advanced features)
+    *   **Task 1.2: Create `focus_sessions` table** (DONE - DDL Updated)
+        *   Fields: `id`, `user_id`, `task_id`, `start_time`, `end_time`, `notes` (reflection), `mood`, `outcome`.
+    *   **Task 1.3: Create `scratch_pad_entries` table** (DONE - DDL Updated)
+        *   Fields: `id`, `user_id`, `task_id` (nullable, if general), `focus_session_id` (nullable), `content`, `created_at`.
+    *   **(Deferred: `user_preferences`, `streak_tracker` tables)**
+    *   **Verification:** `data/db/ddl.sql` updated. User confirms manual application to Supabase for relevant changes.
+
+**2. TypeScript Type Definitions** (DONE)
+    *   **Task 2.1: Update `Task` Interface** (DONE)
+        *   Add `status: TaskStatus`, `priority: TaskPriority`, `motivation?: string`, `completion_note?: string`.
+    *   **Task 2.2: Create `FocusSession` Related Enums & Interface** (DONE)
+        *   `FocusSessionMood`, `FocusSessionOutcome` enums.
+        *   `FocusSession` interface.
+    *   **Task 2.3: Create `ScratchPadEntry` Interface** (DONE)
+    *   **Verification:** `webApp/src/api/types.ts` updated.
+
+**3. API Hooks for P-E-R Backend Operations** (DONE - Initial versions for core P-E-R flow)
+    *   **Task 3.1: Update `useFetchTasks`** (DONE)
+        *   Order by `priority` (then by `position` or `created_at`).
+    *   **Task 3.2: Update `useUpdateTask`** (DONE)
+        *   To handle new fields like `status`, `priority`, `motivation`, `completion_note`.
+    *   **Task 3.3: Create `useCreateFocusSession`** (DONE)
+        *   To insert a new focus session.
+    *   **Task 3.4: Create `useEndFocusSession`** (DONE)
+        *   To update `end_time`, `notes`, `mood`, `outcome` for a focus session.
+    *   **Task 3.5: Create `useCreateScratchPadEntry`** (DONE)
+    *   **Verification:** Hooks implemented in `webApp/src/api/hooks/useTaskHooks.ts` (and potentially new `useFocusSessionHooks.ts`, `useScratchPadHooks.ts` if complexity warrants). Initial versions for task start/end and reflection exist.
+
+**4. Integrating P-E-R Backend with Frontend Components** (DONE - TaskCard Start Button & TodayView Logic)
+    *   **Task 4.1: Update `TaskCard.tsx`** (DONE)
+        *   Display `priority` and `status`.
+        *   Add "Start" button (or similar) to initiate a focus session / P-E-R flow.
+    *   **Task 4.2: Update `TodayView.tsx`** (DONE)
+        *   Implement `onStartTask` handler:
+            *   Calls `updateTask` to set status to `in_progress`.
+            *   Calls `createFocusSession` to log session start.
+        *   (Future: Integrate Plan and Reflect views/modals).
+    *   **Verification:** "Start" button updates task status and creates a focus session. Basic data flow for starting a task is functional. Solved `onStartTask` prop drilling and callback issues.
+
+### Area: Project Review & Refinement (Post Drag-and-Drop & Initial P-E-R Backend)
+
+**1. Code Review & Best Practices Alignment**
+    *   **Status:** Pending
+    *   **Task 1.1: Review API Call Structures**
+        *   Focus on `webApp/src/api/hooks/useTaskHooks.ts` and other API interaction points.
+        *   Ensure consistent use of Supabase client, error handling, and adherence to RESTful principles where applicable (though Supabase client is RPC-like).
+        *   Minimize per-function Supabase client imports if a shared/singleton instance can be used more effectively within the hooks module.
+    *   **Task 1.2: Check for Blocking API Calls in UI Logic**
+        *   Ensure mutations and queries are handled asynchronously, with appropriate loading/error states in the UI.
+        *   Verify that UI remains responsive during API interactions.
+    *   **Task 1.3: Review State Management for P-E-R Cycle**
+        *   Evaluate if existing Zustand stores (`useAuthStore`, `useTaskStore`, `useThemeStore`) are sufficient or if a new store (e.g., `useCycleStore` or `useFocusSessionStore`) is needed for managing active P-E-R state (current phase, active task for focus, timer state, etc.).
+        *   Decision: `useCycleStore` with Zustand is planned for P-E-R state.
+
+**2. Documentation and Context File Review for Next Phase (Cyclical P-E-R Flow UI Implementation)**
+    *   **Status:** Pending
+    *   **Task 2.1: Review `data/db/ddl.sql` for Completeness**
+        *   Ensure all necessary fields and tables for the full P-E-R cycle (including planning inputs, reflection inputs, scratchpad) are defined.
+        *   Identify any DDL lagging behind planned UI/feature implementation.
+    *   **Task 2.2: Review `productContext.md` and `techContext.md`**
+        *   Ensure these documents accurately reflect the current understanding of the P-E-R flow, its data requirements, and the technologies involved.
+        *   Update if new decisions or insights have emerged.
+    *   **Task 2.3: Update `progress.md` and `tasks.md`**
+        *   Reflect the completion of the drag-and-drop feature and the setup for P-E-R backend.
+        *   Clearly define the next set of tasks for implementing the P-E-R UI based on the creative design.
+
+**4. Plan-Execute-Reflect (P-E-R) Cycle UI/UX Design**
+    *   **Status:** Creative Design - Revisions Incorporating Feedback
+    *   **Task 4.1: Create Initial P-E-R UI Design Document** (DONE)
+        *   **Action:** Drafted `memory-bank/creative/creative-PER-cycle.md`.
+        *   **Output:** `memory-bank/creative/creative-PER-cycle.md` created.
+        *   **Verification:** Document covers key aspects of P-E-R UI/UX.
+    *   **Task 4.2: Review and Refine P-E-R Design Document** (DONE - Feedback Incorporated, Revisions Made)
+        *   **Action:** Incorporated user feedback into `memory-bank/creative/creative-PER-cycle.md`. Updated terminology to P-P-E-R (Prioritize-Execute-Reflect). Added designs for Fast Task Entry, TaskDetailView, Subtask handling, Chat Panel location, and refined Execute/Focus window.
+        *   **Output:** Updated `memory-bank/creative/creative-PER-cycle.md`.
+        *   **Verification:** Revised design document reflects user feedback.
+    *   **Task 4.3: (Optional) Create Wireframes or Low-Fidelity Mockups**
+        *   **Action:** If detailed visual clarification is needed.
+        *   **Output:** Wireframes in `memory-bank/clarity/UI Mockups/PER-Cycle/`.
+    *   **Task 4.4: Design Fast Task Entry Mechanism**
+        *   **Status:** To Do
+        *   **Action:** Detail the UI/UX for the top-of-screen input field, hotkey access, and inline property parsing logic (e.g., `p1`, `due:tmrw`).
+        *   **Output:** Specifications for Fast Task Entry in `creative-PER-cycle.md` or a dedicated design doc.
+    *   **Task 4.5: Design TaskDetailView**
+        *   **Status:** To Do
+        *   **Action:** Detail the UI/UX for the modal/panel showing all editable task properties and subtask management.
+        *   **Output:** Specifications for `TaskDetailView` in `creative-PER-cycle.md` or a dedicated design doc.
+    *   **Task 4.6: Design Subtask Display and Interaction**
+        *   **Status:** To Do
+        *   **Action:** Detail accordion display for subtasks, how subtasks are focused, and how parent task status might be derived.
+        *   **Output:** Specifications for Subtasks in `creative-PER-cycle.md` or a dedicated design doc.
+
+### Area: Foundational Backend & Data Model for P-E-R and Enhanced Task Management
+
+**1. Database Schema Updates** (Some DONE, some To Do)
+    *   **Task 1.1: Update `tasks` table (Initial P-E-R)** (DONE - DDL Updated)
+        *   Fields: `status`, `priority`, `motivation`, `completion_note`.
+    *   **Task 1.1b: Add `description` to `tasks` table** (DONE - DDL Updated)
+        *   Action: Added `description TEXT` to `public.tasks` in `data/db/ddl.sql`.
+        *   Verification: DDL updated.
+    *   **Task 1.1c: Add Subtask Support to `tasks` table** (DONE - DDL Updated)
+        *   Action: Added `parent_task_id UUID NULL REFERENCES public.tasks(id)` and `subtask_position INTEGER NULL` to `public.tasks` table in `data/db/ddl.sql`.
+        *   Verification: DDL updated to support task hierarchies.
+    *   **Task 1.2: Create `focus_sessions` table** (DONE - DDL Updated)
+    *   **Task 1.3: Create `scratch_pad_entries` table** (DONE - DDL Updated)
+    *   **(Deferred: `user_preferences`, `streak_tracker`, `projects` tables)**
+
+**2. TypeScript Type Definitions** (Some DONE, some To Do)
+    *   **Task 2.1: Update `Task` Interface (Initial P-E-R)** (DONE)
+    *   **Task 2.1b: Add `description` to `Task` Interface** (DONE)
+        *   Action: Added `description?: string | null` to `Task` interface in `webApp/src/api/types.ts`.
+        *   Verification: Type definition updated.
+    *   **Task 2.1c: Add Subtask Support to `Task` Interface** (DONE - Types Updated)
+        *   Action: Added `parent_task_id?: string | null`, `subtask_position?: number | null`, and `subtasks?: Task[]` to `Task` interface. Adjusted `NewTaskData` and `UpdateTaskData`.
+        *   Verification: Type definition updated for hierarchies.
+    *   **Task 2.2: Create `FocusSession` Related Enums & Interface** (DONE)
+    *   **Task 2.3: Create `ScratchPadEntry` Interface** (DONE)
+
+**3. API Hooks for P-E-R & Enhanced Task Management** (Initial P-E-R DONE, needs expansion)
+    *   **Task 3.1: Update `useFetchTasks`** (DONE - for priority/position)
+        *   Needs update to fetch subtasks with parent tasks if implementing client-side nesting.
+    *   **Task 3.2: Update `useUpdateTask`** (DONE - for initial P-E-R fields)
+        *   Needs update to handle `description`, `parent_task_id`, `subtask_position`.
+    *   **Task 3.2b: Update `useCreateTask` (or NewTaskData type)** (DONE - Verified suitable for parser output)
+        *   To handle `description` and potentially `parent_task_id` on creation.
+    *   **Task 3.3: Create `useCreateFocusSession`** (DONE)
+    *   **Task 3.4: Create `useEndFocusSession`** (DONE)
+    *   **Task 3.5: Create `useCreateScratchPadEntry`** (DONE)
+
+**4. Integrating P-P-E-R & Enhanced Task Management with Frontend Components**
+    *   **Task 4.1: Implement Fast Task Entry UI & Logic** (COMPLETED)
+        *   **Action:** Created `taskParser.ts` utility. Created `FastTaskInput.tsx` component. Integrated into `TodayView.tsx` with 'T' hotkey for focus and callback for query invalidation on task creation. Verified `useCreateTask` and `NewTaskData` are compatible.
+        *   **Output:** Functional fast task entry from `TodayView`.
+        *   **Verification:** Users can quickly add tasks with optional priority and description from the `TodayView` input.
+    *   **Task 4.2: Implement TaskDetailView UI & Logic** (In Progress)
+        *   **Action:** Created `TaskDetailView.tsx` as a Radix Dialog modal. Implemented `useFetchTaskById` hook. Added form state and fields for Title, Description, Notes, Status, Priority. Implemented Save functionality using `useUpdateTask`. Integrated opening of the modal from `TaskCard.tsx` click via `TodayView.tsx` state management. Callbacks for update/delete are passed from `TodayView`.
+        *   **Output:** `TaskDetailView.tsx`, updated `useTaskHooks.ts`, `TodayView.tsx`, `TaskCard.tsx`.
+        *   **Verification (Partial):** Modal opens with task data. Basic fields can be edited and saved. Cancel closes. Loading/error states handled for fetch. Save button has loading state.
+        *   **Pending:** Delete functionality, remaining form fields (category, due date, etc.), subtask management.
+    *   **Task 4.3: Implement Subtask Display & Interaction Logic** (To Do)
+    *   **Task 4.4: Implement Prioritize View (Modal)** (To Do - based on `creative-PER-cycle.md`)
+    *   **Task 4.5: Implement Execute View (Focus Window)** (To Do - based on `creative-PER-cycle.md`)
+    *   **Task 4.6: Implement Reflect View (Modal)** (To Do - based on `creative-PER-cycle.md`)
+    *   **Task 4.7: Implement Collapsible Chat Panel** (To Do)
+    *   **Task 4.8: Update `TaskCard.tsx` (for subtask toggle, P-P-E-R triggers)** (To Do)
+    *   **Task 4.9: Update `TodayView.tsx` (for fast task entry, P-P-E-R flow initiation)** (To Do)
+
+### Area: Project Review & Refinement (Post Drag-and-Drop & Initial P-E-R Backend)
+
+**1. Code Review & Best Practices Alignment**
+    *   **Status:** Pending
+    *   **Task 1.1: Review API Call Structures**
+        *   Focus on `webApp/src/api/hooks/useTaskHooks.ts` and other API interaction points.
+        *   Ensure consistent use of Supabase client, error handling, and adherence to RESTful principles where applicable (though Supabase client is RPC-like).
+        *   Minimize per-function Supabase client imports if a shared/singleton instance can be used more effectively within the hooks module.
+    *   **Task 1.2: Check for Blocking API Calls in UI Logic**
+        *   Ensure mutations and queries are handled asynchronously, with appropriate loading/error states in the UI.
+        *   Verify that UI remains responsive during API interactions.
+    *   **Task 1.3: Review State Management for P-E-R Cycle**
+        *   Evaluate if existing Zustand stores (`useAuthStore`, `useTaskStore`, `useThemeStore`) are sufficient or if a new store (e.g., `useCycleStore` or `useFocusSessionStore`) is needed for managing active P-E-R state (current phase, active task for focus, timer state, etc.).
+        *   Decision: `useCycleStore` with Zustand is planned for P-E-R state.
+
+**2. Documentation and Context File Review for Next Phase (Cyclical P-E-R Flow UI Implementation)**
+    *   **Status:** Pending
+    *   **Task 2.1: Review `data/db/ddl.sql` for Completeness**
+        *   Ensure all necessary fields and tables for the full P-E-R cycle (including planning inputs, reflection inputs, scratchpad) are defined.
+        *   Identify any DDL lagging behind planned UI/feature implementation.
+    *   **Task 2.2: Review `productContext.md` and `techContext.md`**
+        *   Ensure these documents accurately reflect the current understanding of the P-E-R flow, its data requirements, and the technologies involved.
+        *   Update if new decisions or insights have emerged.
+    *   **Task 2.3: Update `progress.md` and `tasks.md`**
+        *   Reflect the completion of the drag-and-drop feature and the setup for P-E-R backend.
+        *   Clearly define the next set of tasks for implementing the P-E-R UI based on the creative design.

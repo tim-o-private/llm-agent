@@ -31,6 +31,7 @@ This document outlines the technical stack, architecture, and key implementation
     *   Radix UI Themes (`@radix-ui/themes`) - For theming provider and some pre-styled components.
     *   Radix UI Primitives (`@radix-ui/react-*`) - For core accessible behaviors.
     *   Framer Motion (for deliberate, simple animations, prefer CSS animations where possible)
+    *   `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/modifiers` (for drag-and-drop functionality)
 *   **Form Handling:** React Hook Form + Zod
 *   **Date/Time:** date-fns
 *   **Notifications:** react-hot-toast

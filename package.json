@@ -11,6 +11,7 @@
     "prod": "pnpm run prod:webApp && pnpm run prod:chatServer"
   },
   "devDependencies": {
-    "concurrently": "^8.0.0"
+    "concurrently": "^8.0.0",
+    "@dnd-kit/utilities": "^3.2.2"
   }
 } 
