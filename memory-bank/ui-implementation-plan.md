@@ -800,3 +800,74 @@ Successful implementation of Phase 0.5 assumes the following components from Pha
 6.  **Verification:** ✅ **COMPLETED**
     *   Development server runs. User tested application, components, and functionality.
     *   No console errors or build issues reported by user.
+
+## Phase 0.6: Project Restructure, Deployment Strategy, and Enhanced Chat Server
+- **Status:** To Do
+- **Goal:** Refactor the project structure for better clarity and separation of concerns, define a deployment strategy, enhance the `chatServer` capabilities, and achieve a live deployed instance.
+
+### Step 1: Define and Document Deployment Strategy
+*   **Goal:** Research, decide, and document the deployment strategy for both the `webApp` (React frontend) and `chatServer` (FastAPI Python backend).
+*   **Status:** Complete
+*   **Considerations:**
+    *   **`webApp` Hosting:** Static hosting (Vercel, Netlify, GitHub Pages, AWS S3/CloudFront), or server-side rendering if needed.
+    *   **`chatServer` Hosting:** Containerization (Docker) and hosting (e.g., Fly.io, Google Cloud Run, AWS ECS/Fargate, DigitalOcean App Platform), or serverless functions if applicable.
+    *   **Supabase Environment Management:** Handling different Supabase environments (dev, staging, prod) and API keys.
+    *   **CI/CD:** Outline a basic CI/CD pipeline for automated builds, tests, and deployments.
+    *   **Environment Variables:** Secure management of environment variables for both frontend and backend.
+*   **Output:** A new document (e.g., `DEPLOYMENT_STRATEGY.md`) detailing the chosen approaches and setup instructions. (✅ Created `DEPLOYMENT_STRATEGY.md` in project root)
+
+### Step 2: Implement Project Structure Refactor
+*   **Goal:** Restructure the project directories for improved clarity and separation of concerns.
+*   **Status:** Complete
+*   **Actions:**
+    *   **Create Cursor Rule File:** Ensure `memory-bank/clarity/clarity-ui-api-development-guidance.md` exists and contains the comprehensive development guidelines.
+    *   **Move Backend:** Relocate `web/apps/api` to `<projectRoot>/chatServer`.
+    *   **Collapse Frontend:** Relocate contents of `web/apps/web` directly into `<projectRoot>/webApp` (deleting the old `web/apps/web` and `web/apps/` if empty).
+    *   **Update `pnpm-workspace.yaml`:** If pnpm workspaces are in use at the root of the `web/` directory or project root, update paths to reflect `chatServer` and `webApp`.
+    *   **Update Configurations:**
+        *   `chatServer`: Update any internal relative paths, `PYTHONPATH` if used, `.env` example for `LLM_AGENT_SRC_PATH`.
+        *   `webApp`: Update `vite.config.ts` (paths, aliases), `tsconfig.json` (paths, aliases like `@/*`), `package.json` scripts.
+    *   **Update Codebase Paths:**
+        *   Review and update all import paths within `chatServer` and `webApp`.
+        *   Update the frontend URL used to fetch from `/api/chat` to point to the `chatServer` (considering its new location and how it will be run/exposed).
+    *   **Update Root Project Files:** Modify `.gitignore`, root `package.json` scripts, and any other top-level configuration files that might reference the old paths.
+*   **Verification:** Ensure both `chatServer` and `webApp` can be built and run locally after restructuring. Basic functionality (especially chat) should be working.
+
+### Step 3: Enhance `chatServer` Capabilities
+*   **Goal:** Equip `chatServer` to interact with Supabase and expose new agent-driven actions to the UI.
+*   **Status:** On Hold (Backlogged - dependent on agent tooling requirements)
+*   **Actions:**
+    *   **Supabase Integration (`chatServer`):**
+        *   Add `supabase-py` (or equivalent Python client) to `chatServer/requirements.txt`.
+        *   Implement Supabase client initialization in `chatServer` (e.g., in `db/` or `core/`), using service role keys managed via environment variables.
+    *   **New Endpoints for Agent Actions (`chatServer`):**
+        *   Design and implement new FastAPI endpoints for agent-driven functionalities. Examples:
+            *   `/api/agent/process-notes`: Takes notes from UI, processes with an agent, potentially returns structured data like tasks.
+            *   `/api/agent/create-tasks-from-chat`: Allows an agent to trigger task creation in Supabase based on conversation context.
+            *   (Consider) `/api/notifications/subscribe` or similar if implementing server-sent events or WebSockets for agent-initiated UI updates.
+    *   **RLS & Security:** Ensure `chatServer` interactions with Supabase respect data ownership and security principles, even when using service roles.
+*   **Verification:** Test new `chatServer` endpoints and corresponding `webApp` hooks. Ensure agents can trigger database actions (like creating tasks) and UI can send data to agents for processing.
+
+### Step 4: Update All Project Documentation
+*   **Goal:** Ensure all project documentation accurately reflects the new structure and functionalities.
+*   **Status:** Complete
+*   **Actions:**
+    *   Update `webApp/README.md` (previously `web/README.md`).
+    *   Create `chatServer/README.md` detailing its setup, API endpoints, and operation.
+    *   Review and update `memory-bank/clarity/implementationPatterns.md` (Pattern 12 added for new structure), `uiComponents.md`, `uiPages.md`, and the main project structure rule (`@project-structure.mdc`) to reflect new paths and server roles.
+    *   Update the `clarity-ui-api-development-guidance.md` Cursor Rule with correct paths and expanded `chatServer` context.
+    *   Update root `README.md` to reflect full-stack nature and new structure.
+*   **Verification:** Documentation accurately represents the refactored project.
+
+### Step 5: Implement and Test Deployment
+*   **Goal:** Deploy the `webApp` and `chatServer` to a live environment based on the defined deployment strategy.
+*   **Status:** To Do
+*   **Actions:**
+    *   Set up hosting environments for frontend and backend.
+    *   Configure CI/CD pipelines (if outlined in strategy).
+    *   Deploy both applications.
+    *   Configure `webApp` to correctly target `chatServer` in both development (via Vite proxy to `http://localhost:3001`) and production (via the `VITE_API_BASE_URL` environment variable, e.g., `https://clarity-chatserver.fly.dev`). Ensure frontend API calls use this variable to construct full URLs in production builds.
+    *   Perform thorough end-to-end testing on the deployed instance.
+*   **Verification:** A running instance of the Clarity application is live and functional, with the frontend correctly communicating with the backend.
+
+---

@@ -48,3 +48,17 @@
 - [x] Phase 0.4 Troubleshooting: Addressed "relation public.tasks does not exist" with SQL DDL.
 - [x] Phase 0.4 Troubleshooting: Fixed new tasks not appearing by refactoring `TodayView.tsx` to remove time period breakdown and reverting hardcoded `time_period` in `AddTaskTray.tsx`.
 - [x] Phase 0.4 Troubleshooting: Fixed checkbox in `TodayView.tsx` by correcting `TaskCard.tsx` to use `onCheckedChange` for the Radix `Checkbox`. Added notes display to `TaskCard.tsx`.
+
+## Current Focus: Phase 0.6 - Documentation & Deployment Planning
+
+*   **Phase 0.4: Implement scalable design and implementation patterns:** Complete.
+*   **Phase 0.5: Core Task Management UI:** On Hold.
+*   **Phase 0.6: Project Restructure, Deployment Strategy, and Enhanced Chat Server:**
+    *   **Step 1: Define and Document Deployment Strategy:** Complete. Researched and documented the deployment strategy for `webApp` and `chatServer`, selecting Fly.io and detailing containerization, Supabase integration, and cost considerations in `DEPLOYMENT_STRATEGY.md`.
+    *   **Step 2: Implement Project Structure Refactor:** Complete. `web/apps/api` moved to `chatServer/`, `web/apps/web` to `webApp/`. Paths updated in `pnpm-workspace.yaml`, `webApp/package.json`, root `package.json` created. `.env` files recreated. `chatServer/main.py` debugged. `webApp/vite.config.ts` and `tsconfig.json` confirmed ok.
+    *   **Step 3: Enhance `chatServer` Capabilities:** On Hold (Backlogged).
+    *   **Step 4: Update All Project Documentation:** Complete. Root `README.md`, `webApp/README.md`, `chatServer/README.md`, `memory-bank/clarity/implementationPatterns.md` (added Pattern 12), `memory-bank/clarity/clarity-ui-api-development-guidance.md`, and other relevant clarity documents reviewed/updated to reflect the project restructure and new `@project-structure.md` (Cursor Rule `project-structure.mdc`).
+
+## Current Focus (Phase 0.6 - Deployment)
+
+*   **Phase 0.6, Step 5: Implement and Test Deployment:** To Do. Plan and execute the deployment of `webApp` and `chatServer` to a live environment using the strategy defined in `DEPLOYMENT_STRATEGY.md`.

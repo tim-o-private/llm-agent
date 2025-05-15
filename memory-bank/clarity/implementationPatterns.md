@@ -1,3 +1,7 @@
+This document outlines key architectural patterns and strategies for implementing UI components and interacting with the API. Follow these guidelines to ensure consistency, maintainability, and conciseness in the codebase, aligning with our project goals.
+
+---
+
 ## Pattern 1: Centralized Overlay State Management
 
 **Goal:** Manage the state of modals, trays, and other overlays consistently and centrally.
@@ -18,16 +22,18 @@ const [isTaskDetailTrayOpen, setIsTaskDetailTrayOpen] = useState(false);
 // ... more state for data and handlers ...
 
 // DO THIS in a component that triggers an overlay
-import { useOverlayStore } from 'stores/useOverlayStore';
+import { useOverlayStore } from '@/stores/useOverlayStore';
 
 // To open Quick Add Tray
 useOverlayStore.getState().openOverlay('quickAddTray');
 
 // To open Task Detail Tray with data
-useOverlayStore.Store.getState().openOverlay('taskDetailTray', { taskId: task.id });// DO THIS in the OverlayManager component
-import { useOverlayStore } from 'stores/useOverlayStore';
-import QuickAddTray from 'components/overlays/QuickAddTray';
-import TaskDetailTray from 'components/overlays/TaskDetailTray';
+useOverlayStore.getState().openOverlay('taskDetailTray', { taskId: task.id });
+
+// DO THIS in the OverlayManager component
+import { useOverlayStore } from '@/stores/useOverlayStore';
+import QuickAddTray from '@/components/overlays/QuickAddTray';
+import TaskDetailTray from '@/components/overlays/TaskDetailTray';
 
 function OverlayManager() {
   const { activeOverlay } = useOverlayStore();
@@ -135,9 +141,9 @@ function MyComponent() {
 
 **Goal:** Have a single, clear component defining the main application structure.
 
-*   **DO:** Use only one component (currently `AppLayout.tsx` is the primary candidate) for the main application shell (sidebar, content area, etc.).
+*   **DO:** Use only one component (e.g., `webApp/src/layouts/AppShell.tsx`) for the main application shell (sidebar, content area, etc.).
 *   **DO:** Ensure all routes requiring the main layout use this single component.
-*   **DON'T:** Maintain multiple files (`AppShell.tsx`, `AppLayout.tsx`) that serve the same purpose of defining the main page structure. Delete redundant layout files.
+*   **DON'T:** Maintain multiple layout files that serve the same purpose of defining the main page structure. Delete redundant layout files.
 
 ---
 
@@ -145,20 +151,21 @@ function MyComponent() {
 
 **Goal:** Manage data fetching and mutations consistently using React Query, encapsulating API logic.
 
-*   **DO:** Use `@tanstack/react-query` for all data fetching, caching, and mutations interacting with Supabase.
-*   **DO:** Create custom React Query hooks (e.g., `useTasks`, `useCreateTask`) in a dedicated directory (e.g., `api/hooks/` or `hooks/api/`) to encapsulate Supabase calls (`supabase.from(...)...`).
+*   **DO:** Use `@tanstack/react-query` for all data fetching, caching, and mutations interacting with Supabase or the `chatServer/` API.
+*   **DO:** Create custom React Query hooks (e.g., `useTasks`, `useCreateTask`) in a dedicated directory (e.g., `@/api/hooks/`) to encapsulate Supabase calls (`supabase.from(...)...`) or calls to `chatServer/` endpoints.
 *   **DO:** Implement `onSuccess` handlers in mutation hooks to invalidate relevant queries using `queryClient.invalidateQueries()` to ensure UI freshness.
 *   **DO:** Have components call only these custom React Query hooks to fetch or mutate data.
-*   **DON'T:** Make direct calls to the raw `supabase` client (`supabase.from(...)...`) within UI components, pages, or other parts of the application outside of the dedicated API hooks/service functions.
+*   **DON'T:** Make direct calls to the raw `supabase` client (`supabase.from(...)...`) or `fetch` calls to `chatServer/` within UI components, pages, or other parts of the application outside of the dedicated API hooks/service functions.
 *   **DON'T:** Implement manual `isLoading`, `error`, or data state management for API calls within components; rely on React Query's hook return values for this.
 
 **Example (Illustrative):**
 
 ```typescript
 // DON'T DO THIS in a component or page
-import { supabase } from 'lib/supabaseClient';
+import { supabase } from '@/lib/supabaseClient';
 
-const [tasks, setTasks] = useState([]);const [isLoading, setIsLoading] = useState(true);
+const [tasks, setTasks] = useState([]);
+const [isLoading, setIsLoading] = useState(true);
 const [error, setError] = useState(null);
 
 useEffect(() => {
@@ -171,11 +178,12 @@ useEffect(() => {
   }
   fetchTasks();
 }, []);
+
 // ... manual error/loading handling in JSX ...
 
-// DO THIS by creating a custom hook in api/hooks/useTaskHooks.ts
+// DO THIS by creating a custom hook in @/api/hooks/useTaskHooks.ts
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from 'lib/supabaseClient';
+import { supabase } from '@/lib/supabaseClient';
 
 export function useTasks() {
   return useQuery({
@@ -203,10 +211,12 @@ export function useCreateTask() {
 }
 
 // DO THIS in a component or page
-import { useTasks, useCreateTask } from 'api/hooks/useTaskHooks';
+import { useTasks, useCreateTask } from '@/api/hooks/useTaskHooks';
 
 function TaskList() {
-  const { data: tasks, isLoading, error } = useTasks(); // Use the hook  if (isLoading) return <div>Loading tasks...</div>;
+  const { data: tasks, isLoading, error } = useTasks();
+
+  if (isLoading) return <div>Loading tasks...</div>;
   if (error) return <div>Error loading tasks: {error.message}</div>;
 
   // ... render tasks ...
@@ -381,7 +391,9 @@ function MyForm() {
 
 ```typescript
 // Using React Query's isLoading
-import { useTasks, useCreateTask } from 'api/hooks/useTaskHooks'; // Pattern 5function TaskList() {
+import { useTasks, useCreateTask } from '@/api/hooks/useTaskHooks'; // Pattern 5
+
+function TaskList() {
   const { data: tasks, isLoading, error } = useTasks();
 
   if (isLoading) {
@@ -523,4 +535,106 @@ function SignUpForm() {
 <a href="/learn-more">Learn More</a> {/* If multiple "Learn More" links on page */}
 ```
 
---
+---
+
+## Pattern 11: Standardized DDL & Row Level Security (RLS) for Data Access
+
+**Goal:** Ensure consistent, coherent, secure and maintainable DDL through centralized `ddl.sql` file & Row Level Security (RLS) for user data in Supabase, ensuring users to access and modify only their own records.
+
+*   **DO:** Ensure `memory-bank/clarity/DDL.sql` is kept up to date when changes are made to the DDL.
+*   **DO:** Ensure all tables with a user_id column implement appropriate RLS.
+*   **DO:** Implement a reusable SQL helper function (e.g., `public.is_record_owner(record_user_id uuid)`) that checks if the `auth.uid()` of the currently authenticated user matches the `user_id` of a given record. This function should use `SECURITY DEFINER`.
+*   **DO:** For each table containing user-specific data and a `user_id` column, enable RLS and create policies that use this helper function in both `USING` (for SELECT, UPDATE, DELETE) and `WITH CHECK` (for INSERT, UPDATE) clauses.
+*   **DO:** Manage the creation of the helper function and all RLS policies through Supabase database migrations to ensure consistency across environments and maintain version control.
+*   **DO:** Clearly document this RLS strategy and the standard policy application process.
+*   **DON'T:** Manually create RLS policies directly in the Supabase dashboard for production environments without a corresponding migration script.
+*   **DON'T:** Write complex, repetitive RLS logic directly in each policy if a helper function can centralize it.
+*   **DON'T:** Forget to enable RLS on tables that require it (`ALTER TABLE your_table ENABLE ROW LEVEL SECURITY;`).
+
+**Reference Implementation:**
+
+For detailed steps on how to implement this, including SQL function creation, policy examples, and migration management, refer to the guide:
+[`supabaseRLSGuide.md`](./supabaseRLSGuide.md)
+
+This guide covers:
+*   Creating the `is_record_owner` SQL function.
+*   Applying standardized RLS policies to tables.
+*   Managing these database objects via Supabase migrations.
+*   Testing RLS effectively.
+
+---
+
+## Pattern 12: Monorepo Structure and Component Architecture (Post-Refactor)
+
+**Goal:** Define the high-level structure of the refactored project, outlining the roles of its major components and how they interact. This pattern documents the architectural decisions made during the Phase 0.6 project restructure.
+
+*   **DO:** Maintain a clear separation of concerns between the frontend application (`webApp`), the backend API server (`chatServer`), and the core LLM agent logic (`src`).
+*   **DO:** Use the defined interaction flows for communication between these components.
+*   **DO:** Manage environment-specific configurations in their respective locations (`webApp/.env`, root `.env`).
+
+### 1. Overall Structure & Roles
+
+The project is now organized into three primary top-level directories, each serving a distinct purpose:
+
+*   **`webApp/`**: Contains the React/TypeScript frontend application. This is what the end-user interacts with for task management, AI coaching, and other UI-driven features. It is responsible for all presentation logic and direct user interaction.
+    *   Further details in `webApp/README.md`.
+*   **`chatServer/`**: A Python FastAPI backend server. Its primary roles are:
+    1.  To provide an API for the `webApp` (e.g., for chat functionality, agent-driven actions).
+    2.  To load and manage Langchain agent configurations (from `config/agents/`).
+    3.  To execute agent logic by leveraging the core `src/` directory.
+    4.  (Future) To handle more complex backend tasks, data processing, or interactions with external services that shouldn't be done directly from the frontend.
+    *   Further details in `chatServer/README.md`.
+*   **`src/`**: The core Python library for the LLM agent framework. This includes:
+    1.  The command-line interface (CLI) for direct agent interaction and development.
+    2.  Core logic for agent instantiation, context management, and tool integration.
+    3.  Utilities for configuration loading and other shared functionalities.
+    *   This directory is utilized by both the `chatServer` (as a library) and the standalone Python CLI.
+
+### 2. Key Decision: Separation of Concerns
+
+The main driver for the refactor was to establish a clearer separation of concerns:
+
+*   **Frontend (`webApp`):** Focuses solely on user interface and user experience. It fetches data and triggers actions via APIs.
+*   **Backend (`chatServer`):** Acts as an intermediary and business logic layer. It protects direct access to certain resources, orchestrates complex operations (like agent execution), and can manage its own state or connections (e.g., to Supabase with service roles if needed for specific agent tasks).
+*   **Core Logic (`src`):** Contains the reusable engine for LLM agent functionality, independent of how it's exposed (CLI or `chatServer`).
+
+This separation improves maintainability, scalability, and allows for independent development and deployment of the different parts of the application.
+
+### 3. Interaction Flows
+
+*   **`webApp` <-> `chatServer`:**
+    *   The `webApp` communicates with the `chatServer` primarily via RESTful API calls to endpoints defined in `chatServer/main.py` (e.g., `/api/chat`).
+    *   All chat messages from the UI are sent to the `chatServer`.
+    *   (Future) Other agent-driven actions initiated from the UI (e.g., processing notes, creating tasks via agent) will also go through `chatServer` APIs.
+*   **`chatServer` <-> `src/`:**
+    *   The `chatServer` imports and uses modules from the `src/` directory as a Python library.
+    *   It relies on `LLM_AGENT_SRC_PATH=src` (set in the root `.env` file) being added to `sys.path` (as handled in `chatServer/main.py`) to find and load core agent logic, configurations, and utilities from `src/`.
+    *   Specifically, it uses `ConfigLoader` and agent execution logic from `src/core/` to run agents based on requests from the `webApp`.
+*   **`webApp` <-> Supabase:**
+    *   For user authentication and direct data operations (CRUD on tasks, user settings, etc.), the `webApp` interacts directly with Supabase.
+    *   This interaction is managed through React Query hooks (`@/api/hooks/`) as defined in **Pattern 5**, which use the Supabase JavaScript client.
+    *   Security for these direct frontend-to-Supabase calls is enforced by Supabase's Row Level Security (RLS) policies, as defined in **Pattern 11**.
+
+### 4. Path Aliases & Module Resolution
+
+*   **`webApp/` (Frontend):**
+    *   Uses TypeScript path aliases (e.g., `@/*` pointing to `webApp/src/*`) defined in `webApp/tsconfig.json` for cleaner and more maintainable import paths within the React application.
+*   **`chatServer/` & `src/` (Backend & Core):**
+    *   The `chatServer` relies on the `src/` directory being available in the Python path. This is typically achieved by setting `LLM_AGENT_SRC_PATH=src` in the root `.env` file, which `chatServer/main.py` uses to dynamically add `src` to `sys.path`.
+    *   The core Python CLI in `src/` also benefits from the project root being set up for `pip install -e .`, which makes the `src` package importable.
+
+### 5. Configuration Management
+
+Configuration is managed separately for different parts of the application:
+
+*   **`webApp/.env`**: Contains environment variables specifically for the frontend application, primarily `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+*   **Root `.env` (in project root `/`):** Contains environment variables for the backend components:
+    *   `LLM_AGENT_SRC_PATH=src`: Crucial for `chatServer` to locate the core agent logic.
+    *   API keys needed by agents (e.g., `GOOGLE_API_KEY`, `OPENAI_API_KEY`) which might be used by `src/` when agents are executed by either `chatServer` or the CLI.
+*   **`config/agents/`**: YAML and Markdown files defining agent configurations (prompts, tools, models). These are loaded by the core logic in `src/` and thus used by both `chatServer` (when serving agent interactions to `webApp`) and the Python CLI.
+*   **`config/settings.yaml`**: General settings for the Python CLI and potentially some core library defaults.
+
+*   **Configuration Management:** Critical paths and environment variables (`LLM_AGENT_SRC_PATH` for `chatServer`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_API_BASE_URL` for `webApp`) must be managed through `.env` files (and Fly.io secrets for deployment). The `webApp` utilizes Vite's proxy in `vite.config.ts` for local development to route `/api/*` requests to the `chatServer` at `http://localhost:3001`. For production, `webApp` API calls are constructed using `import.meta.env.VITE_API_BASE_URL`, which is set to the deployed `chatServer`'s URL (e.g., `https://clarity-chatserver.fly.dev`) during the build process.
+*   **Root Project Files:** Top-level files like `.gitignore`, the root `package.json` (with `concurrently` script), `pnpm-workspace.yaml`, and deployment configurations (`fly.toml`, `Dockerfile` for each app) are crucial for managing the monorepo and deployments.
+
+---

@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+python-dotenv>=1.0.0
+PyYAML>=6.0
+langchain>=0.3.24
+langchain-community>=0.2.0
+langchain-google-genai>=2.0.10,<2.1.0
+click>=8.0.0
+prompt-toolkit>=3.0.0
+pytest>=8.0.0
+langsmith>=0.1.10
+openai>=1.1.0
+pydantic>=2.0.0
+python-jose[cryptography]
