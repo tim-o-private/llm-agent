@@ -1,0 +1,16 @@
+{
+  "name": "llm-agent-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev:chatServer": "python chatServer/main.py",
+    "dev:webApp": "pnpm --filter clarity-frontend dev",
+    "dev": "concurrently \"pnpm:dev:chatServer\" \"pnpm:dev:webApp\" --names \"SERVER,WEBAPP\" --prefix-colors \"bgMagenta.bold,bgGreen.bold\"",
+    "prod:webApp": "flyctl deploy -c webApp/fly.toml --build-secret VITE_API_BASE_URL=https://clarity-chatserver.fly.dev --build-secret VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY --build-secret VITE_SUPABASE_URL=$VITE_SUPABASE_URL",
+    "prod:chatServer": "flyctl deploy -c chatServer/fly.toml",
+    "prod": "pnpm run prod:webApp && pnpm run prod:chatServer"
+  },
+  "devDependencies": {
+    "concurrently": "^8.0.0"
+  }
+} 
