@@ -66,11 +66,27 @@ This directory houses the fundamental building blocks of the application's inter
 
 ## 3. Styling Strategy
 
-The application primarily uses **Tailwind CSS** for styling.
+The application primarily uses **Tailwind CSS** for styling, integrated with **Radix UI Themes** for foundational theming, color palettes (light/dark modes, accent colors), and consistency with Radix Primitives.
 
--   **Utility-First:** Most styling is done directly within component JSX using Tailwind's utility classes (e.g., `p-4`, `flex`, `text-lg`, `bg-brand-primary`). This is the preferred method for layout, spacing, typography, and component-specific styling.
+-   **Utility-First (Tailwind):** Most styling is done directly within component JSX using Tailwind's utility classes (e.g., `p-4`, `flex`, `text-lg`). This is the preferred method for layout, spacing, typography, and component-specific styling.
 
--   **Semantic Color Tokens:** Colors are defined as semantic tokens in `tailwind.config.js` under `theme.extend.colors` (e.g., `brand-primary`, `ui-background`, `text-primary`, `dark-ui-background`). These tokens should be used whenever applying colors (e.g., `bg-brand-primary`, `text-text-secondary`) to ensure consistency and simplify theming (especially for dark mode).
+-   **Radix UI Themes:** The `<Theme>` provider from `@radix-ui/themes` wraps the application (in `main.tsx`), establishing the base appearance (light/dark/system), accent color (e.g., `indigo`), and gray color scale (e.g., `slate`). This provides CSS custom properties (e.g., `var(--accent-9)`, `var(--gray-12)`) that are then used by Tailwind.
+
+-   **Semantic Color Tokens (Tailwind Config):** Colors are defined as semantic tokens in `tailwind.config.js` under `theme.extend.colors`. **These tokens map to the Radix UI Theme CSS variables.** This is the source of truth for application-specific color semantics.
+    *   **Examples of Frequently Used Semantic Tokens:**
+        *   `brand-primary`: Main brand/accent color (e.g., for primary buttons, active elements). Uses `var(--accent-9)`.
+        *   `brand-primary-hover`: Hover state for brand primary. Uses `var(--accent-10)`.
+        *   `brand-primary-text`: Text color for on-brand-primary backgrounds. Uses `var(--accent-contrast)`.
+        *   `ui-bg`: Default main background for panels/pages. Uses `var(--color-panel-solid)`.
+        *   `ui-element-bg`: Default background for elements like cards. Uses `var(--gray-3)`.
+        *   `ui-interactive-bg`: Base background for interactive elements. Uses `var(--gray-3)`.
+        *   `ui-interactive-bg-hover`: Hover state for interactive elements. Uses `var(--gray-4)`.
+        *   `ui-border`: Standard border color. Uses `var(--gray-6)`.
+        *   `text-primary`: Primary text color. Uses `var(--gray-12)`.
+        *   `text-secondary`: Secondary text color. Uses `var(--gray-11)`.
+        *   `text-destructive`: Text color for destructive actions/errors. Uses `var(--red-11)`.
+        *   `danger-bg`: Background for destructive buttons/elements. Uses `var(--red-9)`.
+    *   Always use these semantic tokens (e.g., `bg-brand-primary`, `text-text-secondary`) when applying colors to ensure consistency and simplify theming.
 
 -   **`ui-components.css` (`@layer components`):** Located at `src/styles/ui-components.css`, this file is used for more complex base styles that are shared by UI components or when a dedicated CSS class is beneficial. It uses Tailwind's `@apply` directive to compose utilities into custom classes (e.g., `.btn`, `.btn-primary`). Edits here will affect all instances of components using these classes.
 
@@ -84,8 +100,10 @@ The application primarily uses **Tailwind CSS** for styling.
     *   Use the semantic color tokens from `tailwind.config.js` for colors.
 3.  **For base styles of components that use `@apply` (e.g., all `.btn`s):**
     *   Modify the corresponding class definition in `src/styles/ui-components.css`.
-4.  **To change the overall color scheme (e.g., brand color):**
-    *   Update the semantic color token definitions in `tailwind.config.js`. Changes here will propagate throughout the app.
+4.  **To change the overall color scheme (e.g., brand color, light/dark appearance):**
+    *   Update the `<Theme>` provider props in `webApp/src/main.tsx` (e.g., `accentColor`, `grayColor`, `appearance` linked to `useThemeStore`).
+    *   The underlying Radix variables will change, and since semantic tokens in `tailwind.config.js` point to these variables, the app's theme will update.
+    *   For finer-grained control over specific semantic meanings (if Radix defaults aren't enough), you can adjust the mappings in `tailwind.config.js`, but the primary mechanism for broad theme changes (like accent color) is via the Radix `<Theme>` provider.
 5.  **For global styles affecting the whole app (e.g., base font):**
     *   Consider `src/styles/index.css` or the `body` tag styling (often in `index.html` or via `index.css`).
 

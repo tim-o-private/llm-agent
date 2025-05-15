@@ -134,25 +134,46 @@ This file tracks the current tasks, steps, checklists, and component lists for t
         *   **Action:** Identify semantic color names for Tailwind. Map them in `tailwind.config.js` to CSS custom properties from Radix Themes (e.g., `primary: 'var(--accent-9)'`).
         *   **Output:** Updated `tailwind.config.js`.
         *   **Verification:** Semantic Tailwind classes correctly apply Radix Theme derived colors.
-    *   **Task 1.4: Refactor Existing Components for Radix Theme Compatibility**
-        *   **Action:** Audit UI components. Remove conflicting Tailwind colors on Radix Primitives. Update custom components to use new semantic Tailwind classes.
-        *   **Output:** Updated component files.
-        *   **Verification:** All components render correctly in light/dark modes, colors derived from Radix Themes or semantic mappings.
-    *   **Task 1.5: Document Multi-Palette & Advanced Theming Approach**
+    *   **Task 1.4: Refactor Existing Components for Radix Theme Compatibility** (In Progress)
+        *   Audit components in `webApp/src/components/ui/` and `webApp/src/components/ui/chat/`.
+        *   Replace hardcoded Tailwind color classes (e.g., `bg-blue-500`, `dark:bg-gray-800`) with the new semantic tokens.
+        *   Ensure components correctly adapt to light/dark modes via Radix Theme variables.
+        *   Address any styling conflicts or visual regressions.
+        *   Specific components reviewed/updated:
+            *   `Button.tsx` (via `webApp/src/styles/ui-components.css`): Styles for `.btn-primary`, `.btn-secondary`, `.btn-danger` updated. PostCSS error for `.btn-danger` resolved by refactoring Tailwind key from `'bg-danger-solid'` to `'danger-bg'.` (Done)
+            *   `Card.tsx` (Done)
+            *   `Input.tsx` (Done)
+            *   `Label.tsx` (Done)
+            *   `Modal.tsx` (Done)
+            *   `Spinner.tsx` (Done)
+            *   `TaskCard.tsx` (Done)
+            *   `TaskStatusBadge.tsx` (Done)
+            *   `Checkbox.tsx` (Done)
+            *   `CoachCard.tsx` (Done)
+            *   `ErrorMessage.tsx` (Done)
+            *   `FAB.tsx` (Done)
+            *   `ToggleField.tsx` (Done)
+            *   `chat/MessageBubble.tsx` (Done)
+            *   `chat/MessageHeader.tsx` (Done)
+            *   `chat/MessageInput.tsx` (Done - removed override on Input component)
+        *   Remaining components to verify or refactor: (List any components not yet explicitly checked or known to need work)
+    *   **Task 1.5: Document Multi-Palette & Advanced Theming Approach** (Done)
         *   **Action:** Document in `style-guide.md`/`techContext.md` how to switch `accentColor`, use other `<Theme>` props (`panelBackground`, `radius`, `scaling`), and when to use Radix props vs. Tailwind.
-        *   **Output:** Updated documentation.
-        *   **Verification:** Documentation is clear.
+        *   **Output:** Updated documentation in `memory-bank/style-guide.md`.
+        *   **Verification:** Documentation is clear and covers the specified points.
 
 **2. Keyboard Navigability Audit & Implementation**
-    *   **Status:** Planning Complete - Ready for Implementation
-    *   **Task 2.1: Comprehensive Keyboard Navigation Audit**
-        *   **Action:** Create audit checklist for all interactive elements/flows. Perform manual keyboard-only testing (Tab, Shift+Tab, Enter, Space, Arrows). Check focus order & visibility. Test modal escape. Use browser tools/Axe.
-        *   **Output:** Detailed report of accessibility issues.
-        *   **Verification:** Audit covers all interactive parts.
-    *   **Task 2.2: Implement Fixes for Basic Keyboard Accessibility Issues**
-        *   **Action:** Ensure semantic HTML. Add `tabindex="0"` and ARIA for custom interactive elements. Fix focus order (avoid `tabindex > 0`). Ensure visible focus indicators (Tailwind focus rings or Radix defaults).
-        *   **Output:** Code changes addressing basic issues.
-        *   **Verification:** Re-test fixed components/flows.
+    *   **Status:** In Progress (Major fixes complete, detailed component audit pending)
+    *   **Task 2.1: Comprehensive Keyboard Navigation Audit & Fixes** (DONE)
+        *   **Action:** Create audit checklist. Perform manual keyboard-only testing. Document findings in `memory-bank/keyboard_nav_audit.md`.
+        *   **Fixes Implemented (II.2.1.1 - II.2.1.3):
+            *   **II.2.1.1:** Button styling in Modals (e.g., `AddTaskTray`) fixed for Radix variables & focus visibility.
+            *   **II.2.1.2:** Left navigation (`SideNav`) now supports ArrowUp/ArrowDown key navigation.
+            *   **II.2.1.3:** Global tab order corrected to `TopBar` -> `SideNav` -> Main Content. Logo moved from `SideNav` to `TopBar`.
+        *   **Output:** Updated `memory-bank/keyboard_nav_audit.md`. Code changes in `AppShell.tsx`, `SideNav.tsx`, `TopBar.tsx`, `webApp/src/styles/ui-components.css`.
+        *   **Verification:** Major keyboard navigation issues in shell and modals resolved.
+    *   **Task 2.2: Implement Fixes for Basic Keyboard Accessibility Issues (Component Level)** (To Do - Part of ongoing audit)
+        *   **Action:** Ensure semantic HTML. Add `tabindex="0"` and ARIA for custom interactive elements. Fix focus order (avoid `tabindex > 0`). Ensure visible focus indicators (Tailwind focus rings or Radix defaults) for remaining components like `Checkbox.tsx`, `ToggleField.tsx`, etc.
     *   **Task 2.3: Ensure Accessibility of Radix UI Components**
         *   **Action:** Review Radix UI docs for keyboard patterns. Test Radix components in-app. Ensure custom styling/composition doesn't break their accessibility.
         *   **Output:** Minor code adjustments if needed.

@@ -5,18 +5,78 @@
 /* Styles moved from the former packages/ui library */
 @layer components {
   .btn {
-    @apply px-4 py-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-ui-border-focus;
+    @apply px-4 py-2 rounded-md font-semibold text-sm transition-colors duration-150 ease-in-out;
+    @apply focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2;
+    /* Base styling for disabled state */
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
   }
+
   .btn-primary {
-    @apply bg-brand-primary text-brand-primary-text hover:bg-brand-primary-hover;
+    background-color: var(--indigo-9);
+    color: white; /* --indigo-1 is white, or use a fixed white */
+    /* box-shadow for focus, as outline might be complex with themes */
+    /* Instead of Tailwind rings, using a direct outline for Radix vars */
   }
+  .btn-primary:hover:not(:disabled) {
+    background-color: var(--indigo-10);
+  }
+  .btn-primary:focus-visible:not(:disabled) {
+    outline: 2px solid var(--indigo-7);
+    outline-offset: 2px;
+  }
+
   .btn-secondary {
-    @apply bg-ui-interactive-bg text-text-primary hover:bg-ui-interactive-bg-hover;
+    background-color: var(--slate-3);
+    color: var(--slate-11);
   }
+  .btn-secondary:hover:not(:disabled) {
+    background-color: var(--slate-4);
+  }
+  .btn-secondary:focus-visible:not(:disabled) {
+    outline: 2px solid var(--slate-7);
+    outline-offset: 2px;
+  }
+
   .btn-danger {
-    @apply px-4 py-2 rounded-lg font-medium transition-colors text-white bg-danger-bg hover:bg-danger-bg-hover;
+    background-color: var(--red-9);
+    color: white; /* --red-1 is white */
   }
-  
+  .btn-danger:hover:not(:disabled) {
+    background-color: var(--red-10);
+  }
+  .btn-danger:focus-visible:not(:disabled) {
+    outline: 2px solid var(--red-7);
+    outline-offset: 2px;
+  }
+
+  /* For icon buttons or other variants if needed */
+  .btn-ghost {
+    @apply bg-transparent text-text-secondary hover:bg-ui-fill-hover;
+     /* Focus for ghost should be distinct */
+  }
+   .btn-ghost:focus-visible:not(:disabled) {
+    outline: 2px solid var(--slate-7);
+    outline-offset: 2px;
+  }
+
+  .input-base {
+    @apply block w-full px-3 py-2 rounded-md shadow-sm;
+    @apply border border-ui-border-base;
+    @apply bg-ui-element-bg text-text-primary;
+    @apply placeholder-text-muted;
+    @apply focus:outline-none focus:ring-2 focus:ring-ui-border-focus focus:border-transparent;
+    @apply disabled:bg-ui-element-disabled disabled:cursor-not-allowed;
+  }
+
+  .label-base {
+    @apply block text-sm font-medium text-text-secondary mb-1;
+  }
+
+  .card-base {
+    @apply rounded-lg shadow;
+    @apply bg-ui-panel-bg;
+  }
+
   /* TODO: Add other component base styles from the old packages/ui here */
   /* Example for a Card component if it existed and had styles defined with @apply */
   /* .ui-card {

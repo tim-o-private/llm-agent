@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Theme } from '@radix-ui/themes';
@@ -21,6 +21,15 @@ const queryClient = new QueryClient({
 function ThemedApp() {
   const storedAppearance = useThemeStore((state) => state.appearance);
   const effectiveAppearance = getEffectiveAppearance(storedAppearance);
+
+  useEffect(() => {
+    const root = window.document.documentElement;
+    if (effectiveAppearance === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, [effectiveAppearance]); // Rerun effect when effectiveAppearance changes
 
   return (
     <Theme accentColor="indigo" grayColor="slate" appearance={effectiveAppearance}>

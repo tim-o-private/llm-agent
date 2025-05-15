@@ -66,4 +66,92 @@ While specific techniques are covered in implementation patterns (like Pattern 1
 *   **Semantic HTML:** Use HTML elements according to their semantic meaning.
 *   **ARIA Attributes:** Use ARIA attributes correctly to enhance accessibility for custom components or dynamic content changes.
 
+## Advanced Theming with Radix UI Themes
+
+The primary theming capabilities are provided by Radix UI Themes, which is integrated with Tailwind CSS for utility styling. Here's how to manage and customize the theme:
+
+### 1. Changing the Core Theme (Accent Color, Gray Color, Appearance)
+
+The broadest theme changes are controlled via the `<Theme>` provider in `webApp/src/main.tsx`.
+
+*   **Appearance (Light/Dark/System):**
+    *   Managed by `useThemeStore` (in `webApp/src/stores/useThemeStore.ts`).
+    *   The `appearance` prop of `<Theme>` is dynamically set based on the store's state.
+    *   Users can toggle this via the `ThemeToggle.tsx` component.
+
+*   **Accent Color:**
+    *   The `accentColor` prop of the `<Theme>` provider in `main.tsx` controls the primary brand color used throughout the application (e.g., for buttons, focus rings, active states).
+    *   **To change the accent color globally:** Modify the `accentColor` value in `main.tsx`. For example, to change from `indigo` to `green`:
+        ```tsx
+        // webApp/src/main.tsx
+        <Theme accentColor="green" grayColor="slate" appearance={effectiveAppearance}>
+          <App />
+        </Theme>
+        ```
+    *   Radix Themes supports a variety of accent colors. Refer to the Radix Themes documentation for the full list of available color names.
+
+*   **Gray Color Scale:**
+    *   The `grayColor` prop of the `<Theme>` provider in `main.tsx` controls the neutral gray palette used for backgrounds, text, borders, etc.
+    *   Changing this (e.g., from `slate` to `mauve` or `sand`) can significantly alter the app's look and feel.
+        ```tsx
+        // webApp/src/main.tsx
+        <Theme accentColor="indigo" grayColor="mauve" appearance={effectiveAppearance}>
+          <App />
+        </Theme>
+        ```
+
+### 2. Fine-tuning with Other `<Theme>` Props
+
+Radix UI Themes offers additional props on the `<Theme>` provider for more granular control:
+
+*   `panelBackground`: Can be set to `solid` or `translucent`. Our current default is `solid` via the Radix Theme defaults, reflected in semantic tokens like `ui-bg` mapping to `var(--color-panel-solid)`.
+*   `radius`: Controls the default border-radius for Radix components (e.g., `none`, `small`, `medium`, `large`, `full`). Tailwind utilities can override this on a per-component basis.
+*   `scaling`: Adjusts the density of UI elements (e.g., `90%`, `100%`, `110%`).
+
+    These can be set in `main.tsx` as needed:
+    ```tsx
+    // webApp/src/main.tsx
+    <Theme accentColor="indigo" grayColor="slate" appearance={effectiveAppearance} radius="medium" scaling="100%">
+      <App />
+    </Theme>
+    ```
+
+### 3. Styling Individual Components: Radix Props vs. Tailwind Utilities
+
+Many Radix UI Theme components (and Radix UI Primitives, if used directly) expose their own props for styling (e.g., `color`, `size`, `variant` on a Radix Button).
+
+*   **When to use Radix Component Props:**
+    *   For properties directly supported by the Radix component that align with the overall theme (e.g., using a Radix Button's `color="red"` prop will use the themed red, which is good).
+    *   When you want to leverage built-in variants or states that Radix components provide.
+
+*   **When to use Tailwind CSS Utilities:**
+    *   For layout (margins, padding, flexbox, grid), typography (font size, weight, if not covered by Radix defaults), and specific sizing not available via Radix props.
+    *   When you need to apply one of the semantic color tokens defined in `tailwind.config.js` (e.g., `bg-brand-primary`, `text-text-secondary`) because these are guaranteed to be theme-aware.
+    *   For overriding Radix styles when a more custom look is needed that Radix props don't allow.
+    *   For responsive styling (`sm:`, `md:` prefixes).
+
+*   **Combining Both:** It's common to use both. For example, a Radix `Button` might use its `variant` and `color` props, while Tailwind utilities are used for margins around it.
+
+    ```tsx
+    // Example: Using Radix Button props and Tailwind for margin
+    import { Button } from '@radix-ui/themes';
+
+    <Button color="grass" variant="solid" highContrast className="mt-4">
+      Save Changes
+    </Button>
+    ```
+    In this example, `color`, `variant`, `highContrast` are Radix props. `className="mt-4"` uses a Tailwind utility.
+
+*   **Custom Components using `@apply`:** For more complex, reusable styles on custom components (like `.btn-primary` in `ui-components.css`), continue to use `@apply` with semantic Tailwind tokens. These tokens, in turn, use the Radix CSS variables, ensuring theme consistency.
+
+### 4. Future: User-Selectable Palettes
+
+While the current setup allows developers to change `accentColor` and `grayColor` globally, future enhancements could involve allowing users to select from a predefined list of accent/gray color combinations. This would likely involve: 
+
+*   Expanding `useThemeStore` to store user preferences for `accentColor` and `grayColor`.
+*   Updating `main.tsx` to read these values from the store and pass them to the `<Theme>` provider.
+*   Creating UI elements (e.g., in a settings panel) for users to make these selections.
+
+This approach maintains the benefits of Radix Theming while offering personalization.
+
 This style guide will evolve as the Clarity application develops. Refer to `memory-bank/techContext.md` for technology choices and `memory-bank/clarity/implementationPatterns.md` for detailed implementation rules. 

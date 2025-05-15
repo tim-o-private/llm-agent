@@ -14,11 +14,18 @@ const TopBar: React.FC = () => {
   const { toggleChatPanel, isChatPanelOpen } = useChatStore(); // Get store methods
 
   return (
-    <div className="flex-1 px-4 flex justify-between items-center">
-      {/* Left section - e.g., Mobile Nav Toggle or context actions - can be empty for now */}
+    <div className="flex-1 px-4 flex justify-between items-center h-full">
+      {/* Left section - Logo and optionally Mobile Nav Toggle or context actions */}
       <div className="flex items-center">
+        {/* Logo or App Name Placeholder - MOVED HERE */}
+        <div className="flex items-center flex-shrink-0 px-4 h-full">
+           {/* The h-16 on AppShell for TopBar and border-b from SideNav logo div are now implicitly handled by TopBar's fixed height if needed */}
+           {/* For alignment, ensure TopBar container (in AppShell) has items-center if logo isn't full height */}
+          <span className="text-xl font-semibold text-gray-800 dark:text-white">Clarity</span>
+        </div>
         {/* <button className="md:hidden ..."> Mobile Nav Toggle </button> */}
-        <span className="text-sm text-gray-600 dark:text-gray-400 hidden sm:block">
+        {/* Date can be here or moved further right if logo takes precedence */}
+        <span className="text-sm text-gray-600 dark:text-gray-400 hidden sm:block ml-4">
           {currentDate}
         </span>
       </div>

@@ -50,6 +50,7 @@ export default {
         
         'ui-element-bg': 'var(--gray-3)',         // Default background for elements like cards, inputs (non-interactive state)
         'ui-element-bg-hover': 'var(--gray-4)',   // Hover state for non-interactive elements
+        'ui-modal-bg': 'var(--gray-2)', // Dedicated background for modal content panels
         
         'ui-interactive-bg': 'var(--gray-3)',       // Base for interactive elements
         'ui-interactive-bg-hover': 'var(--gray-4)', // Hover for interactive elements
@@ -58,7 +59,7 @@ export default {
         // Borders
         'ui-border': 'var(--gray-6)',
         'ui-border-hover': 'var(--gray-7)', // Border for interactive elements on hover
-        'ui-border-focus': 'var(--accent-8)', // Focus ring/border
+        'ui-border-focus': 'var(--accent-9)', // Changed from var(--accent-8) to make it stronger, aligns with brand-primary
 
         // Text Colors
         'text-primary': 'var(--gray-12)',

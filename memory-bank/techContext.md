@@ -221,5 +221,15 @@ This section outlines key architectural patterns and strategies. Style-guide spe
 *   **Method:** Identify repeated Tailwind utility sets, create small wrapper components (e.g., `PanelContainer`, `Card`), apply utilities inside. Use `clsx` for conditional classes.
 *   **Avoid:** Repeating long strings of Tailwind utilities for logical UI patterns.
 
-This consolidated `techContext.md` provides a good overview.
-Next, I'll work on `productContext.md`. 
+
+## Tailwind CSS Best Practices
+
+### Defining Semantic Colors for `@apply`
+
+When defining custom semantic colors in `tailwind.config.js` that are intended to be used with the `@apply` directive within CSS files (e.g., in `ui-components.css`):
+
+*   **Prefer "root" semantic names** for your color keys.
+    *   Example: Instead of `colors: { 'bg-brand-primary': 'var(--accent-9)' }`, use `colors: { 'brand-primary': 'var(--accent-9)' }`.
+*   Tailwind will then automatically generate the necessary utility class variants from this root name (e.g., `.bg-brand-primary`, `.text-brand-primary`, `.border-brand-primary`).
+*   You can then reliably use these generated classes with `@apply` (e.g., `@apply bg-brand-primary;`).
+*   **Avoid using utility prefixes (like `bg-`, `text-`) directly within the color configuration keys if you intend to use them broadly with `@apply`.** While Tailwind allows this for creating explicitly named utilities (e.g., `colors: { 'bg-only-this': 'value' }` generates *only* `.bg-only-this`), this approach can sometimes lead to issues where `@apply` fails to resolve the class. If an explicitly named utility is strictly necessary and `@apply` is problematic, direct CSS variable assignment (e.g., `background-color: var(...)`) can serve as a workaround. 

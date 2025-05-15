@@ -200,3 +200,27 @@ This document tracks the active development progress.
 ## Notes & Decisions
 
 - Refactored code into helper modules (`path_helpers`, `agent_loader`, `chat_helpers`).
+
+## IMPLEMENT Mode: UI/UX Enhancements - Radix UI Theming & Semantic Tokens
+
+**Current Phase:** Task II.1: Radix UI Theme Foundation and Semantic Token Refactor - COMPLETED
+
+**Last Major Action:** Completed Task II.1.5 by documenting advanced theming with Radix UI Themes (accent/gray color changes, other Theme props, Radix props vs. Tailwind guidance) in `memory-bank/style-guide.md`.
+
+**Current Focus:** All sub-tasks for "II.1: Radix UI Theme Foundation and Semantic Token Refactor" are now complete. Ready to move to the next major UI/UX task area.
+
+**Next Steps:** Proceed to **Task II.2: Keyboard Navigability Audit & Implementation** as per `tasks.md`.
+
+**Overall Task II Status (Radix UI Theming & Semantic Tokens):** COMPLETED
+
+## IMPLEMENT Mode: UI/UX Enhancements - Keyboard Navigation
+
+**Current Phase:** Task II.2: Keyboard Navigability Audit & Implementation
+
+**Last Major Action:** Completed Task II.1 (Radix UI Theme Foundation and Semantic Token Refactor).
+
+**Current Focus:** Task II.2.1: Comprehensive Keyboard Navigation Audit. Created `memory-bank/keyboard_nav_audit.md` with an initial checklist. The next step is to systematically go through the application, test keyboard interaction for all elements and flows, and document findings in this audit file.
+
+**Next Steps:** Conduct the manual keyboard audit using the checklist. Identify and document any issues related to focus visibility, focus order, element activation, keyboard traps, and ARIA attribute usage.
+
+**Overall Task II.2 Status (Keyboard Navigability):** In Progress
