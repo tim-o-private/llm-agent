@@ -28,11 +28,18 @@ import { Spinner } from '@/components/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../features/auth/useAuthStore';
 
-const mapTaskToTaskCardViewModel = (task: Task, onToggle: any, onStart: any, onEdit: (taskId: string) => void): TaskCardProps => ({
+const mapTaskToTaskCardViewModel = (
+  task: Task, 
+  onToggle: any, 
+  onStart: any, 
+  onEdit: (taskId: string) => void,
+  isFocused: boolean
+): TaskCardProps => ({
   ...task,
   onToggleComplete: onToggle,
   onStartTask: onStart,
   onEdit: () => onEdit(task.id),
+  isFocused,
 });
 
 const TodayView: React.FC = () => {
@@ -48,33 +55,14 @@ const TodayView: React.FC = () => {
   const [isFastInputFocused, setIsFastInputFocused] = useState(false);
   const [isDetailViewOpen, setIsDetailViewOpen] = useState(false);
   const [selectedTaskIdForDetail, setSelectedTaskIdForDetail] = useState<string | null>(null);
+  const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
 
-  // Hotkey for FastTaskInput
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 't' || event.key === 'T') {
-        // Check if a modal or another input is active to prevent overriding
-        const activeElement = document.activeElement;
-        if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA' || activeElement.closest('[role="dialog"]'))) {
-          return; // Don't focus fast input if already in an input or modal
-        }
-        event.preventDefault();
-        setIsFastInputFocused(true);
-        // Optionally, reset after a short delay if it was a one-time focus trigger
-        // setTimeout(() => setIsFastInputFocused(false), 100);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, []);
-
-  // Callback for when FastTaskInput creates a task, to refresh the list
-  const handleTaskCreatedByFastInput = () => {
+  const handleTaskCreatedByFastInput = (createdTask: Task) => {
     queryClient.invalidateQueries({ queryKey: ['tasks', useAuthStore.getState().user?.id] });
-    setIsFastInputFocused(false); // Optionally de-focus after creation
+    setIsFastInputFocused(false); 
+    if (createdTask && createdTask.id) {
+      setFocusedTaskId(createdTask.id);
+    }
   };
 
   const openTaskDetailView = useCallback((taskId: string) => {
@@ -84,17 +72,14 @@ const TodayView: React.FC = () => {
 
   const handleTaskUpdated = () => {
     queryClient.invalidateQueries({ queryKey: ['tasks', useAuthStore.getState().user?.id] });
-    // Optionally, could also invalidate the specific task detail query if needed
-    // queryClient.invalidateQueries({ queryKey: ['tasks', 'detail', selectedTaskIdForDetail] });
   };
 
   const handleTaskDeleted = () => {
     queryClient.invalidateQueries({ queryKey: ['tasks', useAuthStore.getState().user?.id] });
-    setIsDetailViewOpen(false); // Close detail view if task was deleted
+    setIsDetailViewOpen(false); 
     setSelectedTaskIdForDetail(null);
   };
 
-  // Memoize handler functions
   const handleToggleTask = useCallback((taskId: string, currentCompletedState: boolean) => {
     const newCompletedStatus = !currentCompletedState;
     const newStatus = newCompletedStatus ? 'completed' : 'pending';
@@ -123,7 +108,6 @@ const TodayView: React.FC = () => {
               },
               onError: (err: Error) => {
                 console.error('[TodayView] Error creating focus session:', err);
-                // Revert task status if focus session creation failed
                 updateTask(
                   { id: taskId, updates: { status: 'planning' } },
                   {
@@ -146,21 +130,80 @@ const TodayView: React.FC = () => {
     if (fetchedTasks) {
       console.log('[TodayView] useEffect triggered. fetchedTasks:', fetchedTasks.map(t => ({id: t.id, title: t.title, position: t.position })));
       const newDisplayTasks = fetchedTasks.map(task => 
-        mapTaskToTaskCardViewModel(task, handleToggleTask, handleStartTask, openTaskDetailView)
+        mapTaskToTaskCardViewModel(
+          task, 
+          handleToggleTask, 
+          handleStartTask, 
+          openTaskDetailView,
+          task.id === focusedTaskId
+        )
       );
       console.log('[TodayView] useEffect setting displayTasks. New displayTasks:', newDisplayTasks.map(t => ({id: t.id, title: t.title })));
       setDisplayTasks(newDisplayTasks);
-    }
-  }, [fetchedTasks, handleToggleTask, handleStartTask, openTaskDetailView]);
 
-  // When FastInput is focused, then blurred, reset the focus trigger state
-  // This is a simple way to handle it. A more robust way might involve direct ref methods.
+      // Set initial focus to the first task if no task is currently focused
+      if (newDisplayTasks.length > 0 && !focusedTaskId) {
+        setFocusedTaskId(newDisplayTasks[0].id);
+      } else if (newDisplayTasks.length === 0) {
+        setFocusedTaskId(null); // Clear focus if no tasks
+      }
+    }
+  }, [fetchedTasks, handleToggleTask, handleStartTask, openTaskDetailView, focusedTaskId]);
+
+  // Hotkey handling - MOVED DOWN
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const activeElement = document.activeElement;
+      const isModalOpen = document.querySelector('[role="dialog"][data-state="open"]');
+      const isInputActive = activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA');
+
+      if (isModalOpen || isInputActive) {
+        return; 
+      }
+
+      if (event.key === 't' || event.key === 'T') {
+        event.preventDefault();
+        setIsFastInputFocused(true);
+      } else if (event.key === 'e' || event.key === 'E') {
+        if (focusedTaskId && !isDetailViewOpen) { 
+          event.preventDefault();
+          openTaskDetailView(focusedTaskId);
+        } else if (displayTasks.length > 0 && !isDetailViewOpen && !focusedTaskId) {
+          event.preventDefault();
+          openTaskDetailView(displayTasks[0].id);
+        }
+      } else if (event.key === 'n' || event.key === 'N') {
+        event.preventDefault();
+        if (displayTasks.length > 0) {
+          const currentIndex = displayTasks.findIndex(task => task.id === focusedTaskId);
+          if (currentIndex === -1) {
+            setFocusedTaskId(displayTasks[0].id);
+          } else if (currentIndex < displayTasks.length - 1) {
+            setFocusedTaskId(displayTasks[currentIndex + 1].id);
+          }
+        }
+      } else if (event.key === 'p' || event.key === 'P') {
+        event.preventDefault();
+        if (displayTasks.length > 0) {
+          const currentIndex = displayTasks.findIndex(task => task.id === focusedTaskId);
+          if (currentIndex === -1) {
+            setFocusedTaskId(displayTasks[displayTasks.length - 1].id);
+          } else if (currentIndex > 0) {
+            setFocusedTaskId(displayTasks[currentIndex - 1].id);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [displayTasks, focusedTaskId, isDetailViewOpen, openTaskDetailView, setIsFastInputFocused]); // Added setIsFastInputFocused to deps
+
   useEffect(() => {
     if (!isFastInputFocused && document.activeElement?.tagName !== 'INPUT') {
-        // If the focus state is false and no input is focused, it means we can reset it
-        // This is to ensure that if user clicks away, the state is reset.
     } else if (isFastInputFocused && document.activeElement?.tagName !== 'INPUT') {
-        // If it was meant to be focused but isn't (e.g. user clicked away immediately)
         setIsFastInputFocused(false);
     }
   }, [isFastInputFocused]);

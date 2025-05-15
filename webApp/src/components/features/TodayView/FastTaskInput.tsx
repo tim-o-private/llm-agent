@@ -7,14 +7,11 @@ import { NewTaskData, TaskPriority, TaskStatus, Task } from '../../../api/types'
 import { useAuthStore } from '../../../features/auth/useAuthStore';
 
 interface FastTaskInputProps {
-  isFocused?: boolean; // Optional prop to control focus externally if needed
-  onTaskCreated?: (createdTask: Task) => void;
+  isFocused: boolean;
+  onTaskCreated: (createdTask: Task) => void; // Updated prop signature
 }
 
-export const FastTaskInput: React.FC<FastTaskInputProps> = ({ 
-  isFocused,
-  onTaskCreated 
-}) => {
+export const FastTaskInput: React.FC<FastTaskInputProps> = ({ isFocused, onTaskCreated }) => {
   const [inputValue, setInputValue] = useState('');
   const createTaskMutation = useCreateTask();
   const user = useAuthStore((state) => state.user);
@@ -26,37 +23,46 @@ export const FastTaskInput: React.FC<FastTaskInputProps> = ({
     }
   }, [isFocused]);
 
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!inputValue.trim() || !user) return;
+  const handleSubmit = async (e?: React.FormEvent<HTMLFormElement>) => {
+    e?.preventDefault();
+    if (!inputValue.trim()) return;
 
-    const parsedProps = parseTaskString(inputValue.trim());
+    const parsedResult = parseTaskString(inputValue);
 
-    if (!parsedProps.title) {
-      toast.error('Task title cannot be empty.');
+    if (!parsedResult.title || parsedResult.title.trim() === '') {
+      toast.error("Task title cannot be empty.");
       return;
     }
 
-    const newTaskPayload: Omit<NewTaskData, 'user_id'> = {
-      title: parsedProps.title, // Already asserted as non-empty
-      status: 'pending' as TaskStatus, // Default status
-      priority: parsedProps.priority ?? (0 as TaskPriority), // Default priority if not parsed
-      description: parsedProps.description ?? undefined,
-      // Any other defaults or parsed properties can be added here
-      // e.g. notes, category, due_date if parser supports them
+    const taskPayload: Omit<NewTaskData, 'user_id'> = {
+      title: parsedResult.title, // Now guaranteed to be a string
+      description: parsedResult.description ?? null,
+      notes: parsedResult.notes ?? null,
+      status: parsedResult.status ?? 'pending',
+      priority: parsedResult.priority ?? 0,
+      category: parsedResult.category ?? null,
+      due_date: parsedResult.due_date ?? null,
+      completed: parsedResult.completed ?? false,
+      parent_task_id: parsedResult.parent_task_id ?? null,
+      subtask_position: parsedResult.subtask_position ?? null,
     };
-
+    
     try {
-      const createdTask = await createTaskMutation.mutateAsync(newTaskPayload);
-      toast.success(`Task "${createdTask.title}" created!`);
+      const createdTask = await createTaskMutation.mutateAsync(taskPayload);
+      toast.success('Task created!');
       setInputValue('');
-      if (onTaskCreated) {
-        onTaskCreated(createdTask);
+      if (inputRef.current) {
+        inputRef.current.blur(); // Optionally blur after creation
       }
+      onTaskCreated(createdTask); // Pass the full created task object
     } catch (error) {
       toast.error('Failed to create task. Please try again.');
       console.error('Error creating task:', error);
     }
+  };
+
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setInputValue(e.target.value);
   };
 
   return (
@@ -66,7 +72,12 @@ export const FastTaskInput: React.FC<FastTaskInputProps> = ({
         type="text"
         placeholder="Type task title & press Enter (e.g., Buy groceries p1 d:milk, eggs)"
         value={inputValue}
-        onChange={(e: ChangeEvent<HTMLInputElement>) => setInputValue(e.target.value)}
+        onChange={handleInputChange}
+        onBlur={() => { 
+          // Avoid clearing if there's content, allow submission on Enter even if blurred
+          // If you want to auto-submit on blur if content exists: 
+          // if (inputValue.trim()) handleSubmit(); 
+        }}
         className="w-full text-base py-3 px-4"
         // Consider adding a subtle leading icon if desired
       />

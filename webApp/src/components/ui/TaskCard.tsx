@@ -9,6 +9,7 @@ import { Task, TaskPriority, TaskStatus } from '@/api/types'; // Import full Tas
 
 // Lucide icons for priority
 import { ChevronUp, ChevronsUp, Flame, GripVertical } from 'lucide-react';
+import { Pencil2Icon } from '@radix-ui/react-icons'; // Added import
 
 export interface TaskCardProps extends Task { // TaskCardProps now extends the full Task type
   // id, title, completed, etc. are inherited from Task
@@ -16,6 +17,7 @@ export interface TaskCardProps extends Task { // TaskCardProps now extends the f
   onStartTask: (id: string) => void; // Callback to handle starting a task
   onEdit?: () => void; // Callback to open detail view for editing
   className?: string;
+  isFocused?: boolean; // Added isFocused prop
 }
 
 const priorityIcons: Record<TaskPriority, React.ReactNode | null> = {
@@ -43,6 +45,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   onToggleComplete,
   onStartTask,
   onEdit, // Destructure onEdit
+  isFocused, // Destructure isFocused
   className,
   ...restTaskProps // Capture other Task props if necessary, though not used in this rendering
 }) => {
@@ -86,10 +89,11 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         'task-card bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm flex items-center space-x-3 group relative',
         'border', // Ensure border is always applied before status-specific one
         statusCardStyles,
+        isFocused && 'ring-2 ring-blue-600 dark:ring-blue-500 shadow-xl bg-blue-50 dark:bg-slate-700', // Changed dark mode focused background to slate-700
         className,
-        onEdit ? 'cursor-pointer' : '' // Add cursor-pointer if onEdit is provided
+        // onEdit ? 'cursor-pointer' : '' // Remove cursor-pointer from whole card if we have a dedicated edit button
       )}
-      onClick={handleCardClick} // Add onClick handler to the main div
+      // onClick={handleCardClick} // Remove direct click handler from the main div if edit icon is primary
     >
       {/* Drag Handle Icon - listeners attached EXCLUSIVELY here */}
       <div 
@@ -113,7 +117,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       </div>
 
       {/* Task Info */}
-      <div className="flex-grow min-w-0">
+      <div className="flex-grow min-w-0" onClick={onEdit ? handleCardClick : undefined} style={onEdit ? {cursor: 'pointer'} : {}} >
         <p className={clsx("text-sm font-medium text-gray-900 dark:text-white truncate", (completed || status === 'completed') && "line-through")}>
           {title}
         </p>
@@ -127,6 +131,20 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         <div className="ml-auto pl-2" title={`Priority: ${priority === 1 ? 'Low' : priority === 2 ? 'Medium' : 'High'}`}>
           {priorityIcons[priority]}
         </div>
+      )}
+
+      {/* Edit Icon Button */}
+      {onEdit && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation(); // Prevent other card actions
+            onEdit();
+          }}
+          aria-label="Edit task"
+          className="p-1 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-full"
+        >
+          <Pencil2Icon className="h-4 w-4" />
+        </button>
       )}
 
       {/* Start Button - Conditionally render based on status */}
