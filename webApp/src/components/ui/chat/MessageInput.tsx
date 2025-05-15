@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Input } from '../Input'; 
-import { Button } from '../Button'; 
+import { Input } from '@/components/ui/Input'; 
+import { Button } from '@/components/ui/Button'; 
 
 // A simple Send Icon component (can be replaced with a more sophisticated one or an SVG library)
 const SendIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (

@@ -256,24 +256,26 @@ This document tracks the active development progress.
         *   `webApp/src/pages/TodayView.tsx` (Integrated `FastTaskInput`, added hotkey 'T' focusing, and callback for query invalidation).
         *   `webApp/src/api/hooks/useTaskHooks.ts` (Verified `useCreateTask` suitability).
         *   `webApp/src/api/types.ts` (Verified `NewTaskData` suitability).
-    *   **Summary:** A `FastTaskInput` component is now at the top of `TodayView`. Pressing 'T' focuses it. It parses input for title, priority (p0-p3), and description (d:/desc:), then calls `useCreateTask`. Task list refreshes on creation.
+    *   **Summary:** A `FastTaskInput` component is now at the top of `TodayView`. Pressing 'T' focuses it. It parses input for title, priority (p0-p3), and description (d:/desc:), then calls `useCreateTask`. Task list refreshes on creation. New tasks receive focus.
 
 **2. Implement TaskDetailView**
-    *   **Status:** In Progress (Core modal, form for basic fields, and save implemented)
+    *   **Status:** In Progress (Core modal, form for basic fields, save, and trigger from TaskCard implemented. Keyboard navigation for focus within TodayView and triggering TaskDetailView also implemented.)
     *   **Depends on:** DDL/Types for `Task` (all fields) and Subtasks are complete.
     *   **Components & Files:**
         *   `webApp/src/components/features/TaskDetail/TaskDetailView.tsx` (Created: Modal with form for Title, Description, Notes, Status, Priority; Save functionality).
         *   `webApp/src/api/hooks/useTaskHooks.ts` (Created `useFetchTaskById`; `useUpdateTask` utilized).
-        *   `webApp/src/pages/TodayView.tsx` (Integrated opening `TaskDetailView`, state management, callbacks for update/delete).
-        *   `webApp/src/components/ui/TaskCard.tsx` (Modified to trigger `TaskDetailView` on click).
+        *   `webApp/src/pages/TodayView.tsx` (Integrated opening `TaskDetailView`, state management, callbacks for update/delete, hotkeys for task focus (N/P) and opening detail view (E)).
+        *   `webApp/src/components/ui/TaskCard.tsx` (Modified to trigger `TaskDetailView` on click of title area or dedicated edit icon; visual focus indicator added).
+        *   `webApp/src/components/ui/Textarea.tsx` (Created for multi-line input in `TaskDetailView`).
+        *   `webApp/src/lib/utils.ts` (Created for `cn` utility, used by `Textarea`).
     *   **Detailed Steps Progress:**
         *   **V.2.1. Design `TaskDetailView.tsx` Structure (Modal/Panel):** DONE (Radix Dialog modal structure created).
         *   **V.2.2. Implement Form Fields:** In Progress (Title, Description, Notes, Status, Priority implemented. Others like due_date, category are pending).
         *   **V.2.3. Implement Actions:** In Progress (Save implemented. Cancel closes. Delete is pending).
         *   **V.2.4. Create `useFetchTaskById` hook:** DONE.
-        *   **V.2.5. Integrate Trigger:** DONE (TaskCard click opens detail view).
+        *   **V.2.5. Integrate Trigger:** DONE (TaskCard title area click or edit icon opens detail view; 'E' key on focused task also opens it).
         *   **V.2.6. Subtask Management Section:** To Do.
-    *   **Summary:** `TaskDetailView` modal can be opened by clicking a task card. It fetches task data and displays a form with Title, Description, Notes, Status, and Priority. Changes can be saved. Delete functionality and other fields are pending.
+    *   **Summary:** `TaskDetailView` modal can be opened by clicking a task card's title/edit icon, or by pressing 'E' on a focused task. It fetches task data and displays a form with Title, Description, Notes, Status, and Priority. Changes can be saved. Delete functionality and other fields are pending. `TodayView` supports keyboard navigation for focusing tasks and opening the detail view.
 
 **3. Implement Subtask Display in TaskCard**
     *   **Status:** To Do

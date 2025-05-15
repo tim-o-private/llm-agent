@@ -1,9 +1,9 @@
 import React from 'react';
-import SideNav from '../components/navigation/SideNav';
-import TopBar from '../components/navigation/TopBar';
-import { ChatPanel } from '../components/ChatPanel';
-import { useChatStore } from '../stores/useChatStore';
-import { OverlayManager } from '../components/overlays/OverlayManager';
+import SideNav from '@/components/navigation/SideNav';
+import TopBar from '@/components/navigation/TopBar';
+import { ChatPanel } from '@/components/ChatPanel';
+import { useChatStore } from '@/stores/useChatStore';
+import { OverlayManager } from '@/components/overlays/OverlayManager';
 
 interface AppShellProps {
   children: React.ReactNode;

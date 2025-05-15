@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient, QueryKey } from '@tanstack/react-query';
-import { supabase } from '../../lib/supabaseClient';
-import { useAuthStore } from '../../features/auth/useAuthStore';
+import { supabase } from '@/lib/supabaseClient';
+import { useAuthStore } from '@/features/auth/useAuthStore';
 import type { 
   Task, 
   NewTaskData, 

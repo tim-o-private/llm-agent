@@ -1,6 +1,6 @@
 import React from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
-import { useAuthStore } from '../features/auth/useAuthStore';
+import { useAuthStore } from '@/features/auth/useAuthStore';
 
 export const ProtectedRoute: React.FC = () => {
   const { user, loading } = useAuthStore();

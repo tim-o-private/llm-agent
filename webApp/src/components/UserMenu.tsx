@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAuthStore } from '../features/auth/useAuthStore';
+import { useAuthStore } from '@/features/auth/useAuthStore';
 
 export const UserMenu: React.FC = () => {
   const { user, loading, signInWithProvider, signOut } = useAuthStore();

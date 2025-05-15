@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, ChangeEvent, FormEvent } from 'react';
-import { Input } from '../../ui/Input'; // Corrected path to Input
-import { useCreateTask } from '../../../api/hooks/useTaskHooks';
-import { parseTaskString } from '../../../utils/taskParser';
+import { Input } from '@/components/ui/Input';
+import { useCreateTask } from '@/api/hooks/useTaskHooks';
+import { parseTaskString } from '@/utils/taskParser';
 import { toast } from 'react-hot-toast';
-import { NewTaskData, TaskPriority, TaskStatus, Task } from '../../../api/types';
-import { useAuthStore } from '../../../features/auth/useAuthStore';
+import { NewTaskData, TaskPriority, TaskStatus, Task } from '@/api/types';
+import { useAuthStore } from '@/features/auth/useAuthStore';
 
 interface FastTaskInputProps {
   isFocused: boolean;

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useChatStore } from '../stores/useChatStore';
+import { useChatStore } from '@/stores/useChatStore';
 import { MessageHeader, MessageInput, MessageBubble } from '@/components/ui';
 import { supabase } from '@/lib/supabaseClient';
 

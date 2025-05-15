@@ -226,7 +226,7 @@ const TodayView: React.FC = () => {
         
         // Prepare data for backend update
         const taskOrderUpdates = newOrderedItems.map((task, index) => ({
-          id: task.id,
+    id: task.id,
           position: index, // Use the new index as the position
         }));
         console.log('[TodayView] Calling updateTaskOrder with:', taskOrderUpdates); // DEBUGGING
@@ -280,9 +280,9 @@ const TodayView: React.FC = () => {
             items={displayTasks.map(task => task.id)} // Use array of ids for SortableContext
             strategy={verticalListSortingStrategy}
           >
-            <div className="flex-grow overflow-y-auto space-y-8">
+        <div className="flex-grow overflow-y-auto space-y-8">
               <TaskListGroup title="All Tasks" tasks={displayTasks} />
-            </div>
+        </div>
           </SortableContext>
         </DndContext>
       )}
