@@ -262,8 +262,6 @@ const TodayView: React.FC = () => {
             onTaskCreated={handleTaskCreatedByFastInput} 
         />
       </div>
-      <h1 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6">Today's Tasks</h1>
-
       {displayTasks.length === 0 && !isLoadingTasks ? (
         <div className="flex-grow flex flex-col items-center justify-center text-gray-500 dark:text-gray-400">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -288,14 +286,6 @@ const TodayView: React.FC = () => {
           </SortableContext>
         </DndContext>
       )}
-
-      <FABQuickAdd />
-
-      <div 
-        className="hidden md:block fixed top-1/3 right-6 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 w-64 h-auto"
-      >
-        {/* Placeholder for CoachCard content */}
-      </div>
 
       <TaskDetailView 
         taskId={selectedTaskIdForDetail}
