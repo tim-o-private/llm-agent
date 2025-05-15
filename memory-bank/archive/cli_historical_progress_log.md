@@ -1,30 +1,6 @@
-# Project Progress Log
+# Project Progress Log: Local LLM Terminal Environment (Historical)
 
-This document tracks the active development progress.
-
-## Current Focus: Memory Bank Cleanup & Radix UI Theming Preparation
-
-**Status:** In Progress
-
-**Goal:** Finalize the cleanup of the `memory-bank/` directory, ensuring all project context is consolidated, accurate, and current. Prepare for the implementation of Radix UI Theming in the Clarity web application.
-
-**Completed Sub-Tasks (Memory Bank Cleanup):**
-
-*   [X] Reviewed all files in `memory-bank/` and `memory-bank/clarity/`.
-*   [X] Consolidated information from various outdated PRDs, implementation plans, and specific context documents into the primary Memory Bank files (`projectbrief.md`, `productContext.md`, `techContext.md`, `style-guide.md`, `tasks.md`).
-*   [X] Archived historical progress logs (`memory-bank/clarity/progress.md` to `memory-bank/archive/clarity_historical_progress_log.md`; old `memory-bank/progress.md` to `memory-bank/archive/cli_historical_progress_log.md`).
-*   [X] Moved `memory-bank/clarity/ddl.sql` to `data/db/ddl.sql`.
-*   [X] Deleted numerous redundant/outdated files from `memory-bank/` and `memory-bank/clarity/` after merging their relevant content.
-*   [X] Updated `tasks.md` to reflect new DDL location, reference RLS guide, and add a task to update `clarity-ui-api-development-guidance.md`.
-
-**Next Steps:**
-
-1.  **[ACTIVE]** Final check of remaining `memory-bank/` files to ensure no loose ends.
-    *   Remaining files in `memory-bank/clarity/`: `clarity-ui-api-development-guidance.md`, `supabaseRLSGuide.md`, `UI Mockups/` (directory).
-    *   Remaining files in `memory-bank/`: `projectbrief.md`, `productContext.md`, `techContext.md`, `style-guide.md`, `tasks.md`, `progress.md` (this file), `activeContext.md` (to be created/updated), `systemPatterns.md` (to be created/updated if distinct from `techContext.md`), `chatGPTConvo.md`.
-2.  **[TODO]** Initialize/Update `memory-bank/activeContext.md` to reflect the immediate next goal (Radix UI Theming).
-3.  **[TODO]** Initialize/Update `memory-bank/systemPatterns.md` (if necessary, to be distinct from pattern info already in `techContext.md`). Currently, `techContext.md` has a section for key implementation patterns which might suffice.
-4.  **[TODO]** Transition to **IMPLEMENT mode** for Radix UI Theming once Memory Bank cleanup is fully verified.
+This document contains the historical progress log, previously located at `memory-bank/progress.md`.
 
 ## Current Focus
 
@@ -199,4 +175,4 @@ This document tracks the active development progress.
 
 ## Notes & Decisions
 
-- Refactored code into helper modules (`path_helpers`, `agent_loader`, `chat_helpers`).
+- Refactored code into helper modules (`path_helpers`, `agent_loader`, `chat_helpers`). 

@@ -1,22 +1,27 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback } from 'react';
+import { useThemeStore, getEffectiveAppearance, ThemeAppearance } from '../stores/useThemeStore';
 
-export type Theme = 'light' | 'dark';
+export type EffectiveTheme = 'light' | 'dark';
 
-export function useTheme(): [Theme, (theme: Theme) => void, () => void] {
-  const [theme, setThemeState] = useState<Theme>(() => {
-    if (typeof window !== 'undefined') {
-      return (localStorage.getItem('clarity-theme') as Theme) || 'light';
-    }
-    return 'light';
-  });
+export function useTheme(): [EffectiveTheme, (theme: ThemeAppearance) => void, () => void] {
+  const storeSetAppearance = useThemeStore((state) => state.setAppearance);
+  const storeToggleAppearance = useThemeStore((state) => state.toggleAppearance);
+  const storedAppearance = useThemeStore((state) => state.appearance);
 
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('clarity-theme', theme);
-  }, [theme]);
+  const effectiveTheme = getEffectiveAppearance(storedAppearance);
 
-  const setTheme = useCallback((t: Theme) => setThemeState(t), []);
-  const toggleTheme = useCallback(() => setThemeState((t) => (t === 'light' ? 'dark' : 'light')), []);
+  // The setTheme function from the hook can now accept 'light', 'dark', or 'system'
+  const setTheme = useCallback(
+    (newAppearance: ThemeAppearance) => {
+      storeSetAppearance(newAppearance);
+    },
+    [storeSetAppearance]
+  );
 
-  return [theme, setTheme, toggleTheme];
+  // The toggleTheme function will use the store's toggle logic (light/dark)
+  const toggleTheme = useCallback(() => {
+    storeToggleAppearance();
+  }, [storeToggleAppearance]);
+
+  return [effectiveTheme, setTheme, toggleTheme];
 } 

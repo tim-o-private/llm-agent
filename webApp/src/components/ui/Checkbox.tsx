@@ -35,21 +35,21 @@ export const Checkbox: React.FC<CheckboxProps> = (
       disabled={disabled}
       name={name}
       value={value}
-      aria-label={srLabel} // Apply srLabel as aria-label directly on the root
+      aria-label={srLabel}
       className={clsx(
         'group flex items-center justify-center size-5 rounded border focus:outline-none',
         'data-[disabled]:cursor-not-allowed data-[disabled]:opacity-60',
-        // Apply styles based on Radix's data-state attribute
-        'data-[state=checked]:bg-indigo-600 data-[state=checked]:border-transparent dark:data-[state=checked]:bg-indigo-500',
-        'bg-white border-gray-400 dark:bg-gray-700 dark:border-gray-500',
-        'focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800',
+        // Apply styles based on Radix's data-state attribute and semantic tokens
+        'data-[state=checked]:bg-brand-primary data-[state=checked]:border-transparent',
+        'bg-ui-element-bg border-ui-border', // Unchecked state
+        'focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 focus-visible:ring-offset-ui-bg', // Using ui-bg for ring offset
         className
       )}
     >
       <RadixCheckbox.Indicator className="flex items-center justify-center w-full h-full">
         <CheckIcon 
           className={clsx(
-              'size-4 fill-white' // Icon is always present in Indicator, visibility controlled by Radix
+              'size-4 fill-white' // Icon is always white, ensure brand-primary is dark enough
           )}
         />
       </RadixCheckbox.Indicator>

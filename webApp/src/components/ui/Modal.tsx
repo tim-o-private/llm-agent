@@ -23,17 +23,17 @@ export const Modal: React.FC<ModalProps> = ({ open, onOpenChange, title, descrip
       <Dialog.Content 
         className={clsx(
           'fixed z-50 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2',
-          'bg-white dark:bg-gray-900 rounded-lg shadow-lg p-6 w-full max-w-md',
+          'bg-ui-element-bg rounded-lg shadow-lg p-6 w-full max-w-md',
           "transition-all duration-300 ease-in-out",
           "data-[state=closed]:opacity-0 data-[state=closed]:scale-95",
           "data-[state=open]:opacity-100 data-[state=open]:scale-100"
         )}
       >
-        {title && <Dialog.Title className="text-lg font-bold mb-2">{title}</Dialog.Title>}
-        {description && <Dialog.Description className="mb-4 text-gray-500">{description}</Dialog.Description>}
+        {title && <Dialog.Title className="text-lg font-bold mb-2 text-text-primary">{title}</Dialog.Title>}
+        {description && <Dialog.Description className="mb-4 text-text-secondary">{description}</Dialog.Description>}
         {children}
         <Dialog.Close asChild>
-          <button className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" aria-label="Close">✕</button>
+          <button className="absolute top-2 right-2 text-text-muted hover:text-text-secondary" aria-label="Close">✕</button>
         </Dialog.Close>
       </Dialog.Content>
     </Dialog.Portal>

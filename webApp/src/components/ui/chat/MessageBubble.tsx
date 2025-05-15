@@ -23,9 +23,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const bubbleClasses = clsx(
     'p-3 rounded-lg max-w-xs md:max-w-md lg:max-w-lg break-words shadow',
     {
-      'bg-blue-500 text-white': isUser,
-      'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200': !isUser && !isSystem,
-      'bg-transparent text-gray-500 dark:text-gray-400 text-center text-xs w-full italic': isSystem,
+      'bg-brand-primary text-brand-primary-text': isUser,
+      'bg-ui-element-bg text-text-primary': !isUser && !isSystem,
+      'bg-transparent text-text-muted text-center text-xs w-full italic': isSystem,
     }
   );
 
@@ -39,10 +39,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   );
 
   const avatar = (
-    <div className={clsx("w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-600 flex-shrink-0", isUser ? 'ml-2' : 'mr-2')}>
+    <div className={clsx("w-8 h-8 rounded-full bg-neutral-subtle flex-shrink-0", isUser ? 'ml-2' : 'mr-2')}>
       {avatarUrl && <img src={avatarUrl} alt={`${senderName || sender}'s avatar`} className="w-full h-full rounded-full object-cover" />}
-      {/* Placeholder for initials or default icon if no avatarUrl */}
-      {!avatarUrl && senderName && <span className="flex items-center justify-center w-full h-full text-xs text-white dark:text-gray-300 font-semibold">{senderName.substring(0, 2).toUpperCase()}</span>}
+      {!avatarUrl && senderName && <span className="flex items-center justify-center w-full h-full text-xs text-neutral-strong font-semibold">{senderName.substring(0, 2).toUpperCase()}</span>}
       {!avatarUrl && !senderName && sender === 'ai' && <span className="flex items-center justify-center w-full h-full text-xs">🤖</span>}
       {!avatarUrl && !senderName && sender === 'user' && <span className="flex items-center justify-center w-full h-full text-xs">👤</span>}
     </div>
@@ -52,7 +51,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     return (
       <div className={alignmentClasses}>
         <p className={bubbleClasses}>{text}</p>
-        {/* Optionally add timestamp for system messages too */}
       </div>
     );
   }
@@ -62,7 +60,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       {!isUser && avatar}
       <div className={clsx("flex flex-col", isUser ? 'items-end' : 'items-start')}>
         {senderName && !isUser && (
-          <span className="text-xs text-gray-500 dark:text-gray-400 mb-0.5 ml-1">
+          <span className="text-xs text-text-muted mb-0.5 ml-1">
             {senderName}
           </span>
         )}
@@ -70,7 +68,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           <p className="text-sm">{text}</p>
         </div>
         {timestamp && (
-          <span className={clsx("text-xs text-gray-400 dark:text-gray-500 mt-1", isUser ? 'mr-1' : 'ml-1')}>
+          <span className={clsx("text-xs text-text-muted mt-1", isUser ? 'mr-1' : 'ml-1')}>
             {timestamp}
           </span>
         )}

@@ -2,7 +2,7 @@ import React from 'react';
 
 export const Spinner: React.FC<{ size?: number }> = ({ size = 24 }) => (
   <svg
-    className="animate-spin text-blue-600"
+    className="animate-spin text-brand-primary"
     width={size}
     height={size}
     viewBox="0 0 24 24"

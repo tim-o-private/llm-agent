@@ -42,20 +42,20 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex items-center p-2 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+    <form onSubmit={handleSubmit} className="flex items-center p-2 bg-ui-element-bg border-t border-ui-border">
       <Input
         type="text"
         value={inputValue}
         onChange={handleInputChange}
         placeholder={placeholder}
-        className="flex-grow mr-2 bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+        className="flex-grow mr-2 rounded-lg"
         disabled={disabled}
         aria-label="Chat message input"
       />
       <Button 
         type="submit" 
         variant="primary" 
-        className="px-3 py-2 rounded-lg" // Ensure padding for icon button
+        className="px-3 py-2 rounded-lg"
         disabled={disabled || inputValue.trim() === ''}
         aria-label="Send message"
       >

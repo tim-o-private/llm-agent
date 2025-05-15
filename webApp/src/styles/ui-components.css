@@ -8,14 +8,13 @@
     @apply px-4 py-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-ui-border-focus;
   }
   .btn-primary {
-    @apply bg-brand-primary text-text-on-brand hover:bg-brand-primary-hover;
+    @apply bg-brand-primary text-brand-primary-text hover:bg-brand-primary-hover;
   }
   .btn-secondary {
-    @apply bg-ui-element text-text-primary hover:bg-ui-element-hover;
+    @apply bg-ui-interactive-bg text-text-primary hover:bg-ui-interactive-bg-hover;
   }
   .btn-danger {
-    /* TODO: Consider creating a semantic token like 'status-error-bg' or 'brand-danger' in tailwind.config.js */
-    @apply bg-red-600 text-white hover:bg-red-700;
+    @apply px-4 py-2 rounded-lg font-medium transition-colors text-white bg-danger-bg hover:bg-danger-bg-hover;
   }
   
   /* TODO: Add other component base styles from the old packages/ui here */

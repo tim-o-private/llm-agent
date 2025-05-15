@@ -30,7 +30,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     <Card 
       className={clsx(
         "mb-3 transition-all hover:shadow-md", 
-        completed && "bg-gray-100 dark:bg-gray-800 opacity-70", // Slightly different completed style for better contrast
+        // For completed tasks, use a subtler background from the theme and opacity
+        completed && "bg-ui-bg-alt opacity-70", 
         className
       )}
       // The Card component itself has p-6 padding by default, so content is directly inside.
@@ -49,16 +50,16 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           <label
             className={clsx(
               "block text-sm font-medium cursor-pointer",
-              completed ? "line-through text-gray-500 dark:text-gray-400" : "text-gray-900 dark:text-white"
+              completed ? "line-through text-text-muted" : "text-text-primary"
             )}
           >
             {title}
           </label>
           {(time || category) && (
-            <div className="mt-1 flex items-center space-x-2 text-xs text-gray-500 dark:text-gray-400">
+            <div className="mt-1 flex items-center space-x-2 text-xs text-text-muted">
               {time && <span>{time}</span>}
               {category && (
-                <span className="px-2 py-0.5 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300 rounded-full">
+                <span className="px-2 py-0.5 bg-accent-subtle text-text-accent-strong rounded-full">
                   {category}
                 </span>
               )}
@@ -66,7 +67,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           )}
           {/* Display notes if they exist - simple version */}
           {notes && (
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            <p className="mt-1 text-xs text-text-muted">
               {notes}
             </p>
           )}

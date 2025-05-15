@@ -40,13 +40,13 @@ export const FAB: React.FC<FABProps> = ({
     <button
       type="button"
       className={clsx(
-        'fixed inline-flex items-center justify-center rounded-full shadow-lg text-white transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800',
-        'bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500', // Default theme, can be overridden by className
+        'fixed inline-flex items-center justify-center rounded-full shadow-lg text-brand-primary-text transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-ui-bg',
+        'bg-brand-primary hover:bg-brand-primary-hover focus:ring-brand-primary', 
         positionClasses[position],
         sizeClasses[size],
         className
       )}
-      title={tooltip} // Native browser tooltip
+      title={tooltip}
       {...props}
     >
       <span className={clsx(iconSizeClasses[size])}>{icon}</span>
