@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChatPanel } from '../components/ChatPanel'; // Changed to named import
+import { ChatPanel } from '@/components/ChatPanel';
 
 const CoachPage: React.FC = () => {
   return (

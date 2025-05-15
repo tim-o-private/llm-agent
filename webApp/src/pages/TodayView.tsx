@@ -15,18 +15,18 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 
-import TaskListGroup from '../components/tasks/TaskListGroup';
+import TaskListGroup from '@/components/tasks/TaskListGroup';
 import { TaskCard, TaskCardProps } from '@/components/ui/TaskCard';
-import FABQuickAdd from '../components/tasks/FABQuickAdd';
-import { FastTaskInput } from '../components/features/TodayView/FastTaskInput';
-import { TaskDetailView } from '../components/features/TaskDetail/TaskDetailView';
-/* import { useOverlayStore } from '../stores/useOverlayStore'; */
+import FABQuickAdd from '@/components/tasks/FABQuickAdd';
+import { FastTaskInput } from '@/components/features/TodayView/FastTaskInput';
+import { TaskDetailView } from '@/components/features/TaskDetail/TaskDetailView';
+/* import { useOverlayStore } from '@/stores/useOverlayStore'; */
 
-import { useFetchTasks, useUpdateTask, useUpdateTaskOrder, useCreateFocusSession } from '../api/hooks/useTaskHooks';
-import type { Task, FocusSession } from '../api/types';
+import { useFetchTasks, useUpdateTask, useUpdateTaskOrder, useCreateFocusSession } from '@/api/hooks/useTaskHooks';
+import type { Task, FocusSession } from '@/api/types';
 import { Spinner } from '@/components/ui';
 import { useQueryClient } from '@tanstack/react-query';
-import { useAuthStore } from '../features/auth/useAuthStore';
+import { useAuthStore } from '@/features/auth/useAuthStore';
 
 const mapTaskToTaskCardViewModel = (
   task: Task, 

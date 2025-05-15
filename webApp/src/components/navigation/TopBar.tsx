@@ -1,8 +1,8 @@
 import React from 'react';
-import { UserMenu } from '../UserMenu'; // Uncommented and ensured named import
-import { ThemeToggle, Button } from '@/components/ui'; // Added ThemeToggle and Button
-import { MessageSquare } from 'lucide-react'; // Added MessageSquare icon
-import { useChatStore } from '../../stores/useChatStore'; // Added useChatStore
+import { UserMenu } from '@/components/UserMenu';
+import { ThemeToggle, Button } from '@/components/ui';
+import { MessageSquare } from 'lucide-react';
+import { useChatStore } from '@/stores/useChatStore';
 
 const TopBar: React.FC = () => {
   const currentDate = new Date().toLocaleDateString(undefined, {
@@ -11,7 +11,7 @@ const TopBar: React.FC = () => {
     month: 'long',
     day: 'numeric'
   });
-  const { toggleChatPanel, isChatPanelOpen } = useChatStore(); // Get store methods
+  const { toggleChatPanel, isChatPanelOpen } = useChatStore();
 
   return (
     <div className="flex-1 px-4 flex justify-between items-center h-full">

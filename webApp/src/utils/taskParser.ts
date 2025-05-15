@@ -1,4 +1,4 @@
-import { NewTaskData, TaskPriority } from '../api/types';
+import { NewTaskData, TaskPriority } from '@/api/types';
 
 // Basic patterns for parsing
 const priorityPattern = /\b(p[0-3])\b/i;

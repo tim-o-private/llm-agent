@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect, KeyboardEvent } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { navItems } from '../../navigation/navConfig'; // Adjusted path
+import { navItems } from '@/navigation/navConfig';
 
 const SideNav: React.FC = () => {
   const baseStyle = "group flex items-center px-3 py-3 text-sm font-medium rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-800";
