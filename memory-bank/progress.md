@@ -242,11 +242,87 @@ This document tracks the active development progress.
 **Overall Task II.3 Status (Drag-and-Drop Reordering - Core Functionality):** COMPLETED
 **Overall Task II.3.5 Status (Drag-and-Drop Styling/Interaction Refinements):** COMPLETED
 
+## IV. UI Implementation: Prioritize Flow & Task Management Refinements (Cyclical Flow - Phase 1)
+
+**Overall Goal:** Fully implement the "Prioritize" flow for task management, including UI for task selection, a refined `TaskCard`, a complete `TaskDetailView`, and a collapsible chat panel. This phase also includes connecting the chat server to Supabase for task R/W and moving agent context to Postgres.
+
+**Status:** In Progress
+
+**Sub-Tasks & Progress:**
+*   **Task IV.1: Fast Task Entry Mechanism (`Sub-Task 4.1.UI.1` from `tasks.md`)**
+    *   **Status:** COMPLETED
+    *   **Details:** `taskParser.ts`, `FastTaskInput.tsx` created and integrated. Hotkey 'T' operational.
+*   **Task IV.2: `TaskDetailView.tsx` Completion & Refinements (`Sub-Task 4.1.UI.2` from `tasks.md`)**
+    *   **Status:** In Progress (Significant Refactor Completed)
+    *   **Details:** Modal refactored with consolidated form state (`formData`), select inputs for Status/Priority, improved `handleSave`, standardized Radix Dialog usage, and added a "Delete Task" button in the modal footer. Ensured `TodayView.tsx` passes `onDeleteTaskFromDetail` prop.
+    *   **Pending:** Subtask section UI/logic (placeholder added). Consider if any other form fields are critical before moving to Prioritize View.
+*   **Task IV.3: Enhanced Keyboard Navigation in `TodayView` (`Sub-Task 4.1.UI.3` from `tasks.md`)**
+    *   **Status:** COMPLETED
+    *   **Details:** Focused task state, visual indicator, 'N'/'P'/'E' key navigation.
+*   **Task IV.4: `TaskCard.tsx` Refactor for Prioritization (`Sub-Task 4.1.UI.5.A` from `tasks.md`)**
+    *   **Status:** COMPLETED
+    *   **Details:** Checkbox changed to selection, Edit/Complete/Delete buttons added.
+*   **Task IV.5: Delete Task Functionality (`useDeleteTask` hook & `TodayView` integration)**
+    *   **Status:** COMPLETED
+    *   **Details:** `useDeleteTask` hook implemented with Supabase call, RLS, query invalidation, and toast notifications. Integrated into `TodayView.tsx` for `TaskCard` delete button.
+
+**Current Focus:** Ensuring `TaskDetailView`'s delete functionality is fully wired up via `TodayView.tsx`.
+
+**Next Major Focus Areas:**
+1.  **Implement Prioritize View (Modal) (`Sub-Task 4.1.UI.5` from `tasks.md`)**
+    *   **Status:** In Progress (Modal created and integrated)
+    *   **Details:** Created `webApp/src/components/features/PrioritizeView/PrioritizeViewModal.tsx`. Added fields for motivation, completion note, session breakdown, and timer. Includes logic for fetching task data and updating the task with these details. Integrated into `TodayView.tsx` with a new "Focus" button on `TaskCard` to trigger it. `handleStartFocusSession` callback in `TodayView` currently logs data and closes modal.
+    *   **Next Steps:** Thoroughly test the flow. Then, implement the actual logic in `handleStartFocusSession` to transition to an "Execute" phase/view (this will be a significant next piece of work involving state management for the P-P-E-R cycle).
+2.  **Implement Collapsible Chat Panel in `TodayView` (`Sub-Task 4.1.UI.8` from `tasks.md`)**
+    *   **Status:** In Progress (Initial UI and collapsibility implemented)
+    *   **Details:** Created `ChatPanel.tsx` with placeholder UI. Integrated into `TodayView.tsx` with open/close toggle and layout adjustment for the panel.
+    *   **Next Steps:** Implement full chat functionality (connecting to backend, message handling, etc.).
+
 ## V. UI Implementation: Fast Task Entry, TaskDetailView, Subtasks (P-P-E-R Phase 1)
 
 **Overall Goal:** Implement core UI features for enhanced task management as defined in `memory-bank/creative/creative-PER-cycle.md` (Fast Task Entry, TaskDetailView, Subtask Display).
 
 **Status:** In Progress
+
+**Recent Progress (Focus: Bug Fixes & Stabilization):**
+*   **TodayView.tsx Performance & Stability Improvements:**
+    *   **Fixed infinite loop rendering bug** by refactoring state management:
+        *   Replaced multiple interdependent useEffect hooks with a more streamlined approach that avoids circular dependencies
+        *   Implemented useMemo to derive mapped tasks from raw task data
+        *   Restructured the component to ensure state updates happen in a predictable and controlled manner
+        *   Ensured proper dependency arrays in useEffect hooks to prevent unnecessary re-renders
+    *   **Improved keyboard shortcut reliability** for navigation and task interaction:
+        *   Fixed focus management for 'N' and 'P' keys for navigating between tasks
+        *   Restored 'E' key functionality for opening TaskDetailView
+        *   Enhanced 'T' key behavior for activating fast task input
+    *   **Enhanced UI component consistency:**
+        *   Standardized on Radix UI icons across all components
+        *   Replaced Lucide's Trash2Icon with Radix's TrashIcon in TaskDetailView
+        *   Fixed ChatPanel close button implementation with proper Radix Cross1Icon
+*   **TaskDetailView.tsx Improvements:**
+    *   Completed the integration with proper delete functionality
+    *   Fixed icon consistency by using Radix icons throughout
+*   **ChatPanel Component:**
+    *   Completed the initial implementation with working close functionality
+    *   Added proper styling for the toggle button
+    *   Ensured clean panel transitions
+
+**Recent Progress (Focus: Prioritize Flow Foundations):**
+*   **`TaskCard.tsx` Refactor (Sub-Task 4.1.UI.5.A from tasks.md):**
+    *   Updated `TaskCardProps` to include `isSelected`, `onSelectTask`, `onMarkComplete`, `onDeleteTask`, removing `onToggleComplete`.
+    *   Modified checkbox to use `isSelected` and call `onSelectTask` for prioritization selection.
+    *   Added new action buttons (Complete, Delete) alongside the existing Edit button, with appropriate icons and event handling.
+    *   Resolved linter errors (unused imports/props).
+*   **`TodayView.tsx` Integration for new `TaskCard` capabilities:**
+    *   Added state `selectedTaskIds` to manage task selection.
+    *   Updated `mapTaskToTaskCardViewModel` to pass new props/callbacks.
+    *   Implemented `handleSelectTask`, `handleMarkComplete`.
+    *   Integrated `useDeleteTask` hook and implemented `handleDeleteTask` callback for task deletion from `TaskCard`.
+    *   Removed old `handleToggleTask` logic.
+*   **API Hook `useDeleteTask` (in `useTaskHooks.ts`):**
+    *   Implemented `useDeleteTask` using `useMutation` for deleting tasks from Supabase.
+    *   Includes user-specific deletion logic, query invalidation, and toast notifications.
+    *   Resolved duplicate identifier issue for the hook.
 
 **1. Implement Fast Task Entry Mechanism**
     *   **Status:** COMPLETED

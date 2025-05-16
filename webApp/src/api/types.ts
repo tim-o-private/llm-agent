@@ -19,6 +19,8 @@ export interface Task {
   parent_task_id?: string | null; // FK to tasks.id, for subtasks
   subtask_position?: number | null; // For ordering subtasks under a parent
   subtasks?: Task[]; // Populated if subtasks are fetched with the parent
+  motivation?: string | null; // Added for P-P-E-R cycle
+  completion_note?: string | null; // Added for P-P-E-R cycle (Definition of Done for this task)
   // Add other fields like priority, reminders, etc. as needed
 }
 

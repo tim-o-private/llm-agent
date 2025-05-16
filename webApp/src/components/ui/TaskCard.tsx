@@ -1,21 +1,28 @@
 import React from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Card } from './Card'; // Assuming Card is a styled div or similar
+// import { Card } from './Card'; // Assuming Card is a styled div or similar - Unused import
 import { Checkbox } from './Checkbox';
 import { Button } from './Button'; // Assuming a Button component exists
 import clsx from 'clsx';
 import { Task, TaskPriority, TaskStatus } from '@/api/types'; // Import full Task type and enums
 
-// Lucide icons for priority
-import { ChevronUp, ChevronsUp, Flame, GripVertical } from 'lucide-react';
-import { Pencil2Icon } from '@radix-ui/react-icons'; // Added import
+// Lucide icons for priority and actions
+import { ChevronUp, ChevronsUp, Flame, GripVertical, CheckCircleIcon, Trash2Icon, PlayIcon } from 'lucide-react';
+import { Pencil2Icon } from '@radix-ui/react-icons';
 
 export interface TaskCardProps extends Task { // TaskCardProps now extends the full Task type
   // id, title, completed, etc. are inherited from Task
-  onToggleComplete: (id: string, completed: boolean) => void;
+  // onToggleComplete: (id: string, completed: boolean) => void; // Replaced by onMarkComplete and onSelectTask
   onStartTask: (id: string) => void; // Callback to handle starting a task
   onEdit?: () => void; // Callback to open detail view for editing
+  onStartFocus?: (id: string) => void; // Added for Prioritize View Modal trigger
+  
+  isSelected?: boolean; // For selection in prioritization view
+  onSelectTask?: (id: string, selected: boolean) => void; // Callback for selection change
+  onMarkComplete?: (id: string) => void; // Callback to mark task as complete
+  onDeleteTask?: (id: string) => void; // Callback to delete a task
+
   className?: string;
   isFocused?: boolean; // Added isFocused prop
 }
@@ -37,17 +44,22 @@ const getStatusStyles = (status: TaskStatus, completed: boolean) => {
 export const TaskCard: React.FC<TaskCardProps> = ({
   id,
   title,
-  category,
-  notes,
+  // category, // Unused prop
+  // notes,    // Unused prop
   completed,
   status,
   priority,
-  onToggleComplete,
+  // onToggleComplete, // Removed
   onStartTask,
-  onEdit, // Destructure onEdit
-  isFocused, // Destructure isFocused
+  onEdit,
+  onStartFocus,
+  isSelected,
+  onSelectTask,
+  onMarkComplete,
+  onDeleteTask,
+  isFocused,
   className,
-  ...restTaskProps // Capture other Task props if necessary, though not used in this rendering
+  // ...restTaskProps // Unused prop
 }) => {
   const { 
     attributes, 
@@ -106,13 +118,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         <GripVertical size={18} className="text-gray-400 dark:text-gray-500" />
       </div>
 
-      {/* Checkbox */}
+      {/* Checkbox for Selection */}
       <div className="flex items-center h-5">
         <Checkbox
           id={`task-checkbox-${id}`}
-          checked={completed}
-          onCheckedChange={() => onToggleComplete(id, !completed)}
-          aria-label={`Mark task ${title} as ${completed ? 'incomplete' : 'complete'}`}
+          checked={isSelected} // Use isSelected for checkbox state
+          onCheckedChange={(checked) => onSelectTask && onSelectTask(id, !!checked)} // Pass boolean state
+          aria-label={`Select task ${title} for prioritization`} // Updated aria-label
         />
       </div>
 
@@ -133,19 +145,61 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         </div>
       )}
 
-      {/* Edit Icon Button */}
-      {onEdit && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation(); // Prevent other card actions
-            onEdit();
-          }}
-          aria-label="Edit task"
-          className="p-1 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-full"
-        >
-          <Pencil2Icon className="h-4 w-4" />
-        </button>
-      )}
+      {/* Action Buttons Group */}
+      <div className="ml-auto flex items-center space-x-1 pl-2">
+        {onStartFocus && !completed && status !== 'completed' && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onStartFocus(id);
+            }}
+            aria-label="Prepare and Focus on task"
+            title="Prepare & Focus"
+            className="p-1.5 text-blue-500 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+          >
+            <PlayIcon className="h-4 w-4" />
+          </button>
+        )}
+
+        {onEdit && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit();
+            }}
+            aria-label="Edit task"
+            className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+          >
+            <Pencil2Icon className="h-4 w-4" />
+          </button>
+        )}
+
+        {onMarkComplete && !completed && status !== 'completed' && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onMarkComplete(id);
+            }}
+            aria-label="Mark task complete"
+            className="p-1.5 text-green-500 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+          >
+            <CheckCircleIcon className="h-4 w-4" />
+          </button>
+        )}
+
+        {onDeleteTask && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDeleteTask(id);
+            }}
+            aria-label="Delete task"
+            className="p-1.5 text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+          >
+            <Trash2Icon className="h-4 w-4" />
+          </button>
+        )}
+      </div>
 
       {/* Start Button - Conditionally render based on status */}
       {status !== 'in_progress' && status !== 'completed' && !completed && (

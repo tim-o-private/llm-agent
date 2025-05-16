@@ -10,7 +10,7 @@ import { Spinner } from '@/components/ui';
 const Home = lazy(() => import('@/pages/Home'));
 const Login = lazy(() => import('@/pages/Login'));
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
-const TodayView = lazy(() => import('@/pages/TodayView'));
+const TodayView = lazy(() => import('@/pages/TodayView.tsx'));
 const CoachPage = lazy(() => import('@/pages/CoachPage'));
 
 // AppLayout component is no longer needed as AppShell is the primary layout.

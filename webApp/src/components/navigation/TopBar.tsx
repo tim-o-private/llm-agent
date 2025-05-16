@@ -1,9 +1,6 @@
 import React from 'react';
 import { UserMenu } from '@/components/UserMenu';
-import { ThemeToggle, Button } from '@/components/ui';
-import { MessageSquare } from 'lucide-react';
-import { useChatStore } from '@/stores/useChatStore';
-
+import { ThemeToggle } from '@/components/ui';
 const TopBar: React.FC = () => {
   const currentDate = new Date().toLocaleDateString(undefined, {
     weekday: 'long',
@@ -11,7 +8,6 @@ const TopBar: React.FC = () => {
     month: 'long',
     day: 'numeric'
   });
-  const { toggleChatPanel, isChatPanelOpen } = useChatStore();
 
   return (
     <div className="flex-1 px-4 flex justify-between items-center h-full">
@@ -41,7 +37,7 @@ const TopBar: React.FC = () => {
         </div> */}
       </div>
 
-      {/* Right section - Streak, ThemeToggle, ChatPanel Toggle, UserMenu */}
+      {/* Right section - Streak, ThemeToggle, UserMenu */}
       <div className="ml-4 flex items-center md:ml-6 space-x-3"> {/* Added space-x-3 for item spacing */}
         {/* Streak Progress Placeholder */}
         <div className="mr-3"> {/* This mr-3 might be redundant due to space-x-3 on parent */}
@@ -51,14 +47,17 @@ const TopBar: React.FC = () => {
         
         <ThemeToggle /> {/* Added ThemeToggle */}
 
+        {/* REMOVING CHAT TOGGLE BUTTON FROM TOPBAR - Now handled in TodayView */}
+        {/* 
         <Button 
-          variant="secondary" // Consistent with AppLayout's button style for this
+          variant="secondary" 
           onClick={toggleChatPanel} 
           aria-label={isChatPanelOpen ? 'Close chat panel' : 'Open chat panel'}
-          className="p-2" // Consistent with AppLayout's button style
+          className="p-2"
         >
           <MessageSquare size={20} />
         </Button>
+        */}
 
         {/* User Menu Integration */}
         <UserMenu />

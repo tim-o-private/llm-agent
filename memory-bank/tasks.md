@@ -146,30 +146,50 @@ This file tracks the current tasks, steps, checklists, and component lists for t
     *   **Sub-Task 3.6: Persist Reordered Task Positions** (DONE)
 
 **4. Cyclical Flow Implementation (Prioritize -> Execute -> Reflect)**
-    *   **Status:** Planning Complete - Data/Types Updated - Initial P-P-E-R UI Features In Progress
+    *   **Status:** Planning Complete - Data/Types Updated - **Current Focus: Full Implementation of "Prioritize" Flow. "Execute" and "Reflect" phases are deferred until "Prioritize" is complete.**
     *   **Task 4.1: Define/Refine Core Data Structures and State for Cyclical Flow**
         *   **Status:** DDL Updated for P-E-R core, TypeScript types updated, Zustand store planned. (DONE)
-    *   **Task 4.1.UI: Implement P-P-E-R UI Features (Phase 1: Fast Entry, TaskDetail, Keyboard Nav)**
+    *   **Task 4.1.UI: Implement P-P-E-R UI Features (Phase 1: Prioritize Flow Focus)**
         *   **Sub-Task 4.1.UI.1: Implement Fast Task Entry Mechanism** (COMPLETED)
             *   **Key Actions:** Created `taskParser.ts`, `FastTaskInput.tsx`. Integrated into `TodayView.tsx` with 'T' hotkey, focus management, and auto-focus on new task.
-        *   **Sub-Task 4.1.UI.2: Implement TaskDetailView UI & Logic** (In Progress)
-            *   **Status:** Core modal with basic fields (Title, Description, Notes, Status, Priority) and Save functionality implemented. Trigger from `TaskCard` (click title/icon or 'E' key on focused task) operational. `Textarea` and `utils.ts` created. Debugged schema cache issue for `subtask_position`.
-            *   **Pending:** Delete functionality, remaining form fields (category, due date, etc.), subtask management section within detail view.
+        *   **Sub-Task 4.1.UI.2: Implement TaskDetailView UI & Logic** (COMPLETED)
+            *   **Status:** Core modal with fields (Title, Description, Notes, Status, Priority) and Save functionality implemented. Trigger from `TaskCard` (click title/icon or 'E' key on focused task) operational. `Textarea` and `utils.ts` created. Debugged schema cache issue for `subtask_position`. Delete button in modal footer connected.
+            *   **Bug fixes implemented:** Fixed icon consistency by replacing Lucide icons with Radix icons. Ensured `TodayView.tsx` correctly passes the `onDeleteTaskFromDetail` prop.
         *   **Sub-Task 4.1.UI.3: Implement Enhanced Keyboard Navigation in TodayView** (COMPLETED)
             *   **Key Actions:** Added `focusedTaskId` state. Visual focus indicator on `TaskCard` (adjusted for dark mode). Initial focus on first task. 'N'/'P' keys for next/previous task focus (direction corrected). 'E' key to edit focused task. Focus on newly created task from Fast Input.
-        *   **Sub-Task 4.1.UI.4: Implement Subtask Display & Interaction Logic** (To Do)
-        *   **Sub-Task 4.1.UI.5: Implement Prioritize View (Modal)** (To Do)
-        *   **Sub-Task 4.1.UI.6: Implement Execute View (Focus Window)** (To Do)
-        *   **Sub-Task 4.1.UI.7: Implement Reflect View (Modal)** (To Do)
-        *   **Sub-Task 4.1.UI.8: Implement Collapsible Chat Panel** (To Do)
-    *   **Task 4.2: Enhance "Today View" for Prioritization (`Prioritize` Phase)** (Renamed to 4.1.UI.5)
-    *   **Task 4.3: Implement "Focus Mode" (`Execute` Phase)** (Renamed to 4.1.UI.6)
-    *   **Task 4.4: Implement "Reflection Modal/View" (`Reflect` Phase)** (Renamed to 4.1.UI.7)
-    *   **Task 4.5: Implement Transitions and AI Nudges Between Phases** (To Do)
-    *   **Task 4.6: Document the Cyclical Flow and UI States** (To Do)
+            *   **Bug fixes implemented:** Fixed infinite rendering loop in TodayView.tsx by restructuring how displayTasks are calculated and managed to break dependency cycles. Improved focus state management with careful useEffect dependencies.
+        *   **Sub-Task 4.1.UI.4: Implement Subtask Display & Interaction Logic** (To Do - *Next priority after Prioritize View*)
+        *   **Sub-Task 4.1.UI.5: Implement Prioritize View (Modal)** (In Progress - **Primary Focus**)
+            *   **Key Actions:** Design and implement the main UI for the "Prioritize" phase. This will likely involve selecting tasks for the day/session.
+            *   **Progress:** 
+                *   Created `PrioritizeViewModal.tsx` with initial structure, form fields for motivation, completion note, session breakdown, and timer duration. Handles fetching task data and updating task details.
+                *   Integrated `PrioritizeViewModal` into `TodayView.tsx`.
+                *   Added a "Focus" button to `TaskCard.tsx` to trigger the modal.
+                *   `TodayView.tsx` now manages state for the modal and includes a `handleStartFocusSession` callback (currently logs data, to be expanded for actual focus session initiation).
+            *   **Next Steps:** Test the flow. Implement actual transition to an "Execute" phase/view from `handleStartFocusSession`.
+        *   **Sub-Task 4.1.UI.5.A: Refactor `TaskCard.tsx` for Prioritization** (COMPLETED - **Part of Prioritize View Focus**)
+            *   **Goal:** Adapt `TaskCard` for use in the prioritization flow.
+            *   **Key Actions:** 
+                *   Change checkbox functionality: Instead of marking complete, it should act as a selection mechanism for prioritization (e.g., add to "Today's Focus").
+                *   Add explicit buttons for "Edit", "Complete", and "Delete" actions, accessible via click and keyboard commands. Update keyboard navigation accordingly.
+        *   **Sub-Task 4.1.UI.6: Implement Execute View (Focus Window)** (To Do - *Defer until after Prioritize flow completion*)
+        *   **Sub-Task 4.1.UI.7: Implement Reflect View (Modal)** (To Do - *Defer until after Prioritize flow completion*)
+        *   **Sub-Task 4.1.UI.8: Implement Collapsible Chat Panel in `TodayView`** (COMPLETED)
+            *   **Goal:** Provide an integrated chat interface on the right side of the `TodayView`.
+            *   **Progress:** 
+                *   Created `ChatPanel.tsx` with basic UI (title, close button, placeholder message area, input field).
+                *   Integrated `ChatPanel` into `TodayView.tsx` with state for `isOpen` and a toggle function.
+                *   `TodayView` main content area now adjusts with padding when the chat panel is open.
+            *   **Bug fixes implemented:** Fixed Chat Panel close functionality with proper Radix Cross1Icon and styling.
+            *   **Next Steps:** Implement actual chat functionality (message state, sending/receiving, connecting to agent/backend).
+    *   **Task 4.2: Enhance \"Today View\" for Prioritization (`Prioritize` Phase)** (Renamed to 4.1.UI.5)
+    *   **Task 4.3: Implement \"Focus Mode\" (`Execute` Phase)** (Renamed to 4.1.UI.6)
+    *   **Task 4.4: Implement \"Reflection Modal/View\" (`Reflect` Phase)** (Renamed to 4.1.UI.7)
+    *   **Task 4.5: Implement Transitions and AI Nudges Between Phases** (To Do - *Defer until after Prioritize flow completion*)
+    *   **Task 4.6: Document the Cyclical Flow and UI States** (To Do - Update as "Prioritize" flow is built)
 
 ## III. Agent Memory & Tooling Enhancement (Supabase Integration)
-    *   **Status:** Planning Complete - Ready for Implementation (High-level design)
+    *   **Status:** Planning Complete - **Implementation ongoing, critical for Chat Panel and future agent capabilities.**
 
 **1. Supabase Schema Design/Refinement (Agent Memory, Prompts, Tasks)**
     *   **Task 1.1: Define Schema for Agent Memory**
@@ -177,7 +197,7 @@ This file tracks the current tasks, steps, checklists, and component lists for t
         *   **Action:** Draft DDL for `agent_sessions` (session_id, agent_id, user_id, created_at, summary) and `agent_chat_messages` (message_id, session_id, timestamp, sender_type, content_type, content, tokens). Consider LangChain `ChatMessageHistory` compatibility. Update `ddl.sql`.
         *   **Output:** DDL for agent memory tables.
     *   **Task 1.2: Define Schema for Storing Agent Configurations/Prompts**
-        *   **Goal:** Design tables for core system prompts and user-specific agent configurations/overrides.
+        *   **Goal:** Design tables for core system prompts and user-specific agent configurations/overrides. Move agent context and prompts to PostgreSQL (Supabase) with local caching.
         *   **Action:** Draft DDL for `agent_core_prompts` (prompt_id, agent_name, prompt_type, content, version) and `user_agent_configs` (config_id, user_id, agent_name, custom_instructions, tool_preferences). Update `ddl.sql`.
         *   **Output:** DDL for prompt/config tables.
     *   **Task 1.3: Refine `tasks` Table Schema (and other UI-related tables)**
@@ -196,17 +216,17 @@ This file tracks the current tasks, steps, checklists, and component lists for t
         *   **Action:** Create FastAPI endpoints (e.g., `/api/agent/memory/load`, `/api/agent/memory/save`) that interact with Supabase memory tables. Implement with async operations.
         *   **Output:** New API endpoints in `chatServer/main.py`.
     *   **Task 2.2: Design and Implement Endpoints for Agent Prompts/Contexts**
-        *   **Goal:** Allow agents to fetch their specific prompts/contexts from Supabase.
-        *   **Action:** Create FastAPI endpoints (e.g., `/api/agent/context/load`) to retrieve from `user_agent_contexts` (and potentially `base_agent_prompts`).
+        *   **Goal:** Allow agents to fetch their specific prompts/contexts from Supabase (which were moved from local files).
+        *   **Action:** Create FastAPI endpoints (e.g., `/api/agent/context/load`) to retrieve from `user_agent_configs` (and potentially `agent_core_prompts`).
         *   **Output:** New API endpoints.
     *   **Task 2.3: Design and Implement Endpoints for Task Interactions by Agents**
-        *   **Goal:** Enable agents to read, create, and update tasks in Supabase.
+        *   **Goal:** Enable agents (called by `chatServer`) to read and write task data from/to Supabase.
         *   **Action:** Create FastAPI endpoints (e.g., `/api/agent/tasks/create`, `/api/agent/tasks/update/{task_id}`, `/api/agent/tasks/get/{task_id_or_query_params}`).
         *   **Output:** New API endpoints.
 
 **3. Agent Tool Modifications/Creations**
     *   **Task 3.1: Develop/Refactor Task Management Tools for Agents**
-        *   **Goal:** Create LangChain tools for agents to interact with tasks via the new `chatServer` Supabase endpoints.
+        *   **Goal:** Create LangChain tools for agents to interact with tasks via the new `chatServer` Supabase endpoints (enabling them to read/write tasks).
         *   **Action:** Create `CreateTaskTool`, `UpdateTaskTool`, `ReadTaskTool`. These tools will make HTTP requests to the `chatServer` endpoints. Define clear Pydantic schemas for tool inputs.
         *   **Output:** New/updated Python tool files in `src/tools/`.
     *   **Task 3.2: Develop/Refactor Memory Management Tools/Mechanisms for Agents**
@@ -214,7 +234,7 @@ This file tracks the current tasks, steps, checklists, and component lists for t
         *   **Action:** Integrate memory saving/loading into the agent lifecycle (e.g., `AgentExecutor` callbacks or manual calls within `chat_helpers.py`). This might involve a custom `BaseChatMessageHistory` implementation that uses the `chatServer` API.
         *   **Output:** Updated agent memory handling logic in `src/utils/chat_helpers.py` or custom history class.
     *   **Task 3.3: Develop/Refactor Prompt/Context Loading for Agents**
-        *   **Goal:** Ensure agents load their base and user-specific prompts/contexts via `chatServer` (which fetches from Supabase).
+        *   **Goal:** Ensure agents load their base and user-specific prompts/contexts via `chatServer` (which fetches from Supabase, replacing direct file reads).
         *   **Action:** Modify `src/core/agent_loader.py` to call `chatServer` endpoints to get prompt data, integrating with the caching layer.
         *   **Output:** Updated `agent_loader.py`.
 
@@ -237,13 +257,13 @@ This file tracks the current tasks, steps, checklists, and component lists for t
         *   **Goal:** Understand current `agent_config.yaml` structure and usage.
         *   **Action:** Review `agent_config.yaml` to map static vs. user-specific elements.
         *   **Output:** Analysis document/notes.
-    *   **Task 5.2: Define New Configuration Loading Strategy (Files + Supabase)**
-        *   **Goal:** Load static base configs (from files or DB) and augment with user-specific configs from Supabase.
-        *   **Action:** Static base: Keep in `config/` YAMLs (Option A recommended). User-specific: Store in `user_agent_settings` or `user_agent_contexts` Supabase table. Define merging logic in `agent_loader.py`.
+    *   **Task 5.2: Define New Configuration Loading Strategy (Supabase + Optional Local Base)**
+        *   **Goal:** Load user-specific configurations/prompts from Supabase, potentially augmenting with static base configs (from files or a separate DB table).
+        *   **Action:** User-specific: Store in `user_agent_configs` Supabase table. Static base: Could remain in `config/` YAMLs or be seeded into `agent_core_prompts`. Define merging logic in `agent_loader.py`.
         *   **Output:** Documented configuration strategy.
     *   **Task 5.3: Implement Refactored Configuration Loading**
-        *   **Goal:** Modify `agent_loader.py` for new strategy.
-        *   **Action:** Update `agent_loader.py` to fetch user-specific configs from Supabase (via `chatServer` API, using cache) and merge with base configs. Ensure `chatServer` can pass `user_id` / `agent_type_identifier`.
+        *   **Goal:** Modify `agent_loader.py` for new strategy (Supabase-first for user prompts/configs).
+        *   **Action:** Update `agent_loader.py` to fetch user-specific configs from Supabase (via `chatServer` API, using cache) and merge with base configs if applicable. Ensure `chatServer` can pass `user_id` / `agent_type_identifier`.
         *   **Output:** Updated `agent_loader.py`.
     *   **Task 5.4: Plan for User Modification of Specific Configs (Future)**
         *   **Goal:** Design for future UI/agent tool to modify user-specific agent configs in Supabase.
@@ -257,6 +277,33 @@ This file tracks the current tasks, steps, checklists, and component lists for t
         *   **Action:** Review the document, particularly "Pattern 2: UI Component Strategy". Update it to recommend Radix UI Themes and Colors, and ensure it aligns with `techContext.md` and `style-guide.md`. Remove or update any conflicting advice.
         *   **Output:** Updated `memory-bank/clarity/clarity-ui-api-development-guidance.md`.
         *   **Verification:** Guidance document is consistent with current project plans and decisions.
+
+*   **Task: Refactor `TodayView.tsx` State Management with `useTaskViewStore`**
+    *   **Goal:** Implement a robust and simple Zustand-based state management for `TodayView.tsx` as per PLAN mode discussion to resolve errors, simplify logic, and improve maintainability.
+    *   **Status:** In Progress (Build Phase)
+    *   **Complexity:** Level 3-4 (Significant architectural change to a core component)
+    *   **Key Implementation Phases & Steps:**
+        1.  **Phase 1: Create `useTaskViewStore.ts`**
+            *   **Action:** Define `TaskViewState` and `TaskViewActions` interfaces. Implement the Zustand store with initial state and actions for: raw task data (`setRawTasks`, `clearRawTasks`), focus management (`setFocusedTaskId`, `setFastInputFocused`), selection management (`toggleSelectedTask`, `addSelectedTask`, `removeSelectedTask`, `clearSelectedTasks`), modal management (`openDetailModal`, `closeDetailModal`, `openPrioritizeModal`, `closePrioritizeModal`), and optimistic DND reordering (`reorderRawTasks`). Utilize `devtools` and `immer` middleware.
+            *   **File:** `src/stores/useTaskViewStore.ts`
+            *   **Testing:** Verify store instantiation and that actions update state correctly (initially via devtools, potentially unit tests later).
+        2.  **Phase 2: Refactor `webApp/src/pages/TodayView.tsx`**
+            *   **Action:** 
+                *   Integrate `useTaskViewStore`: Remove local `useState`s for store-managed state; use store selectors for state access; update event handlers to dispatch store actions.
+                *   Sync API Tasks: Add `useEffect` to call `store.setRawTasks(tasksFromApi)` when data from `useFetchTasks` changes.
+                *   Compute `displayTasks`: Re-implement `displayTasks: TaskCardProps[]` computation using `useMemo`. Dependencies will include relevant state from `useTaskViewStore` (e.g., `rawTasks`, `focusedTaskId`, `selectedTaskIds`) and memoized component-level API/modal handlers (e.g., `handleMarkComplete`, `store.openDetailModal`). `mapRawTaskToViewModel` (defined in/near `TodayView.tsx`) will be called within this `useMemo`.
+                *   Refactor `useEffect` hooks (keyboard navigation, DND `handleDragEnd`, initial focus logic) to use store state and dispatch store actions.
+            *   **Testing:** Verify `TodayView.tsx` renders correctly with data from the store, all interactive functionalities (task display, DND, modal triggers, keyboard navigation, fast task input) operate as expected with the new store, and ensure the "Maximum update depth exceeded" error is resolved.
+        3.  **Phase 3: Refactor `webApp/src/components/ui/TaskCard.tsx`**
+            *   **Action:** 
+                *   Update checkbox to reflect selection: `checked` state from `props.isSelected` (derived via `displayTasks` mapping from `store.selectedTaskIds`). Checkbox `onChange` should call `props.onSelectTask(props.id, newSelectedState)`.
+                *   Add an explicit "Mark Complete" button/icon that calls `props.onMarkComplete()`.
+                *   Ensure other actions (`onEdit`, `onDeleteTask`, `onStartFocus`) correctly use their respective props from `displayTasks`.
+            *   **Testing:** `TaskCard` selection mechanism, new completion action, and other existing actions function correctly.
+        4.  **Phase 4: Documentation & Final Testing**
+            *   **Action:** Document `useTaskViewStore.ts` (state structure, purpose of each action). Conduct comprehensive testing of all refactored components and their interactions. Verify absence of console errors, especially render loops.
+    *   **Files Affected:** `src/stores/useTaskViewStore.ts`, `webApp/src/pages/TodayView.tsx`, `webApp/src/components/ui/TaskCard.tsx`.
+    *   **Relevant Rules:** `ui-dev` (for component patterns, though the core state logic moves to Zustand).
 
 ## IV. Completed / Migrated Tasks (Reference Only)
 

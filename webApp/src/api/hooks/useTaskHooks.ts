@@ -99,27 +99,6 @@ export function useUpdateTask() {
 }
 
 /**
- * Deletes a task.
- */
-export function useDeleteTask() {
-  const queryClient = useQueryClient();
-
-  return useMutation<void, Error, string>({
-    mutationFn: async (taskId: string) => {
-      const { error } = await supabase
-        .from('tasks')
-        .delete()
-        .eq('id', taskId);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [TASKS_QUERY_KEY_PREFIX] });
-    },
-  });
-}
-
-/**
  * Hook to update the order (position) of multiple tasks.
  * Accepts an array of objects, each with id and new position.
  */
@@ -164,7 +143,7 @@ export const useUpdateTaskOrder = () => {
       console.log('[useUpdateTaskOrder] All Supabase update results:', results);
       return results; // This will be an array of results from each update, or nulls
     },
-    onSuccess: (data, variables, context) => {
+    onSuccess: (_data, _variables, _context) => {
       toast.success('Task order updated!');
       if (user) {
         queryClient.invalidateQueries({ queryKey: [TASKS_QUERY_KEY_PREFIX, user.id] });
@@ -172,7 +151,7 @@ export const useUpdateTaskOrder = () => {
         queryClient.invalidateQueries({ queryKey: [TASKS_QUERY_KEY_PREFIX] });
       }
     },
-    onError: (error: Error, variables, context) => {
+    onError: (error: Error, _variables, _context) => {
       toast.error(`Failed to update task order: ${error.message}`);
     },
   });
@@ -209,7 +188,7 @@ export const useCreateFocusSession = () => {
       console.log('[useCreateFocusSession] Success, data:', data);
       return data;
     },
-    onSuccess: (data) => {
+    onSuccess: (_data) => {
       toast.success('Focus session started!');
       queryClient.invalidateQueries({ queryKey: [FOCUS_SESSIONS_QUERY_KEY_PREFIX, user?.id] });
     },
@@ -254,7 +233,7 @@ export const useEndFocusSession = () => {
       console.log('[useEndFocusSession] Success, data:', data);
       return data;
     },
-    onSuccess: (data) => {
+    onSuccess: (_data) => {
       toast.success('Focus session ended & reflection saved!');
       queryClient.invalidateQueries({ queryKey: [FOCUS_SESSIONS_QUERY_KEY_PREFIX, user?.id] });
     },
@@ -291,4 +270,48 @@ export function useFetchTaskById(taskId: string | null | undefined) {
     },
     enabled: !!user && !!taskId, // Only run the query if the user is authenticated and taskId is provided
   });
-} 
+}
+
+// New hook to delete a task
+export const useDeleteTask = () => {
+  const queryClient = useQueryClient();
+  const { user } = useAuthStore();
+
+  return useMutation<
+    Task | null, // Supabase delete might return the deleted record or null/count
+    Error,
+    { id: string } // Variables for the mutation: task ID
+  >({ 
+    mutationFn: async ({ id }) => {
+      if (!user) throw new Error('User not authenticated');
+      
+      // Perform the delete operation
+      const { data, error } = await supabase
+        .from('tasks')
+        .delete()
+        .match({ id, user_id: user.id }); // Ensure user can only delete their own tasks
+
+      if (error) {
+        console.error('Error deleting task from Supabase:', error);
+        throw error;
+      }
+      
+      console.log('Task deleted from Supabase:', data ); // `data` might be an empty array or count
+      return null; // Or adjust based on actual Supabase client return for delete
+    },
+    onSuccess: (_, variables) => {
+      toast.success('Task deleted successfully!');
+      // Invalidate tasks query to refetch and update the list
+      if (user) {
+        queryClient.invalidateQueries({ queryKey: [TASKS_QUERY_KEY_PREFIX, user.id] });
+      } else {
+        queryClient.invalidateQueries({ queryKey: [TASKS_QUERY_KEY_PREFIX] });
+      }
+      console.log(`Invalidated queries for tasks after deleting task ID: ${variables.id}`);
+    },
+    onError: (error: Error, variables) => {
+      console.error(`Error deleting task ID ${variables.id}:`, error);
+      toast.error('Failed to delete task. Please try again.');
+    },
+  });
+}; 

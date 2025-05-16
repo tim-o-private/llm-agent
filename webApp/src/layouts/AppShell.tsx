@@ -1,8 +1,8 @@
 import React from 'react';
 import SideNav from '@/components/navigation/SideNav';
 import TopBar from '@/components/navigation/TopBar';
-import { ChatPanel } from '@/components/ChatPanel';
-import { useChatStore } from '@/stores/useChatStore';
+// import { ChatPanel } from '@/components/ChatPanel'; // No longer needed here
+// import { useChatStore } from '@/stores/useChatStore'; // No longer needed here
 import { OverlayManager } from '@/components/overlays/OverlayManager';
 
 interface AppShellProps {
@@ -10,7 +10,7 @@ interface AppShellProps {
 }
 
 const AppShell: React.FC<AppShellProps> = ({ children }) => {
-  const { isChatPanelOpen } = useChatStore();
+  // const { isChatPanelOpen } = useChatStore(); // No longer needed here
 
   return (
     <>
@@ -41,13 +41,14 @@ const AppShell: React.FC<AppShellProps> = ({ children }) => {
               <main className="flex-1 relative overflow-y-auto focus:outline-none p-6" tabIndex={-1}>
                 {children}
               </main>
-              {/* Chat Panel */}
+              {/* Chat Panel - Removed from AppShell, now managed by TodayView */}
+              {/* 
               {isChatPanelOpen && (
-                // Ensure aside is focusable if it contains interactive elements and needs to be part of sequence
                 <aside className="w-full md:w-96 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 shadow-lg overflow-y-auto transition-all duration-300 ease-in-out" tabIndex={-1}>
                   <ChatPanel />
                 </aside>
               )}
+              */}
             </div>
           </div>
         </div>
