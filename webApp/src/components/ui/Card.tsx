@@ -8,7 +8,7 @@ export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
 export const Card: React.FC<CardProps> = ({ children, className, ...props }) => (
   <div
     className={clsx(
-      'bg-white rounded-lg shadow p-6',
+      'bg-ui-element-bg rounded-lg shadow p-6',
       className
     )}
     {...props}

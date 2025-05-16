@@ -1,4 +1,4 @@
-import { UserMenu } from '../components/UserMenu';
+import { UserMenu } from '@/components/UserMenu';
 import { useEffect } from 'react';
 
 export function AuthLogger() {

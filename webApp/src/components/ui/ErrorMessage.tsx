@@ -16,7 +16,7 @@ export const ErrorMessage: React.FC<ErrorMessageProps> = ({ children, className,
     <p 
       role="alert" 
       id={id}
-      className={clsx("text-sm text-red-600 dark:text-red-400 mt-1", className)}
+      className={clsx("text-sm text-text-destructive mt-1", className)}
     >
       {children}
     </p>

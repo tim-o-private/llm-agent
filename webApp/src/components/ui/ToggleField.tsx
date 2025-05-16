@@ -28,11 +28,11 @@ const ToggleField: React.FC<ToggleFieldProps> = ({
   return (
     <div className={clsx("flex items-center justify-between", disabled && "opacity-50", className)}>
       <span className="flex flex-col mr-3"> {/* Added mr-3 for spacing */}
-        <label htmlFor={internalId} className="text-sm font-medium text-gray-900 dark:text-gray-100 cursor-pointer">
+        <label htmlFor={internalId} className="text-sm font-medium text-text-primary cursor-pointer">
           {label}
         </label>
         {description && (
-          <span id={`${internalId}-description`} className="text-xs text-gray-500 dark:text-gray-400">
+          <span id={`${internalId}-description`} className="text-xs text-text-muted">
             {description}
           </span>
         )}
@@ -45,9 +45,9 @@ const ToggleField: React.FC<ToggleFieldProps> = ({
         aria-label={srLabel} // Use srLabel if provided, especially if no <label htmlFor>
         aria-describedby={description ? `${internalId}-description` : undefined}
         className={clsx(
-          'group relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800',
-          'data-[state=checked]:bg-indigo-600',
-          'data-[state=unchecked]:bg-gray-200 dark:data-[state=unchecked]:bg-gray-700',
+          'group relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 focus-visible:ring-offset-ui-bg',
+          'data-[state=checked]:bg-brand-primary',
+          'data-[state=unchecked]:bg-ui-element-bg',
           'data-[disabled]:cursor-not-allowed data-[disabled]:opacity-70' // Adjusted opacity for disabled
         )}
       >

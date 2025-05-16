@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { supabase } from '../../lib/supabaseClient';
+import { supabase } from '@/lib/supabaseClient';
 import { useAuthStore } from './useAuthStore';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {

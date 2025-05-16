@@ -14,23 +14,23 @@ export const MessageHeader: React.FC<MessageHeaderProps> = ({
   statusColor = 'gray',
   // onClearChat
 }) => {
-  const statusDotColorClasses = {
-    green: 'bg-green-500',
-    yellow: 'bg-yellow-500',
-    gray: 'bg-gray-400',
+  const statusDotColorClasses: Record<string, string> = { // Widened key type for safety
+    green: 'bg-success-indicator',
+    yellow: 'bg-warning-indicator',
+    gray: 'bg-neutral-indicator',
   };
 
   return (
-    <div className="p-3 px-4 flex items-center justify-between bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm">
+    <div className="p-3 px-4 flex items-center justify-between bg-ui-element-bg border-b border-ui-border shadow-sm">
       <div className="flex items-center">
         {/* Avatar/Icon could go here if desired */}
         {/* <div className="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-600 mr-3 flex-shrink-0"></div> */}
         <div>
-          <h2 className="text-base font-semibold text-gray-900 dark:text-white">{chatTitle}</h2>
+          <h2 className="text-base font-semibold text-text-primary">{chatTitle}</h2>
           {status && (
             <div className="flex items-center mt-0.5">
-              <span className={clsx("w-2 h-2 rounded-full mr-1.5", statusDotColorClasses[statusColor])}></span>
-              <p className="text-xs text-gray-500 dark:text-gray-400">{status}</p>
+              <span className={clsx("w-2 h-2 rounded-full mr-1.5", statusDotColorClasses[statusColor] || 'bg-neutral-indicator')}></span>
+              <p className="text-xs text-text-muted">{status}</p>
             </div>
           )}
         </div>

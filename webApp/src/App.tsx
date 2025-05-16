@@ -1,17 +1,17 @@
 import { BrowserRouter as Router, Routes, Route, Outlet } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
-import { AuthProvider } from './features/auth/AuthProvider';
-import AppShell from './layouts/AppShell';
-import { ProtectedRoute } from './components/ProtectedRoute';
-import { ErrorBoundary } from './components/ErrorBoundary';
+import { AuthProvider } from '@/features/auth/AuthProvider';
+import AppShell from '@/layouts/AppShell';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Spinner } from '@/components/ui';
 
 // Lazy load pages for better performance
-const Home = lazy(() => import('./pages/Home'));
-const Login = lazy(() => import('./pages/Login'));
-const Dashboard = lazy(() => import('./pages/Dashboard'));
-const TodayView = lazy(() => import('./pages/TodayView'));
-const CoachPage = lazy(() => import('./pages/CoachPage'));
+const Home = lazy(() => import('@/pages/Home'));
+const Login = lazy(() => import('@/pages/Login'));
+const Dashboard = lazy(() => import('@/pages/Dashboard'));
+const TodayView = lazy(() => import('@/pages/TodayView.tsx'));
+const CoachPage = lazy(() => import('@/pages/CoachPage'));
 
 // AppLayout component is no longer needed as AppShell is the primary layout.
 

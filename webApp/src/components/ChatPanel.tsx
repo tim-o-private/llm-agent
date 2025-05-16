@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useChatStore } from '../stores/useChatStore';
+import { useChatStore } from '@/stores/useChatStore';
 import { MessageHeader, MessageInput, MessageBubble } from '@/components/ui';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -44,13 +44,9 @@ async function fetchAiResponse(message: string): Promise<string> {
 }
 
 export const ChatPanel: React.FC = () => {
-  const {
-    messages,
-    addMessage,
-    isChatPanelOpen // This might be re-evaluated if ChatPanel is always visible on CoachPage
-  } = useChatStore();
-  // inputValue is now managed by MessageInput component
-  // const [inputValue, setInputValue] = useState(''); 
+  const { messages, addMessage } = useChatStore();
+  // const { isChatPanelOpen } = useChatStore(); // isChatPanelOpen is no longer used here
+  
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
 
@@ -91,14 +87,12 @@ export const ChatPanel: React.FC = () => {
     }
   };
 
-  // If ChatPanel is part of CoachPage, it might not need its own `isChatPanelOpen` check anymore,
-  // as its visibility would be controlled by navigating to/from CoachPage.
-  // For now, let's assume `CoachPage` renders it conditionally if this logic is still desired from the store.
-  // Or, if always visible on CoachPage, this check can be removed.
-  // Keeping for now to minimize breaking changes to store logic immediately.
-  if (!isChatPanelOpen && window.location.pathname !== '/coach') { // Adjusted condition slightly
+  // This visibility check is now handled by the parent component (TodayView)
+  /*
+  if (!isChatPanelOpen && window.location.pathname !== '/coach') { 
     return null;
   }
+  */
 
   return (
     // Changed from fixed sidebar to a flexible container for CoachPage
