@@ -171,9 +171,7 @@ This file tracks the current tasks, steps, checklists, and component lists for t
             *   **Key Actions:** 
                 *   Change checkbox functionality: Instead of marking complete, it should act as a selection mechanism for prioritization (e.g., add to "Today's Focus").
                 *   Add explicit buttons for "Edit", "Complete", and "Delete" actions, accessible via click and keyboard commands. Update keyboard navigation accordingly.
-        *   **Sub-Task 4.1.UI.6: Implement Execute View (Focus Window)** (To Do - *Defer until after Prioritize flow completion*)
-        *   **Sub-Task 4.1.UI.7: Implement Reflect View (Modal)** (To Do - *Defer until after Prioritize flow completion*)
-        *   **Sub-Task 4.1.UI.8: Implement Collapsible Chat Panel in `TodayView`** (COMPLETED)
+        *   **Sub-Task 4.1.UI.8: Implement Collapsible Chat Panel in `TodayView`**
             *   **Goal:** Provide an integrated chat interface on the right side of the `TodayView`.
             *   **Progress:** 
                 *   Created `ChatPanel.tsx` with basic UI (title, close button, placeholder message area, input field).
@@ -181,10 +179,13 @@ This file tracks the current tasks, steps, checklists, and component lists for t
                 *   `TodayView` main content area now adjusts with padding when the chat panel is open.
             *   **Bug fixes implemented:** Fixed Chat Panel close functionality with proper Radix Cross1Icon and styling.
             *   **Next Steps:** Implement actual chat functionality (message state, sending/receiving, connecting to agent/backend).
+        *   **Task 4.1.9: Implement AI Task Entry**
+            *   **Goal:** Allow agent to read tasks and create tasks & subtasks.
+        *   **Task 4.1.10: Project Cleanup**
+            * TBD
     *   **Task 4.2: Enhance \"Today View\" for Prioritization (`Prioritize` Phase)** (Renamed to 4.1.UI.5)
-    *   **Task 4.3: Implement \"Focus Mode\" (`Execute` Phase)** (Renamed to 4.1.UI.6)
+    *   **Task 4.3: Implement \"Focus Mode\" (`Execute` Phase)**
     *   **Task 4.4: Implement \"Reflection Modal/View\" (`Reflect` Phase)** (Renamed to 4.1.UI.7)
-    *   **Task 4.5: Implement Transitions and AI Nudges Between Phases** (To Do - *Defer until after Prioritize flow completion*)
     *   **Task 4.6: Document the Cyclical Flow and UI States** (To Do - Update as "Prioritize" flow is built)
 
 ## III. Agent Memory & Tooling Enhancement (Supabase Integration)

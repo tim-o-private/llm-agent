@@ -1,11 +1,8 @@
 import { create } from 'zustand';
-import { devtools, persist } from 'zustand/middleware';
+import { devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { enableMapSet } from 'immer';
 import type { Task } from '@/api/types'; // This path will be correct if this file is in webApp/src/stores/
-import { TaskCardProps } from '@/components/ui/TaskCard';
-import { useQueryClient } from '@tanstack/react-query';
-import { useAuthStore } from '@/features/auth/useAuthStore';
 
 enableMapSet(); // Initialize Immer's MapSet plugin
 

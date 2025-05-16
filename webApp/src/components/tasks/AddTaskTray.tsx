@@ -33,7 +33,7 @@ const AddTaskTray: React.FC<AddTaskTrayProps> = ({ isOpen, onClose }) => {
 
   const onSubmit: SubmitHandler<TaskFormData> = (data) => {
     createTask(
-      { title: data.title }, 
+      { title: data.title, status: 'pending', priority: 0 }, 
       {
         onSuccess: () => {
           reset();

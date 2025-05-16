@@ -3,16 +3,25 @@
 ## Project Status:
 The project involves two main components: a CLI LLM environment and the "Clarity" web application.
 Current active work, as indicated by `tasks.md`, is primarily focused on:
-1.  **Clarity Web Application UI/UX:** Specifically, the "Prioritize" flow of the Cyclical Flow Implementation (Task 4.1.UI.5) and related sub-tasks like `TaskCard.tsx` refactoring. Chat panel UI is complete, awaiting backend integration.
+1.  **Clarity Web Application UI/UX:** Specifically, the "Prioritize" flow of the Cyclical Flow Implementation (Task 4.1.UI.5) and related sub-tasks. Chat panel UI is complete, awaiting backend integration.
 2.  **Agent Memory & Tooling Enhancement (Supabase Integration):** Schema design for agent memory and prompts is a key ongoing task, critical for the Clarity chat panel and future agent capabilities.
 
-## VAN Mode Completion:
-VAN mode assessment complete. All core Memory Bank files (`projectbrief.md`, `productContext.md`, `systemPatterns.md`, `techContext.md`, `activeContext.md`, `progress.md`, `tasks.md`, `style-guide.md`) are present. `tasks.md` indicates substantial ongoing work.
+## VAN Mode Completion & Transition:
+**Date:** (Current Date)
+**VAN Assessment Summary:**
+*   VAN mode initiated by user.
+*   Platform Detection: Linux. Standard commands apply.
+*   Memory Bank Check: Core Memory Bank structure and files verified as present and populated.
+*   Early Complexity Determination: Based on `tasks.md` (e.g., "Implement Prioritize View (Modal)" - Task 4.1.UI.5, Supabase integration), the project complexity is Level 3-4.
 
-## Next Step:
-Transitioning to PLAN mode to refine current objectives from `tasks.md` or select the next specific task for development.
+**Transition:** As per `isolation_rules/visual-maps/van_mode_split/van-mode-map`, for Level 2-4 complexity, VAN mode transitions to PLAN mode.
 
-**Overall Goal:** UI/UX Overhaul for Clarity web application, focusing on implementing the Cyclical Flow (Prioritize, Execute, Reflect) and enhancing core usability features like Fast Task Entry, Task Detail Views, and keyboard navigation.
+**Current Mode: PLAN**
+
+**Goal for PLAN Mode:**
+Review active tasks in `tasks.md`, particularly "Implement Prioritize View (Modal)" (Task 4.1.UI.5), "Implement full chat functionality in Chat Panel" (backend integration for Task 4.1.UI.8), and "Subtask Display & Interaction Logic" (Task 4.1.UI.4). Determine the immediate focus for the current session and break down the selected task into actionable steps if necessary.
+
+**Overall Goal (Reminder):** UI/UX Overhaul for Clarity web application, focusing on implementing the Cyclical Flow (Prioritize, Execute, Reflect) and enhancing core usability features.
 
 **Current State & Last Session Summary (Refer to specific task archives for detailed history of completed items like TodayView Refactor):**
 
@@ -23,12 +32,12 @@ Transitioning to PLAN mode to refine current objectives from `tasks.md` or selec
 *   **TaskDetailView (Task II.4.1.UI.2):** COMPLETED.
 *   **Enhanced Keyboard Navigation in TodayView (Task II.4.1.UI.3):** ARCHIVED (See archive-clarity-ui-todayview-state-refactor-for-4.1.UI.1-and-4.1.UI.3.md)
 *   **Prioritize View Modal (Task II.4.1.UI.5):** In Progress.
-*   **Chat Panel (Task II.4.1.UI.8):** COMPLETED.
+*   **Chat Panel (Task II.4.1.UI.8):** UI COMPLETED, backend integration pending.
 
-**Immediate Next Steps for New Session:**
+**Immediate Next Steps for New Session (to be confirmed in PLAN mode):**
 
 *   **Continue implementation of Prioritize View Modal (Task II.4.1.UI.5)**.
-*   **Implement full chat functionality in Chat Panel (Task II.4.1.UI.8)**.
+*   **Implement backend integration for Chat Panel (Task II.4.1.UI.8)**.
 *   **Begin work on Subtask Display & Interaction Logic (Task II.4.1.UI.4)**.
 
 
