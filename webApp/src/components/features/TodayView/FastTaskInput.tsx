@@ -8,10 +8,11 @@ import { useAuthStore } from '@/features/auth/useAuthStore';
 
 interface FastTaskInputProps {
   isFocused: boolean;
-  onTaskCreated: (createdTask: Task) => void; // Updated prop signature
+  onTaskCreated: (createdTask: Task) => void;
+  onBlurred: () => void;
 }
 
-export const FastTaskInput: React.FC<FastTaskInputProps> = ({ isFocused, onTaskCreated }) => {
+export const FastTaskInput: React.FC<FastTaskInputProps> = ({ isFocused, onTaskCreated, onBlurred }) => {
   const [inputValue, setInputValue] = useState('');
   const createTaskMutation = useCreateTask();
   const user = useAuthStore((state) => state.user);
@@ -20,6 +21,7 @@ export const FastTaskInput: React.FC<FastTaskInputProps> = ({ isFocused, onTaskC
   useEffect(() => {
     if (isFocused && inputRef.current) {
       inputRef.current.focus();
+    } else if (isFocused && !inputRef.current) {
     }
   }, [isFocused]);
 
@@ -35,7 +37,7 @@ export const FastTaskInput: React.FC<FastTaskInputProps> = ({ isFocused, onTaskC
     }
 
     const taskPayload: Omit<NewTaskData, 'user_id'> = {
-      title: parsedResult.title, // Now guaranteed to be a string
+      title: parsedResult.title,
       description: parsedResult.description ?? null,
       notes: parsedResult.notes ?? null,
       status: parsedResult.status ?? 'pending',
@@ -52,9 +54,10 @@ export const FastTaskInput: React.FC<FastTaskInputProps> = ({ isFocused, onTaskC
       toast.success('Task created!');
       setInputValue('');
       if (inputRef.current) {
-        inputRef.current.blur(); // Optionally blur after creation
+        inputRef.current.blur();
       }
-      onTaskCreated(createdTask); // Pass the full created task object
+      onTaskCreated(createdTask);
+      onBlurred();
     } catch (error) {
       toast.error('Failed to create task. Please try again.');
       console.error('Error creating task:', error);
@@ -73,13 +76,10 @@ export const FastTaskInput: React.FC<FastTaskInputProps> = ({ isFocused, onTaskC
         placeholder="Type task title & press Enter (e.g., Buy groceries p1 d:milk, eggs)"
         value={inputValue}
         onChange={handleInputChange}
-        onBlur={() => { 
-          // Avoid clearing if there's content, allow submission on Enter even if blurred
-          // If you want to auto-submit on blur if content exists: 
-          // if (inputValue.trim()) handleSubmit(); 
+        onBlur={() => {
+          onBlurred();
         }}
         className="w-full text-base py-3 px-4"
-        // Consider adding a subtle leading icon if desired
       />
     </form>
   );

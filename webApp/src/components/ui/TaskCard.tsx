@@ -101,7 +101,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         'task-card bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm flex items-center space-x-3 group relative',
         'border', // Ensure border is always applied before status-specific one
         statusCardStyles,
-        isFocused && 'ring-2 ring-blue-600 dark:ring-blue-500 shadow-xl bg-blue-50 dark:bg-slate-700', // Changed dark mode focused background to slate-700
+        isFocused && 'ring-4 ring-blue-500 dark:ring-blue-400 shadow-xl bg-blue-100 dark:bg-slate-700', // More prominent ring
         className,
         // onEdit ? 'cursor-pointer' : '' // Remove cursor-pointer from whole card if we have a dedicated edit button
       )}

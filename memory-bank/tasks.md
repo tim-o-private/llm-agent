@@ -150,14 +150,13 @@ This file tracks the current tasks, steps, checklists, and component lists for t
     *   **Task 4.1: Define/Refine Core Data Structures and State for Cyclical Flow**
         *   **Status:** DDL Updated for P-E-R core, TypeScript types updated, Zustand store planned. (DONE)
     *   **Task 4.1.UI: Implement P-P-E-R UI Features (Phase 1: Prioritize Flow Focus)**
-        *   **Sub-Task 4.1.UI.1: Implement Fast Task Entry Mechanism** (COMPLETED)
-            *   **Key Actions:** Created `taskParser.ts`, `FastTaskInput.tsx`. Integrated into `TodayView.tsx` with 'T' hotkey, focus management, and auto-focus on new task.
+        *   **Sub-Task 4.1.UI.1: Implement Fast Task Entry Mechanism** (ARCHIVED - See archive-clarity-ui-todayview-state-refactor-for-4.1.UI.1-and-4.1.UI.3.md)
+            *   **Key Actions:** Refactored as part of TodayView State Refactor.
         *   **Sub-Task 4.1.UI.2: Implement TaskDetailView UI & Logic** (COMPLETED)
             *   **Status:** Core modal with fields (Title, Description, Notes, Status, Priority) and Save functionality implemented. Trigger from `TaskCard` (click title/icon or 'E' key on focused task) operational. `Textarea` and `utils.ts` created. Debugged schema cache issue for `subtask_position`. Delete button in modal footer connected.
             *   **Bug fixes implemented:** Fixed icon consistency by replacing Lucide icons with Radix icons. Ensured `TodayView.tsx` correctly passes the `onDeleteTaskFromDetail` prop.
-        *   **Sub-Task 4.1.UI.3: Implement Enhanced Keyboard Navigation in TodayView** (COMPLETED)
-            *   **Key Actions:** Added `focusedTaskId` state. Visual focus indicator on `TaskCard` (adjusted for dark mode). Initial focus on first task. 'N'/'P' keys for next/previous task focus (direction corrected). 'E' key to edit focused task. Focus on newly created task from Fast Input.
-            *   **Bug fixes implemented:** Fixed infinite rendering loop in TodayView.tsx by restructuring how displayTasks are calculated and managed to break dependency cycles. Improved focus state management with careful useEffect dependencies.
+        *   **Sub-Task 4.1.UI.3: Implement Enhanced Keyboard Navigation in TodayView** (ARCHIVED - See archive-clarity-ui-todayview-state-refactor-for-4.1.UI.1-and-4.1.UI.3.md)
+            *   **Key Actions:** Refactored as part of TodayView State Refactor.
         *   **Sub-Task 4.1.UI.4: Implement Subtask Display & Interaction Logic** (To Do - *Next priority after Prioritize View*)
         *   **Sub-Task 4.1.UI.5: Implement Prioritize View (Modal)** (In Progress - **Primary Focus**)
             *   **Key Actions:** Design and implement the main UI for the "Prioritize" phase. This will likely involve selecting tasks for the day/session.

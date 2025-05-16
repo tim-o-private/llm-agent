@@ -236,17 +236,17 @@ const TodayView: React.FC = () => {
 
   // Handle focusing the first task if needed
   useEffect(() => {
-    if (tasksFromAPI.length > 0 && focusedTaskId === null) {
-      setFocusedTaskId(tasksFromAPI[0].id);
-    } else if (tasksFromAPI.length > 0 && focusedTaskId !== null) {
-      const focusedTaskExists = tasksFromAPI.some(task => task.id === focusedTaskId);
+    if (rawTasks.length > 0 && focusedTaskId === null) {
+      setFocusedTaskId(rawTasks[0].id);
+    } else if (rawTasks.length > 0 && focusedTaskId !== null) {
+      const focusedTaskExists = rawTasks.some(task => task.id === focusedTaskId);
       if (!focusedTaskExists) {
-        setFocusedTaskId(tasksFromAPI[0].id);
+        setFocusedTaskId(rawTasks[0].id);
       }
-    } else if (tasksFromAPI.length === 0 && focusedTaskId !== null) {
+    } else if (rawTasks.length === 0 && focusedTaskId !== null) {
       setFocusedTaskId(null);
     }
-  }, [tasksFromAPI, focusedTaskId, setFocusedTaskId]);
+  }, [rawTasks, focusedTaskId, setFocusedTaskId]);
 
   // Handle keyboard shortcuts
   useEffect(() => {
@@ -270,19 +270,23 @@ const TodayView: React.FC = () => {
           else if (displayTasks.length > 0) openDetailModal(displayTasks[0].id);
           break;
         case 'n':
-          event.preventDefault();
           if (displayTasks.length > 0) {
             const currentIndex = displayTasks.findIndex(item => item.id === focusedTaskId);
-            if (currentIndex === -1) setFocusedTaskId(displayTasks[0].id);
-            else if (currentIndex < displayTasks.length - 1) setFocusedTaskId(displayTasks[currentIndex + 1].id);
+            if (currentIndex === -1) {
+              setFocusedTaskId(displayTasks[0].id);
+            } else if (currentIndex < displayTasks.length - 1) {
+              setFocusedTaskId(displayTasks[currentIndex + 1].id);
+            }
           }
           break;
         case 'p':
-          event.preventDefault();
           if (displayTasks.length > 0) {
             const currentIndex = displayTasks.findIndex(item => item.id === focusedTaskId);
-            if (currentIndex === -1) setFocusedTaskId(displayTasks[displayTasks.length - 1].id);
-            else if (currentIndex > 0) setFocusedTaskId(displayTasks[currentIndex - 1].id);
+            if (currentIndex === -1) {
+              setFocusedTaskId(displayTasks[displayTasks.length - 1].id);
+            } else if (currentIndex > 0) {
+              setFocusedTaskId(displayTasks[currentIndex - 1].id);
+            }
           }
           break;
       }
@@ -290,16 +294,6 @@ const TodayView: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [displayTasks, focusedTaskId, detailViewTaskId, prioritizeModalTaskId, setFocusedTaskId, openDetailModal, setFastInputFocused]);
-
-  // Handle focus on fast input when isFastInputFocused changes
-  useEffect(() => {
-    if (isFastInputFocused) {
-      const inputEl = document.querySelector('input[type="text"]') as HTMLInputElement | null;
-      if (inputEl && document.activeElement !== inputEl) {
-        inputEl.focus();
-      }
-    }
-  }, [isFastInputFocused]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -369,6 +363,7 @@ const TodayView: React.FC = () => {
           <FastTaskInput 
               isFocused={isFastInputFocused} 
               onTaskCreated={handleTaskCreatedByFastInput} 
+              onBlurred={() => setFastInputFocused(false)}
           />
         </div>
         {rawTasks.length === 0 ? (
