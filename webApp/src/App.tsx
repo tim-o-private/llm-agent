@@ -6,6 +6,7 @@ import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Spinner } from '@/components/ui';
 import { useTaskViewStore } from '@/stores/useTaskViewStore';
+import { Toaster } from '@/components/ui/toast';
 
 
 // Lazy load pages for better performance
@@ -49,6 +50,7 @@ function App() {
               </Route>
             </Routes>
           </Suspense>
+          <Toaster />
         </ErrorBoundary>
       </AuthProvider>
     </Router>

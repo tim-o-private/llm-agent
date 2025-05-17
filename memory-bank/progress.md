@@ -2,9 +2,16 @@
 
 This document tracks the active development progress.
 
-## Current Focus: Memory Bank Cleanup & Radix UI Theming Preparation
+## Current Focus: UI Bug Fixes & Cyclical Flow Enhancements
 
 **Status:** In Progress
+
+**Immediate Goals:**
+1.  **[COMPLETED] Radix Toast Implementation & Verification:** The refactored `webApp/src/components/ui/toast.tsx` (using Radix UI primitives, imperative API) has been implemented and verified. Related bugs in `TaskDetailView` (dialog not closing) are resolved.
+2.  **Resolve Task Reordering Regression:** Investigate and fix the issue where reordering tasks/subtasks in `TodayView` reverts immediately.
+3.  **Continue "Prioritize" Flow Development:** Resume work on `Sub-Task 4.1.UI.5: Implement Prioritize View (Modal)` (from `tasks.md`) once critical regressions are addressed.
+
+**Context:** Recent efforts focused on stabilizing keyboard navigation and addressing regressions. The "Edit Task Save" issue led to a significant overhaul of the toast notification system, culminating in a simplified and now verified Radix UI-based implementation in `webApp/src/components/ui/toast.tsx`. Toast styling and duration issues are also resolved.
 
 **Goal:** Finalize the cleanup of the `memory-bank/` directory, ensuring all project context is consolidated, accurate, and current. Prepare for the implementation of Radix UI Theming in the Clarity web application.
 
@@ -306,6 +313,20 @@ This document tracks the active development progress.
     *   Completed the initial implementation with working close functionality
     *   Added proper styling for the toggle button
     *   Ensured clean panel transitions
+*   **Toast Notification System Overhaul & Verification (Related to Edit Task Save Debugging):**
+    *   **Initial Issue:** "Edit Task Save" button in `TaskDetailView` would gray out, `updateTaskMutation` succeeded, but the modal wouldn't close and no success toast appeared.
+    *   **Diagnosis & Resolution:**
+        *   Identified missing `<Toaster />` from `react-hot-toast` in `App.tsx`. Adding it revealed toasts appearing behind modals.
+        *   Switched to `@radix-ui/react-toast` to align with existing Radix UI usage and mitigate portal conflicts.
+        *   Refactored `webApp/src/components/ui/toast.tsx` to use Radix UI primitives directly with a leaner global state and an imperative API (`toast.success()`, `toast.error()`, `toast.default()`).
+        *   Corrected Radix primitive imports.
+        *   Integrated the new toast API across all relevant files (`useTaskHooks.ts`, `TaskDetailView.tsx`, `TodayView.tsx`, `FastTaskInput.tsx`, `useTaskStore.ts`).
+        *   Resolved issues with toast duration (configurable `DEFAULT_TOAST_DURATION`) and styling (background color for default variant).
+        *   The "Edit Task Save" modal closing issue in `TaskDetailView.tsx` was also fixed as part of this effort.
+    *   **Current Status:** The simplified Radix-based toast component (`toast.tsx`) is implemented and verified. Core functionality is stable.
+    *   **Next Steps (Reflected in top "Current Focus" section):**
+        1.  Address the "Reordering Issue" (tasks/subtasks reverting).
+        2.  Continue with "Prioritize" flow development.
 
 **Recent Progress (Focus: Prioritize Flow Foundations):**
 *   **`TaskCard.tsx` Refactor (Sub-Task 4.1.UI.5.A from tasks.md):**

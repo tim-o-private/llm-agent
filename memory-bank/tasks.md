@@ -209,28 +209,25 @@ This file tracks the current tasks, steps, checklists, and component lists for t
                     *   Test all UI interactions. (Verified by user as working).
             *   **Files Affected (Primary for this task going forward):** `webApp/src/components/ChatPanel.tsx`, `webApp/src/pages/TodayView.tsx`, `webApp/src/stores/useChatStore.ts`, `chatServer/main.py` (for the `/api/chat` endpoint).
             *   **Deprecated/To Be Removed:** `chatServer/routers/chat_router.py` (and the `routers` directory if empty). - DONE (directory removed)
-        *   **Sub-Task 4.1.UI.9: Implement Subtask Creation & Display UI**
-            *   **Goal:** Allow users to create and view subtasks within a parent task, likely in the `TaskDetailView` and potentially summarized in `TodayView` task cards.
-            *   **Status:** ARCHIVED
-            *   **Reflection:** `memory-bank/reflection/reflection-II.4.1.9.md`
-            *   **Archive:** `memory-bank/archive/archive-II.4.1.9.md`
-            *   **Key Actions:**
-                *   Confirmed backend `tasks` table in `data/db/ddl.sql` is suitable.
-        *   **Task 4.2: Enhance \"Today View\" for Prioritization (`Prioritize` Phase)** (Renamed to 4.1.UI.5)
-        *   **Task 4.3: Implement \"Focus Mode\" (`Execute` Phase)**
-        *   **Task 4.4: Implement \"Reflection Modal/View\" (`Reflect` Phase)** (Renamed to 4.1.UI.7)
-        *   **Task 4.6: Document the Cyclical Flow and UI States** (To Do - Update as "Prioritize" flow is built)
-
-*   **Sub-Task 4.1.UI.9: Refine Chat Panel Collapse/Expand Animation**
-    *   **Goal:** Ensure a smoother and more visually appealing animation when the chat panel is minimized (collapsed) and maximized (expanded).
-    *   **Status:** To Do
-    *   **Complexity:** Level 1-2 (UI Polish)
-    *   **Details:**
-        *   Review current CSS transitions in `webApp/src/pages/TodayView.tsx` for the chat panel container.
-        *   Explore techniques for smoother width transitions and potentially opacity/transform animations for the `ChatPanel` content itself to prevent content from appearing/disappearing abruptly before the container finishes resizing.
-        *   Consider if child elements within `ChatPanel` contribute to animation issues.
-        *   Ensure animation is performant.
-    *   **Files Affected:** `webApp/src/pages/TodayView.tsx`, global CSS/Tailwind config (if needed).
+        *   **Sub-Task 4.1.UI.9: Refine Chat Panel Collapse/Expand Animation**
+            *   **Goal:** Ensure a smoother and more visually appealing animation when the chat panel is minimized (collapsed) and maximized (expanded).
+            *   **Status:** To Do
+            *   **Complexity:** Level 1-2 (UI Polish)
+            *   **Details:**
+                *   Review current CSS transitions in `webApp/src/pages/TodayView.tsx` for the chat panel container.
+                *   Explore techniques for smoother width transitions and potentially opacity/transform animations for the `ChatPanel` content itself to prevent content from appearing/disappearing abruptly before the container finishes resizing.
+                *   Consider if child elements within `ChatPanel` contribute to animation issues.
+                *   Ensure animation is performant.
+            *   **Files Affected:** `webApp/src/pages/TodayView.tsx`, global CSS/Tailwind config (if needed).
+        *   **Sub-Task 4.1.UI.10: Refine and Verify Toast Notification System**
+            *   **Goal:** Ensure a reliable, accessible, and correctly displayed toast notification system for user feedback.
+            *   **Status:** In Progress
+            *   **Details:**
+                *   Switched from `react-hot-toast` to `@radix-ui/react-toast` to address stacking context issues with modals.
+                *   Refactored `webApp/src/components/ui/toast.tsx` to a simplified implementation using Radix UI primitives directly, removing prior complex state management. The import mechanism for Radix primitives was corrected, and an imperative API (`toast.success()`, `toast.error()`, `toast.default()`) was established and integrated across relevant files (`useTaskHooks.ts`, `TaskDetailView.tsx`, `TodayView.tsx`, `FastTaskInput.tsx`, `useTaskStore.ts`).
+                *   Default toast duration was made configurable and issues with auto-closing were resolved. Styling for default toast background was updated.
+                *   **Next Step:** The core functionality of the toast system is now considered stable. Minor style refinements or variant additions can be handled as needed.
+            *   **Blocks:** Smooth user experience for actions requiring feedback (e.g., save, delete, errors).
 
 **5. State Management Refactoring**
    * **Status:** Design Complete, Implementation In Progress

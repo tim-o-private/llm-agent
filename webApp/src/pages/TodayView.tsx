@@ -31,7 +31,7 @@ import { useCreateFocusSession } from '@/api/hooks/useTaskHooks';
 import type { Task, FocusSession } from '@/api/types';
 import { Spinner } from '@/components/ui';
 
-import { toast } from 'react-hot-toast';
+import { toast } from '@/components/ui/toast';
 import { useTaskViewStore } from '@/stores/useTaskViewStore';
 
 const mapTaskToTaskCardViewModel = (
@@ -136,7 +136,7 @@ const TodayView: React.FC = () => {
       { task_id: taskId },
       {
         onSuccess: (_focusSession: FocusSession | null) => {
-          toast.success(`Focus session started for task.`);
+          toast.success('Focus session started for task.');
         },
         onError: (_err: Error) => {
           toast.error('Error creating focus session.');

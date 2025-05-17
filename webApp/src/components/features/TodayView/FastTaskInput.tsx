@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, ChangeEvent, forwardRef, KeyboardEvent } from 'react';
 import { Input } from '@/components/ui/Input';
 import { parseTaskString } from '@/utils/taskParser';
-import { toast } from 'react-hot-toast';
+import { toast } from '@/components/ui/toast';
 import { NewTaskData } from '@/api/types';
 import { useTaskStore } from '@/stores/useTaskStore';
 
@@ -32,26 +32,26 @@ export const FastTaskInput = forwardRef<HTMLInputElement, FastTaskInputProps>((
 
     const parsedResult = parseTaskString(inputValue);
 
-    if (!parsedResult.title || parsedResult.title.trim() === '') {
+    const title = parsedResult.title?.trim();
+
+    if (!title) {
       toast.error("Task title cannot be empty.");
       return;
     }
 
-    const taskPayload: Omit<NewTaskData, 'user_id'> = {
-      title: parsedResult.title,
-      description: parsedResult.description ?? null,
+    const newTaskData: Omit<NewTaskData, 'user_id'> = {
+      title: title as string,
+      description: parsedResult.description || '',
       notes: parsedResult.notes ?? null,
       status: parsedResult.status ?? 'pending',
       priority: parsedResult.priority ?? 0,
       category: parsedResult.category ?? null,
       due_date: parsedResult.due_date ?? null,
       completed: parsedResult.completed ?? false,
-      parent_task_id: parsedResult.parent_task_id ?? null,
-      subtask_position: parsedResult.subtask_position ?? null,
     };
     
     try {
-      const taskId = createTask(taskPayload);
+      const taskId = createTask(newTaskData);
       setInputValue('');
       
       if (internalInputRef.current) {
@@ -60,8 +60,8 @@ export const FastTaskInput = forwardRef<HTMLInputElement, FastTaskInputProps>((
       
       onTaskCreated(taskId);
     } catch (error) {
-      toast.error('Failed to create task. Please try again.');
-      console.error('Error creating task:', error);
+      console.error("Error creating task:", error);
+      toast.error('Failed to create task.', error instanceof Error ? error.message : 'Please try again.');
     }
   };
 

@@ -9,7 +9,7 @@ import type {
   NewFocusSessionData, 
   UpdateFocusSessionData 
 } from '../types';
-import { toast } from 'react-hot-toast';
+import { toast } from '@/components/ui/toast';
 
 const TASKS_QUERY_KEY_PREFIX = 'tasks';
 const FOCUS_SESSIONS_QUERY_KEY_PREFIX = 'focus_sessions';
@@ -180,7 +180,7 @@ export const useUpdateTaskOrder = () => {
       }
     },
     onError: (error: Error, _variables, _context) => {
-      toast.error(`Failed to update task order: ${error.message}`);
+      toast.error('Failed to update task order', error.message);
     },
   });
 };
@@ -262,7 +262,7 @@ export const useUpdateSubtaskOrder = () => {
     },
     onError: (err, variables, context) => {
       console.error('[useUpdateSubtaskOrder] onError. Error:', err, 'Variables:', variables);
-      toast.error(`Failed to update subtask order: ${err.message}. Reverting.`);
+      toast.error('Failed to update subtask order', `${err.message}. Reverting.`);
       if (context?.previousTasks && user?.id) {
         console.log('[useUpdateSubtaskOrder] onError. Reverting to previous tasks:', JSON.stringify(context.previousTasks.map(t => t.id)));
         queryClient.setQueryData([TASKS_QUERY_KEY_PREFIX, user.id], context.previousTasks);
@@ -276,7 +276,7 @@ export const useUpdateSubtaskOrder = () => {
         console.log('[useUpdateSubtaskOrder] onSettled. Invalidated all tasks query key.');
       }
     },
-    // onSuccess callback is now primarily for side-effects like toasts if not handled by onSettled, 
+    // onSuccess callback is now primarily for side-effects like Toasts if not handled by onSettled, 
     // or if specific data from mutationFn is needed beyond what onMutate handles for optimistic UI.
     // The UI should react to cache changes from onMutate or refetch from onSettled.
     onSuccess: (updatedSubtasksFromServer, variables) => {
@@ -323,7 +323,7 @@ export const useCreateFocusSession = () => {
       queryClient.invalidateQueries({ queryKey: [FOCUS_SESSIONS_QUERY_KEY_PREFIX, user?.id] });
     },
     onError: (error: Error) => {
-      toast.error(`Failed to start focus session: ${error.message}`);
+      toast.error('Failed to start focus session', error.message);
     },
   });
 };
@@ -368,7 +368,7 @@ export const useEndFocusSession = () => {
       queryClient.invalidateQueries({ queryKey: [FOCUS_SESSIONS_QUERY_KEY_PREFIX, user?.id] });
     },
     onError: (error: Error) => {
-      toast.error(`Failed to save reflection: ${error.message}`);
+      toast.error('Failed to save reflection', error.message);
     },
   });
 };
@@ -441,7 +441,7 @@ export const useDeleteTask = () => {
     },
     onError: (error: Error, variables) => {
       console.error(`Error deleting task ID ${variables.id}:`, error);
-      toast.error('Failed to delete task. Please try again.');
+      toast.error('Failed to delete task', 'Please try again.');
     },
   });
 }; 

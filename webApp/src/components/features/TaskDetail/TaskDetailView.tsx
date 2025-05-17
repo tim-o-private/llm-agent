@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Label } from '@/components/ui/Label';
 import { Spinner } from '@/components/ui/Spinner';
-import { toast } from 'react-hot-toast';
+import { toast } from '@/components/ui/toast';
 import { SubtaskItem } from './SubtaskItem';
 
 // Dnd-kit imports
@@ -146,7 +146,22 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
   }, [task, formData]);
 
   const handleSave = async () => {
-    if (!taskId || !task) return;
+    console.log('[TaskDetailView] handleSave triggered.');
+    console.log('[TaskDetailView] Current state before save attempt:');
+    console.log('  taskId:', taskId);
+    console.log('  task available:', !!task);
+    console.log('  formData:', JSON.stringify(formData));
+    console.log('  original task data:', JSON.stringify(task));
+    console.log('  isLoading (fetch task):', isLoading);
+    console.log('  updateTaskMutation.isPending:', updateTaskMutation.isPending);
+    console.log('  createTaskMutation.isPending:', createTaskMutation.isPending);
+    console.log('  parentTaskHasChanges (memoized):', parentTaskHasChanges); 
+    console.log('  subtasksWereModifiedInThisSessionRef.current:', subtasksWereModifiedInThisSessionRef.current);
+
+    if (!taskId || !task) {
+      console.warn('[TaskDetailView] handleSave: No taskId or task data. Aborting.');
+      return;
+    }
 
     // Recalculate updates for parent task
     const updates: UpdateTaskData = {};
@@ -160,28 +175,57 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
     if (formData.status !== undefined && formData.status !== task.status) updates.status = formData.status as TaskStatus;
     if (formData.priority !== undefined && formData.priority !== task.priority) updates.priority = formData.priority as TaskPriority;
     
+    console.log('[TaskDetailView] Calculated updates object:', JSON.stringify(updates));
     const actualParentHasChanges = Object.keys(updates).length > 0;
+    console.log('[TaskDetailView] actualParentHasChanges (calculated now):', actualParentHasChanges);
 
     if (!actualParentHasChanges) {
+      console.log('[TaskDetailView] No actual parent task changes detected.');
       if (subtasksWereModifiedInThisSessionRef.current) {
-        onOpenChange(false); // Close if only subtasks changed
-        subtasksWereModifiedInThisSessionRef.current = false; // Reset for next opening
+        console.log('[TaskDetailView] Subtasks were modified. Closing modal.');
+        onOpenChange(false); 
+        subtasksWereModifiedInThisSessionRef.current = false; 
       } else {
-        toast('No changes to save.');
+        console.log('[TaskDetailView] No subtask changes either. Toasting "No changes to save." with new toast function');
+        toast.default('No changes to save.', undefined, { duration: 3000 });
       }
       return;
     }
 
+    console.log('[TaskDetailView] Parent task has changes. Attempting mutation.');
     try {
+      console.log('[TaskDetailView] Calling updateTaskMutation.mutateAsync with id:', taskId, 'and updates:', JSON.stringify(updates));
       await updateTaskMutation.mutateAsync({ id: taskId, updates });
-      toast.success('Task updated successfully!');
-      subtasksWereModifiedInThisSessionRef.current = false; // Reset on successful save
-      if (onTaskUpdated) onTaskUpdated();
-      // Optionally close modal on successful save
-      // onOpenChange(false); 
+      console.log('[TaskDetailView] updateTaskMutation.mutateAsync Succeeded.');
+      
+      if (onTaskUpdated) {
+        console.log('[TaskDetailView] Calling onTaskUpdated callback (moved before toast for testing).');
+        onTaskUpdated();
+      }
+      
+      console.log('[TaskDetailView] Attempting new toast function...');
+      toast.default(
+        'Task Updated',
+        'Your task has been successfully updated.',
+      );
+      console.log('[TaskDetailView] new toast call completed.');
+
+      subtasksWereModifiedInThisSessionRef.current = false; 
+      onOpenChange(false);
+      
     } catch (err) {
-      toast.error('Failed to update task.');
-      console.error("Failed to update task:", err);
+      console.error('[TaskDetailView] updateTaskMutation.mutateAsync FAILED. Error in handleSave catch block:', err);
+      toast.error(
+        'Error Updating Task',
+        (err instanceof Error) ? err.message : 'An unexpected error occurred.',
+      );
+      if (err instanceof Error) {
+        console.error('[TaskDetailView] Error name:', err.name);
+        console.error('[TaskDetailView] Error message:', err.message);
+        console.error('[TaskDetailView] Error stack:', err.stack);
+      } else {
+        console.error('[TaskDetailView] Caught error is not an instance of Error:', err);
+      }
     }
   };
   
@@ -201,17 +245,17 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
       parent_task_id: task.id,
       status: 'pending',
       priority: task.priority || 0,
-      subtask_position: (optimisticSubtasks?.length || subtasks?.length || 0) + 1, // Use optimistic/subtasks length
+      subtask_position: (optimisticSubtasks?.length || subtasks?.length || 0) + 1,
     };
 
     try {
       await createTaskMutation.mutateAsync(newSubtaskData);
-      toast.success('Subtask added!');
+      toast.default('Subtask Added!');
       setNewSubtaskTitle('');
-      refetchSubtasks(); // This will update 'subtasks' state
+      refetchSubtasks();
       subtasksWereModifiedInThisSessionRef.current = true;
     } catch (err) {
-      toast.error('Failed to add subtask.');
+      toast.error('Failed to add subtask', (err instanceof Error) ? err.message : undefined);
       console.error("Failed to add subtask:", err);
     }
   };
@@ -221,10 +265,10 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
     console.log('[TaskDetailView] handleDragEnd. Active:', active.id, 'Over:', over?.id);
     console.log('[TaskDetailView] optimisticSubtasks at start of dragEnd:', JSON.stringify(optimisticSubtasks?.map(st => ({id: st.id, title: st.title, pos: st.subtask_position}))));
 
-    if (active.id !== over?.id && optimisticSubtasks && task && over) { // Ensure over is not null
+    if (active.id !== over?.id && optimisticSubtasks && task && over) {
       const currentSubtasksForReorder = optimisticSubtasks;
       const oldIndex = currentSubtasksForReorder.findIndex((item) => item.id === active.id);
-      const newIndex = currentSubtasksForReorder.findIndex((item) => item.id === over.id); // Use over.id
+      const newIndex = currentSubtasksForReorder.findIndex((item) => item.id === over.id);
 
       console.log('[TaskDetailView] oldIndex:', oldIndex, 'newIndex:', newIndex);
       if (oldIndex === -1 || newIndex === -1) {
@@ -235,7 +279,6 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
       const newOrderedSubtasksForBackend = arrayMove(currentSubtasksForReorder, oldIndex, newIndex);
       console.log('[TaskDetailView] Calculated newOrderedSubtasksForBackend:', JSON.stringify(newOrderedSubtasksForBackend.map(st => ({id: st.id, title: st.title, pos: st.subtask_position}))));
       
-      // Optimistic update for immediate UI feedback in TaskDetailView
       setOptimisticSubtasks(newOrderedSubtasksForBackend);
       console.log('[TaskDetailView] Optimistically set optimisticSubtasks.');
 
@@ -250,16 +293,16 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
         {
           onSuccess: (_updatedTasksFromServer) => {
             console.log('[TaskDetailView] updateSubtaskOrderMutation onSuccess. Server response:', JSON.stringify(_updatedTasksFromServer));
-            toast.success('Subtask order saved (detail)!'); 
+            toast.default('Subtask order saved!');
             console.log('[TaskDetailView] Calling refetchSubtasks after mutation success.');
-            refetchSubtasks(); // Refetch to ensure sync with server & RQ cache updated by the hook.
+            refetchSubtasks();
             subtasksWereModifiedInThisSessionRef.current = true;
           },
           onError: (error) => {
             console.error('[TaskDetailView] updateSubtaskOrderMutation onError. Error:', error.message);
-            toast.error(`Failed to save subtask order (detail): ${error.message}`);
+            toast.error('Failed to save subtask order', error.message);
             console.log('[TaskDetailView] Reverting optimisticSubtasks due to error. Current server state of subtasks:', JSON.stringify(subtasks));
-            setOptimisticSubtasks(subtasks); // Revert to last known good state from server
+            setOptimisticSubtasks(subtasks);
             console.log('[TaskDetailView] Calling refetchSubtasks after mutation error to ensure consistency.');
             refetchSubtasks();
           },

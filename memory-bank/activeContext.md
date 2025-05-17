@@ -6,7 +6,7 @@
     *   **Reflection:** `memory-bank/reflection/reflection-II.4.1.9.md`
 
 ## Current Mode
-ARCHIVE mode completed. Resetting for next task.
+IMPLEMENTATION (Verification & Next Steps)
 
 ## Current Focus
 
@@ -215,4 +215,45 @@ Based on the recent TodayView refactor session and user feedback, the following 
     *   **State Interaction:** Dispatch actions to stores.
     *   **Consistency & Discoverability.**
 
-This detailed context and the proposed guidelines should help maintain a cleaner and more robust state management approach moving forward. 
+This detailed context and the proposed guidelines should help maintain a cleaner and more robust state management approach moving forward.
+
+# Active Context Update - 2024-07-18 (End of Session)
+
+## Current Mode
+IMPLEMENTATION (Verification & Next Steps)
+
+## Summary of Recent Activity & Key Decisions
+
+*   **Toast Notification System Overhaul & Verification:**
+    *   Successfully refactored `webApp/src/components/ui/toast.tsx` to use `@radix-ui/react-toast` primitives directly, resolving issues with `react-hot-toast` (stacking context, incorrect positioning).
+    *   Implemented a simplified imperative API (`toast.success()`, `toast.error()`, `toast.default()`) for triggering toasts.
+    *   Corrected Radix primitive imports and ensured the `<ToastPrimitives.Provider>` and `<ToastPrimitives.Viewport>` are correctly used within the `ToasterContainer`.
+    *   Updated all relevant files (`useTaskHooks.ts`, `TaskDetailView.tsx`, `TodayView.tsx`, `FastTaskInput.tsx`, `useTaskStore.ts`) to use the new toast API.
+    *   Resolved issues related to toast `duration` (now configurable and defaults to `2000ms`, with `Infinity` used for debugging) and styling (background color for default variant using `bg-[var(--color-panel-translucent)]`).
+    *   The system is now considered stable and verified.
+*   **"Edit Task Save" Modal Closure:** Fixed the bug in `TaskDetailView.tsx` where the modal was not closing upon successful task save. It now correctly calls `onOpenChange(false)`.
+*   **Keyboard Shortcut Refactor Follow-ups:** (Previously completed, context for other issues)
+
+## Immediate Next Steps
+
+1.  **Address Task Reordering Regression:** Investigate and fix the critical regression where reordering tasks or subtasks in `TodayView` causes them to revert to their original positions immediately. This was noted as a new regression after the keyboard shortcut fixes.
+2.  **Focus Management on Modal Close:** While not explicitly tested as part of the toast/save fix, ensure that when `TaskDetailView` closes, focus returns appropriately to the main application, ideally to the element that triggered its opening or a sensible default in `TodayView.tsx`. (This is a general UX best practice to keep in mind).
+
+## Subsequent Goals
+
+1.  **Continue "Prioritize" Flow Development:** Resume development of the "Prioritize View (Modal)" (`Sub-Task 4.1.UI.5` from `tasks.md`) and other features related to the P-P-E-R cycle.
+
+## Key Files Affected by Recent Toast & Modal Work:
+*   `webApp/src/components/ui/toast.tsx` (Majorly refactored and verified)
+*   `webApp/src/App.tsx` (Imports `ToasterContainer` from `toast.tsx`)
+*   `webApp/src/api/hooks/useTaskHooks.ts` (Updated toast calls)
+*   `webApp/src/components/features/TaskDetail/TaskDetailView.tsx` (Updated toast calls, fixed modal close on save)
+*   `webApp/src/pages/TodayView.tsx` (Updated toast calls)
+*   `webAll/src/components/features/TodayView/FastTaskInput.tsx` (Updated toast calls)
+*   `webApp/src/stores/useTaskStore.ts` (Updated toast calls)
+
+**🛑 CRITICAL REMINDERS FOR NEXT SESSION 🛑**
+*   **The next major bug to tackle is the task reordering regression.** This is a high priority.
+*   Investigate focus management after modal closures as a general UX improvement.
+*   Consult `memory-bank/tasks.md` and `memory-bank/progress.md` for detailed task status and context.
+*   Adhere to `ui-dev` rule (Radix UI, Tailwind CSS) and project conventions for state management. 

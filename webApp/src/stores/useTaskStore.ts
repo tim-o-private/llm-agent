@@ -3,7 +3,7 @@ import { devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { useAuthStore } from '@/features/auth/useAuthStore';
 import { supabase } from '@/lib/supabaseClient';
-import { toast } from 'react-hot-toast';
+import { toast } from '@/components/ui/toast';
 import { Task, NewTaskData, UpdateTaskData, TaskStatus } from '@/api/types';
 import { useEffect } from 'react';
 
