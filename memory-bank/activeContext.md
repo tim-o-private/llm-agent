@@ -1,3 +1,65 @@
+# Active Context Update - 2025-05-16
+
+## Recently Completed & Archived
+*   **Task II.4.1.UI.9: Implement Subtask Creation & Display UI** - Enhancement is now complete and archived.
+    *   **Archive:** `memory-bank/archive/archive-II.4.1.9.md`
+    *   **Reflection:** `memory-bank/reflection/reflection-II.4.1.9.md`
+
+## Current Mode
+ARCHIVE mode completed. Resetting for next task.
+
+## Current Focus
+
+### State Management Architecture Redesign
+
+The project is currently focused on creating a consistent, robust state management pattern for the application to replace the current mix of approaches:
+
+**Problem:** Different components use different approaches to state management (React Query direct calls, Zustand, component local state), creating inconsistency and complexity in the codebase.
+
+**Solution:** A unified architecture using Zustand stores with local-first state and eventual sync with the database:
+
+1. **Entity-Centric Stores:** Each entity type (tasks, subtasks, etc.) has its own Zustand store
+2. **Local-First:** Changes are applied immediately to the local store for instant UI updates
+3. **Background Sync:** Changes are synchronized with the database every 5-10 seconds
+4. **Optimistic Updates:** UI updates immediately with rollback mechanisms for failed syncs
+
+**Resources:**
+- Design Document: `memory-bank/clarity/state-management-design.md`
+- Reference Implementation: `memory-bank/clarity/state-management-example.ts`
+- Component Example: `memory-bank/clarity/state-management-component-example.tsx`
+
+**Next Steps:**
+1. Implement the Task Store using the new architecture
+2. Refactor task-related components (TodayView, TaskDetail) to use the new store
+3. Extend the pattern to other entity types
+
+---
+
+# VAN Mode Assessment - Session Start: {datetime.now().isoformat()}
+
+## 1. VAN Mode Initiation
+User initiated VAN mode.
+
+## 2. Platform Detection
+*   Operating System: Linux (as per user_info)
+*   Path Separator: /
+*   Command Structure: Standard Linux commands
+
+## 3. Memory Bank Check
+*   Core Memory Bank files and directories (`tasks.md`, `activeContext.md`, `progress.md`, `projectbrief.md`, `productContext.md`, `systemPatterns.md`, `techContext.md`, `style-guide.md`, `creative/`, `reflection/`, `archive/`) **verified as existing**.
+*   No creation of Memory Bank structure was needed.
+
+## 4. Basic File Verification
+*   Essential Memory Bank components and structure are present.
+
+## 5. Early Complexity Determination
+*   **Analysis of `memory-bank/tasks.md`:** Current primary tasks include "Implement Prioritize View (Modal)" (Task II.4.1.UI.5 under "Cyclical Flow Implementation") and "Agent Memory & Tooling Enhancement (Supabase Integration)" (Task III).
+*   **Complexity Level:** Assessed as **Level 3 (Intermediate Feature) / Level 4 (Complex System)** due to the nature and scope of these tasks.
+*   **VAN Mode Outcome:** As per `isolation_rules/visual-maps/van_mode_split/van-mode-map.mdc`, Level 2-4 complexity requires a transition from VAN to PLAN mode.
+
+## 6. Next Step
+Transition to PLAN mode.
+
 # Active Context - Post-VAN Assessment
 
 ## Project Status:
@@ -16,30 +78,60 @@ Current active work, as indicated by `tasks.md`, is primarily focused on:
 
 **Transition:** As per `isolation_rules/visual-maps/van_mode_split/van-mode-map`, for Level 2-4 complexity, VAN mode transitions to PLAN mode.
 
-**Current Mode: PLAN**
+**Current Mode: REFLECT**
 
-**Goal for PLAN Mode:**
-Review active tasks in `tasks.md`, particularly "Implement Prioritize View (Modal)" (Task 4.1.UI.5), "Implement full chat functionality in Chat Panel" (backend integration for Task 4.1.UI.8), and "Subtask Display & Interaction Logic" (Task 4.1.UI.4). Determine the immediate focus for the current session and break down the selected task into actionable steps if necessary.
+**Task for Reflection:** II.4.1.9 - Implement Subtask Creation & Display UI
 
-**Overall Goal (Reminder):** UI/UX Overhaul for Clarity web application, focusing on implementing the Cyclical Flow (Prioritize, Execute, Reflect) and enhancing core usability features.
+**Summary of Reflection for II.4.1.9:**
+The reflection for Task II.4.1.9, documented in `memory-bank/reflection/reflection-II.4.1.9.md`, covers the implementation of subtask creation, display, and drag-and-drop reordering in both `TaskDetailView` and `TaskCard`. Key challenges included DND state synchronization, UI "pop" effects, and a "Maximum update depth exceeded" error. These were resolved through a significant state management refactor (favoring React Query over direct Zustand manipulation for server state, removing `rawTasks` from `useTaskViewStore`), and implementing optimistic updates for subtask reordering in `TaskCard`. The reflection highlights the complexities of managing hierarchical, interactive state and the benefits of React Query for server state and optimistic updates.
 
-**Current State & Last Session Summary (Refer to specific task archives for detailed history of completed items like TodayView Refactor):**
+**Current Mode: CREATIVE**
 
-*   **Theming Strategy (Task II.1):** COMPLETED.
-*   **Keyboard Navigability (Task II.2 - General Audit & Shell):** COMPLETED.
-*   **Drag-and-Drop Task Reordering (Task II.3):** COMPLETED.
-*   **Fast Task Entry (Task II.4.1.UI.1):** ARCHIVED (See archive-clarity-ui-todayview-state-refactor-for-4.1.UI.1-and-4.1.UI.3.md)
-*   **TaskDetailView (Task II.4.1.UI.2):** COMPLETED.
-*   **Enhanced Keyboard Navigation in TodayView (Task II.4.1.UI.3):** ARCHIVED (See archive-clarity-ui-todayview-state-refactor-for-4.1.UI.1-and-4.1.UI.3.md)
-*   **Prioritize View Modal (Task II.4.1.UI.5):** In Progress.
-*   **Chat Panel (Task II.4.1.UI.8):** UI COMPLETED, backend integration pending.
+**Goal for CREATIVE Mode:**
+Define and document a consistent storage and state management strategy for Tasks (including Subtasks) and TaskDetails. This will focus on solidifying the patterns for using React Query (for server state, caching, mutations, optimistic updates) and Zustand (for global UI state, if necessary), and how they interact. The aim is to ensure clarity, prevent future synchronization issues, and provide a clear reference for ongoing development.
 
-**Immediate Next Steps for New Session (to be confirmed in PLAN mode):**
+**Current Storage & State Management Strategy (Summary for Discussion and Refinement):**
 
-*   **Continue implementation of Prioritize View Modal (Task II.4.1.UI.5)**.
-*   **Implement backend integration for Chat Panel (Task II.4.1.UI.8)**.
-*   **Begin work on Subtask Display & Interaction Logic (Task II.4.1.UI.4)**.
+*   **Server State & Caching (Primary Mechanism):**
+    *   **Tool:** `React Query` (`@tanstack/react-query`).
+    *   **Usage:** All CRUD operations for tasks and subtasks (fetch, create, update, delete) are managed via React Query hooks (e.g., `useFetchTasks`, `useUpdateTaskOrder`, `useUpdateSubtaskOrder`).
+    *   **Caching:** React Query handles caching of task data. Cache keys (e.g., `['tasks', userId]`) are used to manage and invalidate data.
+    *   **Mutations:** Updates to the backend are performed via mutation hooks.
+        *   `onSuccess`: Typically invalidates relevant queries (e.g., `queryClient.invalidateQueries(['tasks', userId])`) to trigger re-fetches and UI updates with fresh data.
+        *   `onMutate`, `onError`, `onSettled`: Used for implementing optimistic updates.
+            *   `onMutate`:
+                *   Cancels ongoing queries for the same data.
+                *   Snapshots the previous state from the cache.
+                *   Optimistically updates the cache (`queryClient.setQueryData`) with the new expected state.
+                *   Returns a context object with the snapshotted state.
+            *   `onError`:
+                *   Rolls back the cache to the snapshotted state using the context from `onMutate`.
+            *   `onSettled`:
+                *   Invalidates the relevant queries to ensure eventual consistency with the server.
+    *   **Current Optimistic Implementation Example:** `useUpdateSubtaskOrder` optimistically updates the `['tasks', userId]` query cache by directly manipulating the `subtasks` array of the parent task within the cached data.
 
+*   **Global UI State (Secondary / Ancillary):**
+    *   **Tool:** `Zustand`.
+    *   **Usage:** Intended for global UI state that doesn't directly map to server data or when cross-component state needs to be shared without prop drilling, and React Query's cache isn't the right fit.
+    *   **Current Status:** Usage has been significantly reduced for task/subtask data itself. The `useTaskViewStore` previously held `rawTasks` which caused synchronization issues. This has been removed.
+    *   **Potential Future Use:** Managing transient UI states like modal visibility, selected items not yet persisted, or complex form states before submission if not co-located with the component.
+    *   **Guideline:** Avoid duplicating server state in Zustand. Rely on React Query as the source of truth for server-persisted data.
+
+*   **Local Component State:**
+    *   **Tool:** `React.useState`, `React.useReducer`.
+    *   **Usage:** For component-specific UI state that doesn't need to be shared globally or isn't tied to server data (e.g., input field values before validation/submission, toggle states for UI elements within a single component).
+
+**Key Principles from Recent Refactor:**
+1.  **React Query as Source of Truth for Server Data:** Task and subtask data displayed in the UI should primarily flow from React Query's cache.
+2.  **Minimize Direct Store Manipulation for Server Data:** Avoid actions in Zustand stores that directly set or modify data that mirrors server state. Instead, mutations should go through React Query hooks, which then update the cache and/or invalidate queries.
+3.  **Optimistic Updates for Responsiveness:** Implement optimistic updates via React Query for operations like reordering to improve perceived performance.
+4.  **Clear Separation:** Maintain a clear distinction between server state (React Query) and purely client-side UI state (Zustand, local state).
+
+**Items for Creative Discussion:**
+*   Further standardization of optimistic update patterns (e.g., helper functions, consistent cache update logic).
+*   Defining clear boundaries for when to use Zustand vs. local state for UI concerns.
+*   Documentation of these patterns for the team (e.g., in `memory-bank/techContext.md` or a dedicated state management guide).
+*   Review if any remaining parts of `useTaskViewStore` (or other stores) could be further simplified or if their current role is appropriate.
 
 **🛑 CRITICAL REMINDERS FOR AGENT 🛑**
 

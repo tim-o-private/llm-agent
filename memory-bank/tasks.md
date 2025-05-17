@@ -116,6 +116,29 @@ This file tracks the current tasks, steps, checklists, and component lists for t
     *   **Status:** Needs Refinement
     *   **Key Requirements:** Modular evaluators, support for various evaluation types against different agents.
 
+*   **Task: CORE - Rationalize and Refactor Agent Tool Loading & Calling Logic**
+    *   **Goal:** Refactor `src/core/agent_loader.py` and related components to establish a clear, robust, and extensible system for defining, loading, and invoking agent tools, separating duties cleanly, and defining a coherent interaction model.
+    *   **Status:** To Do
+    *   **Complexity:** Level 3-4
+    *   **Blocks:** Task II.4.1.10 (Implement AI Task Interactivity), Future new agent tool development.
+    *   **Key Phases & Steps:**
+        1.  **Phase 1: Design & Creative (Define Target Architecture)**
+            *   Document current tool loading flow and pain points.
+            *   Define target architecture for tool management (registration, scope/context provision, API-backed tool patterns).
+            *   Review `agent_loader.py` and identify specific refactoring targets.
+            *   Output: Design document/notes.
+        2.  **Phase 2: Incremental Refactoring of `src/core/agent_loader.py`**
+            *   Refactor scope management.
+            *   Refactor tool instantiation (LangChain toolkits, custom tools).
+            *   Implement standard pattern for API client tools (e.g., for `chatServer`).
+            *   Update agent configuration handling (`tools_config` in YAMLs) if needed.
+            *   Add/update unit tests.
+        3.  **Phase 3: Integration & Testing**
+            *   Adapt callers of `load_agent_executor` / `load_tools`.
+            *   Test existing agents for regressions with their current tools.
+            *   Update documentation.
+    *   **Files Affected:** `src/core/agent_loader.py`, agent config YAMLs, `src/utils/path_helpers.py`, `src/cli/main.py`.
+
 ## II. Clarity Web Application UI/UX Tasks
 
 ### Area: UI/UX Overhaul & Cyclical Flow Implementation
@@ -171,22 +194,74 @@ This file tracks the current tasks, steps, checklists, and component lists for t
             *   **Key Actions:** 
                 *   Change checkbox functionality: Instead of marking complete, it should act as a selection mechanism for prioritization (e.g., add to "Today's Focus").
                 *   Add explicit buttons for "Edit", "Complete", and "Delete" actions, accessible via click and keyboard commands. Update keyboard navigation accordingly.
-        *   **Sub-Task 4.1.UI.8: Implement Collapsible Chat Panel in `TodayView`**
-            *   **Goal:** Provide an integrated chat interface on the right side of the `TodayView`.
-            *   **Progress:** 
-                *   Created `ChatPanel.tsx` with basic UI (title, close button, placeholder message area, input field).
-                *   Integrated `ChatPanel` into `TodayView.tsx` with state for `isOpen` and a toggle function.
-                *   `TodayView` main content area now adjusts with padding when the chat panel is open.
-            *   **Bug fixes implemented:** Fixed Chat Panel close functionality with proper Radix Cross1Icon and styling.
-            *   **Next Steps:** Implement actual chat functionality (message state, sending/receiving, connecting to agent/backend).
-        *   **Task 4.1.9: Implement AI Task Entry**
-            *   **Goal:** Allow agent to read tasks and create tasks & subtasks.
-        *   **Task 4.1.10: Project Cleanup**
-            * TBD
-    *   **Task 4.2: Enhance \"Today View\" for Prioritization (`Prioritize` Phase)** (Renamed to 4.1.UI.5)
-    *   **Task 4.3: Implement \"Focus Mode\" (`Execute` Phase)**
-    *   **Task 4.4: Implement \"Reflection Modal/View\" (`Reflect` Phase)** (Renamed to 4.1.UI.7)
-    *   **Task 4.6: Document the Cyclical Flow and UI States** (To Do - Update as "Prioritize" flow is built)
+        *   **Sub-Task 4.1.UI.8: Restore and Enhance Collapsible Chat Panel in `TodayView`**
+            *   **Goal:** Restore broken chat send/receive functionality and enhance the ChatPanel UI, particularly making it collapsible via an icon on the panel itself.
+            *   **Status:** COMPLETED
+            *   **Context:** Core chat send/receive functionality was previously broken. It has been restored by modifying `ChatPanel.tsx` to use the `/api/chat` endpoint in `chatServer/main.py`. The `chatServer/routers/chat_router.py` and its `/api/chat/send_message` endpoint are now deprecated for this UI feature and the `routers` directory has been removed. The UI has been enhanced to use a persistent toggle button on the panel itself.
+            *   **Implementation Steps:**
+                1.  **Phase 1: Restore Core Chat Functionality (Diagnosis & Fixes)** - COMPLETED
+                    *   Diagnose current failure: Review recent changes affecting chat; test `chatServer` endpoints; trace data flow; check console/network for errors.
+                    *   Implement fixes: Modified `ChatPanel.tsx` to target `chatServer/main.py`'s `/api/chat` endpoint and adapt request/response formats.
+                    *   Verify: Thoroughly test send/receive. (Verified by user as working).
+                2.  **Phase 2: UI/UX Enhancements (Post-Restoration)** - COMPLETED
+                    *   Expand/Collapse Trigger: Implemented persistent icon button on the panel itself (in `TodayView.tsx`) to toggle `isOpen` state. Icon changes appropriately. Header chat toggle removed.
+                    *   Visual Polish: Basic transitions in place. (Further refinement logged as Sub-Task 4.1.UI.9).
+                    *   Test all UI interactions. (Verified by user as working).
+            *   **Files Affected (Primary for this task going forward):** `webApp/src/components/ChatPanel.tsx`, `webApp/src/pages/TodayView.tsx`, `webApp/src/stores/useChatStore.ts`, `chatServer/main.py` (for the `/api/chat` endpoint).
+            *   **Deprecated/To Be Removed:** `chatServer/routers/chat_router.py` (and the `routers` directory if empty). - DONE (directory removed)
+        *   **Sub-Task 4.1.UI.9: Implement Subtask Creation & Display UI**
+            *   **Goal:** Allow users to create and view subtasks within a parent task, likely in the `TaskDetailView` and potentially summarized in `TodayView` task cards.
+            *   **Status:** ARCHIVED
+            *   **Reflection:** `memory-bank/reflection/reflection-II.4.1.9.md`
+            *   **Archive:** `memory-bank/archive/archive-II.4.1.9.md`
+            *   **Key Actions:**
+                *   Confirmed backend `tasks` table in `data/db/ddl.sql` is suitable.
+        *   **Task 4.2: Enhance \"Today View\" for Prioritization (`Prioritize` Phase)** (Renamed to 4.1.UI.5)
+        *   **Task 4.3: Implement \"Focus Mode\" (`Execute` Phase)**
+        *   **Task 4.4: Implement \"Reflection Modal/View\" (`Reflect` Phase)** (Renamed to 4.1.UI.7)
+        *   **Task 4.6: Document the Cyclical Flow and UI States** (To Do - Update as "Prioritize" flow is built)
+
+*   **Sub-Task 4.1.UI.9: Refine Chat Panel Collapse/Expand Animation**
+    *   **Goal:** Ensure a smoother and more visually appealing animation when the chat panel is minimized (collapsed) and maximized (expanded).
+    *   **Status:** To Do
+    *   **Complexity:** Level 1-2 (UI Polish)
+    *   **Details:**
+        *   Review current CSS transitions in `webApp/src/pages/TodayView.tsx` for the chat panel container.
+        *   Explore techniques for smoother width transitions and potentially opacity/transform animations for the `ChatPanel` content itself to prevent content from appearing/disappearing abruptly before the container finishes resizing.
+        *   Consider if child elements within `ChatPanel` contribute to animation issues.
+        *   Ensure animation is performant.
+    *   **Files Affected:** `webApp/src/pages/TodayView.tsx`, global CSS/Tailwind config (if needed).
+
+**5. State Management Refactoring**
+   * **Status:** Design Complete, Implementation Pending
+   * **Task 5.1: Design New State Management Architecture**
+      * **Goal:** Create a consistent, robust state management pattern for the entire application
+      * **Status:** COMPLETED
+      * **Key Actions:** 
+         * Documented core principles (entity-centric stores, local-first with eventual sync)
+         * Created a comprehensive design document (`memory-bank/clarity/state-management-design.md`)
+         * Developed a reference implementation (`memory-bank/clarity/state-management-example.ts`)
+         * Created component integration example (`memory-bank/clarity/state-management-component-example.tsx`)
+   
+   * **Task 5.2: Implement Task Store with New Architecture**
+      * **Goal:** Refactor existing task management to use the new state management pattern
+      * **Status:** To Do
+      * **Key Actions:**
+         * Create production `useTaskStore.ts` based on reference implementation
+         * Update task-related components to use the new store
+         * Implement background sync mechanism
+         * Add conflict resolution for concurrent updates
+      * **Files Affected:** `webApp/src/stores/useTaskStore.ts`, `webApp/src/pages/TodayView.tsx`, `webApp/src/components/TaskCard.tsx`, `webApp/src/components/features/TaskDetail/TaskDetailView.tsx`
+   
+   * **Task 5.3: Extend Architecture to Other Entity Types**
+      * **Goal:** Apply the new state management pattern to other entity types (focus sessions, user preferences, etc.)
+      * **Status:** To Do
+      * **Dependency:** Successful implementation of Task 5.2
+      * **Key Actions:**
+         * Identify next priority entity types for conversion
+         * Create stores following the reference architecture
+         * Refactor relevant components
+      * **Files Affected:** Various store and component files
 
 ## III. Agent Memory & Tooling Enhancement (Supabase Integration)
     *   **Status:** Planning Complete - **Implementation ongoing, critical for Chat Panel and future agent capabilities.**
@@ -279,123 +354,4 @@ This file tracks the current tasks, steps, checklists, and component lists for t
         *   **Verification:** Guidance document is consistent with current project plans and decisions.
 
 *   **Task: Refactor `TodayView.tsx` State Management with `useTaskViewStore`**
-    *   **Goal:** Implement a robust and simple Zustand-based state management for `TodayView.tsx` as per PLAN mode discussion to resolve errors, simplify logic, and improve maintainability.
-    *   **Status:** In Progress (Build Phase)
-    *   **Complexity:** Level 3-4 (Significant architectural change to a core component)
-    *   **Key Implementation Phases & Steps:**
-        1.  **Phase 1: Create `useTaskViewStore.ts`**
-            *   **Action:** Define `TaskViewState` and `TaskViewActions` interfaces. Implement the Zustand store with initial state and actions for: raw task data (`setRawTasks`, `clearRawTasks`), focus management (`setFocusedTaskId`, `setFastInputFocused`), selection management (`toggleSelectedTask`, `addSelectedTask`, `removeSelectedTask`, `clearSelectedTasks`), modal management (`openDetailModal`, `closeDetailModal`, `openPrioritizeModal`, `closePrioritizeModal`), and optimistic DND reordering (`reorderRawTasks`). Utilize `devtools` and `immer` middleware.
-            *   **File:** `src/stores/useTaskViewStore.ts`
-            *   **Testing:** Verify store instantiation and that actions update state correctly (initially via devtools, potentially unit tests later).
-        2.  **Phase 2: Refactor `webApp/src/pages/TodayView.tsx`**
-            *   **Action:** 
-                *   Integrate `useTaskViewStore`: Remove local `useState`s for store-managed state; use store selectors for state access; update event handlers to dispatch store actions.
-                *   Sync API Tasks: Add `useEffect` to call `store.setRawTasks(tasksFromApi)` when data from `useFetchTasks` changes.
-                *   Compute `displayTasks`: Re-implement `displayTasks: TaskCardProps[]` computation using `useMemo`. Dependencies will include relevant state from `useTaskViewStore` (e.g., `rawTasks`, `focusedTaskId`, `selectedTaskIds`) and memoized component-level API/modal handlers (e.g., `handleMarkComplete`, `store.openDetailModal`). `mapRawTaskToViewModel` (defined in/near `TodayView.tsx`) will be called within this `useMemo`.
-                *   Refactor `useEffect` hooks (keyboard navigation, DND `handleDragEnd`, initial focus logic) to use store state and dispatch store actions.
-            *   **Testing:** Verify `TodayView.tsx` renders correctly with data from the store, all interactive functionalities (task display, DND, modal triggers, keyboard navigation, fast task input) operate as expected with the new store, and ensure the "Maximum update depth exceeded" error is resolved.
-        3.  **Phase 3: Refactor `webApp/src/components/ui/TaskCard.tsx`**
-            *   **Action:** 
-                *   Update checkbox to reflect selection: `checked` state from `props.isSelected` (derived via `displayTasks` mapping from `store.selectedTaskIds`). Checkbox `onChange` should call `props.onSelectTask(props.id, newSelectedState)`.
-                *   Add an explicit "Mark Complete" button/icon that calls `props.onMarkComplete()`.
-                *   Ensure other actions (`onEdit`, `onDeleteTask`, `onStartFocus`) correctly use their respective props from `displayTasks`.
-            *   **Testing:** `TaskCard` selection mechanism, new completion action, and other existing actions function correctly.
-        4.  **Phase 4: Documentation & Final Testing**
-            *   **Action:** Document `useTaskViewStore.ts` (state structure, purpose of each action). Conduct comprehensive testing of all refactored components and their interactions. Verify absence of console errors, especially render loops.
-    *   **Files Affected:** `src/stores/useTaskViewStore.ts`, `webApp/src/pages/TodayView.tsx`, `webApp/src/components/ui/TaskCard.tsx`.
-    *   **Relevant Rules:** `ui-dev` (for component patterns, though the core state logic moves to Zustand).
-
-## IV. Completed / Migrated Tasks (Reference Only)
-
-*   **CLI: Architect Agent Implementation** (Status: DONE in `implementation-plan.md`)
-    *   Phase 1: Agent Configuration and Basic Loading (Complete)
-    *   Phase 2: Core Functionality - Backlog Interaction (Complete - Split-Scope File Tools, Prompt Refinement)
-    *   Phase 3: Memory and Grooming Assistance (Complete - Agent Memory, Grooming Prompt)
-*   **UI: Phase 0 - Infrastructure & Foundations** (Status: Complete in `ui-implementation-plan.md`)
-    *   Project Setup (Complete)
-    *   Authentication Foundation (Complete)
-    *   Core UI Components (Complete & Migrated)
-    *   Layout & Navigation (AppShell, SideNav, TopBar) (Complete)
-    *   Specialized Shared UI Components (TaskCard, TaskStatusBadge, ToggleField, FAB) (Complete & Mig మన)
-
-### Area: Foundational Backend & Data Model for P-E-R
-
-**1. Database Schema Updates for P-E-R** (DONE - User to apply any further pending changes to live DB)
-    *   **Task 1.1: Update `tasks` table** (DONE - DDL Updated)
-        *   Fields: `status`, `priority`, `motivation`, `completion_note`.
-    *   **Task 1.1b: Add `description` to `tasks` table** (DONE - DDL Updated)
-        *   Action: Added `description TEXT` to `public.tasks` in `data/db/ddl.sql`.
-        *   Verification: DDL updated.
-    *   **Task 1.1c: Add Subtask Support to `tasks` table** (DONE - DDL Updated)
-        *   Action: Added `parent_task_id UUID NULL REFERENCES public.tasks(id)` and `subtask_position INTEGER NULL` to `public.tasks` table in `data/db/ddl.sql`.
-        *   Verification: DDL updated to support task hierarchies.
-    *   **Task 1.2: Create `focus_sessions` table** (DONE - DDL Updated)
-    *   **Task 1.3: Create `scratch_pad_entries` table** (DONE - DDL Updated)
-    *   **(Deferred: `user_preferences`, `streak_tracker`, `projects` tables)**
-
-**2. TypeScript Type Definitions** (Some DONE, some To Do)
-    *   **Task 2.1: Update `Task` Interface (Initial P-E-R)** (DONE)
-    *   **Task 2.1b: Add `description` to `Task` Interface** (DONE)
-        *   Action: Added `description?: string | null` to `Task` interface in `webApp/src/api/types.ts`.
-        *   Verification: Type definition updated.
-    *   **Task 2.1c: Add Subtask Support to `Task` Interface** (DONE - Types Updated)
-        *   Action: Added `parent_task_id?: string | null`, `subtask_position?: number | null`, and `subtasks?: Task[]` to `Task` interface. Adjusted `NewTaskData` and `UpdateTaskData`.
-        *   Verification: Type definition updated for hierarchies.
-    *   **Task 2.2: Create `FocusSession` Related Enums & Interface** (DONE)
-    *   **Task 2.3: Create `ScratchPadEntry` Interface** (DONE)
-
-**3. API Hooks for P-E-R & Enhanced Task Management** (Initial P-E-R DONE, needs expansion)
-    *   **Task 3.1: Update `useFetchTasks`** (DONE - for priority/position)
-        *   Needs update to fetch subtasks with parent tasks if implementing client-side nesting.
-    *   **Task 3.2: Update `useUpdateTask`** (DONE - for initial P-E-R fields)
-        *   Needs update to handle `description`, `parent_task_id`, `subtask_position`.
-    *   **Task 3.2b: Update `useCreateTask` (or NewTaskData type)** (DONE - Verified suitable for parser output)
-        *   To handle `description` and potentially `parent_task_id` on creation.
-    *   **Task 3.3: Create `useCreateFocusSession`** (DONE)
-    *   **Task 3.4: Create `useEndFocusSession`** (DONE)
-    *   **Task 3.5: Create `useCreateScratchPadEntry`** (DONE)
-
-**4. Integrating P-P-E-R & Enhanced Task Management with Frontend Components**
-    *   **Task 4.1: Implement Fast Task Entry UI & Logic** (COMPLETED)
-        *   **Action:** Created `taskParser.ts` utility. Created `FastTaskInput.tsx` component. Integrated into `TodayView.tsx` with 'T' hotkey for focus and callback for query invalidation on task creation.
-        *   **Output:** Functional fast task entry from `TodayView`.
-        *   **Verification:** Users can quickly add tasks with optional priority and description from the `TodayView` input.
-    *   **Task 4.2: Implement TaskDetailView UI & Logic** (In Progress - core fields, save, trigger from card/key)
-        *   **Action:** Created `TaskDetailView.tsx` as a Radix Dialog modal. Implemented `useFetchTaskById` hook. Added form state and fields for Title, Description, Notes, Status, Priority. Implemented Save functionality using `useUpdateTask`. Integrated opening of the modal from `TaskCard.tsx` click via `TodayView.tsx` state management.
-        *   **Output:** `TaskDetailView.tsx`, updated `useTaskHooks.ts`, `TodayView.tsx`, `TaskCard.tsx`.
-        *   **Verification (Partial):** Modal opens with task data. Basic fields can be edited and saved. Cancel closes. Loading/error states handled for fetch. Save button has loading state.
-        *   **Pending:** Delete functionality, remaining form fields (category, due date, etc.), subtask management.
-    *   **Task 4.3: Implement Subtask Display & Interaction Logic** (To Do)
-    *   **Task 4.4: Implement Prioritize View (Modal)** (To Do - based on `creative-PER-cycle.md`)
-    *   **Task 4.5: Implement Execute View (Focus Window)** (To Do - based on `creative-PER-cycle.md`)
-    *   **Task 4.6: Implement Reflect View (Modal)** (To Do - based on `creative-PER-cycle.md`)
-    *   **Task 4.7: Implement Collapsible Chat Panel** (To Do)
-    *   **Task 4.8: Update `TaskCard.tsx` (for subtask toggle, P-P-E-R triggers)** (To Do)
-    *   **Task 4.9: Update `TodayView.tsx` (for fast task entry, P-P-E-R flow initiation)** (To Do)
-
-### Area: Project Review & Refinement (Post Drag-and-Drop & Initial P-E-R Backend)
-
-**1. Code Review & Best Practices Alignment**
-    *   **Status:** Pending
-    *   **Task 1.1: Review API Call Structures**
-        *   Focus on `webApp/src/api/hooks/useTaskHooks.ts` and other API interaction points.
-        *   Ensure consistent use of Supabase client, error handling, and adherence to RESTful principles where applicable (though Supabase client is RPC-like).
-        *   Minimize per-function Supabase client imports if a shared/singleton instance can be used more effectively within the hooks module.
-    *   **Task 1.2: Check for Blocking API Calls in UI Logic**
-        *   Ensure mutations and queries are handled asynchronously, with appropriate loading/error states in the UI.
-        *   Verify that UI remains responsive during API interactions.
-    *   **Task 1.3: Review State Management for P-E-R Cycle**
-        *   Evaluate if existing Zustand stores (`useAuthStore`, `useTaskStore`, `useThemeStore`) are sufficient or if a new store (e.g., `useCycleStore` or `useFocusSessionStore`) is needed for managing active P-E-R state (current phase, active task for focus, timer state, etc.).
-        *   Decision: `useCycleStore` with Zustand is planned for P-E-R state.
-
-**2. Documentation and Context File Review for Next Phase (Cyclical P-E-R Flow UI Implementation)**
-    *   **Status:** Pending
-    *   **Task 2.1: Review `data/db/ddl.sql` for Completeness**
-        *   Ensure all necessary fields and tables for the full P-E-R cycle (including planning inputs, reflection inputs, scratchpad) are defined.
-        *   Identify any DDL lagging behind planned UI/feature implementation.
-    *   **Task 2.2: Review `productContext.md` and `techContext.md`**
-        *   Ensure these documents accurately reflect the current understanding of the P-E-R flow, its data requirements, and the technologies involved.
-        *   Update if new decisions or insights have emerged.
-    *   **Task 2.3: Update `progress.md` and `tasks.md`**
-        *   Reflect the completion of the drag-and-drop feature and the setup for P-E-R backend.
-        *   Clearly define the next set of tasks for implementing the P-E-R UI based on the creative design.
+    *   **Goal:** Implement a robust and simple Zustand-based state management for `TodayView.tsx`

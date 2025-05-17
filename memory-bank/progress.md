@@ -400,3 +400,27 @@ This document tracks the active development progress.
 *   **Accessibility:** Ensure all new interactive elements are keyboard accessible and have appropriate ARIA attributes.
 
 This plan will be tracked and updated in `memory-bank/progress.md` as implementation proceeds.
+
+## V. Completed & Archived Tasks
+
+**2025-05-16**
+*   **Task II.4.1.UI.9: Implement Subtask Creation & Display UI** - COMPLETED & ARCHIVED
+    *   **Summary:** Implemented UI for creating, viewing, editing, deleting, and reordering subtasks in `TodayView` and `TaskDetailView`, including DND functionality and state management refactor using React Query.
+    *   **Reflection:** `memory-bank/reflection/reflection-II.4.1.9.md`
+    *   **Archive:** `memory-bank/archive/archive-II.4.1.9.md`
+
+## Recent Progress and Updates
+
+### July 2, 2023
+
+- Added comprehensive state management design document and reference implementation to address inconsistent state management approaches.
+- Created `state-management-design.md` outlining the new architecture using Zustand with eventual sync
+- Implemented `state-management-example.ts` as a reference implementation for tasks
+- Created `state-management-component-example.tsx` showing how to use the new store pattern in components
+- The new architecture provides:
+  - Entity-centric stores with normalized data models
+  - Local-first operations with background sync to database
+  - Optimistic UI updates with rollback mechanisms
+  - Consistent patterns for state access and modification across components
+
+This design will be the standard approach for all new state management going forward, replacing the current mix of React Query direct calls and component local state.
