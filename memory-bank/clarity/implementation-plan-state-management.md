@@ -13,7 +13,7 @@ Type: Intermediate Feature
 - State Management: Zustand + Immer
 - API/Caching: React Query
 - Database: Supabase
-- UI Notification: react-hot-toast
+- UI Notification: Radix UI Toast (preferred, `react-hot-toast` mentioned in example to be updated or noted)
 - Build Tool: Vite
 - Framework: React
 
@@ -68,7 +68,7 @@ Type: Intermediate Feature
 
 3. **Implement Background Sync Indicators**
    - Add UI feedback for sync status (pending/in-progress/complete)
-   - Display toast notifications for sync success/failure
+   - Display toast notifications for sync success/failure (using Radix UI Toast, or approved alternative)
    - Add error recovery UI where appropriate
 
 #### Phase 3: TaskDetail Integration
@@ -130,7 +130,7 @@ Type: Intermediate Feature
 ### Dependencies
 - Updates to `webApp/src/api/types.ts` might be required to ensure proper typing
 - Proper authentication setup to ensure user_id is available for store operations
-- Toast notification system for user feedback
+- Toast notification system for user feedback (Radix UI Toast preferred)
 
 ### Implementation Timeline
 - Phase 1 (Core Store): 2-3 days

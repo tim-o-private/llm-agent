@@ -4,7 +4,7 @@ import { immer } from 'zustand/middleware/immer';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/features/auth/useAuthStore';
 import { supabase } from '@/lib/supabaseClient';
-import { toast } from 'react-hot-toast';
+import { toast } from 'react-hot-toast'; // TODO: Replace with Radix Toast as per updated guidelines
 import { Task, NewTaskData, UpdateTaskData } from '@/api/types';
 
 // Define the structure of our task store
@@ -34,6 +34,9 @@ interface TaskStore {
   getTaskById: (id: string) => Task | undefined;
   getSubtasksByParentId: (parentId: string) => Task[];
 }
+
+const MAX_RETRY_COUNT = 3;
+const RETRY_DELAY_MS = 1000;
 
 /**
  * Store for managing tasks with local-first state and eventual sync
@@ -79,7 +82,8 @@ export const useTaskStore = create<TaskStore>()(
           set({ 
             tasks: normalizedTasks, 
             isLoading: false,
-            lastSyncTime: Date.now()
+            lastSyncTime: Date.now(),
+            error: null // Clear previous errors on successful fetch
           });
         } catch (error) {
           set({ 
@@ -93,7 +97,11 @@ export const useTaskStore = create<TaskStore>()(
       createTask: (taskData) => {
         const userId = useAuthStore.getState().user?.id;
         if (!userId) {
-          set({ error: new Error('User not authenticated') });
+          // This should ideally not happen if UI prevents action
+          // Consider logging this error or showing a persistent notification
+          console.error("Create task attempted without authenticated user.");
+          toast.error("User not authenticated. Please log in.");
+          set({ error: new Error('User not authenticated') }); 
           return '';
         }
         
@@ -127,7 +135,8 @@ export const useTaskStore = create<TaskStore>()(
           // Add to pending changes for sync
           state.pendingChanges[tempId] = {
             action: 'create',
-            data: newTask
+            data: newTask,
+            retryCount: 0
           };
         });
         
@@ -153,14 +162,23 @@ export const useTaskStore = create<TaskStore>()(
           };
           
           // Add or update in pending changes
-          state.pendingChanges[id] = {
-            ...(state.pendingChanges[id] || {}),
-            action: 'update',
-            data: {
-              ...(state.pendingChanges[id]?.data || {}),
-              ...updates
-            }
-          };
+          // If it was a 'create' and hasn't synced, keep it as create but with updated data
+          const currentPendingChange = state.pendingChanges[id];
+          if (currentPendingChange && currentPendingChange.action === 'create') {
+            state.pendingChanges[id] = {
+              ...currentPendingChange,
+              data: { ...currentPendingChange.data, ...updates }
+            };
+          } else {
+            state.pendingChanges[id] = {
+              action: 'update',
+              data: {
+                ...(currentPendingChange?.data || {}), // Preserve other pending updates if any
+                ...updates
+              },
+              retryCount: 0
+            };
+          }
         });
         
         // Schedule a sync after update
@@ -175,7 +193,7 @@ export const useTaskStore = create<TaskStore>()(
           // Check if task exists
           if (!state.tasks[id]) return;
           
-          // If this is a temporary task that hasn't been synced yet
+          // If this is a temporary task that hasn't been synced yet (pending create)
           if (id.startsWith('temp_') && state.pendingChanges[id]?.action === 'create') {
             // Remove from pending changes to prevent unnecessary API call
             delete state.pendingChanges[id];
@@ -183,7 +201,8 @@ export const useTaskStore = create<TaskStore>()(
             // Mark for deletion on next sync
             state.pendingChanges[id] = {
               action: 'delete',
-              data: { id }
+              data: { id }, // Only need ID for delete
+              retryCount: 0
             };
           }
           
@@ -202,7 +221,7 @@ export const useTaskStore = create<TaskStore>()(
         const state = get();
         const userId = useAuthStore.getState().user?.id;
         
-        // Don't sync if already syncing or no pending changes
+        // Don't sync if already syncing or no pending changes or not authenticated
         if (state.isSyncing || !userId || Object.keys(state.pendingChanges).length === 0) {
           return;
         }
@@ -212,8 +231,7 @@ export const useTaskStore = create<TaskStore>()(
         try {
           // Clone pending changes to process
           const changesToProcess = { ...state.pendingChanges };
-          const processedIds: string[] = [];
-          const failedIds: string[] = [];
+          let newPendingChanges = { ...state.pendingChanges }; // Start with current pending changes
           
           // Process each change
           for (const [id, change] of Object.entries(changesToProcess)) {
@@ -221,190 +239,148 @@ export const useTaskStore = create<TaskStore>()(
               if (change.action === 'create') {
                 // For temporary IDs, create in the database
                 if (id.startsWith('temp_')) {
-                  const { data, error } = await supabase
+                  // Ensure user_id is correctly set from auth, not from potentially stale pending change data
+                  const taskToInsert = { ...change.data, id: undefined, user_id: userId };
+                  const { data: createdTask, error } = await supabase
                     .from('tasks')
-                    .insert([{ ...change.data, id: undefined, user_id: userId }])
+                    .insert([taskToInsert])
                     .select()
                     .single();
                     
                   if (error) throw error;
                   
-                  if (data) {
+                  if (createdTask) {
                     // Replace temporary task with real one
-                    set(state => {
-                      // Remove the temp task
-                      delete state.tasks[id];
-                      // Add the real task with server-generated ID
-                      state.tasks[data.id] = data;
+                    set(s => {
+                      delete s.tasks[id]; // Remove temp task
+                      s.tasks[createdTask.id] = createdTask; // Add real task
+                      delete newPendingChanges[id]; // Remove from pending changes
                     });
                   }
                 }
               } else if (change.action === 'update') {
-                // Skip updates for temporary IDs, they'll be created with all data
+                // Skip updates for temporary IDs if they are still marked as 'create' (should be handled by create logic)
                 if (id.startsWith('temp_')) continue;
                 
+                // Ensure user_id is for authorization, but don't include it in the update payload unless it's a field to be changed.
+                const updatePayload = { ...change.data };
+                delete updatePayload.user_id; // Avoid trying to update user_id typically
+                delete updatePayload.id; // Cannot update ID
+
                 const { error } = await supabase
                   .from('tasks')
-                  .update(change.data)
+                  .update(updatePayload)
                   .eq('id', id)
                   .eq('user_id', userId);
                   
                 if (error) throw error;
+                set(s => { delete newPendingChanges[id]; });
+
               } else if (change.action === 'delete') {
-                // Skip deletes for temporary IDs, they don't exist on server
-                if (id.startsWith('temp_')) continue;
-                
+                // Skip deletes for temporary IDs that were never created on server
+                if (id.startsWith('temp_')) {
+                  set(s => { delete newPendingChanges[id]; });
+                  continue;
+                }
+
                 const { error } = await supabase
                   .from('tasks')
                   .delete()
                   .eq('id', id)
                   .eq('user_id', userId);
-                  
+                
                 if (error) throw error;
+                set(s => { delete newPendingChanges[id]; });
               }
-              
-              // Mark as processed
-              processedIds.push(id);
-            } catch (error) {
-              console.error(`Failed to sync task ${id}:`, error);
-              failedIds.push(id);
-              
-              // Update retry count
-              set(state => {
-                if (state.pendingChanges[id]) {
-                  state.pendingChanges[id].retryCount = 
-                    (state.pendingChanges[id].retryCount || 0) + 1;
+            } catch (error: any) {
+              console.error(`Failed to sync change for ID ${id}:`, error);
+              toast.error(`Failed to sync task: ${change.action} ${state.tasks[id]?.title || id}`);
+              set(s => {
+                if (newPendingChanges[id]) {
+                  newPendingChanges[id].retryCount = (newPendingChanges[id].retryCount || 0) + 1;
+                  if (newPendingChanges[id].retryCount! >= MAX_RETRY_COUNT) {
+                    // Too many retries, remove from pending and log as critical failure
+                    console.error(`CRITICAL: Failed to sync task ${id} after ${MAX_RETRY_COUNT} retries. Giving up.`);
+                    toast.error(`Failed to sync task ${state.tasks[id]?.title || id} after multiple retries. Data may be out of sync.`);
+                    delete newPendingChanges[id];
+                  } else {
+                    // Optionally, implement backoff for retries here
+                  }
                 }
               });
             }
           }
           
-          // Clean up processed changes
-          if (processedIds.length > 0) {
-            set(state => {
-              processedIds.forEach(id => {
-                delete state.pendingChanges[id];
-              });
-            });
-          }
-          
-          // Handle failed changes
-          if (failedIds.length > 0) {
-            // If some changes have been retried too many times, consider removing them
-            set(state => {
-              failedIds.forEach(id => {
-                if ((state.pendingChanges[id]?.retryCount || 0) > 5) {
-                  // Too many retries, give up
-                  delete state.pendingChanges[id];
-                  toast.error(`Failed to sync task after multiple attempts: ${id}`);
-                }
-              });
-            });
-          }
-          
-          // Update sync status
-          set({ 
+          // Update pendingChanges state with what's left (failed items to be retried)
+          set({
+            pendingChanges: newPendingChanges,
+            lastSyncTime: Date.now(),
             isSyncing: false,
-            lastSyncTime: Date.now() 
+            error: null // Clear previous global sync errors if any operations succeeded or were processed
           });
-          
-          // Refresh from server occasionally to ensure consistency
-          if (Date.now() - state.lastSyncTime > 60000) { // 1 minute
-            get().fetchTasks();
-          }
-        } catch (error) {
-          console.error('Sync error:', error);
+
+        } catch (error: any) {
+          // Catch any unexpected errors during the sync batch itself
+          console.error("Error during sync process:", error);
+          toast.error("An unexpected error occurred during data synchronization.");
           set({ 
             error: error instanceof Error ? error : new Error(String(error)),
-            isSyncing: false
+            isSyncing: false 
           });
         }
       },
       
-      // Selector: Get task by ID
+      // Selectors
       getTaskById: (id) => {
         return get().tasks[id];
       },
-      
-      // Selector: Get subtasks by parent ID
       getSubtasksByParentId: (parentId) => {
-        return Object.values(get().tasks).filter(
-          task => task.parent_task_id === parentId
-        ).sort((a, b) => {
-          // Sort by subtask_position
-          const posA = a.subtask_position || 0;
-          const posB = b.subtask_position || 0;
-          if (posA !== posB) return posA - posB;
-          
-          // If positions are equal, sort by created_at
-          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-        });
-      }
+        return Object.values(get().tasks).filter(task => task.parent_task_id === parentId);
+      },
     })),
     { name: 'taskStore' }
-  )
-);
+  );
 
-// Setup automatic sync with an interval
-if (typeof window !== 'undefined') {
-  // Only run in browser environment
-  let syncInterval: NodeJS.Timeout;
-  
-  const setupSyncInterval = () => {
-    // Clear any existing interval
-    if (syncInterval) clearInterval(syncInterval);
-    
-    // Set up new interval
-    syncInterval = setInterval(() => {
-      const store = useTaskStore.getState();
-      if (Object.keys(store.pendingChanges).length > 0) {
-        store.syncWithServer();
+// Automatic background synchronization setup
+// This should only run in the browser environment
+let syncIntervalId: NodeJS.Timeout | null = null;
+
+const setupSyncInterval = () => {
+  if (typeof window !== 'undefined') {
+    if (syncIntervalId) clearInterval(syncIntervalId);
+    syncIntervalId = setInterval(() => {
+      const { pendingChanges, isSyncing } = useTaskStore.getState();
+      if (Object.keys(pendingChanges).length > 0 && !isSyncing) {
+        useTaskStore.getState().syncWithServer();
       }
-    }, 10000); // 10 second sync interval
-  };
-  
-  // Set up interval on module load
-  setupSyncInterval();
-  
-  // Listen for store changes to reset interval if needed
-  useTaskStore.subscribe(
-    (state) => state.isSyncing,
-    (isSyncing) => {
-      if (!isSyncing) setupSyncInterval();
+    }, 10000); // Sync every 10 seconds if there are pending changes
+  }
+};
+
+// Initialize the sync interval when the store is first used or app loads
+setupSyncInterval();
+
+// Optionally, listen to auth changes to re-fetch tasks or clear store
+if (typeof window !== 'undefined') {
+  useAuthStore.subscribe(
+    (state, prevState) => {
+      // On login, fetch tasks
+      if (state.user && !prevState.user) {
+        useTaskStore.getState().fetchTasks();
+      }
+      // On logout, clear tasks and pending changes
+      if (!state.user && prevState.user) {
+        useTaskStore.setState({
+          tasks: {},
+          pendingChanges: {},
+          isLoading: false,
+          error: null,
+          lastSyncTime: 0
+        });
+      }
     }
   );
 }
 
-// Example usage in a component
-/*
-function TaskComponent() {
-  // Get tasks and actions from store
-  const { 
-    tasks, 
-    isLoading, 
-    createTask, 
-    updateTask, 
-    deleteTask,
-    getSubtasksByParentId
-  } = useTaskStore();
-  
-  // Initial load - only needed once in app
-  useEffect(() => {
-    useTaskStore.getState().fetchTasks();
-  }, []);
-  
-  // Get all tasks
-  const allTasks = Object.values(tasks);
-  
-  // Or get subtasks for a specific parent
-  const subtasks = getSubtasksByParentId('parent-task-id');
-  
-  // Use actions for immediate UI updates
-  const handleCreateTask = () => {
-    const taskId = createTask({ title: 'New Task' });
-    console.log('Created task with optimistic ID:', taskId);
-  };
-  
-  // The rest of your component...
-}
-*/ 
+// TODO: Add a note about react-hot-toast being deprecated in favor of Radix Toast.
+// This example uses react-hot-toast for now but should be updated. 

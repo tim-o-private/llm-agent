@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { TrashIcon, Pencil1Icon, CheckIcon, Cross1Icon } from '@radix-ui/react-icons';
 import { toast } from 'react-hot-toast';
+// TODO: Replace react-hot-toast with Radix UI Toast as per project guidelines (see agent-core-instructions.md)
 import { Task, TaskStatus } from '@/api/types';
 
 /**
@@ -66,7 +67,7 @@ export const TaskListExample: React.FC = () => {
     
     // Clear input
     setNewTaskTitle('');
-    toast.success('Task created!');
+    toast.success('Task created!'); // NOTE: Project preference is Radix UI Toast
     console.log('Created task with temporary ID:', newTaskId);
   };
   
@@ -94,7 +95,7 @@ export const TaskListExample: React.FC = () => {
   // Save edited task
   const handleSaveEdit = (taskId: string) => {
     if (!editedTitle.trim()) {
-      toast.error('Task title cannot be empty');
+      toast.error('Task title cannot be empty'); // NOTE: Project preference is Radix UI Toast
       return;
     }
     

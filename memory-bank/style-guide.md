@@ -13,7 +13,7 @@ This document outlines the visual and interaction style guidelines for the Clari
 
 ## 2. Color Palette & Theming Engine
 
-*   **Primary Theming Engine:** Radix UI Themes (`@radix-ui/themes`) is the foundation for our color system and base component theming. It manages light/dark modes and allows for various accent color palettes.
+*   **Primary Theming Engine:** Radix UI Themes (`@radix-ui/themes`) is the foundation for our color system and base component theming. Its `<Theme>` provider (used at the application root) manages light/dark modes, accent color palettes, gray scales, and other thematic concerns by exposing CSS custom properties.
 *   **TailwindCSS Integration:** TailwindCSS is used for layout, spacing, typography, and custom component styling. Tailwind color utilities should be configured to map to Radix Theme CSS custom properties to ensure consistency (e.g., a Tailwind class like `bg-primary` would use `var(--accent-9)` from Radix Themes).
 *   **Color Scales:** Leverage the accessible color scales provided by Radix UI Colors (which are integral to Radix UI Themes).
 *   **Accent Colors:** Theme accent colors (e.g., different brand palettes like "blue", "green", "violet") will be managed via the `accentColor` prop on the Radix `<Theme>` provider.
@@ -27,15 +27,16 @@ This document outlines the visual and interaction style guidelines for the Clari
 
 ## 4. Component Styling & UI Primitives
 
-*   **Theming Foundation:** Radix UI Themes provides the base theme (colors, radius, scaling) for components.
-*   **UI Primitives:** Use Radix UI Primitives (`@radix-ui/react-*`) for core accessible behaviors. These primitives will be styled by the Radix Theme and can be further customized with TailwindCSS.
-*   **TailwindCSS for Customization:** TailwindCSS is used for layouts, spacing, and any styling overrides or custom component styling not covered by the Radix Theme.
+*   **Theming Foundation:** Radix UI Themes provides the base theme (colors, radius, scaling via its `<Theme>` provider and CSS variables) for components.
+*   **UI Primitives:** Use Radix UI Primitives (`@radix-ui/react-*`) for core accessible behaviors. These primitives will be styled by TailwindCSS, leveraging the CSS variables from the Radix Theme.
+*   **Avoid Direct Usage of `@radix-ui/themes` Components:** While the `@radix-ui/themes` *library* is used for its `<Theme>` provider and CSS variables, **do NOT import and use its pre-styled individual components directly** (e.g., avoid `import { Button } from '@radix-ui/themes';`). Instead, use Radix UI Primitives and style them with Tailwind.
+*   **TailwindCSS for Customization:** TailwindCSS is used for layouts, spacing, and any styling overrides or custom component styling not covered by the Radix Theme variables. It should be the primary way to style Radix Primitives.
 *   **Wrapper Components (Pattern 6):** For common or repeated Tailwind utility combinations (especially for layout or custom components not directly using Radix Theme styling), create dedicated, reusable wrapper components in `webApp/src/components/ui/`.
-*   **State & Interaction:** Clearly indicate interactive states (hover, focus, active, disabled). Radix Themes and Primitives handle many of these; supplement with TailwindCSS as needed for custom components.
+*   **State & Interaction:** Clearly indicate interactive states (hover, focus, active, disabled). Radix Primitives handle many of these behaviors; supplement with TailwindCSS for styling these states.
 
 ## 5. Iconography
 
-*   **Icon Set:** Utilize Lucide Icons (`lucide-react`) for consistent and clean iconography.
+*   **Icon Set:** Utilize Radix Icons (`radix-ui/react-icons`) for consistent and clean iconography.
 *   **Usage:** Icons should be simple, clear, and used purposefully to enhance comprehension, not for decoration alone.
 *   **Accessibility:** Ensure icons that convey meaning have appropriate ARIA labels or are accompanied by text.
 
@@ -81,6 +82,7 @@ The broadest theme changes are controlled via the `<Theme>` provider in `webApp/
 
 *   **Accent Color:**
     *   The `accentColor` prop of the `<Theme>` provider in `main.tsx` controls the primary brand color used throughout the application (e.g., for buttons, focus rings, active states).
+    *   Component colors MUST use --accent-colors for background and border colors unless explicitly approved by the user.
     *   **To change the accent color globally:** Modify the `accentColor` value in `main.tsx`. For example, to change from `indigo` to `green`:
         ```tsx
         // webApp/src/main.tsx
@@ -123,6 +125,7 @@ Many Radix UI Theme components (and Radix UI Primitives, if used directly) expos
 *   **When to use Radix Component Props:**
     *   For properties directly supported by the Radix component that align with the overall theme (e.g., using a Radix Button's `color="red"` prop will use the themed red, which is good).
     *   When you want to leverage built-in variants or states that Radix components provide.
+    *   **Clarification:** This point generally applies when using Radix UI *Primitives* if they offer variant-like props. For components from `@radix-ui/themes` (which are generally avoided for direct use), their styling props would also use the theme, but the preference is to style Primitives with Tailwind.
 
 *   **When to use Tailwind CSS Utilities:**
     *   For layout (margins, padding, flexbox, grid), typography (font size, weight, if not covered by Radix defaults), and specific sizing not available via Radix props.

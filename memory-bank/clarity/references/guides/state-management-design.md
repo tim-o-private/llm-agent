@@ -1,3 +1,4 @@
+<!-- Content from memory-bank/clarity/state-management-design.md -->
 # State Management Design Document
 
 ## Current State Analysis
@@ -248,50 +249,16 @@ export const createEntityStore = <T extends { id: string }>(
 
 2. **Phase 2: Component Migration**
    - Update components to use the new stores
-   - Start with simpler components like TaskItem
-   - Gradually migrate more complex components like TaskDetailView
+   - Migrate Task-related components first
+   - Address potential conflicts with existing React Query cache
 
-3. **Phase 3: Enhance Sync Features**
-   - Add conflict resolution
-   - Implement optimistic UI updates
-   - Add offline support indicators
+3. **Phase 3: Offline Capability & Conflict Resolution**
+   - Implement robust conflict resolution logic
+   - Test offline scenarios thoroughly
+   - Add UI indicators for sync status and offline mode
 
-4. **Phase 4: Remove/Refactor React Query Usage**
-   - Limit React Query to initial data fetching
-   - Update components to rely on Zustand for state
+## Future Considerations
 
-## Benefits of New Architecture
-
-1. **Consistent State Management**
-   - Single source of truth for each entity type
-   - Predictable data flow in all components
-
-2. **Improved Performance**
-   - Reduced API calls through batched updates
-   - Optimistic UI updates for improved user experience
-
-3. **Better Developer Experience**
-   - Consistent patterns for state access and modification
-   - Simplified component logic with no direct API calls
-
-4. **Resilience to Network Issues**
-   - Local-first approach enables offline capabilities
-   - Background sync handles eventual consistency
-
-## Potential Challenges and Mitigations
-
-1. **Complex Sync Logic**
-   - Solution: Implement sync logic incrementally, starting with simple cases
-   - Consider using a library like Replicache for sync
-
-2. **Conflict Resolution**
-   - Solution: Implement entity-specific conflict resolution strategies
-   - Use timestamps and versions to detect conflicts
-
-3. **Migration Complexity**
-   - Solution: Incremental migration with hybrid approach during transition
-   - Maintain backward compatibility during migration
-
-## Conclusion
-
-The proposed architecture creates a consistent, robust state management pattern focused on local-first development with eventual synchronization. By using Zustand stores as the single source of truth and implementing background synchronization, we can improve performance, user experience, and developer productivity. 
+- Integration with Web Workers for background sync
+- Advanced conflict resolution strategies (e.g., CRDTs)
+- Real-time updates via websockets (optional) 
