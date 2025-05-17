@@ -10,7 +10,6 @@ import type {
   UpdateFocusSessionData 
 } from '../types';
 import { toast } from 'react-hot-toast';
-import { useTaskViewStore } from '@/stores/useTaskViewStore';
 
 const TASKS_QUERY_KEY_PREFIX = 'tasks';
 const FOCUS_SESSIONS_QUERY_KEY_PREFIX = 'focus_sessions';

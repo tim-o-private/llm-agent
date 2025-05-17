@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 // import { Card } from './Card'; // Assuming Card is a styled div or similar - Unused import
@@ -43,7 +43,6 @@ import {
 
 // Hook for updating subtask order
 import { useUpdateSubtaskOrder } from '@/api/hooks/useTaskHooks'; 
-import { toast } from 'react-hot-toast'; // For toasts on reorder
 
 export interface TaskCardProps extends Omit<Task, 'subtasks'> { // Omit subtasks from Task, define it separately
   // id, title, completed, etc. are inherited from Task
