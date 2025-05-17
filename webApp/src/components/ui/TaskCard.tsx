@@ -343,6 +343,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 <SubtaskItem 
                   key={subtask.id} 
                   subtask={subtask} 
+                  parentTaskId={id}
+                  onSubtaskUpdate={() => {}}
                 />
               ))}
             </div>

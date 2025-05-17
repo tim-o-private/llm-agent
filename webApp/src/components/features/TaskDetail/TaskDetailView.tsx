@@ -420,6 +420,7 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
                               <SubtaskItem 
                                 key={subtask.id} 
                                 subtask={subtask} 
+                                parentTaskId={task.id}
                                 onSubtaskUpdate={() => {
                                   refetchSubtasks();
                                   subtasksWereModifiedInThisSessionRef.current = true;
