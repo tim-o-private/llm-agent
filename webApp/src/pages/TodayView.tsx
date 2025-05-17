@@ -22,7 +22,7 @@ import { TaskDetailView } from '@/components/features/TaskDetail/TaskDetailView'
 import { PrioritizeViewModal } from '@/components/features/PrioritizeView/PrioritizeViewModal';
 import { ChatPanel } from '@/components/ChatPanel';
 import { useChatStore } from '@/stores/useChatStore';
-import { PlusIcon, ChatBubbleIcon, Cross1Icon } from '@radix-ui/react-icons';
+import { PlusIcon, ChatBubbleIcon, DoubleArrowRightIcon } from '@radix-ui/react-icons';
 import { Button } from '@/components/ui/Button';
 
 import { useFetchTasks, useUpdateTask, useUpdateTaskOrder, useCreateFocusSession, useDeleteTask } from '@/api/hooks/useTaskHooks';
@@ -42,7 +42,8 @@ const mapTaskToTaskCardViewModel = (
   onSelectTask: (taskId: string) => void,
   onMarkComplete: (taskId: string) => void,
   onDeleteTask: (taskId: string) => void,
-  onStartFocus: (taskId: string) => void
+  onStartFocus: (taskId: string) => void,
+  processedSubtasks?: Task[]
 ): TaskCardProps => ({
   ...task,
   onStartTask: () => onStartTask(task.id),
@@ -53,6 +54,7 @@ const mapTaskToTaskCardViewModel = (
   onMarkComplete: () => onMarkComplete(task.id),
   onDeleteTask: () => onDeleteTask(task.id),
   onStartFocus: () => onStartFocus(task.id),
+  subtasks: processedSubtasks,
 });
 
 const TodayView: React.FC = () => {
@@ -69,9 +71,7 @@ const TodayView: React.FC = () => {
   const { mutate: createFocusSession } = useCreateFocusSession();
   const deleteTaskMutationHook: UseMutationResult<Task | null, Error, { id: string }, unknown> = useDeleteTask();
 
-  // --- Connect to useTaskViewStore ---
-  const rawTasks = useTaskViewStore(state => state.rawTasks);
-  const setRawTasks = useTaskViewStore(state => state.setRawTasks);
+  // --- Zustand Store Selectors for UI state ---
   const focusedTaskId = useTaskViewStore(state => state.focusedTaskId);
   const setFocusedTaskId = useTaskViewStore(state => state.setFocusedTaskId);
   const selectedTaskIds = useTaskViewStore(state => state.selectedTaskIds);
@@ -84,26 +84,12 @@ const TodayView: React.FC = () => {
   const prioritizeModalTaskId = useTaskViewStore(state => state.prioritizeModalTaskId);
   const openPrioritizeModal = useTaskViewStore(state => state.openPrioritizeModal);
   const closePrioritizeModal = useTaskViewStore(state => state.closePrioritizeModal);
-  const reorderRawTasks = useTaskViewStore(state => state.reorderRawTasks);
   const removeSelectedTask = useTaskViewStore(state => state.removeSelectedTask);
 
-  // Effect to sync API tasks to store
-  useEffect(() => {
-    // Compare tasksFromAPI with current rawTasks in the store
-    // Only update if they are different to prevent infinite loops
-    if (tasksFromAPI.length !== rawTasks.length) {
-      setRawTasks(tasksFromAPI);
-      return;
-    }
-    // If lengths are the same, check if IDs match in the same order
-    for (let i = 0; i < tasksFromAPI.length; i++) {
-      if (tasksFromAPI[i].id !== rawTasks[i].id) {
-        setRawTasks(tasksFromAPI);
-        return;
-      }
-    }
-    // If we reach here, tasks are considered the same, no update needed.
-  }, [tasksFromAPI, rawTasks, setRawTasks]); // rawTasks and setRawTasks are now dependencies
+  // Local state for optimistic UI updates for main task drag, if needed
+  // This will be set on drag start and cleared on drag end (success/error of mutation)
+  // Or, we can rely purely on React Query's refetch for simplicity first.
+  // For now, let's remove direct optimistic updates here and rely on RQ refetch.
 
   // --- Component-level Handlers (mainly for API calls) ---
   const invalidateTasksQuery = useCallback(() => {
@@ -205,13 +191,36 @@ const TodayView: React.FC = () => {
   }, [updateTaskMutation, invalidateTasksQuery, closePrioritizeModal]);
 
   // --- Derived Data (View Models for TaskCards) ---
-  const displayTasks = useMemo(() => {
-    if (!rawTasks || rawTasks.length === 0) {
+  const displayTasksWithSubtasks = useMemo(() => {
+    console.log('[TodayView] Recalculating displayTasksWithSubtasks. tasksFromAPI:', JSON.stringify(tasksFromAPI.map(t => ({id: t.id, title: t.title, parent_id: t.parent_task_id, subtask_pos: t.subtask_position, main_pos: t.position}))));
+    if (!tasksFromAPI || tasksFromAPI.length === 0) {
       return [];
     }
-    return rawTasks.map(task => 
+
+    const tasksById = new Map(tasksFromAPI.map(task => [task.id, { ...task, subtasks: [] as Task[] }]));
+    const rootTasks: Array<Task & { subtasks: Task[] }> = [];
+
+    tasksFromAPI.forEach(task => {
+      const taskWithSubtasks = tasksById.get(task.id)!;
+      if (task.parent_task_id && tasksById.has(task.parent_task_id)) {
+        tasksById.get(task.parent_task_id)!.subtasks.push(taskWithSubtasks);
+      } else {
+        rootTasks.push(taskWithSubtasks);
+      }
+    });
+
+    tasksById.forEach(taskEntry => {
+      if (taskEntry.subtasks.length > 0) {
+        taskEntry.subtasks.sort((a, b) => 
+          (a.subtask_position ?? Infinity) - (b.subtask_position ?? Infinity) || 
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
+      }
+    });
+    
+    const mappedRootTasks = rootTasks.map(task => 
       mapTaskToTaskCardViewModel(
-        task,
+        task, 
         handleStartTaskLegacy,
         openDetailModal,
         task.id === focusedTaskId,
@@ -219,11 +228,14 @@ const TodayView: React.FC = () => {
         toggleSelectedTask,
         handleMarkComplete,
         handleDeleteTask,
-        openPrioritizeModal
+        openPrioritizeModal,
+        task.subtasks
       )
     );
+    console.log('[TodayView] Finished recalculating displayTasksWithSubtasks. Result count:', mappedRootTasks.length);
+    return mappedRootTasks;
   }, [
-    rawTasks, 
+    tasksFromAPI,
     focusedTaskId, 
     selectedTaskIds, 
     handleStartTaskLegacy,
@@ -236,17 +248,17 @@ const TodayView: React.FC = () => {
 
   // Handle focusing the first task if needed
   useEffect(() => {
-    if (rawTasks.length > 0 && focusedTaskId === null) {
-      setFocusedTaskId(rawTasks[0].id);
-    } else if (rawTasks.length > 0 && focusedTaskId !== null) {
-      const focusedTaskExists = rawTasks.some(task => task.id === focusedTaskId);
+    if (tasksFromAPI.length > 0 && focusedTaskId === null) {
+      setFocusedTaskId(tasksFromAPI[0].id);
+    } else if (tasksFromAPI.length > 0 && focusedTaskId !== null) {
+      const focusedTaskExists = tasksFromAPI.some(task => task.id === focusedTaskId);
       if (!focusedTaskExists) {
-        setFocusedTaskId(rawTasks[0].id);
+        setFocusedTaskId(tasksFromAPI[0].id);
       }
-    } else if (rawTasks.length === 0 && focusedTaskId !== null) {
+    } else if (tasksFromAPI.length === 0 && focusedTaskId !== null) {
       setFocusedTaskId(null);
     }
-  }, [rawTasks, focusedTaskId, setFocusedTaskId]);
+  }, [tasksFromAPI, focusedTaskId, setFocusedTaskId]);
 
   // Handle keyboard shortcuts
   useEffect(() => {
@@ -267,25 +279,25 @@ const TodayView: React.FC = () => {
         case 'e':
           event.preventDefault();
           if (focusedTaskId) openDetailModal(focusedTaskId);
-          else if (displayTasks.length > 0) openDetailModal(displayTasks[0].id);
+          else if (displayTasksWithSubtasks.length > 0) openDetailModal(displayTasksWithSubtasks[0].id);
           break;
         case 'n':
-          if (displayTasks.length > 0) {
-            const currentIndex = displayTasks.findIndex(item => item.id === focusedTaskId);
+          if (displayTasksWithSubtasks.length > 0) {
+            const currentIndex = displayTasksWithSubtasks.findIndex(item => item.id === focusedTaskId);
             if (currentIndex === -1) {
-              setFocusedTaskId(displayTasks[0].id);
-            } else if (currentIndex < displayTasks.length - 1) {
-              setFocusedTaskId(displayTasks[currentIndex + 1].id);
+              setFocusedTaskId(displayTasksWithSubtasks[0].id);
+            } else if (currentIndex < displayTasksWithSubtasks.length - 1) {
+              setFocusedTaskId(displayTasksWithSubtasks[currentIndex + 1].id);
             }
           }
           break;
         case 'p':
-          if (displayTasks.length > 0) {
-            const currentIndex = displayTasks.findIndex(item => item.id === focusedTaskId);
+          if (displayTasksWithSubtasks.length > 0) {
+            const currentIndex = displayTasksWithSubtasks.findIndex(item => item.id === focusedTaskId);
             if (currentIndex === -1) {
-              setFocusedTaskId(displayTasks[displayTasks.length - 1].id);
+              setFocusedTaskId(displayTasksWithSubtasks[displayTasksWithSubtasks.length - 1].id);
             } else if (currentIndex > 0) {
-              setFocusedTaskId(displayTasks[currentIndex - 1].id);
+              setFocusedTaskId(displayTasksWithSubtasks[currentIndex - 1].id);
             }
           }
           break;
@@ -293,8 +305,9 @@ const TodayView: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [displayTasks, focusedTaskId, detailViewTaskId, prioritizeModalTaskId, setFocusedTaskId, openDetailModal, setFastInputFocused]);
+  }, [displayTasksWithSubtasks, focusedTaskId, detailViewTaskId, prioritizeModalTaskId, setFocusedTaskId, openDetailModal, setFastInputFocused]);
 
+  // DND setup for main tasks
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -303,28 +316,29 @@ const TodayView: React.FC = () => {
   );
 
   function handleDragEnd(event: DragEndEvent) {
-    const {active, over} = event;
-    
-    if (over && active.id !== over.id) {
-      // The store's reorderRawTasks expects activeId and overId
-      // Keep a snapshot of tasks before reordering for backend update
-      const currentTasks = [...rawTasks];
-      const oldIndex = currentTasks.findIndex((item: Task) => item.id === active.id);
-      const newIndex = currentTasks.findIndex((item: Task) => item.id === over.id);
+    const { active, over } = event;
+    if (active.id !== over?.id && tasksFromAPI && over) {
+      const oldIndex = tasksFromAPI.findIndex((task) => task.id === active.id);
+      const newIndex = tasksFromAPI.findIndex((task) => task.id === over.id);
       
-      if (oldIndex === -1 || newIndex === -1) return; // Should not happen if IDs are correct
+      if (oldIndex === -1 || newIndex === -1) return;
 
-      const newOrderedItems = arrayMove(currentTasks, oldIndex, newIndex);
+      // Optimistic update could be done here using React Query's context if desired,
+      // or simply rely on the refetch after mutation success.
+      // For now, we are not doing a direct optimistic update of tasksFromAPI in component state.
+      // const locallyReorderedTasks = arrayMove(tasksFromAPI, oldIndex, newIndex);
+      // If we had local state for optimistic display: setOptimisticDisplayTasks(locallyReorderedTasks);
       
-      // Update task order in backend
-      const taskOrderUpdates = newOrderedItems.map((task: Task, index: number) => ({
+      const newOrderedTasksForBackend = arrayMove([...tasksFromAPI], oldIndex, newIndex);
+      const taskOrderUpdates = newOrderedTasksForBackend.map((task, index) => ({
         id: task.id,
-        position: index,
+        position: index + 1, 
       }));
-      updateTaskOrder(taskOrderUpdates);
       
-      // Update local state using activeId and overId for the store's action
-      reorderRawTasks(active.id.toString(), over.id.toString());
+      console.log("[TodayView] handleDragEnd - Calling updateTaskOrder with:", taskOrderUpdates);
+      updateTaskOrder(taskOrderUpdates, {
+        // onSuccess and onError are handled by the hook itself (toast, query invalidation)
+      }); 
     }
   }
 
@@ -354,9 +368,6 @@ const TodayView: React.FC = () => {
             <Button variant="secondary" onClick={() => alert('New task (not implemented yet)')}>
               <PlusIcon className="mr-2 h-4 w-4" /> New Task
             </Button>
-            <Button variant="secondary" onClick={toggleChatPanel}>
-              <ChatBubbleIcon className="h-5 w-5" />
-            </Button>
           </div>
         </div>
         <div className="mb-6">
@@ -366,7 +377,7 @@ const TodayView: React.FC = () => {
               onBlurred={() => setFastInputFocused(false)}
           />
         </div>
-        {rawTasks.length === 0 ? (
+        {tasksFromAPI.length === 0 ? (
           <div className="flex-grow flex flex-col items-center justify-center text-gray-500 dark:text-gray-400">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
@@ -375,18 +386,9 @@ const TodayView: React.FC = () => {
             <p>Add some tasks to get started.</p>
           </div>
         ) : (
-          <DndContext 
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext 
-              items={rawTasks.map(task => task.id)} 
-              strategy={verticalListSortingStrategy}
-            >
-              <div className="flex-grow overflow-y-auto space-y-8">
-                <TaskListGroup title="All Tasks" tasks={displayTasks} />
-              </div>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={displayTasksWithSubtasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+              <TaskListGroup tasks={displayTasksWithSubtasks} title="Today's Tasks" />
             </SortableContext>
           </DndContext>
         )}
@@ -412,18 +414,28 @@ const TodayView: React.FC = () => {
         )}
       </div>
 
-      {isChatPanelOpen && (
-        <div className="fixed top-0 right-0 h-full w-full max-w-md md:max-w-sm bg-white dark:bg-gray-800 shadow-xl z-50 transform transition-transform duration-300 ease-in-out translate-x-0 border-l border-gray-200 dark:border-gray-700">
-          <button
-            onClick={toggleChatPanel}
-            className="absolute top-4 right-4 p-1 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 z-10"
-            aria-label="Close chat panel"
-          >
-            <Cross1Icon className="h-5 w-5 text-gray-500 dark:text-gray-400" />
-          </button>
-          <ChatPanel />
-        </div>
-      )}
+      {/* Revised Persistent Chat Panel Area with Integrated Toggle Button */}
+      <div 
+        className={`fixed top-0 right-0 h-full z-50 transition-all duration-300 ease-in-out border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-xl flex
+                    ${isChatPanelOpen ? 'w-full max-w-md md:max-w-sm' : 'w-16'}`}
+      >
+        {/* Always visible Toggle Button Area */} 
+        <button
+          onClick={toggleChatPanel}
+          className="w-16 h-full flex flex-col items-center justify-center py-4 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none flex-shrink-0"
+          aria-label={isChatPanelOpen ? "Close chat panel" : "Open chat panel"}
+        >
+          {isChatPanelOpen ? <DoubleArrowRightIcon className="h-6 w-6" /> : <ChatBubbleIcon className="h-6 w-6" />}
+          {!isChatPanelOpen && <span className="text-xs mt-1">Chat</span>} {/* Optional: Text label when collapsed */}
+        </button>
+
+        {/* Conditionally rendered ChatPanel content area */}
+        {isChatPanelOpen && (
+          <div className="flex-grow h-full relative"> {/* Container for ChatPanel to take remaining space */}
+            <ChatPanel />
+          </div>
+        )}
+      </div>
     </div>
   );
 };

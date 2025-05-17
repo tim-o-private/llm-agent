@@ -10,6 +10,7 @@ import type {
   UpdateFocusSessionData 
 } from '../types';
 import { toast } from 'react-hot-toast';
+import { useTaskViewStore } from '@/stores/useTaskViewStore';
 
 const TASKS_QUERY_KEY_PREFIX = 'tasks';
 const FOCUS_SESSIONS_QUERY_KEY_PREFIX = 'focus_sessions';
@@ -38,6 +39,35 @@ export function useFetchTasks() {
       return data || [];
     },
     enabled: !!user, // Only run the query if the user is authenticated
+  });
+}
+
+/**
+ * Fetches subtasks for a given parent task ID for the current authenticated user.
+ */
+export function useFetchSubtasks(parentTaskId: string | undefined | null) {
+  const user = useAuthStore((state) => state.user);
+  // Construct a more specific query key for subtasks
+  const queryKey: QueryKey = [TASKS_QUERY_KEY_PREFIX, user?.id, 'subtasks', parentTaskId];
+
+  return useQuery<Task[], Error, Task[], QueryKey>({
+    queryKey: queryKey,
+    queryFn: async () => {
+      if (!user) throw new Error('User not authenticated');
+      if (!parentTaskId) return []; // If no parentTaskId, return empty array or handle as needed
+
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('parent_task_id', parentTaskId)
+        .order('subtask_position', { ascending: true, nullsFirst: true })
+        .order('created_at', { ascending: true }); // Secondary sort by creation time
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user && !!parentTaskId, // Only run if user is authenticated and parentTaskId is provided
   });
 }
 
@@ -129,22 +159,21 @@ export const useUpdateTaskOrder = () => {
       );
       console.log('[useUpdateTaskOrder] Supabase update promises created:', updates.length);
       
-      // Rewrapping Promise.all to ensure errors are thrown correctly for useMutation
       const results = await Promise.all(updates.map(async (updatePromise) => {
         console.log('[useUpdateTaskOrder] Processing one update promise...');
         const { data, error } = await updatePromise;
         if (error) {
           console.error('[useUpdateTaskOrder] Supabase error during one task order update:', error);
-          throw error; // Re-throw to be caught by useMutation's onError
+          throw error; 
         }
         console.log('[useUpdateTaskOrder] One task update successful, data:', data);
         return data;
       }));
       console.log('[useUpdateTaskOrder] All Supabase update results:', results);
-      return results; // This will be an array of results from each update, or nulls
+      return results; 
     },
     onSuccess: (_data, _variables, _context) => {
-      toast.success('Task order updated!');
+      toast.success('Task order updated successfully!');
       if (user) {
         queryClient.invalidateQueries({ queryKey: [TASKS_QUERY_KEY_PREFIX, user.id] });
       } else {
@@ -153,6 +182,108 @@ export const useUpdateTaskOrder = () => {
     },
     onError: (error: Error, _variables, _context) => {
       toast.error(`Failed to update task order: ${error.message}`);
+    },
+  });
+};
+
+/**
+ * Hook to update the order (subtask_position) of multiple subtasks for a specific parent.
+ * Accepts an array of objects, each with id and new subtask_position.
+ */
+interface SubtaskOrderUpdate {
+  id: string;
+  subtask_position: number;
+}
+
+export const useUpdateSubtaskOrder = () => {
+  const queryClient = useQueryClient();
+  const user = useAuthStore((state) => state.user);
+
+  return useMutation<Task[], Error, { parentTaskId: string; orderedSubtasks: SubtaskOrderUpdate[] }, { previousTasks?: Task[] }>({
+    mutationFn: async ({ parentTaskId, orderedSubtasks }) => {
+      console.log('[useUpdateSubtaskOrder] mutationFn started. Parent:', parentTaskId, 'Ordered Subtasks:', JSON.stringify(orderedSubtasks));
+      if (!user) throw new Error('User not authenticated');
+      if (!parentTaskId) throw new Error('Parent task ID is required to update subtask order');
+
+      const updates = orderedSubtasks.map(subtask =>
+        supabase
+          .from('tasks')
+          .update({ subtask_position: subtask.subtask_position })
+          .eq('id', subtask.id)
+          .eq('user_id', user.id)
+          .eq('parent_task_id', parentTaskId)
+          .select()
+      );
+      
+      const results = await Promise.all(updates.map(async (updatePromise) => {
+        const { data, error } = await updatePromise;
+        if (error) {
+          console.error('[useUpdateSubtaskOrder] Supabase error during one subtask order update:', error);
+          throw error; 
+        }
+        return data?.[0] || null; 
+      }));
+      console.log('[useUpdateSubtaskOrder] Raw results from Supabase:', JSON.stringify(results));
+      
+      const filteredResults = results.filter(r => r !== null) as Task[];
+      console.log('[useUpdateSubtaskOrder] Filtered results (returned by mutationFn):', JSON.stringify(filteredResults));
+      return filteredResults; // Return the updated subtasks from the server
+    },
+    onMutate: async (variables) => {
+      console.log('[useUpdateSubtaskOrder] onMutate. Variables:', variables);
+      if (!user?.id) return;
+      const allTasksQueryKey = [TASKS_QUERY_KEY_PREFIX, user.id];
+
+      // Cancel any outgoing refetches (so they don't overwrite our optimistic update)
+      await queryClient.cancelQueries({ queryKey: allTasksQueryKey });
+
+      // Snapshot the previous value
+      const previousTasks = queryClient.getQueryData<Task[]>(allTasksQueryKey);
+      console.log('[useUpdateSubtaskOrder] onMutate. Previous tasks from cache:', JSON.stringify(previousTasks?.map(t => t.id)));
+
+      // Optimistically update to the new value
+      if (previousTasks) {
+        const newOptimisticTasks = previousTasks.map(task => {
+          if (task.id === variables.parentTaskId) {
+            // Create a map of new positions for quick lookup
+            const newSubtaskPositions = new Map(variables.orderedSubtasks.map(st => [st.id, st.subtask_position]));
+            // Reorder existing subtasks and update their positions
+            const updatedParentSubtasks = (task.subtasks || [])
+              .map(st => ({ ...st, subtask_position: newSubtaskPositions.get(st.id) || st.subtask_position }))
+              .sort((a, b) => (a.subtask_position ?? Infinity) - (b.subtask_position ?? Infinity));
+            
+            return { ...task, subtasks: updatedParentSubtasks };
+          }
+          return task;
+        });
+        console.log('[useUpdateSubtaskOrder] onMutate. Setting optimistic tasks to cache:', JSON.stringify(newOptimisticTasks.find(t => t.id === variables.parentTaskId)?.subtasks?.map(st => ({id: st.id, pos: st.subtask_position}))));
+        queryClient.setQueryData<Task[]>(allTasksQueryKey, newOptimisticTasks);
+      }
+      return { previousTasks }; // Return context with previous data
+    },
+    onError: (err, variables, context) => {
+      console.error('[useUpdateSubtaskOrder] onError. Error:', err, 'Variables:', variables);
+      toast.error(`Failed to update subtask order: ${err.message}. Reverting.`);
+      if (context?.previousTasks && user?.id) {
+        console.log('[useUpdateSubtaskOrder] onError. Reverting to previous tasks:', JSON.stringify(context.previousTasks.map(t => t.id)));
+        queryClient.setQueryData([TASKS_QUERY_KEY_PREFIX, user.id], context.previousTasks);
+      }
+    },
+    onSettled: (_data, error, variables) => {
+      console.log('[useUpdateSubtaskOrder] onSettled. Variables:', variables, 'Error:', error);
+      // Always refetch after error or success to ensure server state
+      if (user?.id) {
+        queryClient.invalidateQueries({ queryKey: [TASKS_QUERY_KEY_PREFIX, user.id] });
+        console.log('[useUpdateSubtaskOrder] onSettled. Invalidated all tasks query key.');
+      }
+    },
+    // onSuccess callback is now primarily for side-effects like toasts if not handled by onSettled, 
+    // or if specific data from mutationFn is needed beyond what onMutate handles for optimistic UI.
+    // The UI should react to cache changes from onMutate or refetch from onSettled.
+    onSuccess: (updatedSubtasksFromServer, variables) => {
+      console.log('[useUpdateSubtaskOrder] onSuccess hook. Parent:', variables.parentTaskId, 'Updated Subtasks from mutationFn:', JSON.stringify(updatedSubtasksFromServer));
+      toast.success('Subtask order updated successfully!');
+      // The main invalidation is in onSettled. If specific data is needed for other caches, handle here.
     },
   });
 };

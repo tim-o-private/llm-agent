@@ -2,12 +2,12 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { enableMapSet } from 'immer';
-import type { Task } from '@/api/types'; // This path will be correct if this file is in webApp/src/stores/
+// import type { Task } from '@/api/types'; // Task type no longer needed directly in store state
 
 enableMapSet(); // Initialize Immer's MapSet plugin
 
 export interface TaskViewState {
-  rawTasks: Task[];
+  // rawTasks: Task[]; // Removed
   focusedTaskId: string | null;
   selectedTaskIds: Set<string>;
   isFastInputFocused: boolean;
@@ -16,8 +16,8 @@ export interface TaskViewState {
 }
 
 export interface TaskViewActions {
-  setRawTasks: (tasks: Task[]) => void;
-  clearRawTasks: () => void;
+  // setRawTasks: (tasks: Task[]) => void; // Removed
+  clearTaskRelatedState: () => void; // Renamed from clearRawTasks, focuses on UI state
   setFocusedTaskId: (taskId: string | null) => void;
   setFastInputFocused: (isFocused: boolean) => void;
   toggleSelectedTask: (taskId: string) => void;
@@ -28,11 +28,12 @@ export interface TaskViewActions {
   closeDetailModal: () => void;
   openPrioritizeModal: (taskId: string) => void;
   closePrioritizeModal: () => void;
-  reorderRawTasks: (activeId: string, overId: string) => void;
+  // reorderRawTasks: (activeId: string, overId: string) => void; // Removed
+  // updateSubtasksInRawTasks: (parentTaskId: string, updatedSubtasksForParent: Task[]) => void; // Removed
 }
 
 const initialState: TaskViewState = {
-  rawTasks: [],
+  // rawTasks: [], // Removed
   focusedTaskId: null,
   selectedTaskIds: new Set(),
   isFastInputFocused: false,
@@ -47,9 +48,9 @@ export const useTaskViewStore = create<TaskViewStore>()(
   devtools(
     immer((set) => ({
       ...initialState,
-      setRawTasks: (tasks) => set(state => { state.rawTasks = tasks; }),
-      clearRawTasks: () => set(state => { 
-        state.rawTasks = []; 
+      // setRawTasks: (tasks) => set(state => { state.rawTasks = tasks; }), // Removed
+      clearTaskRelatedState: () => set(state => { 
+        // state.rawTasks = []; // Removed
         state.focusedTaskId = null; 
         state.selectedTaskIds.clear(); 
         state.detailViewTaskId = null;
@@ -72,16 +73,20 @@ export const useTaskViewStore = create<TaskViewStore>()(
       closeDetailModal: () => set(state => { state.detailViewTaskId = null; }),
       openPrioritizeModal: (taskId) => set(state => { state.prioritizeModalTaskId = taskId; }),
       closePrioritizeModal: () => set(state => { state.prioritizeModalTaskId = null; }),
-      reorderRawTasks: (activeId, overId) => set(state => {
-        const oldIndex = state.rawTasks.findIndex(task => task.id === activeId);
-        const newIndex = state.rawTasks.findIndex(task => task.id === overId);
-        if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
-          const reorderedTasks = Array.from(state.rawTasks);
-          const [movedItem] = reorderedTasks.splice(oldIndex, 1);
-          reorderedTasks.splice(newIndex, 0, movedItem);
-          state.rawTasks = reorderedTasks;
-        }
-      }),
+      // reorderRawTasks: (activeId, overId) => set(state => { // Removed
+      //   const oldIndex = state.rawTasks.findIndex(task => task.id === activeId);
+      //   const newIndex = state.rawTasks.findIndex(task => task.id === overId);
+      //   if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+      //     const reorderedTasks = Array.from(state.rawTasks);
+      //     const [movedItem] = reorderedTasks.splice(oldIndex, 1);
+      //     reorderedTasks.splice(newIndex, 0, movedItem);
+      //     state.rawTasks = reorderedTasks;
+      //   }
+      // }),
+      // updateSubtasksInRawTasks: (parentTaskId, updatedSubtasksForParent) => set(state => { // Removed
+      //   const nonRelatedTasks = state.rawTasks.filter(task => task.parent_task_id !== parentTaskId);
+      //   state.rawTasks = [...nonRelatedTasks, ...updatedSubtasksForParent];
+      // }),
     })),
     { name: 'TaskViewStore' }
   )

@@ -6,36 +6,47 @@ import { supabase } from '@/lib/supabaseClient';
 
 
 // Actual function to fetch AI response from the backend
-async function fetchAiResponse(message: string): Promise<string> {
-  console.log('Sending message to backend API:', message);
+async function fetchAiResponse(message: string, userId: string | null /*, sessionId?: string */): Promise<string> { // sessionId might become unused
+  console.log('Sending message to backend API (/api/chat):', message, 'UserId (for context, not body):', userId);
   try {
-    const apiUrl = `${import.meta.env.VITE_API_BASE_URL || ''}/api/chat`;
+    const apiUrl = `${import.meta.env.VITE_API_BASE_URL || ''}/api/chat`; // CHANGED
     const { data: { session } } = await supabase.auth.getSession();
     const accessToken = session?.access_token;
-    console.log('Access token:', accessToken);
+    // console.log('Access token:', accessToken); // Keep for debugging if needed
+
+    // Define a default agent_id. This should match an agent config YAML.
+    const agentIdToUse = import.meta.env.VITE_DEFAULT_CHAT_AGENT_ID || "assistant";
+
+    const requestBody = {
+      agent_id: agentIdToUse, // ADDED
+      message: message,       // REMAINS
+      // userId: userId,      // REMOVED from body (obtained from JWT on backend)
+      // sessionId: sessionId // REMOVED from body (not used by /api/chat in main.py)
+    };
+
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${accessToken}`,
       },
-      body: JSON.stringify({
-        agent_id: 'assistant',
-        message: message,
-        // user_id: userId, // (optional, can be omitted)
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ detail: 'Unknown error from API' }));
-      throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorData.detail}`);
+      // The /api/chat endpoint returns { "detail": "message" } for HTTPExceptions
+      // and { "reply": "message" } for ChatResponse.
+      // Let's try to get a consistent error message.
+      const detail = errorData.detail || errorData.reply || 'No detail';
+      throw new Error(`API Error: ${response.status} ${response.statusText} - ${detail}`);
     }
 
     const data = await response.json();
-    return data.reply;
+    // /api/chat returns { "reply": "agent_response_text" }
+    return data.reply; // CHANGED from data.agentResponse
   } catch (error) {
-    console.error('Failed to fetch AI response from backend:', error);
-    // Return a user-friendly error message to be displayed in the chat
+    console.error('Failed to fetch AI response from backend (/api/chat):', error);
     if (error instanceof Error && error.message.startsWith('API Error:')) {
         return `Sorry, I couldn\'t connect to the AI: ${error.message.replace('API Error: ', '')}`;
     }
@@ -57,29 +68,27 @@ export const ChatPanel: React.FC = () => {
   const [userId, setUserId] = useState<string | null>(null);
   
   useEffect(() => {
-    const fetchUserId = async () => {
+    const fetchUserSessionData = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       setUserId(user?.id || null);
     };
-    fetchUserId();
+    fetchUserSessionData();
   }, []);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  // handleSendMessage is now passed to MessageInput
   const handleSendMessage = async (messageText: string) => {
     if (!messageText || isLoading || !userId) return; 
 
-
     addMessage({ text: messageText, sender: 'user' });
-    // setInputValue(''); // MessageInput handles its own state clearing
     setIsLoading(true);
 
     try {
-      const aiResponse = await fetchAiResponse(messageText);
-      addMessage({ text: aiResponse, sender: 'ai' });
+      // Pass userId for logging/context if needed by fetchAiResponse, but not for the request body to /api/chat
+      const aiResponseText = await fetchAiResponse(messageText, userId /*, currentSessionId */); // currentSessionId no longer sent in body
+      addMessage({ text: aiResponseText, sender: 'ai' });
     } catch (error) {
       addMessage({ text: error instanceof Error ? error.message : 'An unexpected error occurred.', sender: 'ai'});
     } finally {

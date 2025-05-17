@@ -1,7 +1,7 @@
 import sys
 import os
 import logging # Added for log_level
-from typing import Dict, Tuple # Added for typing the cache
+from typing import Dict, Tuple, Optional # Added Optional here
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Depends, Request, status
@@ -11,6 +11,7 @@ from langchain.memory import ConversationBufferMemory # Added
 from langchain.agents import AgentExecutor # Added for type hinting
 from fastapi.middleware.cors import CORSMiddleware
 from jose import jwt, JWTError
+from supabase import create_client, AsyncClient
 
 # Correctly import ConfigLoader
 from utils.config_loader import ConfigLoader
@@ -148,6 +149,114 @@ async def handle_chat(
         raise HTTPException(status_code=500, detail=f"Error processing message with agent. Check server logs. {str(e)}")
 
     return ChatResponse(reply=ai_reply)
+
+# Global Supabase client instance
+# Initialize as None, will be created on startup
+supabase_client: AsyncClient | None = None
+
+@app.on_event("startup")
+async def startup_event():
+    global supabase_client
+    if os.getenv("SUPABASE_URL") and os.getenv("SUPABASE_SERVICE_KEY"):
+        try:
+            supabase_client = await create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KEY"))
+            print("Supabase client initialized successfully.")
+        except Exception as e:
+            print(f"Error initializing Supabase client: {e}")
+            supabase_client = None # Ensure it's None if initialization fails
+    else:
+        print("Supabase client not initialized due to missing URL or Key.")
+
+# Dependency to get Supabase client
+async def get_supabase_client() -> AsyncClient:
+    if supabase_client is None:
+        print("Supabase client not available.")
+        raise HTTPException(status_code=503, detail="Supabase client not available")
+    return supabase_client
+
+@app.get("/")
+async def root():
+    print("Root endpoint accessed.")
+    return {"message": "Clarity Chat Server is running."}
+
+# Example protected endpoint using Supabase for user tasks
+# This is just an example, actual task management might be more complex
+# and involve user authentication/authorization through JWT tokens passed from frontend
+@app.get("/api/tasks")
+async def get_tasks(request: Request, db: AsyncClient = Depends(get_supabase_client)):
+    print("Attempting to fetch tasks from Supabase.")
+    try:
+        # Example: Fetch tasks. In a real app, you'd filter by user_id from JWT.
+        # For now, this fetches all tasks, assuming RLS is set up for direct access if needed,
+        # or this endpoint is for admin/internal use.
+        response = await db.table('tasks').select("*").execute()
+        print(f"Supabase response: {response}")
+        if response.data:
+            return response.data
+        else:
+            # Handle cases where response.data might be None or empty, or an error occurred
+            # Supabase client typically raises an exception for network/DB errors covered by the outer try-except
+            # This handles cases where the query was successful but returned no data or unexpected structure
+            if hasattr(response, 'error') and response.error:
+                 print(f"Error fetching tasks: {response.error}")
+                 raise HTTPException(status_code=500, detail=str(response.error.message if response.error.message else "Error fetching tasks"))
+            return [] # Return empty list if no data and no specific error
+
+    except HTTPException as e:
+        # Re-raise HTTPExceptions directly
+        raise e
+    except Exception as e:
+        print(f"An unexpected error occurred while fetching tasks: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
+# To run this server (example using uvicorn):
+# uvicorn chatServer.main:app --reload
+
+# Placeholder for webhook endpoint from Supabase
+class SupabasePayload(BaseModel):
+    type: str
+    table: str
+    record: Optional[dict] = None
+    old_record: Optional[dict] = None
+    webhook_schema: Optional[str] = None # Renamed from schema to avoid conflict
+
+@app.post("/api/supabase-webhook")
+async def supabase_webhook(payload: SupabasePayload):
+    print(f"Received Supabase webhook: Type={payload.type}, Table={payload.table}")
+    # Process the webhook payload
+    # Example: Invalidate a cache, notify clients via WebSockets, etc.
+    if payload.type == "INSERT" and payload.table == "tasks":
+        print(f"New task inserted: {payload.record}")
+        # Potentially send a notification or update a real-time view
+    
+    # Add more specific handling based on type and table, e.g., using payload.webhook_schema
+
+    return {"status": "received"}
+
+# Example: If using the agent_loader directly (ensure paths are correct)
+# This is highly conceptual and needs proper path management if used.
+# from src.core.agent_loader import load_specific_agent, AgentType # Adjust import path
+
+# @app.post("/api/agent/invoke")
+# async def invoke_agent_endpoint(request_data: dict):
+#     agent_name = request_data.get("agent_name", "assistant") # Default to assistant
+#     user_input = request_data.get("user_input", "")
+#     user_id = request_data.get("user_id", "default_user") # Get user_id if available
+
+#     if not user_input:
+#         raise HTTPException(status_code=400, detail="user_input is required")
+
+#     try:
+#         # Assuming load_specific_agent can take user_id for context/memory
+#         agent_executor,_ = load_specific_agent(agent_name, AgentType.AUTONOMOUS, user_id=user_id)
+#         # This is a simplified invocation. Real agents might need history, tools, etc.
+#         response = await agent_executor.ainvoke({"input": user_input})
+#         return {"response": response.get("output")}
+#     except FileNotFoundError:
+#         raise HTTPException(status_code=404, detail=f"Agent configuration for '{agent_name}' not found.")
+#     except Exception as e:
+#         logger.error(f"Error invoking agent '{agent_name}': {e}", exc_info=True)
+#         raise HTTPException(status_code=500, detail=f"Error invoking agent: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
