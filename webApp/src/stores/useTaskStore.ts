@@ -201,9 +201,14 @@ export const useTaskStore = create<TaskStore>()(
        * Update a task locally with optimistic UI
        */
       updateTask: (id, updates) => {
+        console.log(`[useTaskStore] updateTask called for ID: ${id}, Updates:`, JSON.stringify(updates, null, 2));
         set(state => {
           // Only update if the task exists
-          if (!state.tasks[id]) return;
+          if (!state.tasks[id]) {
+            console.warn(`[useTaskStore] Task with ID: ${id} not found for update.`);
+            return;
+          }
+          const oldTask = JSON.parse(JSON.stringify(state.tasks[id])); // Deep copy for logging
           
           // Apply updates to local state
           state.tasks[id] = {
@@ -211,6 +216,7 @@ export const useTaskStore = create<TaskStore>()(
             ...updates,
             updated_at: new Date().toISOString()
           };
+          console.log(`[useTaskStore] Task ID: ${id} - Before:`, oldTask, 'After:', JSON.parse(JSON.stringify(state.tasks[id])));
           
           // Add or update in pending changes
           state.pendingChanges[id] = {

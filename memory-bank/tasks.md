@@ -1,3 +1,7 @@
+# CRITICAL INSTRUCTIONS
+All agents MUST `style-guide.md` & `systemPatterns.md`, and adhere to established patterns unless EXPLICITLY told by the user to deviate.
+All agents MUST 
+
 # Tasks
 
 This file tracks the current tasks, steps, checklists, and component lists for the Local LLM Terminal Environment and the Clarity web application. It consolidates information from previous implementation plans and backlog documents.
@@ -221,7 +225,7 @@ This file tracks the current tasks, steps, checklists, and component lists for t
             *   **Files Affected:** `webApp/src/pages/TodayView.tsx`, global CSS/Tailwind config (if needed).
         *   **Sub-Task 4.1.UI.10: Refine and Verify Toast Notification System**
             *   **Goal:** Ensure a reliable, accessible, and correctly displayed toast notification system for user feedback.
-            *   **Status:** In Progress
+            *   **Status:** COMPLETE
             *   **Details:**
                 *   Switched from `react-hot-toast` to `@radix-ui/react-toast` to address stacking context issues with modals.
                 *   Refactored `webApp/src/components/ui/toast.tsx` to a simplified implementation using Radix UI primitives directly, removing prior complex state management. The import mechanism for Radix primitives was corrected, and an imperative API (`toast.success()`, `toast.error()`, `toast.default()`) was established and integrated across relevant files (`useTaskHooks.ts`, `TaskDetailView.tsx`, `TodayView.tsx`, `FastTaskInput.tsx`, `useTaskStore.ts`).
@@ -243,6 +247,7 @@ This file tracks the current tasks, steps, checklists, and component lists for t
    * **Task 5.2: Implement Task Store with New Architecture**
       * **Goal:** Refactor task management to use the new state management approach
       * **Status:** PARTIAL - IN PROGRESS (Phases 1-3 Complete)
+      * **Detailed Plan:** See `memory-bank/clarity/implementation-plan-state-management.md`
       * **Implementation Plan:**
          * **Phase 1: ✅ Core Store Implementation** 
             * Created `useTaskStore.ts` with local-first state
@@ -268,9 +273,8 @@ This file tracks the current tasks, steps, checklists, and component lists for t
          * Proper authentication for user_id availability
          * Toast notification system for sync feedback
       * **Estimated Timeline:** 6-9 days
-      * **Detailed Plan:** See `memory-bank/clarity/implementation-plan-state-management.md`
-   
-   * **Task 5.3: Extend Architecture to Other Entity Types**
+
+*   **Task 5.3: Extend Architecture to Other EntityTypes**
       * **Goal:** Apply the new state management pattern to other entity types (focus sessions, user preferences, etc.)
       * **Status:** To Do
       * **Dependency:** Successful implementation of Task 5.2
@@ -280,14 +284,154 @@ This file tracks the current tasks, steps, checklists, and component lists for t
          * Refactor relevant components
       * **Files Affected:** Various store and component files
 
+*   **Task 6: Re-architect TaskDetailView Save & State Management**
+    *   **Goal:** Refactor `TaskDetailView.tsx` to use React Hook Form for parent task field management and simplify save/close logic, improving robustness and maintainability, establishing a reference pattern for modal-based editors.
+    *   **Status:** Implementation of RHF for parent fields complete.
+    *   **Complexity:** Level 3
+    *   **Key Phases & Steps:**
+        1.  **Phase 1: Requirements & Design (Completed as part of interactive session)**
+            *   Identify generalized save functionality requirements.
+            *   Research and confirm React Hook Form as the key out-of-the-box solution.
+            *   Map out a simple, straightforward implementation strategy.
+            *   Define documentation strategy for the reference architecture. (See below)
+            *   Capture existing manual test plan for `TaskDetailView`. (See below)
+            *   Create a state diagram for the generalized object editor flow. (See below)
+        2.  **Phase 2: React Hook Form Integration for Parent Task (Completed)**
+            *   Confirmed `react-hook-form` is installed and correctly configured.
+            *   Defined RHF form data types/schema for the Task entity (editable fields).
+            *   Initialized `useForm` hook in `TaskDetailView.tsx`, managing default values from the fetched task and resetting appropriately.
+            *   Replaced existing `formData` state and `handleChange` logic with RHF `register` or `Controller` components for all parent task form fields.
+            *   Replaced manual `parentTaskHasChanges` memo with `formState.isDirty` from RHF.
+        3.  **Phase 3: Refactor Save Logic (Completed)**
+            *   Simplified the "Save Changes" button's `disabled` logic to primarily rely on `formState.isDirty` and relevant mutation loading states.
+            *   Refactored the `handleSave` function to utilize `handleSubmit(onValidParentSubmit)` pattern from RHF.
+            *   Implemented the `onValidParentSubmit` callback.
+        4.  **Phase 4: Subtask Interaction & `childOperationsOccurredInSessionRef` (Completed)**
+            *   Introduced `childOperationsOccurredInSessionRef = useRef(false)`.
+            *   Ensured subtask operations set `childOperationsOccurredInSessionRef.current = true`.
+            *   Reset `childOperationsOccurredInSessionRef.current = false` when the modal opens.
+        5.  **Phase 5: Cleanup & Testing (Largely Completed, ongoing verification)**
+            *   Removed old `formData` state and `parentTaskHasChanges` memo.
+            *   Removed overly complex logging or workarounds.
+            *   Thoroughly execute the captured manual test plan against the refactored component.
+            *   Document test results in `activeContext.md`.
+        6.  **Phase 6: Documentation (Partially complete with state diagram and test plan)**
+            *   Create a new markdown document detailing this RHF-based modal editing pattern as a reference architecture for future similar components.
+            *   Link to this new document from relevant guides like `ui-guide.md` or `api-data-guide.md`.
+        7.  **Phase 7: Implement Conditional Close/Cancel Logic (Deferred)**
+            *   **Goal:** Implement prompting mechanism before closing the modal if there are unsaved parent changes (`isDirty`) or unacknowledged child operations (`childOperationsOccurredInSessionRef`).
+            *   **Status:** To Do
+            *   **Details:** Modify `wrappedOnOpenChange` or a new cancel handler to check `isDirty` and `childOperationsOccurredInSessionRef`. If true, use `window.confirm()` or a custom modal to ask for confirmation before closing. If false, close directly.
+    *   **Files Affected (Primary):** `webApp/src/components/features/TaskDetail/TaskDetailView.tsx`.
+    *   **Supporting Files (Review/Minor Adjustments):** `webApp/src/api/hooks/useTaskHooks.ts`.
+    *   **New Files:** New reference architecture documentation file.
+    *   **Blocking:** Further complex feature additions to `TaskDetailView` until this refactor is complete and stable.
+
+*   **Task 7: Abstract TaskDetailView State Management into Reusable Hooks**
+    *   **Goal:** Abstract state management logic (RHF hooks for parent object, data fetching, save/close handlers, child list management including DND reordering and item CRUD) out of `TaskDetailView.tsx` into two new custom hooks: `useObjectEditManager` and `useReorderableList`. `TaskDetailView.tsx` should then become primarily a presentational component, consuming these hooks.
+    *   **Status:** Hook Development & Initial Integration Largely Complete. Linter Blockers Resolved. Pending Full Testing.
+    *   **Complexity:** Level 4 (involves creating generic, reusable hooks and refactoring a complex component)
+    *   **Depends On:** Successful completion and verification of Task 6 (robust internal state management in `TaskDetailView` which serves as the basis for abstraction).
+    *   **Key Benefits:** Improved separation of concerns, easier testing of view vs. logic, reusability of the state management patterns across the application (e.g., for future calendar event editing, managing checklist items, etc.), significant simplification of `TaskDetailView.tsx`.
+    *   **Documentation:** Conceptual design and API for these hooks is in `memory-bank/clarity/references/patterns/reusable-ui-logic-hooks.md` (Now updated to match implementation).
+    *   **Phases:**
+        1.  **Phase 1: Develop `useObjectEditManager` Hook (COMPLETED)**
+            *   Implement the hook based on the API defined in `reusable-ui-logic-hooks.md`.
+            *   Include generic typing, RHF integration, data lifecycle management (fetch, update, create), dirty state tracking, and save/cancel logic with confirmation for unsaved changes.
+            *   Write unit tests for the hook. (To Be Done)
+            *   **Follow-up/Refinements:**
+                *   Review and potentially refine `handleCancel` logic for edge cases or custom confirmation dialogs (current `window.confirm` is a good default).
+                *   Evaluate if `canSubmit` logic (`isDirty && !isSaving`) needs to be more flexible for scenarios where submission is allowed even if not "dirty". Current logic is generally appropriate for an edit manager.
+                *   Consider strategies for more explicit error communication from mutations if the default (consumer observing `mutation.error` or the hook's combined `error` state) proves insufficient in practice. (Current combined `error` is a good start; future enhancements could include specific error callbacks like `onUpdateError` or more granular error states if use cases demand it).
+        2.  **Phase 2: Develop `useReorderableList` Hook (COMPLETED)**
+            *   Implement the hook based on the API defined in `reusable-ui-logic-hooks.md`.
+            *   Include generic typing, `dnd-kit` integration, optimistic updates for reordering, data lifecycle (fetch list, update order, create item), and item ID/position accessors.
+            *   Write unit tests for the hook. (To Be Done)
+        3.  **Phase 3: Refactor `TaskDetailView.tsx` to use `useObjectEditManager` (Largely Complete - Minor adjustments and cleanup pending full testing)**
+            *   Replace the parent task editing logic (RHF setup, data fetching, save/cancel) with the `useObjectEditManager` hook.
+            *   Ensure all existing parent task functionalities are preserved.
+        4.  **Phase 4: Refactor `TaskDetailView.tsx` to use `useReorderableList` for Subtasks (Largely Complete - Minor adjustments and cleanup pending full testing)**
+            *   Replace the subtask list management logic (fetching, DND reordering, adding new subtasks) with the `useReorderableList` hook.
+            *   Ensure all existing subtask functionalities are preserved.
+        5.  **Phase 5: Integration Testing & Refinement (NEXT STEP)**
+            *   Thoroughly test the refactored `TaskDetailView.tsx` against the manual test plan in `memory-bank/clarity/testing/task-detail-view-test-plan.md`.
+            *   Address any issues arising from the integration.
+            *   Refine hook APIs if necessary based on practical application.
+        6.  **Phase 6: Documentation Update & Cleanup**
+            *   Update `reusable-ui-logic-hooks.md` with any API changes or implementation notes (Already done for current state).
+            *   Clean up `TaskDetailView.tsx`, removing any redundant code (Largely done).
+            *   Consider creating examples of how to use these hooks for other object types.
+    *   **Files Affected (Primary):** 
+        *   `webApp/src/components/features/TaskDetail/TaskDetailView.tsx` (major refactor)
+        *   `webApp/src/hooks/useObjectEditManager.ts` (new file)
+        *   `webApp/src/hooks/useReorderableList.ts` (new file)
+    *   **Future Scope:** Apply these hooks to other parts of the application where similar patterns exist.
+
+*   **Task 8: Review and Refine state management of `useObjectEditManager.ts` and `useReorderableList.ts`**
+    *   **Goal:** Ensure a clean and simple flow for managing state and modals.
+    *   **Status:** To Do
+    *   **Complexity:** Level 2-3
+    *   **Details:**
+        *   The agent planning the refactor to `useObjectEditManager.ts` and `useReorderableList.ts` ignored reference architecture, specifically `stateManagementFlow.md` and `stateManagementDesign.md`. We have many synchronous calls to the DB that are unnecessary.
+        *   The `childOperationsOccurredInSessionRef` flag correctly tracks that subtask changes have happened, influencing the "Cancel" prompt.
+        *   Review `memory-bank/clarity/diagrams/modal-editor-state-flow-v2.md` and identify any gaps that need to be filled.
+        *   Radically simplify the state management logic in `TaskDetail.md`.
+        *   Ensure `TaskDetail.md`, `stateManagementFlow.md` and `stateManagementDesign.md` are following established practices.
+        *   Implement the chosen refined UX.
+    *   **Files Affected:** `webApp/src/components/features/TaskDetail/TaskDetailView.tsx`, potentially `useObjectEditManager.ts` if its `canSubmit` logic needs to be influenced. 
+
+*   **Task 9: Refactor `updateSubtaskOrderMutation` for Asynchronous Database Writes (Follow-up from Task 7 Testing)**
+    *   **Goal:** Ensure that when subtask order is updated (e.g., via drag-and-drop in `TaskDetailView`), the database persistence operation is fully asynchronous and does not block the UI.
+    *   **Status:** To Do
+    *   **Complexity:** Level 2-3
+    *   **Details:**
+        *   Review the implementation of `useUpdateSubtaskOrder` (likely in `webApp/src/api/hooks/useTaskHooks.ts`) and any backend services (e.g., Supabase functions or direct API calls) it interacts with.
+        *   Modify the mutation and/or backend logic to ensure that the client-side operation can resolve quickly after initiating the reorder request, with the database write occurring asynchronously.
+        *   Optimistic updates are already in place via `useReorderableList`; this task focuses on the backend persistence part of the mutation.
+    *   **Files Affected:** `webApp/src/api/hooks/useTaskHooks.ts` (specifically `useUpdateSubtaskOrder`), potentially backend Supabase functions if applicable.
+
+*   **Task 10: BUG - Editing Subtask Closes Parent TaskDetailView Modal (Follow-up from Task 7 Testing - ST-6)**
+    *   **Goal:** Fix the bug where initiating an edit on a subtask item within the `TaskDetailView` modal incorrectly causes the entire modal to close.
+    *   **Status:** To Do (Bug)
+    *   **Complexity:** Level 2-3 (Bug Fix - potentially involves event propagation, state management interaction, or incorrect component unmounting/remounting)
+    *   **Observed Behavior (ST-6):**
+        *   User opens `TaskDetailView` for a parent task with subtasks.
+        *   User clicks the "Edit" button/icon on a specific `SubtaskItem`.
+        *   The entire `TaskDetailView` modal closes.
+    *   **Expected Behavior:**
+        *   The `TaskDetailView` modal REMAINS OPEN.
+        *   The specific `SubtaskItem` becomes editable inline (e.g., its text field becomes an input).
+        *   Alternatively, a smaller, focused modal/popover for editing just that subtask might appear, while the main modal remains open and visible beneath.
+    *   **Investigation Pointers:**
+        *   Review event handlers in `SubtaskItem.tsx` (or the component rendering subtasks if different) for the edit action. Is an event bubbling up and unintentionally triggering the `onOpenChange` of the main modal?
+        *   Check if any state changes related to starting an edit are causing a re-render that unmounts or closes `TaskDetailView`.
+        *   Ensure the `useReorderableList` hook or the `TaskDetailView`'s implementation of subtask editing correctly manages the edit state for individual items without interfering with the parent modal's visibility state.
+        *   Verify that `useObjectEditManager`'s `onOpenChange` handling isn't being inadvertently triggered.
+    *   **Files Affected (Likely):** `webApp/src/components/features/TaskDetail/TaskDetailView.tsx`, `webApp/src/components/features/TaskDetail/SubtaskItem.tsx` (or equivalent), potentially `webApp/src/hooks/useReorderableList.ts`.
+
+*   **Task 11: BUG - Parent Task Deletion Fails Due to Foreign Key Constraint (Follow-up from Task 7 Testing - OT-1)**
+    *   **Goal:** Resolve the foreign key constraint violation that occurs when attempting to delete a parent task that has subtasks.
+    *   **Status:** To Do (Bug - Critical)
+    *   **Complexity:** Level 2 (DB Schema / Mutation Logic)
+    *   **Observed Behavior (OT-1):**
+        *   User attempts to delete a parent task from `TaskDetailView`.
+        *   Deletion fails with a database error: `Object { code: "23503", details: 'Key is still referenced from table "tasks".', hint: null, message: 'update or delete on table "tasks" violates foreign key constraint "tasks_parent_task_id_fkey" on table "tasks"' }`.
+    *   **Expected Behavior:**
+        *   The parent task and all its associated subtasks are successfully deleted from the database.
+        *   Alternatively, if cascading delete is not desired, the user should be prompted to delete subtasks first or the deletion should be blocked with a clear message.
+    *   **Investigation Pointers & Solution Options:**
+        1.  **Database Schema Change (Preferred for simplicity if appropriate):** Modify the `tasks_parent_task_id_fkey` foreign key constraint on the `tasks` table in `data/db/ddl.sql` to include `ON DELETE CASCADE`. This will automatically delete subtasks when their parent is deleted. This requires a database migration.
+        2.  **Backend Logic Change:** If cascading delete at the DB level is not desired, the `deleteTask` mutation (likely in `useTaskHooks.ts` or a Supabase function it calls) needs to be updated. It would first have to delete all subtasks associated with the parent_task_id, and then delete the parent task itself. This might involve multiple DB calls.
+        3.  **Frontend Logic Change (Least Preferred for this type of error):** Block deletion if subtasks exist and inform the user. This is less ideal as it puts the burden on the user to manually clean up.
+    *   **Files Affected (Likely):** `data/db/ddl.sql` (for schema change), or `webApp/src/api/hooks/useTaskHooks.ts` (for mutation logic change), or Supabase edge functions if the delete logic resides there.
+
 ## III. Agent Memory & Tooling Enhancement (Supabase Integration)
     *   **Status:** Planning Complete - **Implementation ongoing, critical for Chat Panel and future agent capabilities.**
 
 **1. Supabase Schema Design/Refinement (Agent Memory, Prompts, Tasks)**
     *   **Task 1.1: Define Schema for Agent Memory**
-        *   **Goal:** Design tables for agent conversation history & summaries.
-        *   **Action:** Draft DDL for `agent_sessions` (session_id, agent_id, user_id, created_at, summary) and `agent_chat_messages` (message_id, session_id, timestamp, sender_type, content_type, content, tokens). Consider LangChain `ChatMessageHistory` compatibility. Update `ddl.sql`.
-        *   **Output:** DDL for agent memory tables.
+        *   **Goal:** Design tables & stores for `agent_sessions` (session_id, agent_id, user_id, created_at, summary) and `agent_chat_messages` (message_id, session_id, timestamp, sender_type, content_type, content, tokens). Consider LangChain `ChatMessageHistory` compatibility. Update `ddl.sql`.
+        *   **Output:** DDL & store schema for agent memory tables.
     *   **Task 1.2: Define Schema for Storing Agent Configurations/Prompts**
         *   **Goal:** Design tables for core system prompts and user-specific agent configurations/overrides. Move agent context and prompts to PostgreSQL (Supabase) with local caching.
         *   **Action:** Draft DDL for `agent_core_prompts` (prompt_id, agent_name, prompt_type, content, version) and `user_agent_configs` (config_id, user_id, agent_name, custom_instructions, tool_preferences). Update `ddl.sql`.

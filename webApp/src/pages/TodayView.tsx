@@ -9,6 +9,7 @@ import {
   DragEndEvent,
 } from '@dnd-kit/core';
 import {
+  arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
@@ -27,7 +28,7 @@ import { Button } from '@/components/ui/Button';
 import { useTaskStore } from '@/stores/useTaskStore';
 import { useTaskStoreInitializer } from '@/hooks/useTaskStoreInitializer';
 
-import { useCreateFocusSession } from '@/api/hooks/useTaskHooks';
+import { useCreateFocusSession, useUpdateTaskOrder } from '@/api/hooks/useTaskHooks';
 import type { Task, FocusSession } from '@/api/types';
 import { Spinner } from '@/components/ui';
 
@@ -67,18 +68,31 @@ const TodayView: React.FC = () => {
   const {
     updateTask,
     deleteTask,
-    getTopLevelTasks,
-    getTaskById,
     getSubtasksByParentId,
   } = useTaskStore(state => ({
     updateTask: state.updateTask,
     deleteTask: state.deleteTask,
-    getTopLevelTasks: state.getTopLevelTasks,
-    getTaskById: state.getTaskById,
     getSubtasksByParentId: state.getSubtasksByParentId,
   }));
   
+  // Subscribe to the actual task data
+  const topLevelTasksFromStore = useTaskStore(state => state.getTopLevelTasks());
+
+  // Log topLevelTasksFromStore and taskDataSignature when they change
+  useEffect(() => {
+    console.log('[TodayView] topLevelTasksFromStore updated:', JSON.stringify(topLevelTasksFromStore.map(t => ({id: t.id, title: t.title, completed: t.completed, status: t.status})), null, 2));
+  }, [topLevelTasksFromStore]);
+
   const { mutate: createFocusSession } = useCreateFocusSession();
+  const { mutate: updateTaskOrderMutation } = useUpdateTaskOrder();
+
+  // Create a simplified signature of relevant task data
+  const taskDataSignature = useMemo(() => {
+    if (!initialized || !topLevelTasksFromStore) return '';
+    const signature = topLevelTasksFromStore.map(t => t.id + '-' + t.title + '-' + t.completed + '-' + t.status).join('|');
+    console.log('[TodayView] taskDataSignature calculated:', signature);
+    return signature;
+  }, [initialized, topLevelTasksFromStore]);
 
   // --- Component Local State for Modal Visibility ---
   const [currentDetailTaskId, setCurrentDetailTaskId] = useState<string | null>(null);
@@ -171,11 +185,11 @@ const TodayView: React.FC = () => {
 
   // --- Derived Data (View Models for TaskCards) ---
   const displayTasksWithSubtasks = useMemo(() => {
+    console.log('[TodayView] Recalculating displayTasksWithSubtasks...'); // Log when this recalculates
     if (!initialized) return [];
-    const topLevelTasks = getTopLevelTasks();
-    if (!topLevelTasks || topLevelTasks.length === 0) return [];
+    if (!topLevelTasksFromStore || topLevelTasksFromStore.length === 0) return [];
 
-    return topLevelTasks.map(task => {
+    return topLevelTasksFromStore.map(task => {
       const subtasks = getSubtasksByParentId(task.id);
       return mapTaskToTaskCardViewModel(
         task, 
@@ -192,12 +206,12 @@ const TodayView: React.FC = () => {
     });
   }, [
     initialized,
-    getTopLevelTasks,
+    taskDataSignature, // Using the new signature
     getSubtasksByParentId,
     focusedTaskId, 
     selectedTaskIds, 
     handleStartTaskLegacy,
-    openDetailModalForTask, // Dependency
+    openDetailModalForTask,
     toggleSelectedTask,
     handleMarkComplete,
     handleDeleteTask,
@@ -247,16 +261,54 @@ const TodayView: React.FC = () => {
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const activeTask = getTaskById(active.id.toString());
-    const overTask = getTaskById(over.id.toString());
-    if (!activeTask || !overTask) return;
-    const overPosition = overTask.position ?? 0;
-    updateTask(active.id.toString(), { position: overPosition });
-    const allTopLevelTasks = getTopLevelTasks();
-    allTopLevelTasks.forEach((task, index) => {
-      if (task.position !== index) updateTask(task.id, { position: index });
-    });
+
+    if (active.id !== over?.id && over) {
+      const currentTasks = topLevelTasksFromStore;
+      const oldIndex = currentTasks.findIndex(task => task.id === active.id);
+      const newIndex = currentTasks.findIndex(task => task.id === over.id);
+
+      if (oldIndex === -1 || newIndex === -1) {
+        console.warn('[TodayView] handleDragEnd: Task not found in current list. Aborting.');
+        return;
+      }
+
+      // 1. Create the new optimistic order
+      const optimisticallyReorderedTasks = arrayMove(currentTasks, oldIndex, newIndex);
+
+      // 2. Optimistically update the Zustand store IMMEDIATELY
+      // This ensures that topLevelTasksFromStore selector will return the new order quickly.
+      const storeUpdates: { [id: string]: Partial<Task> } = {};
+      optimisticallyReorderedTasks.forEach((task, index) => {
+        if (task.position !== index) { // Check if position actually changed
+          storeUpdates[task.id] = { position: index }; // Collect updates for Zustand state
+          // Call the existing updateTask which handles local state and pendingChanges for sync
+          useTaskStore.getState().updateTask(task.id, { position: index });
+        }
+      });
+
+      // 3. Prepare updates for the backend batch operation
+      const taskOrderUpdatesForBackend: Array<{ id: string; position: number }> = optimisticallyReorderedTasks.map((task, index) => ({
+        id: task.id,
+        position: index,
+      }));
+      
+      // 4. Call the mutation to update backend
+      if (taskOrderUpdatesForBackend.length > 0) {
+        console.log('[TodayView] Calling updateTaskOrderMutation with:', taskOrderUpdatesForBackend);
+        updateTaskOrderMutation(taskOrderUpdatesForBackend, {
+          onSuccess: () => {
+            console.log('[TodayView] updateTaskOrderMutation successful. Query invalidation should refresh the store from server.');
+            // Query invalidation is handled by the useUpdateTaskOrder hook.
+          },
+          onError: (error) => {
+            console.error('[TodayView] updateTaskOrderMutation failed:', error);
+            toast.error("Failed to reorder tasks. Please try again.");
+            // Consider a strategy to revert optimistic updates if backend fails, 
+            // e.g., by refetching or rolling back store changes if the hook doesn't handle it.
+          }
+        });
+      }
+    }
   }
 
   if (isLoadingTasks) {
@@ -334,7 +386,6 @@ const TodayView: React.FC = () => {
               }
             }}
             onTaskUpdated={() => {}} 
-            onTaskDeleted={() => {}}
             onDeleteTaskFromDetail={handleDeleteTask}
           />
         )}

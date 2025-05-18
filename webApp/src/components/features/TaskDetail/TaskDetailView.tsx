@@ -1,6 +1,7 @@
-import React, { useState, useEffect, ChangeEvent, FormEvent, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as RadixDialog from '@radix-ui/react-dialog';
 import { Cross2Icon, TrashIcon } from '@radix-ui/react-icons';
+import { z } from 'zod';
 import { useFetchTaskById, useUpdateTask, useFetchSubtasks, useCreateTask, useUpdateSubtaskOrder } from '@/api/hooks/useTaskHooks';
 import { Task, UpdateTaskData, TaskStatus, TaskPriority, NewTaskData } from '@/api/types';
 import { Button } from '@/components/ui/Button';
@@ -10,21 +11,19 @@ import { Label } from '@/components/ui/Label';
 import { Spinner } from '@/components/ui/Spinner';
 import { toast } from '@/components/ui/toast';
 import { SubtaskItem } from './SubtaskItem';
+import { useObjectEditManager, ObjectEditManagerOptions } from '@/hooks/useObjectEditManager';
+import { useReorderableList, ReorderableListOptions } from '@/hooks/useReorderableList';
+import { Controller } from 'react-hook-form';
+import { UseMutationResult as ReactQueryUseMutationResult } from '@tanstack/react-query';
 
 // Dnd-kit imports
 import {
   DndContext,
   closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
+  UniqueIdentifier,
 } from '@dnd-kit/core';
 import {
-  arrayMove,
   SortableContext,
-  sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 
@@ -33,11 +32,22 @@ interface TaskDetailViewProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   onTaskUpdated: () => void;
-  onTaskDeleted: () => void;
   onDeleteTaskFromDetail?: (taskId: string) => void;
 }
 
-const ALL_STATUSES: TaskStatus[] = ['pending', 'planning', 'in_progress', 'completed', 'skipped', 'deferred'];
+// Define the type for our form data
+export type TaskFormData = {
+  title: string;
+  description?: string | null;
+  notes?: string | null;
+  category?: string | null;
+  due_date?: string | null;
+  status: TaskStatus;
+  priority: TaskPriority;
+};
+
+// Define constants for enum values BEFORE using them in the schema
+const ALL_STATUSES = ['pending', 'planning', 'in_progress', 'completed', 'skipped', 'deferred'] as const;
 const ALL_PRIORITIES: { label: string; value: TaskPriority }[] = [
   { label: 'None', value: 0 },
   { label: 'Low', value: 1 },
@@ -45,14 +55,65 @@ const ALL_PRIORITIES: { label: string; value: TaskPriority }[] = [
   { label: 'High', value: 3 },
 ];
 
-const initialFormState: Partial<Task> = {
-  title: '',
-  description: '',
-  notes: '',
-  category: '',
-  due_date: '',
-  status: 'pending',
-  priority: 0,
+// Optional: Define Zod schema for validation
+const taskFormSchema = z.object({
+  title: z.string().min(1, 'Title is required'),
+  description: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
+  category: z.string().nullable().optional(),
+  due_date: z.string().nullable().optional(), 
+  status: z.enum(ALL_STATUSES),
+  priority: z.union([
+    z.literal(0),
+    z.literal(1),
+    z.literal(2),
+    z.literal(3),
+  ]),
+});
+
+// --- Transformation Functions for useObjectEditManager ---
+const transformDataToFormData = (task: Task | null): TaskFormData => {
+  if (!task) { // Handle null case, return default form data
+    return {
+      title: '',
+      description: '',
+      notes: '',
+      category: '',
+      due_date: '',
+      status: 'pending',
+      priority: 0,
+    };
+  }
+  return {
+    title: task.title || '',
+    description: task.description || '',
+    notes: task.notes || '',
+    category: task.category || '',
+    due_date: task.due_date ? task.due_date.split('T')[0] : '',
+    status: task.status || 'pending',
+    priority: task.priority || 0,
+  };
+};
+
+const transformFormDataToUpdateData = (formData: TaskFormData, originalTask: Task | null): UpdateTaskData => {
+  const updates: UpdateTaskData = {};
+  if (!originalTask) return updates; // Should not happen in an update scenario
+
+  if (formData.title !== originalTask.title) updates.title = formData.title;
+  if (formData.description !== (originalTask.description || '')) updates.description = formData.description;
+  if (formData.notes !== (originalTask.notes || '')) updates.notes = formData.notes;
+  if (formData.category !== (originalTask.category || '')) updates.category = formData.category;
+  
+  const formDueDateString = formData.due_date ? formData.due_date : null;
+  const taskDueDateString = originalTask.due_date ? originalTask.due_date.split('T')[0] : null;
+  if (formDueDateString !== taskDueDateString) {
+    updates.due_date = formDueDateString ? new Date(formDueDateString).toISOString() : null;
+  }
+
+  if (formData.status !== originalTask.status) updates.status = formData.status;
+  if (formData.priority !== originalTask.priority) updates.priority = formData.priority;
+  
+  return updates;
 };
 
 export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
@@ -60,175 +121,161 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
   isOpen,
   onOpenChange,
   onTaskUpdated,
-  //onTaskDeleted, Unused, commented out.
   onDeleteTaskFromDetail,
 }) => {
-  const { data: task, isLoading, error, refetch } = useFetchTaskById(taskId);
-  const updateTaskMutation = useUpdateTask();
-  const createTaskMutation = useCreateTask();
+  console.log(`[TaskDetailView] Render. taskId: ${taskId}, isOpen: ${isOpen}`);
 
-  const [formData, setFormData] = useState<Partial<Task>>(initialFormState);
-  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
-
-  const subtasksWereModifiedInThisSessionRef = useRef(false);
-
-  const { 
-    data: subtasks,
-    isLoading: isLoadingSubtasks,
-    refetch: refetchSubtasks,
-    error: subtasksError
-  } = useFetchSubtasks(task?.id);
-
-  const updateSubtaskOrderMutation = useUpdateSubtaskOrder();
-
-  // State for optimistic UI updates during DND
-  const [optimisticSubtasks, setOptimisticSubtasks] = useState<Task[] | undefined>(undefined);
-
-  useEffect(() => {
-    if (isOpen && taskId) {
-      refetch();
-      refetchSubtasks(); // Ensure subtasks are fresh when modal opens
-      subtasksWereModifiedInThisSessionRef.current = false; // Reset flag
-    }
-  }, [isOpen, taskId, refetch, refetchSubtasks]);
-
-  useEffect(() => {
-    if (task) {
-      setFormData({
-        title: task.title || '',
-        description: task.description || '',
-        notes: task.notes || '',
-        category: task.category || '',
-        due_date: task.due_date ? task.due_date.split('T')[0] : '',
-        status: task.status || 'pending',
-        priority: task.priority || 0,
-      });
-    } else {
-      setFormData(initialFormState);
-    }
-  }, [task]);
-
-  useEffect(() => {
-    if (subtasks) {
-      setOptimisticSubtasks(subtasks);
-      console.log('[TaskDetailView] useEffect setting optimisticSubtasks from subtasks prop:', JSON.stringify(subtasks?.map(st => ({id: st.id, title: st.title, pos: st.subtask_position}))));
-    }
-  }, [subtasks]);
-
-  // Dnd-kit sensors
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
-  const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: name === 'priority' ? parseInt(value, 10) as TaskPriority : value,
-    }));
-  };
-
-  const parentTaskHasChanges = useMemo(() => {
-    if (!task || !formData) return false;
-    if (formData.title !== undefined && formData.title !== task.title) return true;
-    if (formData.description !== undefined && formData.description !== (task.description || '')) return true;
-    if (formData.notes !== undefined && formData.notes !== (task.notes || '')) return true;
-    if (formData.category !== undefined && formData.category !== (task.category || '')) return true;
-    const formDueDate = formData.due_date ? new Date(formData.due_date).toISOString() : null;
-    const taskDueDate = task.due_date ? new Date(task.due_date).toISOString() : null;
-    if (formDueDate !== taskDueDate) return true;
-    if (formData.status !== undefined && formData.status !== task.status) return true;
-    if (formData.priority !== undefined && formData.priority !== task.priority) return true;
-    return false;
-  }, [task, formData]);
-
-  const handleSave = async () => {
-    console.log('[TaskDetailView] handleSave triggered.');
-    console.log('[TaskDetailView] Current state before save attempt:');
-    console.log('  taskId:', taskId);
-    console.log('  task available:', !!task);
-    console.log('  formData:', JSON.stringify(formData));
-    console.log('  original task data:', JSON.stringify(task));
-    console.log('  isLoading (fetch task):', isLoading);
-    console.log('  updateTaskMutation.isPending:', updateTaskMutation.isPending);
-    console.log('  createTaskMutation.isPending:', createTaskMutation.isPending);
-    console.log('  parentTaskHasChanges (memoized):', parentTaskHasChanges); 
-    console.log('  subtasksWereModifiedInThisSessionRef.current:', subtasksWereModifiedInThisSessionRef.current);
-
-    if (!taskId || !task) {
-      console.warn('[TaskDetailView] handleSave: No taskId or task data. Aborting.');
-      return;
-    }
-
-    // Recalculate updates for parent task
-    const updates: UpdateTaskData = {};
-    if (formData.title !== undefined && formData.title !== task.title) updates.title = formData.title;
-    if (formData.description !== undefined && formData.description !== (task.description || '')) updates.description = formData.description;
-    if (formData.notes !== undefined && formData.notes !== (task.notes || '')) updates.notes = formData.notes;
-    if (formData.category !== undefined && formData.category !== (task.category || '')) updates.category = formData.category;
-    const formDueDate = formData.due_date ? new Date(formData.due_date).toISOString() : null;
-    const taskDueDate = task.due_date ? new Date(task.due_date).toISOString() : null;
-    if (formDueDate !== taskDueDate) updates.due_date = formDueDate;
-    if (formData.status !== undefined && formData.status !== task.status) updates.status = formData.status as TaskStatus;
-    if (formData.priority !== undefined && formData.priority !== task.priority) updates.priority = formData.priority as TaskPriority;
-    
-    console.log('[TaskDetailView] Calculated updates object:', JSON.stringify(updates));
-    const actualParentHasChanges = Object.keys(updates).length > 0;
-    console.log('[TaskDetailView] actualParentHasChanges (calculated now):', actualParentHasChanges);
-
-    if (!actualParentHasChanges) {
-      console.log('[TaskDetailView] No actual parent task changes detected.');
-      if (subtasksWereModifiedInThisSessionRef.current) {
-        console.log('[TaskDetailView] Subtasks were modified. Closing modal.');
-        onOpenChange(false); 
-        subtasksWereModifiedInThisSessionRef.current = false; 
-      } else {
-        console.log('[TaskDetailView] No subtask changes either. Toasting "No changes to save." with new toast function');
-        toast.default('No changes to save.', undefined, { duration: 3000 });
-      }
-      return;
-    }
-
-    console.log('[TaskDetailView] Parent task has changes. Attempting mutation.');
-    try {
-      console.log('[TaskDetailView] Calling updateTaskMutation.mutateAsync with id:', taskId, 'and updates:', JSON.stringify(updates));
-      await updateTaskMutation.mutateAsync({ id: taskId, updates });
-      console.log('[TaskDetailView] updateTaskMutation.mutateAsync Succeeded.');
-      
-      if (onTaskUpdated) {
-        console.log('[TaskDetailView] Calling onTaskUpdated callback (moved before toast for testing).');
-        onTaskUpdated();
-      }
-      
-      console.log('[TaskDetailView] Attempting new toast function...');
+  const objectManagerOptions: ObjectEditManagerOptions<Task, TaskFormData, UpdateTaskData> = {
+    objectType: 'Task',
+    objectId: taskId,
+    fetchQueryHook: useFetchTaskById as (id: string | null) => import('@tanstack/react-query').UseQueryResult<Task | null, Error>,
+    updateMutationHook: useUpdateTask,
+    zodSchema: taskFormSchema,
+    defaultValues: {
+      title: '',
+      description: '',
+      notes: '',
+      category: '',
+      due_date: '',
+      status: 'pending',
+      priority: 0,
+    },
+    transformDataToFormData,
+    transformFormDataToUpdateData,
+    onSaveSuccess: (_savedTask, _isNew) => {
       toast.default(
         'Task Updated',
         'Your task has been successfully updated.',
       );
-      console.log('[TaskDetailView] new toast call completed.');
-
-      subtasksWereModifiedInThisSessionRef.current = false; 
+      if (onTaskUpdated) onTaskUpdated();
       onOpenChange(false);
-      
-    } catch (err) {
-      console.error('[TaskDetailView] updateTaskMutation.mutateAsync FAILED. Error in handleSave catch block:', err);
-      toast.error(
-        'Error Updating Task',
-        (err instanceof Error) ? err.message : 'An unexpected error occurred.',
-      );
-      if (err instanceof Error) {
-        console.error('[TaskDetailView] Error name:', err.name);
-        console.error('[TaskDetailView] Error message:', err.message);
-        console.error('[TaskDetailView] Error stack:', err.stack);
-      } else {
-        console.error('[TaskDetailView] Caught error is not an instance of Error:', err);
-      }
+    },
+    onClose: () => onOpenChange(false),
+    onLoadError: (error) => {
+        toast.error('Error Loading Task', error.message);
     }
   };
-  
+
+  const {
+    formMethods,
+    originalData: task,
+    isLoading: isLoadingTaskData,
+    isFetching: isFetchingTask,
+    isSaving: isSavingTask,
+    error: taskError,
+    handleSave: handleSaveTask,
+    handleCancel: handleCancelEdit,
+    isDirty: isTaskFormDirty,
+    canSubmit: canSubmitTask,
+  } = useObjectEditManager(objectManagerOptions);
+
+  const { register, control, formState: { errors } } = formMethods;
+
+  const wrappedOnOpenChange = useCallback((open: boolean) => {
+    console.log(`[TaskDetailView] wrappedOnOpenChange called with: ${open}. Current isOpen prop: ${isOpen}`);
+    if (!open && isTaskFormDirty) {
+        handleCancelEdit();
+    } else {
+        onOpenChange(open);
+    }
+  }, [onOpenChange, isOpen, isTaskFormDirty, handleCancelEdit]);
+
+  // --- Subtask Management with useReorderableList ---
+  const subtasksWereModifiedInThisSessionRef = useRef(false);
+
+  const adaptedUpdateSubtaskOrderHook = useCallback(() => {
+    const originalMutation = useUpdateSubtaskOrder();
+    return {
+      ...originalMutation,
+      mutate: (variables: { parentId: string | null; orderedItems: Array<{ id: UniqueIdentifier; position: number } & Partial<Task>> }, 
+               options?: import('@tanstack/react-query').MutateOptions<Task[], Error, { parentTaskId: string; orderedSubtasks: { id: string; subtask_position: number; }[] }, { previousTasks?: Task[]; }>) => {
+        if (!variables.parentId) {
+          console.error("Parent ID is null for subtask order update.");
+          if (options?.onError) options.onError(new Error("Parent ID is null"), { parentTaskId: '', orderedSubtasks: [] }, undefined /* context */);
+          return;
+        }
+        const actualPayload = {
+          parentTaskId: variables.parentId,
+          orderedSubtasks: variables.orderedItems.map(item => ({ id: item.id as string, subtask_position: item.position })),
+        };
+        originalMutation.mutate(actualPayload, options);
+      },
+      mutateAsync: async (variables: { parentId: string | null; orderedItems: Array<{ id: UniqueIdentifier; position: number } & Partial<Task>> }, 
+                          options?: import('@tanstack/react-query').MutateOptions<Task[], Error, { parentTaskId: string; orderedSubtasks: { id: string; subtask_position: number; }[] }, { previousTasks?: Task[]; }>) => {
+        if (!variables.parentId) {
+          return Promise.reject(new Error("Parent ID is null for subtask order update."));
+        }
+        const actualPayload = {
+          parentTaskId: variables.parentId,
+          orderedSubtasks: variables.orderedItems.map(item => ({ id: item.id as string, subtask_position: item.position })),
+        };
+        return originalMutation.mutateAsync(actualPayload, options);
+      },
+    } as ReactQueryUseMutationResult<Task[], Error, { parentId: string | null; orderedItems: Array<{ id: UniqueIdentifier; position: number } & Partial<Task>> }, unknown>;
+  }, []);
+
+  const adaptedCreateSubtaskHook = useCallback(() => {
+    const originalMutation = useCreateTask();
+    return {
+      ...originalMutation,
+      mutate: (variables: { parentId: string | null; newItem: Omit<NewTaskData, "user_id">; position?: number },
+               options?: import('@tanstack/react-query').MutateOptions<Task, Error, Omit<NewTaskData, "user_id">, unknown>) => {
+        const { parentId, newItem, position } = variables;
+        const actualPayload: Omit<NewTaskData, "user_id"> = { ...newItem, parent_task_id: parentId, subtask_position: position };
+        originalMutation.mutate(actualPayload, options);
+      },
+      mutateAsync: async (variables: { parentId: string | null; newItem: Omit<NewTaskData, "user_id">; position?: number },
+                          options?: import('@tanstack/react-query').MutateOptions<Task, Error, Omit<NewTaskData, "user_id">, unknown>) => {
+        const { parentId, newItem, position } = variables;
+        const actualPayload: Omit<NewTaskData, "user_id"> = { ...newItem, parent_task_id: parentId, subtask_position: position };
+        return originalMutation.mutateAsync(actualPayload, options);
+      },
+    } as ReactQueryUseMutationResult<Task, Error, { parentId: string | null; newItem: Omit<NewTaskData, "user_id">; position?: number }, unknown>;
+  }, []);
+
+  const sublistOptions: ReorderableListOptions<Task, Omit<NewTaskData, 'user_id'>> = {
+    listName: 'Subtasks',
+    parentObjectId: task?.id || null,
+    fetchListQueryHook: useFetchSubtasks,
+    updateOrderMutationHook: adaptedUpdateSubtaskOrderHook,
+    createItemMutationHook: adaptedCreateSubtaskHook,
+    getItemId: (item: Task) => item.id,
+    getItemPosition: (item: Task) => item.subtask_position || 0,
+    getNewItemPosition: (items: Task[], _newItemData: Omit<NewTaskData, 'user_id'>) => items.length + 1,
+    onReorderCommit: (_reorderedItems) => {
+      toast.default('Subtask order saved!');
+      subtasksWereModifiedInThisSessionRef.current = true;
+    },
+    onItemAdded: (_newItem) => {
+      toast.default('Subtask Added!');
+      subtasksWereModifiedInThisSessionRef.current = true;
+      setNewSubtaskTitle('');
+    },
+    onFetchError: (error) => {
+      toast.error('Error loading subtasks', error.message);
+    },
+  };
+
+  const {
+    items: subtasks,
+    isLoading: isLoadingSubtasks,
+    isAddingItem: isAddingSubtask,
+    error: subtasksError,
+    dndSensors: subtaskDndSensors,
+    handleDragStart: handleSubtaskDragStart,
+    handleDragEnd: handleSubtaskDragEnd,
+    handleAddItem: handleAddSubtaskOptimistic,
+    refetchList: refetchSubtasks,
+  } = useReorderableList<Task, Omit<NewTaskData, 'user_id'>>(sublistOptions);
+
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
+
+  useEffect(() => {
+    if (isOpen && taskId) {
+      subtasksWereModifiedInThisSessionRef.current = false;
+    }
+  }, [isOpen, taskId]);
+
   const handleDeleteClick = () => {
     if (taskId && onDeleteTaskFromDetail) {
         if (window.confirm('Are you sure you want to delete this task?')) {
@@ -237,207 +284,146 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
     }
   };
 
-  const handleAddSubtask = async () => {
-    if (!newSubtaskTitle.trim() || !task) return;
+  const handleInitiateAddSubtask = async () => {
+    if (!newSubtaskTitle.trim() || !task || !handleAddSubtaskOptimistic) return;
 
     const newSubtaskData: Omit<NewTaskData, 'user_id'> = {
       title: newSubtaskTitle.trim(),
-      parent_task_id: task.id,
-      status: 'pending',
-      priority: task.priority || 0,
-      subtask_position: (optimisticSubtasks?.length || subtasks?.length || 0) + 1,
+      status: 'pending', 
+      priority: task.priority || 0, 
     };
 
     try {
-      await createTaskMutation.mutateAsync(newSubtaskData);
-      toast.default('Subtask Added!');
-      setNewSubtaskTitle('');
-      refetchSubtasks();
-      subtasksWereModifiedInThisSessionRef.current = true;
+      await handleAddSubtaskOptimistic(newSubtaskData);
     } catch (err) {
-      toast.error('Failed to add subtask', (err instanceof Error) ? err.message : undefined);
-      console.error("Failed to add subtask:", err);
-    }
-  };
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    console.log('[TaskDetailView] handleDragEnd. Active:', active.id, 'Over:', over?.id);
-    console.log('[TaskDetailView] optimisticSubtasks at start of dragEnd:', JSON.stringify(optimisticSubtasks?.map(st => ({id: st.id, title: st.title, pos: st.subtask_position}))));
-
-    if (active.id !== over?.id && optimisticSubtasks && task && over) {
-      const currentSubtasksForReorder = optimisticSubtasks;
-      const oldIndex = currentSubtasksForReorder.findIndex((item) => item.id === active.id);
-      const newIndex = currentSubtasksForReorder.findIndex((item) => item.id === over.id);
-
-      console.log('[TaskDetailView] oldIndex:', oldIndex, 'newIndex:', newIndex);
-      if (oldIndex === -1 || newIndex === -1) {
-        console.warn('[TaskDetailView] Aborting dragEnd: index not found.');
-        return;
-      }
-
-      const newOrderedSubtasksForBackend = arrayMove(currentSubtasksForReorder, oldIndex, newIndex);
-      console.log('[TaskDetailView] Calculated newOrderedSubtasksForBackend:', JSON.stringify(newOrderedSubtasksForBackend.map(st => ({id: st.id, title: st.title, pos: st.subtask_position}))));
-      
-      setOptimisticSubtasks(newOrderedSubtasksForBackend);
-      console.log('[TaskDetailView] Optimistically set optimisticSubtasks.');
-
-      const subtasksToUpdate = newOrderedSubtasksForBackend.map((sub, index) => ({
-        id: sub.id,
-        subtask_position: index + 1,
-      }));
-      console.log('[TaskDetailView] Calling updateSubtaskOrderMutation with parentTaskId:', task.id, 'payload:', JSON.stringify(subtasksToUpdate));
-
-      updateSubtaskOrderMutation.mutate(
-        { parentTaskId: task.id, orderedSubtasks: subtasksToUpdate },
-        {
-          onSuccess: (_updatedTasksFromServer) => {
-            console.log('[TaskDetailView] updateSubtaskOrderMutation onSuccess. Server response:', JSON.stringify(_updatedTasksFromServer));
-            toast.default('Subtask order saved!');
-            console.log('[TaskDetailView] Calling refetchSubtasks after mutation success.');
-            refetchSubtasks();
-            subtasksWereModifiedInThisSessionRef.current = true;
-          },
-          onError: (error) => {
-            console.error('[TaskDetailView] updateSubtaskOrderMutation onError. Error:', error.message);
-            toast.error('Failed to save subtask order', error.message);
-            console.log('[TaskDetailView] Reverting optimisticSubtasks due to error. Current server state of subtasks:', JSON.stringify(subtasks));
-            setOptimisticSubtasks(subtasks);
-            console.log('[TaskDetailView] Calling refetchSubtasks after mutation error to ensure consistency.');
-            refetchSubtasks();
-          },
-        }
-      );
-    } else {
-      console.log('[TaskDetailView] handleDragEnd: active.id === over?.id or optimisticSubtasks/task/over missing.');
+      toast.error('Failed to add subtask', (err instanceof Error) ? err.message : 'Unknown error');
+      console.error("[TaskDetailView] Failed to add subtask via hook:", err);
     }
   };
 
   if (!isOpen) return null;
 
+  const isSaveButtonDisabled = !canSubmitTask || isSavingTask;
+  const displayTaskTitle = task ? 'Edit Task' : isLoadingTaskData ? 'Loading...' : 'Task Details';
+
   return (
-    <RadixDialog.Root open={isOpen} onOpenChange={onOpenChange}>
+    <RadixDialog.Root open={isOpen} onOpenChange={wrappedOnOpenChange}>
       <RadixDialog.Portal>
         <RadixDialog.Overlay className="fixed inset-0 bg-black/50 data-[state=open]:animate-overlayShow" />
         <RadixDialog.Content className="fixed top-1/2 left-1/2 w-[90vw] max-w-lg max-h-[85vh] -translate-x-1/2 -translate-y-1/2 rounded-lg bg-white dark:bg-gray-800 p-6 shadow-lg data-[state=open]:animate-contentShow focus:outline-none flex flex-col">
           <RadixDialog.Title className="text-xl font-semibold text-gray-900 dark:text-white mb-1">
-            {task ? 'Edit Task' : isLoading? 'Loading...' : 'Task Details'}
+            {displayTaskTitle}
           </RadixDialog.Title>
           <RadixDialog.Description className="text-sm text-gray-500 dark:text-gray-400 mb-4">
             View and edit task information.
           </RadixDialog.Description>
 
-          {isLoading && (
+          {isFetchingTask && (
             <div className="flex items-center justify-center h-40">
               <Spinner size={32} />
               <p className="ml-2">Loading task details...</p>
             </div>
           )}
 
-          {error && !isLoading && (
+          {taskError && !isFetchingTask && (
             <div className="text-red-500">
-              Error loading task: {error.message}
+              Error: {taskError.message}
             </div>
           )}
           
-          {!taskId && isOpen && !isLoading && (
+          {!taskId && isOpen && !isLoadingTaskData && (
              <div className="text-gray-500 dark:text-gray-400 p-4">
                 No task selected or task ID is missing.
             </div>
           )}
 
-          {!isLoading && !error && task && taskId && (
+          {!isLoadingTaskData && !taskError && task && taskId && (
             <>
-              <form onSubmit={(e: FormEvent) => { e.preventDefault(); handleSave(); }} className="flex-grow overflow-y-auto pr-2 space-y-4 custom-scrollbar">
+              <form onSubmit={handleSaveTask} className="flex-grow overflow-y-auto pr-2 space-y-4 custom-scrollbar">
                 <div>
                   <Label htmlFor="title">Title</Label>
                   <Input 
                     id="title"
-                    name="title"
-                    value={formData.title || ''}
-                    onChange={handleChange}
+                    {...register('title')}
                     className="mt-1" 
-                    required
                   />
+                  {errors.title && <p className="text-red-500 text-sm mt-1">{errors.title.message}</p>}
                 </div>
                 <div>
                   <Label htmlFor="description">Description</Label>
                   <Textarea 
                     id="description"
-                    name="description"
-                    value={formData.description || ''}
-                    onChange={handleChange}
+                    {...register('description')}
                     className="mt-1" 
-                    rows={3} 
                   />
+                  {errors.description && <p className="text-red-500 text-sm mt-1">{errors.description.message}</p>}
                 </div>
                 <div>
                   <Label htmlFor="notes">Notes</Label>
                   <Textarea 
                     id="notes"
-                    name="notes"
-                    value={formData.notes || ''}
-                    onChange={handleChange}
+                    {...register('notes')}
                     className="mt-1" 
-                    rows={2} 
                   />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="status">Status</Label>
-                    <select 
-                        id="status"
-                        name="status"
-                        value={formData.status || 'pending'}
-                        onChange={handleChange}
-                        className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white p-2"
-                    >
-                        {ALL_STATUSES.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <Label htmlFor="priority">Priority</Label>
-                    <select 
-                        id="priority"
-                        name="priority"
-                        value={formData.priority || 0}
-                        onChange={handleChange}
-                        className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white p-2"
-                    >
-                        {ALL_PRIORITIES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-                    </select>
-                  </div>
+                  {errors.notes && <p className="text-red-500 text-sm mt-1">{errors.notes.message}</p>}
                 </div>
                 <div>
                   <Label htmlFor="category">Category</Label>
                   <Input 
-                    id="category" 
-                    name="category" 
-                    value={formData.category || ''} 
-                    onChange={handleChange} 
-                    placeholder="e.g., Work, Personal" 
-                    className="mt-1"
+                    id="category"
+                    {...register('category')}
+                    className="mt-1" 
                   />
+                  {errors.category && <p className="text-red-500 text-sm mt-1">{errors.category.message}</p>}
                 </div>
                 <div>
                   <Label htmlFor="due_date">Due Date</Label>
                   <Input 
                     id="due_date" 
-                    name="due_date" 
                     type="date" 
-                    value={formData.due_date || ''}
-                    onChange={handleChange} 
+                    {...register('due_date')}
                     className="mt-1"
                   />
+                  {errors.due_date && <p className="text-red-500 text-sm mt-1">{errors.due_date.message}</p>}
                 </div>
-                <div className="pt-2">
-                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Subtasks</h3>
-                  <div className="mt-2 p-2 border border-dashed border-gray-300 dark:border-gray-600 rounded-md min-h-[50px]">
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Subtask management will be here.</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="status">Status</Label>
+                    <Controller
+                      name="status"
+                      control={control}
+                      render={({ field }) => (
+                        <select 
+                          {...field} 
+                          id="status" 
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm p-2"
+                        >
+                          {ALL_STATUSES.map(s => <option key={s} value={s}>{s.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</option>)}
+                        </select>
+                      )}
+                    />
+                    {errors.status && <p className="text-red-500 text-sm mt-1">{errors.status.message}</p>}
+                  </div>
+                  <div>
+                    <Label htmlFor="priority">Priority</Label>
+                    <Controller
+                      name="priority"
+                      control={control}
+                      render={({ field }) => (
+                        <select 
+                          {...field} 
+                          id="priority" 
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm p-2"
+                          onChange={e => field.onChange(parseInt(e.target.value, 10) as TaskPriority)}
+                        >
+                          {ALL_PRIORITIES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                        </select>
+                      )}
+                    />
+                    {errors.priority && <p className="text-red-500 text-sm mt-1">{errors.priority.message}</p>}
                   </div>
                 </div>
 
-                {/* Subtasks Section */}
                 <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                   <h3 className="text-md font-semibold text-gray-800 dark:text-gray-100 mb-2">Subtasks</h3>
                   {isLoadingSubtasks && (
@@ -449,21 +435,22 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
                   {subtasksError && <p className='text-red-500 text-sm'>Error loading subtasks: {subtasksError.message}</p>}
                   {!isLoadingSubtasks && !subtasksError && (
                     <DndContext
-                      sensors={sensors}
+                      sensors={subtaskDndSensors}
                       collisionDetection={closestCenter}
-                      onDragEnd={handleDragEnd}
+                      onDragStart={handleSubtaskDragStart}
+                      onDragEnd={handleSubtaskDragEnd}
                     >
                       <SortableContext 
-                        items={(optimisticSubtasks || []).map(s => s.id)} 
+                        items={(subtasks || []).map(s => s.id)} 
                         strategy={verticalListSortingStrategy}
                       >
                         <div className="space-y-1 mb-3">
-                          {(optimisticSubtasks || subtasks || []).length > 0 ? (
-                            (optimisticSubtasks || subtasks || []).map(subtask => (
+                          {(subtasks || []).length > 0 ? (
+                            (subtasks || []).map(subtask => (
                               <SubtaskItem 
                                 key={subtask.id} 
                                 subtask={subtask} 
-                                parentTaskId={task.id}
+                                parentTaskId={task?.id || ''}
                                 onSubtaskUpdate={() => {
                                   refetchSubtasks();
                                   subtasksWereModifiedInThisSessionRef.current = true;
@@ -484,47 +471,55 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
                       onChange={(e) => setNewSubtaskTitle(e.target.value)}
                       placeholder="Add new subtask..."
                       className="h-9 text-sm flex-grow mr-2"
-                      onKeyDown={(e) => e.key === 'Enter' && handleAddSubtask()}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleInitiateAddSubtask();
+                        }
+                      }}
                     />
                     <Button 
                       type="button" 
-                      onClick={handleAddSubtask} 
-                      disabled={!newSubtaskTitle.trim() || createTaskMutation.isPending}
+                      onClick={handleInitiateAddSubtask} 
+                      disabled={!newSubtaskTitle.trim() || isAddingSubtask}
                     >
-                      {createTaskMutation.isPending ? <Spinner size={16} /> : 'Add'}
+                      {isAddingSubtask ? <Spinner size={16} /> : 'Add'}
                     </Button>
                   </div>
                 </div>
               </form>
 
               <div className="mt-6 flex justify-between items-center pt-4 border-t border-gray-200 dark:border-gray-700">
-                {onDeleteTaskFromDetail && taskId && (
-                  <Button 
-                    variant="danger"
-                    onClick={handleDeleteClick}
-                    disabled={updateTaskMutation.isPending}
-                  >
-                    <TrashIcon className="mr-2 h-4 w-4" /> Delete
-                  </Button>
-                )}
                 <div className="flex space-x-2 ml-auto">
-                  <RadixDialog.Close asChild>
-                    <Button variant="secondary" type="button">Cancel</Button>
-                  </RadixDialog.Close>
+                  <Button variant="secondary" type="button" onClick={handleCancelEdit}>Cancel</Button>
                   <Button 
                     type="button"
-                    onClick={handleSave}
-                    disabled={(!parentTaskHasChanges && !subtasksWereModifiedInThisSessionRef.current && !createTaskMutation.isPending) || updateTaskMutation.isPending || isLoading }
+                    onClick={handleSaveTask}
+                    className="bg-blue-500 hover:bg-blue-600 text-white"
+                    disabled={isSaveButtonDisabled}
                   >
-                    {updateTaskMutation.isPending ? <span className="mr-2"><Spinner size={16} /></span> : null}
+                    {isSavingTask ? <Spinner size={16} className="mr-2" /> : null}
                     Save Changes
                   </Button>
+                </div>
+                <div className="flex-shrink-0">
+                   {taskId && onDeleteTaskFromDetail && (
+                      <Button 
+                          variant="danger" 
+                          onClick={handleDeleteClick} 
+                          className="ml-auto"
+                          aria-label="Delete task"
+                      >
+                          <TrashIcon className="w-4 h-4 mr-2" />
+                          Delete
+                      </Button>
+                  )}
                 </div>
               </div>
             </>
           )}
 
-          {!isLoading && !error && !task && taskId && (
+          {!isLoadingTaskData && !taskError && !task && taskId && (
              <div className="text-center text-gray-500 dark:text-gray-400 p-4">
                 Task not found. It may have been deleted.
             </div>
@@ -535,6 +530,7 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
               className="absolute top-3.5 right-3.5 inline-flex h-6 w-6 appearance-none items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-400"
               aria-label="Close"
               type="button"
+              onClick={() => wrappedOnOpenChange(false)}
             >
               <Cross2Icon />
             </button>

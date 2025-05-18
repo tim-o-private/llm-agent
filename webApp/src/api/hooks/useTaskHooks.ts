@@ -10,6 +10,7 @@ import type {
   UpdateFocusSessionData 
 } from '../types';
 import { toast } from '@/components/ui/toast';
+import { useTaskStore } from '@/stores/useTaskStore';
 
 const TASKS_QUERY_KEY_PREFIX = 'tasks';
 const FOCUS_SESSIONS_QUERY_KEY_PREFIX = 'focus_sessions';
@@ -121,7 +122,10 @@ export function useUpdateTask() {
       if (!data) throw new Error('Failed to update task: no data returned');
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (updatedTaskFromServer, variables) => {
+      console.log('[useUpdateTask] onSuccess - Calling useTaskStore.updateTask with:', updatedTaskFromServer);
+      useTaskStore.getState().updateTask(variables.id, updatedTaskFromServer);
+
       queryClient.invalidateQueries({ queryKey: [TASKS_QUERY_KEY_PREFIX] });
     },
   });
