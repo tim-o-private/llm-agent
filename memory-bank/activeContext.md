@@ -1,174 +1,156 @@
-# Active Context Update - 2025-05-16
+**Task 7: Abstract TaskDetailView State Management into Reusable Hooks**
 
-## Recently Completed & Archived
-*   **Task II.4.1.UI.9: Implement Subtask Creation & Display UI** - Enhancement is now complete and archived.
-    *   **Archive:** `memory-bank/archive/archive-II.4.1.9.md`
-    *   **Reflection:** `memory-bank/reflection/reflection-II.4.1.9.md`
+Following the successful refactor of `TaskDetailView.tsx` to use React Hook Form for its main form state (Task 6), the next major initiative is to abstract the complex state management and interaction logic into reusable custom hooks. This aims to significantly simplify `TaskDetailView.tsx`, making it more of a presentational component, and to create generalizable solutions for object editing and reorderable list management across the application.
 
-## Current Mode
-ARCHIVE mode completed. Resetting for next task.
+**Key Objectives for Task 7:**
+1.  **Develop `useObjectEditManager` Hook:** This hook will manage the lifecycle of editing a single data object, integrating with React Hook Form, handling data fetching (via a provided query hook), mutations (update/create), and save/cancel logic (including dirty checking and confirmation).
+2.  **Develop `useReorderableList` Hook:** This hook will manage a list of items that can be reordered using `dnd-kit`. It will handle list fetching, optimistic updates for reordering, committing order changes, and potentially adding/editing items within the list.
+3.  **Refactor `TaskDetailView.tsx`:** Systematically replace its internal logic for parent task editing with `useObjectEditManager` and its subtask management logic with `useReorderableList`.
 
-## Current Focus
-
-### State Management Architecture Redesign
-
-The project is currently focused on creating a consistent, robust state management pattern for the application to replace the current mix of approaches:
-
-**Problem:** Different components use different approaches to state management (React Query direct calls, Zustand, component local state), creating inconsistency and complexity in the codebase.
-
-**Solution:** A unified architecture using Zustand stores with local-first state and eventual sync with the database:
-
-1. **Entity-Centric Stores:** Each entity type (tasks, subtasks, etc.) has its own Zustand store
-2. **Local-First:** Changes are applied immediately to the local store for instant UI updates
-3. **Background Sync:** Changes are synchronized with the database every 5-10 seconds
-4. **Optimistic Updates:** UI updates immediately with rollback mechanisms for failed syncs
-
-**Resources:**
-- Design Document: `memory-bank/clarity/state-management-design.md`
-- Reference Implementation: `memory-bank/clarity/state-management-example.ts`
-- Component Example: `memory-bank/clarity/state-management-component-example.tsx`
+**Conceptual Design & API Proposal:**
+*   The detailed design for these hooks, including proposed API signatures and features, is documented in `memory-bank/clarity/references/patterns/reusable-ui-logic-hooks.md`.
 
 **Next Steps:**
-1. Implement the Task Store using the new architecture
-2. Refactor task-related components (TodayView, TaskDetail) to use the new store
-3. Extend the pattern to other entity types
+1.  [DONE] Finalize the API design for `useObjectEditManager` and `useReorderableList` based on the proposal.
+2.  [DONE] Begin implementation of `useObjectEditManager` (Phase 1 of Task 7).
+3.  [DONE] Follow with the implementation of `useReorderableList` (Phase 2 of Task 7).
+4.  [IN PROGRESS] Proceed with the phased refactoring of `TaskDetailView.tsx` (Phases 3 & 4 of Task 7).
+5.  Thoroughly test the refactored component and the new hooks (Phase 5 of Task 7).
 
----
-
-# VAN Mode Assessment - Session Start: {datetime.now().isoformat()}
-
-## 1. VAN Mode Initiation
-User initiated VAN mode.
-
-## 2. Platform Detection
-*   Operating System: Linux (as per user_info)
-*   Path Separator: /
-*   Command Structure: Standard Linux commands
-
-## 3. Memory Bank Check
-*   Core Memory Bank files and directories (`tasks.md`, `activeContext.md`, `progress.md`, `projectbrief.md`, `productContext.md`, `systemPatterns.md`, `techContext.md`, `style-guide.md`, `creative/`, `reflection/`, `archive/`) **verified as existing**.
-*   No creation of Memory Bank structure was needed.
-
-## 4. Basic File Verification
-*   Essential Memory Bank components and structure are present.
-
-## 5. Early Complexity Determination
-*   **Analysis of `memory-bank/tasks.md`:** Current primary tasks include "Implement Prioritize View (Modal)" (Task II.4.1.UI.5 under "Cyclical Flow Implementation") and "Agent Memory & Tooling Enhancement (Supabase Integration)" (Task III).
-*   **Complexity Level:** Assessed as **Level 3 (Intermediate Feature) / Level 4 (Complex System)** due to the nature and scope of these tasks.
-*   **VAN Mode Outcome:** As per `isolation_rules/visual-maps/van_mode_split/van-mode-map.mdc`, Level 2-4 complexity requires a transition from VAN to PLAN mode.
-
-## 6. Next Step
-Transition to PLAN mode.
-
-# Active Context - Post-VAN Assessment
-
-## Project Status:
-The project involves two main components: a CLI LLM environment and the "Clarity" web application.
-Current active work, as indicated by `tasks.md`, is primarily focused on:
-1.  **Clarity Web Application UI/UX:** Specifically, the "Prioritize" flow of the Cyclical Flow Implementation (Task 4.1.UI.5) and related sub-tasks. Chat panel UI is complete, awaiting backend integration.
-2.  **Agent Memory & Tooling Enhancement (Supabase Integration):** Schema design for agent memory and prompts is a key ongoing task, critical for the Clarity chat panel and future agent capabilities.
-
-## VAN Mode Completion & Transition:
-**Date:** (Current Date)
-**VAN Assessment Summary:**
-*   VAN mode initiated by user.
-*   Platform Detection: Linux. Standard commands apply.
-*   Memory Bank Check: Core Memory Bank structure and files verified as present and populated.
-*   Early Complexity Determination: Based on `tasks.md` (e.g., "Implement Prioritize View (Modal)" - Task 4.1.UI.5, Supabase integration), the project complexity is Level 3-4.
-
-**Transition:** As per `isolation_rules/visual-maps/van_mode_split/van-mode-map`, for Level 2-4 complexity, VAN mode transitions to PLAN mode.
-
-**Current Mode: REFLECT**
-
-**Task for Reflection:** II.4.1.9 - Implement Subtask Creation & Display UI
-
-**Summary of Reflection for II.4.1.9:**
-The reflection for Task II.4.1.9, documented in `memory-bank/reflection/reflection-II.4.1.9.md`, covers the implementation of subtask creation, display, and drag-and-drop reordering in both `TaskDetailView` and `TaskCard`. Key challenges included DND state synchronization, UI "pop" effects, and a "Maximum update depth exceeded" error. These were resolved through a significant state management refactor (favoring React Query over direct Zustand manipulation for server state, removing `rawTasks` from `useTaskViewStore`), and implementing optimistic updates for subtask reordering in `TaskCard`. The reflection highlights the complexities of managing hierarchical, interactive state and the benefits of React Query for server state and optimistic updates.
-
-**Current Mode: CREATIVE**
-
-**Goal for CREATIVE Mode:**
-Define and document a consistent storage and state management strategy for Tasks (including Subtasks) and TaskDetails. This will focus on solidifying the patterns for using React Query (for server state, caching, mutations, optimistic updates) and Zustand (for global UI state, if necessary), and how they interact. The aim is to ensure clarity, prevent future synchronization issues, and provide a clear reference for ongoing development.
-
-**Current Storage & State Management Strategy (Summary for Discussion and Refinement):**
-
-*   **Server State & Caching (Primary Mechanism):**
-    *   **Tool:** `React Query` (`@tanstack/react-query`).
-    *   **Usage:** All CRUD operations for tasks and subtasks (fetch, create, update, delete) are managed via React Query hooks (e.g., `useFetchTasks`, `useUpdateTaskOrder`, `useUpdateSubtaskOrder`).
-    *   **Caching:** React Query handles caching of task data. Cache keys (e.g., `['tasks', userId]`) are used to manage and invalidate data.
-    *   **Mutations:** Updates to the backend are performed via mutation hooks.
-        *   `onSuccess`: Typically invalidates relevant queries (e.g., `queryClient.invalidateQueries(['tasks', userId])`) to trigger re-fetches and UI updates with fresh data.
-        *   `onMutate`, `onError`, `onSettled`: Used for implementing optimistic updates.
-            *   `onMutate`:
-                *   Cancels ongoing queries for the same data.
-                *   Snapshots the previous state from the cache.
-                *   Optimistically updates the cache (`queryClient.setQueryData`) with the new expected state.
-                *   Returns a context object with the snapshotted state.
-            *   `onError`:
-                *   Rolls back the cache to the snapshotted state using the context from `onMutate`.
-            *   `onSettled`:
-                *   Invalidates the relevant queries to ensure eventual consistency with the server.
-    *   **Current Optimistic Implementation Example:** `useUpdateSubtaskOrder` optimistically updates the `['tasks', userId]` query cache by directly manipulating the `subtasks` array of the parent task within the cached data.
-
-*   **Global UI State (Secondary / Ancillary):**
-    *   **Tool:** `Zustand`.
-    *   **Usage:** Intended for global UI state that doesn't directly map to server data or when cross-component state needs to be shared without prop drilling, and React Query's cache isn't the right fit.
-    *   **Current Status:** Usage has been significantly reduced for task/subtask data itself. The `useTaskViewStore` previously held `rawTasks` which caused synchronization issues. This has been removed.
-    *   **Potential Future Use:** Managing transient UI states like modal visibility, selected items not yet persisted, or complex form states before submission if not co-located with the component.
-    *   **Guideline:** Avoid duplicating server state in Zustand. Rely on React Query as the source of truth for server-persisted data.
-
-*   **Local Component State:**
-    *   **Tool:** `React.useState`, `React.useReducer`.
-    *   **Usage:** For component-specific UI state that doesn't need to be shared globally or isn't tied to server data (e.g., input field values before validation/submission, toggle states for UI elements within a single component).
-
-**Key Principles from Recent Refactor:**
-1.  **React Query as Source of Truth for Server Data:** Task and subtask data displayed in the UI should primarily flow from React Query's cache.
-2.  **Minimize Direct Store Manipulation for Server Data:** Avoid actions in Zustand stores that directly set or modify data that mirrors server state. Instead, mutations should go through React Query hooks, which then update the cache and/or invalidate queries.
-3.  **Optimistic Updates for Responsiveness:** Implement optimistic updates via React Query for operations like reordering to improve perceived performance.
-4.  **Clear Separation:** Maintain a clear distinction between server state (React Query) and purely client-side UI state (Zustand, local state).
-
-**Items for Creative Discussion:**
-*   Further standardization of optimistic update patterns (e.g., helper functions, consistent cache update logic).
-*   Defining clear boundaries for when to use Zustand vs. local state for UI concerns.
-*   Documentation of these patterns for the team (e.g., in `memory-bank/techContext.md` or a dedicated state management guide).
-*   Review if any remaining parts of `useTaskViewStore` (or other stores) could be further simplified or if their current role is appropriate.
+This abstraction is a critical step towards improving code quality, reusability, and maintainability in the Clarity application.
 
 **🛑 CRITICAL REMINDERS FOR AGENT 🛑**
-
-*   **ALWAYS consult `memory-bank/tasks.md` BEFORE starting any implementation.**
-*   **Strictly adhere to `ui-dev` rule (Radix UI, Radix Icons).**
-*   **Follow proper React state management practices (Zustand, React Query).**
-*   **Ensure Keyboard shortcuts work consistently.**
-*   **Verify Modal and dialog management.**
-*   **Update `tasks.md` and `memory-bank/progress.md` diligently.**
+*   **ALWAYS consult `memory-bank/tasks.md` and the new `reusable-ui-logic-hooks.md` BEFORE starting implementation of Task 7.**
+*   **Adhere to `ui-dev` rule (Radix UI, Radix Icons, Tailwind CSS).**
+*   **Prioritize generic, reusable design for the new hooks.**
+*   **Ensure comprehensive unit testing for the hooks.**
+*   **Update `tasks.md` and `memory-bank/progress.md` diligently as Task 7 progresses.**
 
 ---
 
-### Proposal for Systematizing Development Practices (Memory Bank Update)
+# Active Context Update - 2025-05-18 (End of Session)
 
-Based on the recent TodayView refactor session and user feedback, the following documentation should be created/updated in the `memory-bank` to prevent similar state management issues and ensure consistency:
+## Current Mode
+ANALYSIS / DOCUMENTATION
 
-1.  **Page Component Best Practices (`memory-bank/clarity/pageComponentBestPractices.md`):**
-    *   **Separation of Concerns:** Emphasize lean pages, delegation to hooks.
-    *   **UI State Management Strategy:** Guidelines for `useState` vs. Zustand.
-    *   **Data Fetching & Caching:** Mandate React Query.
-    *   **Derived State:** Use `useMemo`.
-    *   **Minimize Logic in Render.**
-    *   **Note on `TodayView.tsx`:** Plan further refactoring into custom hooks.
+## Current Focus
+**Task: Capture Current State & Document Hook Patterns (User Request)**
 
-2.  **Zustand Store Design Guidelines (`memory-bank/clarity/zustandStoreDesign.md`):**
-    *   **Scope:** Cohesive, domain-specific stores.
-    *   **State Structure:** Normalized; `Set`/`Map` with `enableMapSet()`.
-    *   **Actions:** Clear, specific; only way to modify state.
-    *   **Immutability:** Immer middleware is standard.
-    *   **Selectors:** Encourage use for specific state subscription.
-    *   **No API Calls in Stores:** Stores hold state; API calls are side effects managed by React Query.
-    *   **Middleware:** `devtools`, `persist` (judiciously), `immer`.
+Following a user report of issues with a previous chat session, the current focus is to thoroughly review and document the state of development, particularly concerning the custom hooks used in `TaskDetailView.tsx`.
 
-3.  **Keyboard Shortcut Management (`memory-bank/clarity/keyboardShortcutGuide.md`):**
-    *   **Scope:** Local (view-specific) vs. Global.
-    *   **Implementation:** `useEffect` with `keydown`, cleanup, check for active inputs/modals, `event.preventDefault()`.
-    *   **State Interaction:** Dispatch actions to stores.
-    *   **Consistency & Discoverability.**
+**Activities Completed:**
+1.  Reviewed `memory-bank/clarity/chatHistory` to understand the preceding context.
+2.  Read and analyzed the following hook files:
+    *   `webApp/src/hooks/useEntityEditManager.ts`
+    *   `webApp/src/hooks/useObjectEditManager.ts`
+    *   `webApp/src/hooks/useReorderableList.ts`
+    *   `webApp/src/hooks/useTaskDetailStateManager.ts`
+3.  Read and analyzed `webApp/src/components/features/TaskDetail/TaskDetailView.tsx` to understand its interaction with these hooks.
+4.  Documented the established patterns and created a MermaidJS sequence diagram illustrating the data flow. This has been saved to `memory-bank/clarity/diagrams/hook-data-flow-tdv.md`.
 
-This detailed context and the proposed guidelines should help maintain a cleaner and more robust state management approach moving forward. 
+**Task 7: Abstract TaskDetailView State Management into Reusable Hooks (Status Update)**
+
+The development and initial integration of `useObjectEditManager`, `useReorderableList`, and the orchestrating `useTaskDetailStateManager` (which uses `useEntityEditManager`) into `TaskDetailView.tsx` are confirmed to be largely complete based on code review.
+
+**Immediate Blocker:**
+None for the current documentation task. For Task 7, the next step remains comprehensive testing.
+
+**Next Steps Upon Resuming (for Task 7):**
+1.  **Perform Thorough Integration Testing:** Execute the manual test plan in `memory-bank/clarity/testing/task-detail-view-test-plan.md` to verify all parent task and subtask functionalities in the refactored `TaskDetailView.tsx`.
+2.  **Address Issues:** Resolve any bugs or unexpected behaviors identified during integration testing (e.g., issues noted in `tasks.md` like ST-6, OT-1 if still relevant after recent refactors).
+3.  **Write Unit Tests:** Implement unit tests for `useObjectEditManager.ts`, `useReorderableList.ts`, `useEntityEditManager.ts`, and `useTaskDetailStateManager.ts`.
+4.  **Finalize Task 7 Documentation:** Update `reusable-ui-logic-hooks.md` if any further API refinements occur during testing. Ensure all related documentation is consistent.
+
+**🛑 CRITICAL REMINDERS FOR AGENT 🛑**
+*   **ALWAYS consult `memory-bank/tasks.md` and the new `memory-bank/clarity/diagrams/hook-data-flow-tdv.md` before resuming work on Task 7 or related UI tasks.**
+*   **The source of truth for hook APIs is the code itself and its accompanying documentation (`reusable-ui-logic-hooks.md` and `hook-data-flow-tdv.md`).**
+*   **Prioritize systematic testing and issue resolution for Task 7.**
+*   **Update `tasks.md` and `memory-bank/progress.md` diligently as Task 7 progresses post-testing.**
+
+**Task: Achieve Passing Test Suite for `TaskDetailView.tsx` (Task 8 - Phase 0)**
+
+**Current Focus:** Stabilize `TaskDetailView.tsx` by ensuring all tests in `memory-bank/clarity/testing/task-detail-view-test-plan.md` pass.
+
+**Immediate Blocker / Next Step:** Resolve **Test Case PT-2 (Edit Parent Task Field & Verify Dirty State)**, where the "Save Changes" button flickers but does not stay enabled upon editing parent task fields.
+
+**Overall Goal for Task 8:** Refactor `TaskDetailView.tsx` and its associated hooks (`useObjectEditManager`, `useReorderableList`, `useTaskDetailStateManager`) to align with "Option 1: Full Adherence to Zustand-First with Eventual Sync", as detailed in `memory-bank/clarity/creative-task8-state-management-refactor.md`. This major refactoring is **blocked** until all tests in `task-detail-view-test-plan.md` are passing.
+
+**Supporting Documents:**
+*   Test Plan: `memory-bank/clarity/testing/task-detail-view-test-plan.md`
+*   Task 8 Creative Brief: `memory-bank/clarity/creative-task8-state-management-refactor.md`
+*   Overall Task List: `memory-bank/tasks.md` (see Task 8 under Clarity UI)
+*   Project Progress: `memory-bank/progress.md`
+
+**🛑 CRITICAL REMINDERS FOR AGENT 🛑**
+*   Prioritize fixing PT-2 in `TaskDetailView.tsx`.
+*   Consult `task-detail-view-test-plan.md` to understand the expected behavior for PT-2.
+*   Once PT-2 is resolved, proceed to address other failing tests in the test plan until all are passing.
+*   Only after all tests pass can the main refactoring work for Task 8 (Phases 1-5) begin.
+
+---
+
+# State Log - 2025-05-19
+
+## TaskDetailView & Hooks - Current State
+
+- **TaskDetailView.tsx** is integrated with `useObjectEditManager`, `useReorderableList`, and `useTaskDetailStateManager`.
+- **Current Blocker:** Editing a parent task field updates RHF's `isDirty` but does NOT update TDSM's `isDirty` (modal dirty), so the Save button remains disabled. The dirty check effect in `useEntityEditManager` is not triggered by form edits.
+- **Last Attempted Fix:** Subscribing to form value changes using RHF's `watch()` and passing the watched values as a dependency to the state manager. This caused an infinite loop and was reverted.
+- **Current Plan:** User will start a new chat session to continue debugging. All recent changes have been reverted to a stable state.
+
+---
+
+# Active Context - Project llm-agent
+
+**Current Task: Task 9.7 - Documentation for `useEditableEntity`**
+
+**Goal:** Create comprehensive documentation for the `useEditableEntity` hook and the associated `EntityTypeConfig`. This includes API details, usage examples, and best practices to ensure developers can effectively use this new pattern.
+
+**Background:**
+*   The `useEditableEntity` hook has been successfully implemented and integrated into `TaskDetailView.tsx`.
+*   All Parent Task (PT), Subtask (ST), and Other (OT) tests for the refactored `TaskDetailView.tsx` are PASSING.
+*   Phases 9.0 through 9.6 of Task 9 (Architect and Implement `useEditableEntity` Hook & Refactor `TaskDetailView`) are now COMPLETE.
+
+**Current Focus: Phase 9.7 - Documentation**
+*   **`9.7.1:` Write Hook API Documentation:** Detail `EntityTypeConfig` options and `UseEditableEntityResult` properties/methods.
+*   **`9.7.2:` Create Usage Examples:** Provide examples of how to configure and use the hook for different scenarios (e.g., simple entity, entity with sub-list).
+*   **`9.7.3:` Document Best Practices and Patterns:** Explain how this hook fits into the broader state management strategy.
+*   **`9.7.4:` Store documentation in `memory-bank/clarity/references/patterns/` or a new dedicated file (e.g., `useEditableEntity-guide.md`).**
+
+**Next Steps (After Documentation - Phase 9.8):**
+*   Cleanup: Evaluate and potentially deprecate/remove the older state management hooks (`useObjectEditManager`, `useReorderableList`, `useEntityEditManager`, `useTaskDetailStateManager`) if `useEditableEntity` is deemed a complete replacement.
+
+**Key Supporting Documents:**
+*   `memory-bank/tasks.md` (Task 9 and its sub-phases)
+*   `memory-bank/progress.md`
+*   `memory-bank/clarity/plan-useEditableEntity.md`
+*   `memory-bank/clarity/creative-useEditableEntity-design.md`
+*   `webApp/src/hooks/useEditableEntity.ts`
+*   `webApp/src/components/features/TaskDetail/TaskDetailView.tsx` (as primary consumer example)
+
+# Active Context & Focus
+
+**Last Updated:** (Current Date)
+
+**Current Overall Project Goal:** Stabilize and enhance the Clarity UI. Concurrently, progress on CLI and Core system enhancements.
+
+**Current Task Focus:**
+
+*   **Task 9: Architect and Implement `useEditableEntity` Hook & Refactor `TaskDetailView` - COMPLETE**
+
+**Brief Context:**
+
+Task 9, which involved designing, implementing, testing, and documenting the `useEditableEntity` hook, refactoring `TaskDetailView.tsx` to use it, and cleaning up superseded hooks (`useObjectEditManager`, `useReorderableList`, `useEntityEditManager`, `useTaskDetailStateManager`), is now fully complete.
+
+**Key Files & Artifacts (Related to completed Task 9):**
+
+*   `webApp/src/hooks/useEditableEntity.ts` (The new hook)
+*   `memory-bank/clarity/references/patterns/useEditableEntity-guide.md` (Documentation for the new hook)
+*   `webApp/src/features/TaskDetailView/TaskDetailView.tsx` (Primary consumer, successfully refactored)
+*   `memory-bank/clarity/plan-useEditableEntity.md` (Overall plan for Task 9 - now marked complete)
+*   `memory-bank/tasks.md` (Overall project tasks - Task 9 marked complete)
+*   `memory-bank/progress.md` (Project progress log - Task 9 marked complete)
+
+**Pending Decisions/Questions:**
+
+*   What is the next P0 or P1 task to focus on from `memory-bank/tasks.md`?

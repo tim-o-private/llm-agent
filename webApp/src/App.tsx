@@ -1,10 +1,13 @@
 import { BrowserRouter as Router, Routes, Route, Outlet } from 'react-router-dom';
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { AuthProvider } from '@/features/auth/AuthProvider';
 import AppShell from '@/layouts/AppShell';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Spinner } from '@/components/ui';
+import { useTaskViewStore } from '@/stores/useTaskViewStore';
+import { Toaster } from '@/components/ui/toast';
+
 
 // Lazy load pages for better performance
 const Home = lazy(() => import('@/pages/Home'));
@@ -16,6 +19,14 @@ const CoachPage = lazy(() => import('@/pages/CoachPage'));
 // AppLayout component is no longer needed as AppShell is the primary layout.
 
 function App() {
+  // Initialize and cleanup global keyboard listener
+  useEffect(() => {
+    useTaskViewStore.getState().initializeListener();
+    return () => {
+      useTaskViewStore.getState().destroyListener();
+    };
+  }, []); // Empty dependency array ensures this runs only once on mount and unmount
+
   return (
     <Router>
       <AuthProvider>
@@ -39,6 +50,7 @@ function App() {
               </Route>
             </Routes>
           </Suspense>
+          <Toaster />
         </ErrorBoundary>
       </AuthProvider>
     </Router>

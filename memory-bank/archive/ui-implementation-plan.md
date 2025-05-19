@@ -2,7 +2,7 @@
 
 This document outlines the implementation plan for the Clarity web application, following the phased approach defined in the feature roadmap.
 
-**IMPORTANT NOTE ON UI COMPONENT LOCATION (October 2024):** The project is currently undergoing a refactor to merge the `web/packages/ui` library directly into the `web/apps/web` application. Shared UI components will reside in `web/apps/web/src/components/ui/` and their base styles in `web/apps/web/src/styles/ui-components.css`. File paths and statuses in this document are being updated to reflect this change.
+**IMPORTANT NOTE ON UI COMPONENT LOCATION (5/15/2025):** The project is currently undergoing a refactor to merge the `web/packages/ui` library directly into the `web/apps/web` application. Shared UI components will reside in `web/apps/web/src/components/ui/` and their base styles in `web/apps/web/src/styles/ui-components.css`. File paths and statuses in this document are being updated to reflect this change.
 
 ## Phase 0: Infrastructure & Foundations (v0.1 Alpha)
 

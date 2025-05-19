@@ -1,8 +1,13 @@
 import React from 'react';
 
-export const Spinner: React.FC<{ size?: number }> = ({ size = 24 }) => (
+interface SpinnerProps {
+  size?: number;
+  className?: string;
+}
+
+export const Spinner: React.FC<SpinnerProps> = ({ size = 24, className }) => (
   <svg
-    className="animate-spin text-brand-primary"
+    className={`animate-spin text-brand-primary ${className || ''}`.trim()}
     width={size}
     height={size}
     viewBox="0 0 24 24"

@@ -1,25 +1,28 @@
-import React, { useState } from 'react';
-import { Task } from '@/api/types';
-import { Checkbox } from '@/components/ui/Checkbox';
-import { Input } from '@/components/ui/Input';
-import { Button } from '@/components/ui/Button';
-import { TrashIcon, Pencil1Icon, CheckIcon, Cross1Icon, DragHandleDots2Icon } from '@radix-ui/react-icons';
-import { useUpdateTask, useDeleteTask } from '@/api/hooks/useTaskHooks';
-import { toast } from 'react-hot-toast';
+import React, { useState, useRef, useEffect } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { DragHandleDots2Icon, Cross2Icon, Pencil1Icon, CheckIcon } from '@radix-ui/react-icons';
+import { Task } from '@/api/types';
+// import { useTaskStore } from '@/stores/useTaskStore'; // Remove direct store usage
 
 interface SubtaskItemProps {
   subtask: Task;
-  onSubtaskUpdate?: () => void; // Callback to refetch parent task's subtasks
+  // parentTaskId?: string; // Remove
+  // onSubtaskUpdate?: () => void; // Remove
+  onUpdate: (id: string, updates: Partial<Task>) => void; // Add
+  onRemove: (id: string) => void; // Add
 }
 
-export const SubtaskItem: React.FC<SubtaskItemProps> = ({ subtask, onSubtaskUpdate }) => {
+export const SubtaskItem: React.FC<SubtaskItemProps> = ({ subtask, onUpdate, onRemove }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [editedTitle, setEditedTitle] = useState(subtask.title);
-
-  const updateTaskMutation = useUpdateTask();
-  const deleteTaskMutation = useDeleteTask();
+  const [editValue, setEditValue] = useState(subtask.title);
+  const inputRef = useRef<HTMLInputElement>(null);
+  
+  // Get actions from the task store - REMOVE
+  // const { updateTask, deleteTask } = useTaskStore(state => ({
+  //   updateTask: state.updateTask,
+  //   deleteTask: state.deleteTask
+  // }));
 
   const {
     attributes,
@@ -27,133 +30,140 @@ export const SubtaskItem: React.FC<SubtaskItemProps> = ({ subtask, onSubtaskUpda
     setNodeRef,
     transform,
     transition,
-    isDragging,
+    isDragging
   } = useSortable({ id: subtask.id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
-    zIndex: isDragging ? 10 : undefined, // Ensure dragging item is on top
+    opacity: isDragging ? 0.4 : 1,
   };
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [isEditing]);
 
   const handleToggleComplete = () => {
     const newStatus = subtask.status === 'completed' ? 'pending' : 'completed';
-    updateTaskMutation.mutate(
-      { id: subtask.id, updates: { status: newStatus, completed: newStatus === 'completed' } },
-      {
-        onSuccess: () => {
-          toast.success(`Subtask "${subtask.title}" marked ${newStatus}.`);
-          onSubtaskUpdate?.();
-        },
-        onError: (error) => {
-          toast.error(`Failed to update subtask: ${error.message}`);
-        },
-      }
-    );
-  };
-
-  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setEditedTitle(e.target.value);
-  };
-
-  const handleSaveTitle = () => {
-    if (editedTitle.trim() === '' || editedTitle.trim() === subtask.title) {
-      setIsEditing(false);
-      setEditedTitle(subtask.title); // Reset if unchanged or empty
-      return;
-    }
-    updateTaskMutation.mutate(
-      { id: subtask.id, updates: { title: editedTitle.trim() } },
-      {
-        onSuccess: () => {
-          toast.success('Subtask title updated.');
-          setIsEditing(false);
-          onSubtaskUpdate?.();
-        },
-        onError: (error) => {
-          toast.error(`Failed to update title: ${error.message}`);
-        },
-      }
-    );
+    // updateTask(subtask.id, { 
+    //   status: newStatus,
+    //   completed: newStatus === 'completed'
+    // });
+    onUpdate(subtask.id, { 
+      status: newStatus,
+      completed: newStatus === 'completed',
+      completed_at: newStatus === 'completed' ? new Date().toISOString() : null 
+    });
+    
+    // if (onSubtaskUpdate) { // Remove
+    //   onSubtaskUpdate();
+    // }
   };
 
   const handleDelete = () => {
-    if (window.confirm(`Are you sure you want to delete subtask "${subtask.title}"?`)) {
-      deleteTaskMutation.mutate({ id: subtask.id }, {
-        onSuccess: () => {
-          toast.success('Subtask deleted.');
-          onSubtaskUpdate?.();
-        },
-        onError: (error) => {
-          toast.error(`Failed to delete subtask: ${error.message}`);
-        },
-      });
+    // deleteTask(subtask.id); // Remove
+    onRemove(subtask.id);
+    
+    // if (onSubtaskUpdate) { // Remove
+    //   onSubtaskUpdate();
+    // }
+  };
+
+  const startEditing = () => {
+    setEditValue(subtask.title);
+    setIsEditing(true);
+  };
+
+  const saveEdit = () => {
+    if (editValue.trim() !== subtask.title) {
+      // updateTask(subtask.id, { title: editValue.trim() }); // Remove
+      onUpdate(subtask.id, { title: editValue.trim() });
+      
+      // if (onSubtaskUpdate) { // Remove
+      //   onSubtaskUpdate();
+      // }
+    }
+    setIsEditing(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      saveEdit();
+    } else if (e.key === 'Escape') {
+      setIsEditing(false);
+      setEditValue(subtask.title);
     }
   };
 
   return (
     <div 
-      ref={setNodeRef} 
-      style={style} 
-      className="flex items-center justify-between py-2 px-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md touch-manipulation select-none"
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-center p-2 border rounded-md mb-2 bg-white dark:bg-gray-800 shadow-sm
+                ${subtask.status === 'completed' ? 'border-green-200 dark:border-green-900' : 'border-gray-200 dark:border-gray-700'}`}
     >
-      <div className="flex items-center flex-grow">
-        <button 
-          {...attributes} 
-          {...listeners} 
-          aria-label="Drag to reorder subtask"
-          className="p-1 mr-2 cursor-grab focus:outline-none focus:ring-1 focus:ring-indigo-500 rounded"
-        >
-          <DragHandleDots2Icon className="h-4 w-4 text-gray-400 dark:text-gray-500" />
-        </button>
-        <Checkbox
-          id={`subtask-${subtask.id}`}
-          checked={subtask.status === 'completed'}
-          onCheckedChange={handleToggleComplete}
-          className="mr-3"
-          aria-label={`Mark subtask ${subtask.title} as complete`}
+      <button
+        {...listeners}
+        {...attributes}
+        className="mr-2 cursor-grab active:cursor-grabbing p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
+        aria-label="Drag to reorder"
+      >
+        <DragHandleDots2Icon />
+      </button>
+      
+      <input
+        type="checkbox"
+        checked={subtask.status === 'completed'}
+        onChange={handleToggleComplete}
+        className="mr-3 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+      />
+      
+      {isEditing ? (
+        <input
+          ref={inputRef}
+          type="text"
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onBlur={saveEdit}
+          onKeyDown={handleKeyDown}
+          className="flex-grow p-1 rounded border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
         />
+      ) : (
+        <span 
+          className={`flex-grow ${subtask.status === 'completed' ? 'line-through text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-white'}`}
+        >
+          {subtask.title}
+        </span>
+      )}
+      
+      <div className="flex space-x-1 ml-2">
         {isEditing ? (
-          <Input
-            type="text"
-            value={editedTitle}
-            onChange={handleTitleChange}
-            onBlur={handleSaveTitle} // Save on blur
-            onKeyDown={(e) => e.key === 'Enter' && handleSaveTitle()} // Save on Enter
-            className="h-8 text-sm flex-grow mr-2"
-            autoFocus
-          />
-        ) : (
-          <span
-            className={`text-sm flex-grow cursor-pointer ${subtask.status === 'completed' ? 'line-through text-gray-500 dark:text-gray-400' : ''}`}
-            onClick={() => setIsEditing(true)} // Click text to edit
-            onKeyDown={(e) => e.key === 'Enter' && setIsEditing(true)}
-            role="button"
-            tabIndex={0}
+          <button
+            onClick={saveEdit}
+            className="p-1 rounded-md hover:bg-green-100 dark:hover:bg-green-900 text-green-600 dark:text-green-400"
+            aria-label="Save changes"
           >
-            {subtask.title}
-          </span>
-        )}
-      </div>
-      <div className="flex items-center space-x-1 ml-2 flex-shrink-0">
-        {isEditing ? (
-          <>
-            <Button onClick={handleSaveTitle} aria-label="Save title">
-              <CheckIcon className="h-4 w-4" />
-            </Button>
-            <Button onClick={() => { setIsEditing(false); setEditedTitle(subtask.title); }} aria-label="Cancel editing title">
-              <Cross1Icon className="h-4 w-4" />
-            </Button>
-          </>
+            <CheckIcon />
+          </button>
         ) : (
-          <Button onClick={() => setIsEditing(true)} aria-label="Edit title">
-            <Pencil1Icon className="h-4 w-4" />
-          </Button>
+          <button
+            onClick={startEditing}
+            className="p-1 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900 text-blue-600 dark:text-blue-400"
+            aria-label="Edit subtask"
+          >
+            <Pencil1Icon />
+          </button>
         )}
-        <Button onClick={handleDelete} aria-label="Delete subtask">
-          <TrashIcon className="h-4 w-4 text-red-500" />
-        </Button>
+        
+        <button
+          onClick={handleDelete}
+          className="p-1 rounded-md hover:bg-red-100 dark:hover:bg-red-900 text-red-600 dark:text-red-400"
+          aria-label="Delete subtask"
+        >
+          <Cross2Icon />
+        </button>
       </div>
     </div>
   );
