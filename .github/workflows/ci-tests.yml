@@ -37,7 +37,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run Vitest tests
-        run: pnpm test # Assuming 'pnpm test' executes 'vitest run' or similar CI-friendly command
+        run: pnpm test --verbose # Assuming 'pnpm test' executes 'vitest run' or similar CI-friendly command
 
       # Optional: If you want to generate and upload coverage reports
       # - name: Generate coverage report
