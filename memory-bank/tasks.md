@@ -328,43 +328,56 @@ This file tracks the current tasks, steps, checklists, and component lists for t
     *   **Blocking:** Further complex feature additions to `TaskDetailView` until this refactor is complete and stable.
 
 *   **Task 7: Abstract TaskDetailView State Management into Reusable Hooks**
-    *   **Goal:** Abstract state management logic (RHF hooks for parent object, data fetching, save/close handlers, child list management including DND reordering and item CRUD) out of `TaskDetailView.tsx` into two new custom hooks: `useObjectEditManager` and `useReorderableList`. `TaskDetailView.tsx` should then become primarily a presentational component, consuming these hooks.
-    *   **Status:** Hook Development & Initial Integration Largely Complete. Linter Blockers Resolved. Pending Full Testing.
+    *   **Goal:** Abstract state management logic (RHF hooks for parent object, data fetching, save/close handlers, child list management including DND reordering and item CRUD) out of `TaskDetailView.tsx` into new custom hooks: `useObjectEditManager`, `useReorderableList`, and the orchestrating `useTaskDetailStateManager` (which internally uses `useEntityEditManager`). `TaskDetailView.tsx` should then become primarily a presentational component, consuming these hooks and interacting with `useTaskStore` for data persistence.
+    *   **Status:** Hooks Developed & Integrated. Pending Comprehensive Testing & Unit Tests.
     *   **Complexity:** Level 4 (involves creating generic, reusable hooks and refactoring a complex component)
-    *   **Depends On:** Successful completion and verification of Task 6 (robust internal state management in `TaskDetailView` which serves as the basis for abstraction).
+    *   **Depends On:** Successful completion and verification of Task 6 (robust internal state management in `TaskDetailView` which served as the basis for abstraction).
     *   **Key Benefits:** Improved separation of concerns, easier testing of view vs. logic, reusability of the state management patterns across the application (e.g., for future calendar event editing, managing checklist items, etc.), significant simplification of `TaskDetailView.tsx`.
-    *   **Documentation:** Conceptual design and API for these hooks is in `memory-bank/clarity/references/patterns/reusable-ui-logic-hooks.md` (Now updated to match implementation).
+    *   **Documentation:** 
+        *   Conceptual design and API for these hooks: `memory-bank/clarity/references/patterns/reusable-ui-logic-hooks.md` (Updated to match implementation).
+        *   Data flow diagram: `memory-bank/clarity/diagrams/hook-data-flow-tdv.md` (NEW).
     *   **Phases:**
         1.  **Phase 1: Develop `useObjectEditManager` Hook (COMPLETED)**
-            *   Implement the hook based on the API defined in `reusable-ui-logic-hooks.md`.
-            *   Include generic typing, RHF integration, data lifecycle management (fetch, update, create), dirty state tracking, and save/cancel logic with confirmation for unsaved changes.
-            *   Write unit tests for the hook. (To Be Done)
-            *   **Follow-up/Refinements:**
-                *   Review and potentially refine `handleCancel` logic for edge cases or custom confirmation dialogs (current `window.confirm` is a good default).
-                *   Evaluate if `canSubmit` logic (`isDirty && !isSaving`) needs to be more flexible for scenarios where submission is allowed even if not "dirty". Current logic is generally appropriate for an edit manager.
-                *   Consider strategies for more explicit error communication from mutations if the default (consumer observing `mutation.error` or the hook's combined `error` state) proves insufficient in practice. (Current combined `error` is a good start; future enhancements could include specific error callbacks like `onUpdateError` or more granular error states if use cases demand it).
+            *   Implemented the hook based on the API defined in `reusable-ui-logic-hooks.md`.
+            *   Generic typing, RHF integration. Refactored to remove direct data persistence.
+            *   Unit tests: To Be Done.
         2.  **Phase 2: Develop `useReorderableList` Hook (COMPLETED)**
-            *   Implement the hook based on the API defined in `reusable-ui-logic-hooks.md`.
-            *   Include generic typing, `dnd-kit` integration, optimistic updates for reordering, data lifecycle (fetch list, update order, create item), and item ID/position accessors.
-            *   Write unit tests for the hook. (To Be Done)
-        3.  **Phase 3: Refactor `TaskDetailView.tsx` to use `useObjectEditManager` (Largely Complete - Minor adjustments and cleanup pending full testing)**
-            *   Replace the parent task editing logic (RHF setup, data fetching, save/cancel) with the `useObjectEditManager` hook.
-            *   Ensure all existing parent task functionalities are preserved.
-        4.  **Phase 4: Refactor `TaskDetailView.tsx` to use `useReorderableList` for Subtasks (Largely Complete - Minor adjustments and cleanup pending full testing)**
-            *   Replace the subtask list management logic (fetching, DND reordering, adding new subtasks) with the `useReorderableList` hook.
-            *   Ensure all existing subtask functionalities are preserved.
-        5.  **Phase 5: Integration Testing & Refinement (NEXT STEP)**
+            *   Implemented the hook based on the API defined in `reusable-ui-logic-hooks.md`.
+            *   Generic typing, `dnd-kit` integration, local list management. Refactored to remove direct data persistence.
+            *   Unit tests: To Be Done.
+        3.  **Phase 2.5: Develop `useEntityEditManager` Hook (COMPLETED - Implicitly as part of `useTaskDetailStateManager`'s needs)**
+            *   Generic hook for snapshot-based dirty checking and delegated save logic.
+            *   Unit tests: To Be Done.
+        4.  **Phase 2.75: Develop `useTaskDetailStateManager` Hook (COMPLETED)**
+            *   Orchestrates `useEntityEditManager` for `TaskDetailData` (parent task + subtasks).
+            *   Defines `getLatestData` by combining parent form values (from `useObjectEditManager` instance) and local subtasks (from `useReorderableList` instance).
+            *   Defines `taskSaveHandler` to compute deltas and dispatch actions to `useTaskStore`.
+            *   Unit tests: To Be Done.
+        5.  **Phase 3 & 4: Refactor `TaskDetailView.tsx` to use these hooks (COMPLETED)**
+            *   Replaced parent task editing logic with `useObjectEditManager`.
+            *   Replaced subtask list management with `useReorderableList`.
+            *   Integrated `useTaskDetailStateManager` for overall control, dirty state, and save operations.
+            *   Ensured all existing functionalities are intended to be preserved (pending testing).
+        6.  **Phase 5: Integration Testing & Refinement (NEXT STEP / IN PROGRESS)**
             *   Thoroughly test the refactored `TaskDetailView.tsx` against the manual test plan in `memory-bank/clarity/testing/task-detail-view-test-plan.md`.
             *   Address any issues arising from the integration.
             *   Refine hook APIs if necessary based on practical application.
-        6.  **Phase 6: Documentation Update & Cleanup**
+        7.  **Phase 6: Unit Testing for Hooks (To Do)**
+            *   Implement unit tests for `useObjectEditManager.ts`.
+            *   Implement unit tests for `useReorderableList.ts`.
+            *   Implement unit tests for `useEntityEditManager.ts`.
+            *   Implement unit tests for `useTaskDetailStateManager.ts`.
+        8.  **Phase 7: Documentation Update & Cleanup (Partially Done, ongoing)**
             *   Update `reusable-ui-logic-hooks.md` with any API changes or implementation notes (Already done for current state).
-            *   Clean up `TaskDetailView.tsx`, removing any redundant code (Largely done).
+            *   Ensure `hook-data-flow-tdv.md` is accurate.
+            *   Clean up `TaskDetailView.tsx`, removing any redundant code (Largely done, verify post-testing).
             *   Consider creating examples of how to use these hooks for other object types.
     *   **Files Affected (Primary):** 
         *   `webApp/src/components/features/TaskDetail/TaskDetailView.tsx` (major refactor)
-        *   `webApp/src/hooks/useObjectEditManager.ts` (new file)
-        *   `webApp/src/hooks/useReorderableList.ts` (new file)
+        *   `webApp/src/hooks/useObjectEditManager.ts` (updated/refactored)
+        *   `webApp/src/hooks/useReorderableList.ts` (updated/refactored)
+        *   `webApp/src/hooks/useEntityEditManager.ts` (new or significantly refactored)
+        *   `webApp/src/hooks/useTaskDetailStateManager.ts` (new file)
     *   **Future Scope:** Apply these hooks to other parts of the application where similar patterns exist.
 
 *   **Task 8: Review and Refine state management of `useObjectEditManager.ts` and `useReorderableList.ts`**

@@ -334,23 +334,29 @@ export const useTaskStore = create<TaskStore>()(
               }
             } 
             else if (change.action === 'update') {
-              // For update, we need the real ID (not temp)
               if (id.startsWith('temp_')) {
-                continue; // Skip updates to temp tasks that haven't been created yet
+                continue; 
               }
               
               const updateData: UpdateTaskData = { ...change.data };
               
-              const { error } = await supabase
+              // Get the updated row back by adding .select().single()
+              const { data: updatedTaskFromServer, error } = await supabase
                 .from('tasks')
                 .update(updateData)
                 .eq('id', id)
-                .eq('user_id', userId);
+                .eq('user_id', userId)
+                .select()
+                .single(); // Assuming we expect one row back
                 
               if (error) throw error;
               
-              // Remove from pending changes on success
               set(state => {
+                if (updatedTaskFromServer) {
+                  // Update the local task with the confirmed data from the server
+                  state.tasks[id] = updatedTaskFromServer;
+                }
+                // Remove from pending changes on success
                 delete state.pendingChanges[id];
               });
             } 

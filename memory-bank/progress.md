@@ -23,6 +23,7 @@ This document tracks the active development progress for the CLI, Core Agent, Ba
 *   [X] Deleted numerous redundant/outdated files from `memory-bank/` and `memory-bank/clarity/` after merging their relevant content.
 *   [X] Updated `tasks.md` to reflect new DDL location, reference RLS guide, and add a task to update `clarity-ui-api-development-guidance.md`.
 *   [X] **Reusable UI Logic Hooks (Clarity UI - Task 7):** Designed, implemented, and documented initial versions of `useObjectEditManager.ts` and `useReorderableList.ts`. Design document `reusable-ui-logic-hooks.md` updated to match implementation. Integration into `TaskDetailView.tsx` is now largely complete, with previously blocking linter errors resolved. Unused variables and imports in the hooks and `TaskDetailView.tsx` have been cleaned up. The next step for this feature is comprehensive integration testing.
+*   [X] **State Capture & Hook Pattern Documentation (User Request):** Reviewed `chatHistory`, analyzed `useEntityEditManager.ts`, `useObjectEditManager.ts`, `useReorderableList.ts`, `useTaskDetailStateManager.ts`, and `TaskDetailView.tsx`. Documented patterns and created a data flow diagram (`memory-bank/clarity/diagrams/hook-data-flow-tdv.md`). Updated `activeContext.md`, `progress.md`, and `tasks.md` to reflect the current state.
 
 **Next Steps (General Project):**
 

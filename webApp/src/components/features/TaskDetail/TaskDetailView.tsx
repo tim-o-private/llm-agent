@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import * as RadixDialog from '@radix-ui/react-dialog';
 import { Cross2Icon, TrashIcon } from '@radix-ui/react-icons';
 import { z } from 'zod';
-import { useFetchTaskById, useUpdateTask, useFetchSubtasks, useCreateTask, useUpdateSubtaskOrder } from '@/api/hooks/useTaskHooks';
-import { Task, UpdateTaskData, TaskStatus, TaskPriority, NewTaskData } from '@/api/types';
+import { useTaskStore, useInitializeTaskStore } from '@/stores/useTaskStore';
+import { Task, TaskStatus, TaskPriority } from '@/api/types';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
@@ -11,16 +11,16 @@ import { Label } from '@/components/ui/Label';
 import { Spinner } from '@/components/ui/Spinner';
 import { toast } from '@/components/ui/toast';
 import { SubtaskItem } from './SubtaskItem';
-import { useObjectEditManager, ObjectEditManagerOptions } from '@/hooks/useObjectEditManager';
-import { useReorderableList, ReorderableListOptions } from '@/hooks/useReorderableList';
-import { Controller } from 'react-hook-form';
-import { UseMutationResult as ReactQueryUseMutationResult } from '@tanstack/react-query';
+import { useObjectEditManager } from '@/hooks/useObjectEditManager';
+import { useReorderableList } from '@/hooks/useReorderableList';
+import { Controller, DefaultValues } from 'react-hook-form';
+import { cloneDeep } from 'lodash-es';
+import { useTaskDetailStateManager } from '@/hooks/useTaskDetailStateManager';
 
-// Dnd-kit imports
+// Dnd-kit imports - REINSTATE THESE
 import {
   DndContext,
   closestCenter,
-  UniqueIdentifier,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -71,51 +71,6 @@ const taskFormSchema = z.object({
   ]),
 });
 
-// --- Transformation Functions for useObjectEditManager ---
-const transformDataToFormData = (task: Task | null): TaskFormData => {
-  if (!task) { // Handle null case, return default form data
-    return {
-      title: '',
-      description: '',
-      notes: '',
-      category: '',
-      due_date: '',
-      status: 'pending',
-      priority: 0,
-    };
-  }
-  return {
-    title: task.title || '',
-    description: task.description || '',
-    notes: task.notes || '',
-    category: task.category || '',
-    due_date: task.due_date ? task.due_date.split('T')[0] : '',
-    status: task.status || 'pending',
-    priority: task.priority || 0,
-  };
-};
-
-const transformFormDataToUpdateData = (formData: TaskFormData, originalTask: Task | null): UpdateTaskData => {
-  const updates: UpdateTaskData = {};
-  if (!originalTask) return updates; // Should not happen in an update scenario
-
-  if (formData.title !== originalTask.title) updates.title = formData.title;
-  if (formData.description !== (originalTask.description || '')) updates.description = formData.description;
-  if (formData.notes !== (originalTask.notes || '')) updates.notes = formData.notes;
-  if (formData.category !== (originalTask.category || '')) updates.category = formData.category;
-  
-  const formDueDateString = formData.due_date ? formData.due_date : null;
-  const taskDueDateString = originalTask.due_date ? originalTask.due_date.split('T')[0] : null;
-  if (formDueDateString !== taskDueDateString) {
-    updates.due_date = formDueDateString ? new Date(formDueDateString).toISOString() : null;
-  }
-
-  if (formData.status !== originalTask.status) updates.status = formData.status;
-  if (formData.priority !== originalTask.priority) updates.priority = formData.priority;
-  
-  return updates;
-};
-
 export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
   taskId,
   isOpen,
@@ -123,13 +78,16 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
   onTaskUpdated,
   onDeleteTaskFromDetail,
 }) => {
-  console.log(`[TaskDetailView] Render. taskId: ${taskId}, isOpen: ${isOpen}`);
+  useInitializeTaskStore();
 
-  const objectManagerOptions: ObjectEditManagerOptions<Task, TaskFormData, UpdateTaskData> = {
-    objectType: 'Task',
-    objectId: taskId,
-    fetchQueryHook: useFetchTaskById as (id: string | null) => import('@tanstack/react-query').UseQueryResult<Task | null, Error>,
-    updateMutationHook: useUpdateTask,
+  const storeParentTask = useTaskStore(state => taskId ? state.getTaskById(taskId) : undefined);
+  const storeSubtasks = useTaskStore(state => taskId ? state.getSubtasksByParentId(taskId) : []);
+  const storeActionsFromHook = useTaskStore.getState();
+
+  const {
+    formMethods,
+    resetForm: resetParentForm,
+  } = useObjectEditManager<TaskFormData>({
     zodSchema: taskFormSchema,
     defaultValues: {
       title: '',
@@ -140,174 +98,161 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
       status: 'pending',
       priority: 0,
     },
-    transformDataToFormData,
-    transformFormDataToUpdateData,
-    onSaveSuccess: (_savedTask, _isNew) => {
-      toast.default(
-        'Task Updated',
-        'Your task has been successfully updated.',
-      );
-      if (onTaskUpdated) onTaskUpdated();
-      onOpenChange(false);
-    },
-    onClose: () => onOpenChange(false),
-    onLoadError: (error) => {
-        toast.error('Error Loading Task', error.message);
-    }
-  };
+  });
+  const { register, control, formState: { errors }, getValues: getParentFormValues } = formMethods;
 
   const {
-    formMethods,
-    originalData: task,
-    isLoading: isLoadingTaskData,
-    isFetching: isFetchingTask,
-    isSaving: isSavingTask,
-    error: taskError,
-    handleSave: handleSaveTask,
-    handleCancel: handleCancelEdit,
-    isDirty: isTaskFormDirty,
-    canSubmit: canSubmitTask,
-  } = useObjectEditManager(objectManagerOptions);
-
-  const { register, control, formState: { errors } } = formMethods;
-
-  const wrappedOnOpenChange = useCallback((open: boolean) => {
-    console.log(`[TaskDetailView] wrappedOnOpenChange called with: ${open}. Current isOpen prop: ${isOpen}`);
-    if (!open && isTaskFormDirty) {
-        handleCancelEdit();
-    } else {
-        onOpenChange(open);
-    }
-  }, [onOpenChange, isOpen, isTaskFormDirty, handleCancelEdit]);
-
-  // --- Subtask Management with useReorderableList ---
-  const subtasksWereModifiedInThisSessionRef = useRef(false);
-
-  const adaptedUpdateSubtaskOrderHook = useCallback(() => {
-    const originalMutation = useUpdateSubtaskOrder();
-    return {
-      ...originalMutation,
-      mutate: (variables: { parentId: string | null; orderedItems: Array<{ id: UniqueIdentifier; position: number } & Partial<Task>> }, 
-               options?: import('@tanstack/react-query').MutateOptions<Task[], Error, { parentTaskId: string; orderedSubtasks: { id: string; subtask_position: number; }[] }, { previousTasks?: Task[]; }>) => {
-        if (!variables.parentId) {
-          console.error("Parent ID is null for subtask order update.");
-          if (options?.onError) options.onError(new Error("Parent ID is null"), { parentTaskId: '', orderedSubtasks: [] }, undefined /* context */);
-          return;
-        }
-        const actualPayload = {
-          parentTaskId: variables.parentId,
-          orderedSubtasks: variables.orderedItems.map(item => ({ id: item.id as string, subtask_position: item.position })),
-        };
-        originalMutation.mutate(actualPayload, options);
-      },
-      mutateAsync: async (variables: { parentId: string | null; orderedItems: Array<{ id: UniqueIdentifier; position: number } & Partial<Task>> }, 
-                          options?: import('@tanstack/react-query').MutateOptions<Task[], Error, { parentTaskId: string; orderedSubtasks: { id: string; subtask_position: number; }[] }, { previousTasks?: Task[]; }>) => {
-        if (!variables.parentId) {
-          return Promise.reject(new Error("Parent ID is null for subtask order update."));
-        }
-        const actualPayload = {
-          parentTaskId: variables.parentId,
-          orderedSubtasks: variables.orderedItems.map(item => ({ id: item.id as string, subtask_position: item.position })),
-        };
-        return originalMutation.mutateAsync(actualPayload, options);
-      },
-    } as ReactQueryUseMutationResult<Task[], Error, { parentId: string | null; orderedItems: Array<{ id: UniqueIdentifier; position: number } & Partial<Task>> }, unknown>;
-  }, []);
-
-  const adaptedCreateSubtaskHook = useCallback(() => {
-    const originalMutation = useCreateTask();
-    return {
-      ...originalMutation,
-      mutate: (variables: { parentId: string | null; newItem: Omit<NewTaskData, "user_id">; position?: number },
-               options?: import('@tanstack/react-query').MutateOptions<Task, Error, Omit<NewTaskData, "user_id">, unknown>) => {
-        const { parentId, newItem, position } = variables;
-        const actualPayload: Omit<NewTaskData, "user_id"> = { ...newItem, parent_task_id: parentId, subtask_position: position };
-        originalMutation.mutate(actualPayload, options);
-      },
-      mutateAsync: async (variables: { parentId: string | null; newItem: Omit<NewTaskData, "user_id">; position?: number },
-                          options?: import('@tanstack/react-query').MutateOptions<Task, Error, Omit<NewTaskData, "user_id">, unknown>) => {
-        const { parentId, newItem, position } = variables;
-        const actualPayload: Omit<NewTaskData, "user_id"> = { ...newItem, parent_task_id: parentId, subtask_position: position };
-        return originalMutation.mutateAsync(actualPayload, options);
-      },
-    } as ReactQueryUseMutationResult<Task, Error, { parentId: string | null; newItem: Omit<NewTaskData, "user_id">; position?: number }, unknown>;
-  }, []);
-
-  const sublistOptions: ReorderableListOptions<Task, Omit<NewTaskData, 'user_id'>> = {
-    listName: 'Subtasks',
-    parentObjectId: task?.id || null,
-    fetchListQueryHook: useFetchSubtasks,
-    updateOrderMutationHook: adaptedUpdateSubtaskOrderHook,
-    createItemMutationHook: adaptedCreateSubtaskHook,
-    getItemId: (item: Task) => item.id,
-    getItemPosition: (item: Task) => item.subtask_position || 0,
-    getNewItemPosition: (items: Task[], _newItemData: Omit<NewTaskData, 'user_id'>) => items.length + 1,
-    onReorderCommit: (_reorderedItems) => {
-      toast.default('Subtask order saved!');
-      subtasksWereModifiedInThisSessionRef.current = true;
-    },
-    onItemAdded: (_newItem) => {
-      toast.default('Subtask Added!');
-      subtasksWereModifiedInThisSessionRef.current = true;
-      setNewSubtaskTitle('');
-    },
-    onFetchError: (error) => {
-      toast.error('Error loading subtasks', error.message);
-    },
-  };
-
-  const {
-    items: subtasks,
-    isLoading: isLoadingSubtasks,
-    isAddingItem: isAddingSubtask,
-    error: subtasksError,
+    items: localSubtasks,
+    setItems: setLocalSubtasks,
     dndSensors: subtaskDndSensors,
     handleDragStart: handleSubtaskDragStart,
     handleDragEnd: handleSubtaskDragEnd,
-    handleAddItem: handleAddSubtaskOptimistic,
-    refetchList: refetchSubtasks,
-  } = useReorderableList<Task, Omit<NewTaskData, 'user_id'>>(sublistOptions);
+    handleLocalAddItem: handleLocalAddSubtask,
+  } = useReorderableList<Task>({
+    listName: 'Subtasks',
+    initialItems: [],
+    getItemId: (item) => item.id,
+  });
+  
+  const {
+    isModalDirty,
+    initializeState,
+    resetState,
+    handleSaveChanges,
+  } = useTaskDetailStateManager({
+    taskId,
+    storeParentTask,
+    getParentFormValues,
+    localSubtasks,
+    storeActions: {
+      updateTask: storeActionsFromHook.updateTask,
+      deleteTask: storeActionsFromHook.deleteTask,
+      createTask: storeActionsFromHook.createTask,
+    },
+    onSaveComplete: () => {
+      onTaskUpdated();
+      onOpenChange(false);
+    },
+  });
+  
+  // Keep track of previous taskId and isOpen state to control re-initialization
+  const prevTaskIdRef = useRef<string | null>();
+  const prevIsOpenRef = useRef<boolean>();
+  
+  useEffect(() => {
+    // Only re-initialize if:
+    // 1. The modal is opening (isOpen becomes true)
+    // 2. The taskId changes while the modal is already open
+    const hasTaskIdChanged = taskId !== prevTaskIdRef.current;
+    const isOpening = isOpen && !prevIsOpenRef.current;
+
+    if (isOpen && (isOpening || hasTaskIdChanged)) {
+      if (taskId && storeParentTask) {
+        console.log('[TaskDetailView] Initializing form and snapshots for taskId:', taskId, 'isOpening:', isOpening, 'hasTaskIdChanged:', hasTaskIdChanged);
+        const parentDataForForm: TaskFormData = {
+          title: storeParentTask.title || '',
+          description: storeParentTask.description || '',
+          notes: storeParentTask.notes || '',
+          category: storeParentTask.category || '',
+          due_date: storeParentTask.due_date ? storeParentTask.due_date.split('T')[0] : '',
+          status: storeParentTask.status || 'pending',
+          priority: storeParentTask.priority || 0,
+        };
+        resetParentForm(parentDataForForm as DefaultValues<TaskFormData>);
+        initializeState(parentDataForForm, cloneDeep(storeSubtasks));
+        setLocalSubtasks(cloneDeep(storeSubtasks));
+      } else if (!taskId) {
+        // If modal opens without a taskId (e.g. create new task flow, not currently supported by this modal directly)
+        // Or if taskId becomes null while open (should ideally not happen without closing)
+        resetParentForm({ title: '', description: '', notes: '', category: '', due_date: '', status: 'pending', priority: 0 });
+        resetState();
+        setLocalSubtasks([]);
+      }
+    } else if (!isOpen && prevIsOpenRef.current) {
+      // Modal is closing
+      console.log('[TaskDetailView] Modal closing, resetting snapshots.');
+      resetState();
+    }
+
+    // Update refs for next render
+    prevTaskIdRef.current = taskId;
+    prevIsOpenRef.current = isOpen;
+    // Note: storeParentTask and storeSubtasks are not in the dependency array to prevent
+    // re-running this effect just because their reference changed but the modal opening condition isn't met.
+    // The logic inside already uses the latest versions of these from the outer scope.
+  }, [isOpen, taskId, resetParentForm, initializeState, resetState, setLocalSubtasks, storeParentTask, storeSubtasks]); // CORRECTED dependency array
+
+  const handleModalCancelOrClose = useCallback((open: boolean) => {
+    if (!open) {
+      if (isModalDirty) {
+        if (window.confirm("You have unsaved changes. Are you sure you want to discard them?")) {
+          onOpenChange(false);
+        } else {
+          return; 
+        }
+      } else {
+        onOpenChange(false);
+      }
+    } else {
+      onOpenChange(true);
+    }
+  }, [isModalDirty, onOpenChange]);
 
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
 
-  useEffect(() => {
-    if (isOpen && taskId) {
-      subtasksWereModifiedInThisSessionRef.current = false;
-    }
-  }, [isOpen, taskId]);
-
   const handleDeleteClick = () => {
     if (taskId && onDeleteTaskFromDetail) {
-        if (window.confirm('Are you sure you want to delete this task?')) {
+        if (window.confirm('Are you sure you want to delete this parent task and all its subtasks?')) {
+            localSubtasks.forEach(sub => storeActionsFromHook.deleteTask(sub.id));
+            storeActionsFromHook.deleteTask(taskId);
             onDeleteTaskFromDetail(taskId);
+            onOpenChange(false);
+            toast.success("Task and subtasks deleted.");
         }
     }
   };
 
-  const handleInitiateAddSubtask = async () => {
-    if (!newSubtaskTitle.trim() || !task || !handleAddSubtaskOptimistic) return;
+  const handleInitiateLocalAddSubtask = () => {
+    if (!newSubtaskTitle.trim() || !taskId) return;
 
-    const newSubtaskData: Omit<NewTaskData, 'user_id'> = {
+    const tempId = `temp_sub_${Date.now()}`;
+    const newSubtaskObject: Task = {
+      id: tempId,
+      user_id: storeParentTask?.user_id || '',
       title: newSubtaskTitle.trim(),
-      status: 'pending', 
-      priority: task.priority || 0, 
+      status: 'pending',
+      priority: storeParentTask?.priority || 0,
+      parent_task_id: taskId,
+      subtask_position: localSubtasks.length + 1,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      description: null,
+      notes: null,
+      category: null,
+      due_date: null,
+      completed: false,
     };
+    handleLocalAddSubtask(newSubtaskObject);
+    setNewSubtaskTitle('');
+  };
+  
+  const handleSubtaskInteraction = () => {
+    console.log("[TaskDetailView] Subtask interaction occurred. Store will reflect changes.");
+  };
 
-    try {
-      await handleAddSubtaskOptimistic(newSubtaskData);
-    } catch (err) {
-      toast.error('Failed to add subtask', (err instanceof Error) ? err.message : 'Unknown error');
-      console.error("[TaskDetailView] Failed to add subtask via hook:", err);
-    }
+  const handleSubtaskReorder = (reordered: Task[]) => {
+    console.log("[TaskDetailView] Subtasks reordered locally", reordered);
   };
 
   if (!isOpen) return null;
 
-  const isSaveButtonDisabled = !canSubmitTask || isSavingTask;
-  const displayTaskTitle = task ? 'Edit Task' : isLoadingTaskData ? 'Loading...' : 'Task Details';
+  const isSaveButtonDisabled = !isModalDirty;
+  const displayTaskTitle = storeParentTask ? 'Edit Task' : taskId ? 'Loading...' : 'Task Details';
+
+  const isLoadingView = taskId && !storeParentTask && isOpen;
 
   return (
-    <RadixDialog.Root open={isOpen} onOpenChange={wrappedOnOpenChange}>
+    <RadixDialog.Root open={isOpen} onOpenChange={handleModalCancelOrClose}>
       <RadixDialog.Portal>
         <RadixDialog.Overlay className="fixed inset-0 bg-black/50 data-[state=open]:animate-overlayShow" />
         <RadixDialog.Content className="fixed top-1/2 left-1/2 w-[90vw] max-w-lg max-h-[85vh] -translate-x-1/2 -translate-y-1/2 rounded-lg bg-white dark:bg-gray-800 p-6 shadow-lg data-[state=open]:animate-contentShow focus:outline-none flex flex-col">
@@ -315,31 +260,25 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
             {displayTaskTitle}
           </RadixDialog.Title>
           <RadixDialog.Description className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-            View and edit task information.
+            View and edit task information. Changes are saved to local store.
           </RadixDialog.Description>
 
-          {isFetchingTask && (
+          {isLoadingView && (
             <div className="flex items-center justify-center h-40">
               <Spinner size={32} />
               <p className="ml-2">Loading task details...</p>
             </div>
           )}
-
-          {taskError && !isFetchingTask && (
-            <div className="text-red-500">
-              Error: {taskError.message}
-            </div>
-          )}
           
-          {!taskId && isOpen && !isLoadingTaskData && (
+          {!taskId && isOpen && (
              <div className="text-gray-500 dark:text-gray-400 p-4">
                 No task selected or task ID is missing.
             </div>
           )}
 
-          {!isLoadingTaskData && !taskError && task && taskId && (
+          {storeParentTask && taskId && (
             <>
-              <form onSubmit={handleSaveTask} className="flex-grow overflow-y-auto pr-2 space-y-4 custom-scrollbar">
+              <form onSubmit={(e) => { e.preventDefault(); handleSaveChanges(); }} className="flex-grow overflow-y-auto pr-2 space-y-4 custom-scrollbar">
                 <div>
                   <Label htmlFor="title">Title</Label>
                   <Input 
@@ -426,44 +365,32 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
 
                 <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                   <h3 className="text-md font-semibold text-gray-800 dark:text-gray-100 mb-2">Subtasks</h3>
-                  {isLoadingSubtasks && (
-                    <div className="flex items-center text-sm text-gray-500">
-                      <Spinner size={16} /> 
-                      <span className="ml-2">Loading subtasks...</span>
-                    </div>
-                  )}
-                  {subtasksError && <p className='text-red-500 text-sm'>Error loading subtasks: {subtasksError.message}</p>}
-                  {!isLoadingSubtasks && !subtasksError && (
-                    <DndContext
-                      sensors={subtaskDndSensors}
-                      collisionDetection={closestCenter}
-                      onDragStart={handleSubtaskDragStart}
-                      onDragEnd={handleSubtaskDragEnd}
+                  <DndContext
+                    sensors={subtaskDndSensors}
+                    collisionDetection={closestCenter}
+                    onDragStart={handleSubtaskDragStart}
+                    onDragEnd={(event) => handleSubtaskDragEnd(event, handleSubtaskReorder)}
+                  >
+                    <SortableContext 
+                      items={(localSubtasks || []).map(s => s.id)} 
+                      strategy={verticalListSortingStrategy}
                     >
-                      <SortableContext 
-                        items={(subtasks || []).map(s => s.id)} 
-                        strategy={verticalListSortingStrategy}
-                      >
-                        <div className="space-y-1 mb-3">
-                          {(subtasks || []).length > 0 ? (
-                            (subtasks || []).map(subtask => (
-                              <SubtaskItem 
-                                key={subtask.id} 
-                                subtask={subtask} 
-                                parentTaskId={task?.id || ''}
-                                onSubtaskUpdate={() => {
-                                  refetchSubtasks();
-                                  subtasksWereModifiedInThisSessionRef.current = true;
-                                }}
-                              />
-                            ))
-                          ) : (
-                            <p className="text-sm text-gray-500 dark:text-gray-400">No subtasks yet.</p>
-                          )}
-                        </div>
-                      </SortableContext>
-                    </DndContext>
-                  )}
+                      <div className="space-y-1 mb-3">
+                        {(localSubtasks || []).length > 0 ? (
+                          (localSubtasks || []).map(subtask => (
+                            <SubtaskItem 
+                              key={subtask.id} 
+                              subtask={subtask} 
+                              parentTaskId={storeParentTask?.id || ''}
+                              onSubtaskUpdate={handleSubtaskInteraction}
+                            />
+                          ))
+                        ) : (
+                          <p className="text-sm text-gray-500 dark:text-gray-400">No subtasks yet.</p>
+                        )}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
                   <div className="flex items-center mt-2">
                     <Input 
                       type="text"
@@ -474,16 +401,16 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           e.preventDefault();
-                          handleInitiateAddSubtask();
+                          handleInitiateLocalAddSubtask();
                         }
                       }}
                     />
                     <Button 
                       type="button" 
-                      onClick={handleInitiateAddSubtask} 
-                      disabled={!newSubtaskTitle.trim() || isAddingSubtask}
+                      onClick={handleInitiateLocalAddSubtask}
+                      disabled={!newSubtaskTitle.trim()}
                     >
-                      {isAddingSubtask ? <Spinner size={16} /> : 'Add'}
+                      Add
                     </Button>
                   </div>
                 </div>
@@ -491,14 +418,13 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
 
               <div className="mt-6 flex justify-between items-center pt-4 border-t border-gray-200 dark:border-gray-700">
                 <div className="flex space-x-2 ml-auto">
-                  <Button variant="secondary" type="button" onClick={handleCancelEdit}>Cancel</Button>
+                  <Button variant="secondary" type="button" onClick={() => handleModalCancelOrClose(false)}>Cancel</Button>
                   <Button 
                     type="button"
-                    onClick={handleSaveTask}
+                    onClick={handleSaveChanges}
                     className="bg-blue-500 hover:bg-blue-600 text-white"
                     disabled={isSaveButtonDisabled}
                   >
-                    {isSavingTask ? <Spinner size={16} className="mr-2" /> : null}
                     Save Changes
                   </Button>
                 </div>
@@ -519,7 +445,7 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
             </>
           )}
 
-          {!isLoadingTaskData && !taskError && !task && taskId && (
+          {!isLoadingView && !taskId && (
              <div className="text-center text-gray-500 dark:text-gray-400 p-4">
                 Task not found. It may have been deleted.
             </div>
@@ -530,7 +456,7 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
               className="absolute top-3.5 right-3.5 inline-flex h-6 w-6 appearance-none items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-400"
               aria-label="Close"
               type="button"
-              onClick={() => wrappedOnOpenChange(false)}
+              onClick={() => handleModalCancelOrClose(false)}
             >
               <Cross2Icon />
             </button>

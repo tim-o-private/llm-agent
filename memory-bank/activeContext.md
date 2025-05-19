@@ -31,28 +31,38 @@ This abstraction is a critical step towards improving code quality, reusability,
 # Active Context Update - 2024-07-18 (End of Session)
 
 ## Current Mode
-IMPLEMENTATION / PENDING TESTING
+ANALYSIS / DOCUMENTATION
 
 ## Current Focus
+**Task: Capture Current State & Document Hook Patterns (User Request)**
 
-**Task 7: Abstract TaskDetailView State Management into Reusable Hooks**
+Following a user report of issues with a previous chat session, the current focus is to thoroughly review and document the state of development, particularly concerning the custom hooks used in `TaskDetailView.tsx`.
 
-The development and initial integration of the `useObjectEditManager` and `useReorderableList` hooks into `webApp/src/components/features/TaskDetail/TaskDetailView.tsx` are now largely complete. Previously blocking linter errors related to this integration have been resolved, and unused resources in the hook files and `TaskDetailView.tsx` have been cleaned up. The documentation for the hooks in `memory-bank/clarity/references/patterns/reusable-ui-logic-hooks.md` has been updated to reflect their current implemented APIs.
+**Activities Completed:**
+1.  Reviewed `memory-bank/clarity/chatHistory` to understand the preceding context.
+2.  Read and analyzed the following hook files:
+    *   `webApp/src/hooks/useEntityEditManager.ts`
+    *   `webApp/src/hooks/useObjectEditManager.ts`
+    *   `webApp/src/hooks/useReorderableList.ts`
+    *   `webApp/src/hooks/useTaskDetailStateManager.ts`
+3.  Read and analyzed `webApp/src/components/features/TaskDetail/TaskDetailView.tsx` to understand its interaction with these hooks.
+4.  Documented the established patterns and created a MermaidJS sequence diagram illustrating the data flow. This has been saved to `memory-bank/clarity/diagrams/hook-data-flow-tdv.md`.
+
+**Task 7: Abstract TaskDetailView State Management into Reusable Hooks (Status Update)**
+
+The development and initial integration of `useObjectEditManager`, `useReorderableList`, and the orchestrating `useTaskDetailStateManager` (which uses `useEntityEditManager`) into `TaskDetailView.tsx` are confirmed to be largely complete based on code review.
 
 **Immediate Blocker:**
-None currently identified for this specific task. The primary path forward is testing.
+None for the current documentation task. For Task 7, the next step remains comprehensive testing.
 
-**Secondary Considerations (Previously addressed or will need re-verification after unblocking):**
-*   Verification that all unused variables/imports introduced during refactoring have been removed from `TaskDetailView.tsx`, `useObjectEditManager.ts`, and `useReorderableList.ts` (This has been completed).
-
-**Next Steps Upon Resuming:**
+**Next Steps Upon Resuming (for Task 7):**
 1.  **Perform Thorough Integration Testing:** Execute the manual test plan in `memory-bank/clarity/testing/task-detail-view-test-plan.md` to verify all parent task and subtask functionalities in the refactored `TaskDetailView.tsx`.
-2.  **Address Issues:** Resolve any bugs or unexpected behaviors identified during integration testing.
-3.  **Write Unit Tests:** Implement unit tests for `useObjectEditManager.ts` and `useReorderableList.ts` as outlined in `tasks.md` (Task 7, Phases 1 & 2).
-4.  **Finalize Task 7:** Proceed with Phase 6 (Documentation Update & Cleanup) of Task 7, which includes a final review of `TaskDetailView.tsx` and consideration of example usage for the hooks.
+2.  **Address Issues:** Resolve any bugs or unexpected behaviors identified during integration testing (e.g., issues noted in `tasks.md` like ST-6, OT-1 if still relevant after recent refactors).
+3.  **Write Unit Tests:** Implement unit tests for `useObjectEditManager.ts`, `useReorderableList.ts`, `useEntityEditManager.ts`, and `useTaskDetailStateManager.ts`.
+4.  **Finalize Task 7 Documentation:** Update `reusable-ui-logic-hooks.md` if any further API refinements occur during testing. Ensure all related documentation is consistent.
 
 **🛑 CRITICAL REMINDERS FOR AGENT 🛑**
-*   **ALWAYS consult `memory-bank/tasks.md` and `reusable-ui-logic-hooks.md` before resuming work on Task 7.**
-*   **The source of truth for hook APIs is `reusable-ui-logic-hooks.md`.**
-*   **Prioritize systematic testing and issue resolution.**
+*   **ALWAYS consult `memory-bank/tasks.md` and the new `memory-bank/clarity/diagrams/hook-data-flow-tdv.md` before resuming work on Task 7 or related UI tasks.**
+*   **The source of truth for hook APIs is the code itself and its accompanying documentation (`reusable-ui-logic-hooks.md` and `hook-data-flow-tdv.md`).**
+*   **Prioritize systematic testing and issue resolution for Task 7.**
 *   **Update `tasks.md` and `memory-bank/progress.md` diligently as Task 7 progresses post-testing.**
