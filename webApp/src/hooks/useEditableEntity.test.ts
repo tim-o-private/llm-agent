@@ -1,16 +1,37 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useEditableEntity, EntityTypeConfig } from './useEditableEntity'; // Adjust path as needed
-import { FieldValues } from 'react-hook-form';
+import { FieldValues, useForm, Control } from 'react-hook-form'; // Import necessary RHF types
 import { DragEndEvent } from '@dnd-kit/core'; // Import DragEndEvent
-import { vi, describe, test, expect, beforeEach, beforeAll } from 'vitest'; // IMPORT vi and test globals
+import { vi, describe, test, expect, beforeEach } from 'vitest'; // IMPORT vi and test globals
+
+// --- Mock react-hook-form ---
+// This object will be the return value of our mocked useForm
+const mockUseFormReturnValue = {
+  watch: vi.fn(),
+  getValues: vi.fn(),
+  setValue: vi.fn(),
+  reset: vi.fn(),
+  handleSubmit: vi.fn((cb) => (...args: any[]) => cb(...args)), // Executes the callback passed to handleSubmit
+  control: {} as Control<any>, // Basic mock for Control
+  formState: {
+    isDirty: false,
+    isValid: true,
+    errors: {},
+    // Add other formState properties if useEditableEntity relies on them
+  },
+  // Add other RHF methods if the hook uses them, e.g., trigger, setError, clearErrors
+};
+
+vi.mock('react-hook-form', async () => {
+  const actualRHF = await vi.importActual('react-hook-form');
+  return {
+    ...actualRHF,
+    useForm: vi.fn(() => mockUseFormReturnValue), // Our mock useForm returns the controllable object
+  };
+});
+// --- End Mock react-hook-form ---
 
 // Mocks
-// Mock react-hook-form's useForm
-// const mockUseForm = jest.fn(); // REMOVED
-// Mock Zod and zodResolver if formSchema is used
-// vi.mock('@hookform/resolvers/zod', () => ({ // CHANGED from jest.mock
-//   zodResolver: vi.fn().mockImplementation(schema => schema), // CHANGED from jest.fn
-// }));
 // Mock lodash-es
 vi.mock('lodash-es', () => ({ 
   cloneDeep: vi.fn(data => JSON.parse(JSON.stringify(data))),
@@ -113,14 +134,39 @@ describe('useEditableEntity', () => {
     // ... any other formState properties used by the hook
   //});
 
-  beforeAll(() => {
-    // Store actual react-hook-form module
-    // actualUseForm = jest.requireActual('react-hook-form').useForm;
-  });
-
   beforeEach(() => {
-    vi.resetAllMocks(); // CHANGED from jest.resetAllMocks
+    // vi.resetAllMocks(); // DO NOT use vi.resetAllMocks()
 
+    if (mockQueryHook) mockQueryHook.mockClear();
+    if (mockSaveHandler) mockSaveHandler.mockClear();
+
+    // Clear the mocked react-hook-form's useForm function itself
+    // After vi.mock, useForm is a Vitest mock function.
+    if (useForm && typeof (useForm as any).mockClear === 'function') {
+      (useForm as any).mockClear();
+    }
+    // The top-level vi.mock ensures useForm still returns mockUseFormReturnValue.
+
+    // Reset the state/methods of the object *returned* by the mocked useForm
+    mockUseFormReturnValue.watch.mockClear();
+    mockUseFormReturnValue.getValues.mockClear().mockReturnValue({ name: 'Initial Name', value: 100 }); 
+    mockUseFormReturnValue.setValue.mockClear();
+    mockUseFormReturnValue.reset.mockClear();
+    mockUseFormReturnValue.handleSubmit.mockClear().mockImplementation((cb) => async (...args:any[]) => await cb(...args));
+    
+    let currentIsDirty = false;
+    Object.defineProperty(mockUseFormReturnValue, 'formState', {
+      value: {
+        get isDirty() { return currentIsDirty; },
+        set isDirty(val: boolean) { currentIsDirty = val; },
+        isValid: true,
+        errors: {},
+      },
+      configurable: true, 
+    });
+    mockUseFormReturnValue.formState.isDirty = false; 
+
+    // Re-initialize mockQueryHook and mockSaveHandler by assignment (this also clears them)
     mockQueryHook = vi.fn<Parameters<MockQueryHook>, ReturnType<MockQueryHook>>().mockReturnValue({
       data: undefined,
       isLoading: true,
@@ -128,33 +174,6 @@ describe('useEditableEntity', () => {
       error: null,
     });
     mockSaveHandler = vi.fn<Parameters<MockSaveHandler>, ReturnType<MockSaveHandler>>().mockResolvedValue(undefined);
-
-    // Configure the global mock for useForm
-    // const defaultMockFormMethods = { // REMOVED
-    //   watch: jest.fn(),
-    //   getValues: jest.fn().mockReturnValue({ name: '', value: 0 }),
-    //   setValue: jest.fn(),
-    //   reset: jest.fn(),
-    //   handleSubmit: jest.fn(cb => (...args: any[]) => cb(...args)), // Mock handleSubmit to call its callback
-    //   formState: mockFormState(false), // Default to not dirty
-    //   control: {} as any, // Mock control object
-    //   // Add other RHF methods if the hook uses them
-    // };
-    
-    // jest.mock('react-hook-form', () => ({
-    //   ...jest.requireActual('react-hook-form'),
-    //   useForm: () => defaultMockFormMethods,
-    // }));
-    // The above module mock needs to be at the top level of the file.
-    // For now, let's assume useEditableEntity imports useForm and we can mock it.
-    // If useEditableEntity directly calls useForm(), we need module-level mock.
-    // For simplicity, we'll pass a mock useForm via config if possible, or rely on a global mock set up elsewhere if that's the pattern.
-    // Let's assume for now the hook itself will call the globally mocked useForm if we set it up.
-    // This is tricky to do reliably within beforeEach without top-level vi.mock.
-
-    // To test dirty state changes from RHF, the hook needs to re-render.
-    // We need to simulate RHF calling a re-render on its consumer.
-    // This is usually handled by RTL's `act` and `renderHook` updates.
   });
 
   const getMockConfig = (overrides: Partial<EntityTypeConfig<TestEntity, TestFormData, TestSubItem, TestSubItem>> = {}): EntityTypeConfig<TestEntity, TestFormData, TestSubItem, TestSubItem> => ({
@@ -229,28 +248,34 @@ describe('useEditableEntity', () => {
     expect(result.current.isFetching).toBe(false);
   });
 
-  // Test for form dirty state (requires proper RHF mocking)
-  // This test is conceptual due to difficulties mocking useForm effectively without module mocking
-  test('isMainFormDirty should reflect RHF form state (conceptual)', () => {
-    // To test this properly, you'd mock 'react-hook-form' module
-    // and control the `formState.isDirty` returned by the mocked `useForm`.
-    // For example:
-    // jest.mock('react-hook-form', () => ({
-    //   ...jest.requireActual('react-hook-form'),
-    //   useForm: () => ({
-    //     ...mockFormMethods, // your base mock
-    //     formState: { isDirty: true },
-    //   }),
-    // }));
-    // const { result } = renderHook(() => useEditableEntity(getMockConfig()));
-    // expect(result.current.isMainFormDirty).toBe(true); // if RHF mock says form is dirty
-    
-    // Since module mocking is complex here, this is a placeholder.
-    // The hook directly returns formMethods.formState.isDirty.
-    const { result } = renderHook(() => useEditableEntity(getMockConfig()));
-    // We can't easily change result.current.formMethods.formState.isDirty from outside
-    // without a proper RHF module mock. So we test its initial state.
-    expect(result.current.isMainFormDirty).toBe(false); // Assuming default initial state from RHF
+  // Test for form dirty state
+  test('isMainFormDirty should reflect RHF form state', async () => {
+    const { result, rerender } = renderHook((props) => useEditableEntity(props), {
+      initialProps: getMockConfig(),
+    });
+
+    // Initial state from mock
+    expect(result.current.isMainFormDirty).toBe(false);
+
+    // Simulate form becoming dirty
+    act(() => {
+      // Directly modify the isDirty property of the object returned by the mocked useForm
+      mockUseFormReturnValue.formState.isDirty = true;
+    });
+
+    // Rerender the hook to pick up the changed mock state
+    // This simulates React re-rendering the component that uses useEditableEntity,
+    // which in turn causes useEditableEntity to re-evaluate based on the new formState.
+    rerender(getMockConfig()); 
+
+    expect(result.current.isMainFormDirty).toBe(true);
+
+    // Simulate form becoming clean again
+    act(() => {
+      mockUseFormReturnValue.formState.isDirty = false;
+    });
+    rerender(getMockConfig());
+    expect(result.current.isMainFormDirty).toBe(false);
   });
 
   test('handleSave should call saveHandler and update state on success (with returned entity)', async () => {
@@ -261,27 +286,44 @@ describe('useEditableEntity', () => {
       data: mockInitialEntity, isLoading: false, isFetching: false, error: null,
     });
 
-    const { result } = renderHook(() => useEditableEntity(getMockConfig()));
+    // Simulate form data that would be passed to saveHandler
+    const formDataForSave = { name: 'Updated Name', value: 100 };
+    mockUseFormReturnValue.getValues.mockReturnValue(formDataForSave);
+
+    const { result, rerender } = renderHook(() => useEditableEntity(getMockConfig()));
     
     await waitFor(() => {
       expect(result.current.originalEntity).toEqual(mockInitialEntity);
     });
 
+    // Simulate form being dirty before save
+    act(() => {
+      mockUseFormReturnValue.formState.isDirty = true;
+    });
+    rerender(); // Rerender to reflect dirty state if necessary for the hook's logic
+
     await act(async () => {
-      await result.current.handleSave();
+      await result.current.handleSave(); // This will internally call the mocked handleSubmit
     });
 
     expect(mockSaveHandler).toHaveBeenCalledWith(
-      mockInitialEntity, // originalSnapshot should now be correctly mockInitialEntity
-      expect.anything(), // currentFormData (mocked by RHF getValues)
-      [] // internalSubEntityList (empty in this simple config)
+      mockInitialEntity, 
+      formDataForSave, // Check that getValues was used
+      mockInitialEntity.subItems || [] // Expect subItems if originalEntity has them
     );
     await waitFor(() => {
       expect(result.current.originalEntity).toEqual(updatedEntity); // Snapshot updated
     });
     expect(result.current.isSaving).toBe(false);
     expect(result.current.error).toBeNull();
-    // Expect formMethods.reset to have been called with transformed updatedEntity
+    // Verify RHF reset was called with the new data to clear dirty state
+    expect(mockUseFormReturnValue.reset).toHaveBeenCalledWith(mockTransformDataToForm(updatedEntity));
+    // After reset, form should not be dirty (assuming RHF mock handles this)
+    act(() => {
+        mockUseFormReturnValue.formState.isDirty = false; // Simulate RHF resetting its dirty state
+    });
+    rerender();
+    expect(result.current.isMainFormDirty).toBe(false);
   });
   
   test('handleSave should call saveHandler and reset RHF dirty state on success (void return)', async () => {
@@ -291,25 +333,39 @@ describe('useEditableEntity', () => {
       data: mockInitialEntity, isLoading: false, isFetching: false, error: null,
     });
 
-    const { result } = renderHook(() => useEditableEntity(getMockConfig()));
+    const formDataForSave = { name: 'Current Form Name', value: 120 }; // Different from initial
+    mockUseFormReturnValue.getValues.mockReturnValue(formDataForSave);
+
+    const { result, rerender } = renderHook(() => useEditableEntity(getMockConfig()));
 
     await waitFor(() => {
       expect(result.current.originalEntity).toEqual(mockInitialEntity);
     });
+
     // Simulate form being dirty
-    // This requires proper RHF mocking to change formState.isDirty and getValues
-    // For now, we mostly test the call to saveHandler and state transitions
+    act(() => {
+      mockUseFormReturnValue.formState.isDirty = true;
+    });
+    rerender();
 
     await act(async () => {
       await result.current.handleSave();
     });
 
-    expect(mockSaveHandler).toHaveBeenCalled();
+    expect(mockSaveHandler).toHaveBeenCalledWith(mockInitialEntity, formDataForSave, mockInitialEntity.subItems || []);
     await waitFor(() => {
+      // Original entity should remain unchanged if saveHandler returns void
       expect(result.current.originalEntity).toEqual(mockInitialEntity);
     });
     expect(result.current.isSaving).toBe(false);
-    // Expect formMethods.reset to have been called to clear RHF dirty state
+    // Verify RHF reset was called with the current form data (or transformed original if non-destructive save)
+    // Hook resets with transformed original entity if saveHandler is void and successful
+    expect(mockUseFormReturnValue.reset).toHaveBeenCalledWith(mockTransformDataToForm(mockInitialEntity));
+    act(() => {
+        mockUseFormReturnValue.formState.isDirty = false; // Simulate RHF resetting its dirty state
+    });
+    rerender();
+    expect(result.current.isMainFormDirty).toBe(false);
   });
 
   test('handleSave should set error state on saveHandler failure', async () => {
@@ -319,18 +375,24 @@ describe('useEditableEntity', () => {
     mockQueryHook.mockReturnValue({
       data: mockInitialEntity, isLoading: false, isFetching: false, error: null,
     });
-    const { result } = renderHook(() => useEditableEntity(getMockConfig()));
+    const { result, rerender } = renderHook(() => useEditableEntity(getMockConfig()));
 
     await waitFor(() => {
       expect(result.current.originalEntity).toEqual(mockInitialEntity);
     });
+
+    // Simulate form being dirty to allow saveHandler to be called
+    act(() => {
+      mockUseFormReturnValue.formState.isDirty = true;
+    });
+    rerender(); // Ensure the hook re-evaluates combinedIsDirty
 
     await act(async () => {
       await result.current.handleSave();
     });
 
     expect(result.current.isSaving).toBe(false);
-    expect(result.current.error).toBe(saveError);
+    await waitFor(() => expect(result.current.error?.message).toBe(saveError.message));
   });
 
   test('handleCancel should reset form and call onCancel callback', async () => {
@@ -338,20 +400,33 @@ describe('useEditableEntity', () => {
     mockQueryHook.mockReturnValue({
       data: mockInitialEntity, isLoading: false, isFetching: false, error: null,
     });
-    const { result } = renderHook(() => useEditableEntity(getMockConfig({ onCancel: mockOnCancel })));
+
+    // Simulate form data being different from initial to be resettable
+    mockUseFormReturnValue.getValues.mockReturnValue({ name: 'Changed Name', value: 150 });
+    act(() => {
+      mockUseFormReturnValue.formState.isDirty = true; // Simulate form was dirty
+    });
+
+    const { result, rerender } = renderHook(() => useEditableEntity(getMockConfig({ onCancel: mockOnCancel })));
 
     await waitFor(() => {
       expect(result.current.originalEntity).toEqual(mockInitialEntity);
     });
-    // Assume form was changed, then cancelled.
-    // This would require RHF interaction to simulate dirty form.
+    rerender(); // To pick up dirty state if needed for hook logic before cancel
 
     act(() => {
       result.current.handleCancel();
     });
 
     // Expect formMethods.reset to be called with original transformed data
+    expect(mockUseFormReturnValue.reset).toHaveBeenCalledWith(mockTransformDataToForm(mockInitialEntity));
     expect(mockOnCancel).toHaveBeenCalled();
+    // Simulate RHF form becoming clean after reset
+    act(() => {
+      mockUseFormReturnValue.formState.isDirty = false;
+    });
+    rerender();
+    expect(result.current.isMainFormDirty).toBe(false);
   });
 
   // Tests for sub-entity CRUD, dirty state, and DND would follow a similar pattern:
@@ -416,34 +491,16 @@ describe('useEditableEntity', () => {
       ],
     };
 
-    let rhfFormStateIsDirty = false;
-    const mockRHFMethods = {
-      watch: vi.fn(),
-      getValues: vi.fn(() => mockTransformDataToForm(initialEntityWithTwoSubItems)),
-      setValue: vi.fn(),
-      reset: vi.fn(),
-      handleSubmit: vi.fn(cb => (...args: any[]) => cb(...args)),
-      formState: { /* will be dynamically set */ } as any,
-      control: {} as any,
-    };
-    
-    // This is the key: mock react-hook-form module
-    // We need to do this at the top-level of the test file.
-    // Since we can't edit that from here, these tests will be somewhat conceptual
-    // or assume such a mock is in place.
+    // rhfFormStateIsDirty and mockRHFMethods are no longer needed here,
+    // as these are handled by the global mockUseFormReturnValue and its setup in beforeEach.
 
-    // Helper to set up the hook for sub-entity tests
     const setupHookWithSubItems = (initialData: TestEntity = initialEntityWithTwoSubItems) => {
       mockQueryHook.mockReturnValue({ data: initialData, isLoading: false, isFetching: false, error: null });
       
-      // Update formState mock for each run
-      mockRHFMethods.formState = {
-        get isDirty() { return rhfFormStateIsDirty; }, // Dynamic getter
-        isValid: true, errors: {}, touchedFields: {},
-      };
-      
-      // If we could mock useForm globally:
-      // (useForm as vi.Mock).mockReturnValue(mockRHFMethods);
+      // Configure getValues for the main form based on initialData for this specific setup
+      mockUseFormReturnValue.getValues.mockReturnValue(mockTransformDataToForm(initialData));
+      // Ensure main form starts as not dirty for these sub-entity tests unless specified
+      mockUseFormReturnValue.formState.isDirty = false;
 
       return renderHook(
         (props) => useEditableEntity(props), 
@@ -452,46 +509,58 @@ describe('useEditableEntity', () => {
             entityId: initialData.id,
             subEntityPath: 'subItems',
             transformSubCollectionToList: mockTransformSubCollectionToList,
-            enableSubEntityReordering: true, // Enable for DND tests
+            enableSubEntityReordering: true, 
           })
         }
       );
     };
 
     beforeEach(() => {
-      rhfFormStateIsDirty = false; // Reset RHF dirty state for main form
-      mockRHFMethods.getValues.mockReturnValue(mockTransformDataToForm(initialEntityWithTwoSubItems));
-      mockRHFMethods.reset.mockClear();
-      mockSaveHandler.mockClear();
+      // Reset main form dirty state for tests within this describe block
+      // This is already handled by the top-level beforeEach, but explicit here for clarity if needed.
+      // mockUseFormReturnValue.formState.isDirty = false;
+      // mockUseFormReturnValue.getValues.mockReturnValue(mockTransformDataToForm(initialEntityWithTwoSubItems));
+      mockSaveHandler.mockClear(); // Ensure save handler is clean for save tests
     });
 
     test('updateSubItem should update an item and set dirty state', async () => {
-      const { result } = setupHookWithSubItems();
+      const { result, rerender } = setupHookWithSubItems(); // Use rerender if needed
       
       await waitFor(() => {
         expect(result.current.subEntityList[0].text).toBe('Alpha');
         expect(result.current.isSubEntityListDirty).toBe(false);
       });
-      expect(result.current.isDirty).toBe(false);
+      expect(result.current.isDirty).toBe(false); // Combined dirty state
 
       act(() => {
         result.current.updateSubItem('sub-a', { text: 'Alpha-Updated' });
       });
+      rerender(getMockConfig({
+        entityId: initialEntityWithTwoSubItems.id,
+        subEntityPath: 'subItems',
+        transformSubCollectionToList: mockTransformSubCollectionToList,
+        enableSubEntityReordering: true,
+      }));
 
       expect(result.current.subEntityList[0].text).toBe('Alpha-Updated');
       expect(result.current.isSubEntityListDirty).toBe(true);
       expect(result.current.isDirty).toBe(true);
 
-      // Test with function updater
       act(() => {
         result.current.updateSubItem('sub-b', (prev) => ({ ...prev, text: prev.text + '-Suffix' }));
       });
+      rerender(getMockConfig({
+        entityId: initialEntityWithTwoSubItems.id,
+        subEntityPath: 'subItems',
+        transformSubCollectionToList: mockTransformSubCollectionToList,
+        enableSubEntityReordering: true,
+      }));
       expect(result.current.subEntityList[1].text).toBe('Bravo-Suffix');
-      expect(result.current.isSubEntityListDirty).toBe(true); // Still dirty
+      expect(result.current.isSubEntityListDirty).toBe(true); 
     });
 
     test('removeSubItem should remove an item and set dirty state', async () => {
-      const { result } = setupHookWithSubItems();
+      const { result, rerender } = setupHookWithSubItems();
       
       await waitFor(() => {
         expect(result.current.subEntityList.length).toBe(2);
@@ -501,6 +570,12 @@ describe('useEditableEntity', () => {
       act(() => {
         result.current.removeSubItem('sub-a');
       });
+      rerender(getMockConfig({
+        entityId: initialEntityWithTwoSubItems.id,
+        subEntityPath: 'subItems',
+        transformSubCollectionToList: mockTransformSubCollectionToList,
+        enableSubEntityReordering: true,
+      }));
 
       expect(result.current.subEntityList.length).toBe(1);
       expect(result.current.subEntityList.find(item => item.subId === 'sub-a')).toBeUndefined();
@@ -510,7 +585,7 @@ describe('useEditableEntity', () => {
     });
 
     test('handleDragEnd should reorder items and set dirty state', async () => {
-      const { result } = setupHookWithSubItems();
+      const { result, rerender } = setupHookWithSubItems();
       
       await waitFor(() => {
         expect(result.current.subEntityList[0].subId).toBe('sub-a');
@@ -524,10 +599,16 @@ describe('useEditableEntity', () => {
       } as DragEndEvent;
 
       act(() => {
-        if (result.current.dndContextProps?.onDragEnd) { // Check if onDragEnd exists
+        if (result.current.dndContextProps?.onDragEnd) { 
           result.current.dndContextProps.onDragEnd(mockDragEndEvent);
         }
       });
+      rerender(getMockConfig({
+        entityId: initialEntityWithTwoSubItems.id,
+        subEntityPath: 'subItems',
+        transformSubCollectionToList: mockTransformSubCollectionToList,
+        enableSubEntityReordering: true, 
+      }));
 
       expect(result.current.subEntityList[0].subId).toBe('sub-b');
       expect(result.current.subEntityList[1].subId).toBe('sub-a');
@@ -536,30 +617,31 @@ describe('useEditableEntity', () => {
     });
 
     test('isDirty should be true if main form is dirty, even if sub-list is not', async () => {
-      const { result, rerender } = setupHookWithSubItems();
+      const { result, rerender } = setupHookWithSubItems(); // Sub-list will be clean initially
       
       await waitFor(() => {
         expect(result.current.isDirty).toBe(false);
         expect(result.current.isSubEntityListDirty).toBe(false);
+        expect(result.current.isMainFormDirty).toBe(false);
       });
       
-      rhfFormStateIsDirty = true; // Simulate RHF form becoming dirty
-      // Rerender to pick up new formState.isDirty (if RHF would cause a rerender)
-      // This is where proper RHF mocking that triggers rerenders is crucial.
-      // For now, we manually rerender to simulate the effect.
+      act(() => {
+        mockUseFormReturnValue.formState.isDirty = true; // Simulate RHF form becoming dirty
+      });
       rerender(getMockConfig({
         entityId: initialEntityWithTwoSubItems.id,
         subEntityPath: 'subItems',
         transformSubCollectionToList: mockTransformSubCollectionToList,
+        enableSubEntityReordering: true, 
       }));
-      
+
       expect(result.current.isMainFormDirty).toBe(true);
-      expect(result.current.isSubEntityListDirty).toBe(false); // Assuming no sub-list changes
+      expect(result.current.isSubEntityListDirty).toBe(false); 
       expect(result.current.isDirty).toBe(true);
     });
 
     test('handleSave should include modified subEntityList', async () => {
-      const { result } = setupHookWithSubItems();
+      const { result, rerender } = setupHookWithSubItems();
       const newSubItem: TestSubItem = { subId: 'sub-c', text: 'Charlie' };
       const updatedText = 'Alpha-Modified';
 
@@ -567,25 +649,45 @@ describe('useEditableEntity', () => {
         result.current.addSubItem(newSubItem); 
         result.current.updateSubItem('sub-a', { text: updatedText }); 
       });
+      rerender(getMockConfig({
+        entityId: initialEntityWithTwoSubItems.id,
+        subEntityPath: 'subItems',
+        transformSubCollectionToList: mockTransformSubCollectionToList,
+        enableSubEntityReordering: true, 
+      }));
 
-      expect(result.current.isDirty).toBe(true);
+      expect(result.current.isDirty).toBe(true); // Both sub-list and main form (potentially) are dirty
 
-      const changedFormData = { ...mockTransformDataToForm(initialEntityWithTwoSubItems), name: "Parent-Changed" };
-      mockRHFMethods.getValues.mockReturnValue(changedFormData);
-      rhfFormStateIsDirty = true;
+      const changedMainFormData = { ...mockTransformDataToForm(initialEntityWithTwoSubItems), name: "Parent-Changed" };
+      mockUseFormReturnValue.getValues.mockReturnValue(changedMainFormData); // Simulate main form changes
+      act(() => {
+          mockUseFormReturnValue.formState.isDirty = true; // Ensure main form is marked dirty for combined isDirty state
+      });
+      rerender(getMockConfig({
+        entityId: initialEntityWithTwoSubItems.id,
+        subEntityPath: 'subItems',
+        transformSubCollectionToList: mockTransformSubCollectionToList,
+        enableSubEntityReordering: true, 
+      }));
 
-      const expectedSavedEntity = { ...initialEntityWithTwoSubItems, name: "Parent-Changed" };
-      const returnedEntityFromSave = { 
-        ...expectedSavedEntity, 
-        subItems: initialEntityWithTwoSubItems.subItems 
+      // Mock saveHandler to return an entity that reflects the save
+      // For this test, let's assume the backend returns the full entity with updated subitems
+      const savedEntityStateFromBackend = {
+        ...initialEntityWithTwoSubItems, // Base original entity
+        name: changedMainFormData.name, // Updated name from form
+        subItems: [ // Expected subItem state AFTER save
+          { subId: 'sub-a', text: updatedText },
+          { subId: 'sub-b', text: 'Bravo' },
+          newSubItem,
+        ],
       };
-      mockSaveHandler.mockResolvedValue(returnedEntityFromSave);
+      mockSaveHandler.mockResolvedValue(savedEntityStateFromBackend);
 
       await act(async () => {
         await result.current.handleSave();
       });
       
-      const expectedSubListPayload = [
+      const expectedSubListPayloadForBackend = [
         { subId: 'sub-a', text: updatedText },
         { subId: 'sub-b', text: 'Bravo' },
         newSubItem,
@@ -594,58 +696,90 @@ describe('useEditableEntity', () => {
       expect(mockSaveHandler).toHaveBeenCalledTimes(1); 
       expect(mockSaveHandler).toHaveBeenCalledWith(
         initialEntityWithTwoSubItems, 
-        changedFormData,              
-        expect.arrayContaining(expectedSubListPayload.map(item => expect.objectContaining(item)))
+        changedMainFormData,              
+        expect.arrayContaining(expectedSubListPayloadForBackend.map(item => expect.objectContaining(item)))
       );
       
-      if (mockSaveHandler.mock.calls.length > 0) {
-        const firstCallArgs = mockSaveHandler.mock.calls[0];
-        // Check if the third argument (index 2) exists and is an array
-        if (firstCallArgs && firstCallArgs.length > 2 && firstCallArgs[2] !== undefined && Array.isArray(firstCallArgs[2])) {
-          expect((firstCallArgs[2] as TestSubItem[]).length).toBe(expectedSubListPayload.length);
-        } else {
-          // Fail the test explicitly if the third argument is not as expected
-          expect(firstCallArgs && firstCallArgs.length > 2 && Array.isArray(firstCallArgs[2])).toBe(true);
-        }
-      }
+      const saveHandlerCallArgs = mockSaveHandler.mock.calls[0];
+      expect(saveHandlerCallArgs[2]).toHaveLength(expectedSubListPayloadForBackend.length);
 
       expect(result.current.isSaving).toBe(false);
-      
-      const currentError = result.current.error;
-      expect(currentError).toBeNull(); 
+      await waitFor(() => expect(result.current.error).toBeNull());
 
-      await waitFor(() => {
-        const currentOriginalEntity = result.current.originalEntity;
-        expect(currentOriginalEntity!).toEqual(returnedEntityFromSave); 
-        expect(result.current.isDirty).toBe(false); 
-        // If saveHandler returns entity, subEntityList snapshot AND internal list should update
-        expect(result.current.subEntityList).toEqual(returnedEntityFromSave.subItems); 
+      // Verify RHF reset was called with the new data
+      expect(mockUseFormReturnValue.reset).toHaveBeenCalledWith(mockTransformDataToForm(savedEntityStateFromBackend));
+      // After reset, form should not be dirty. Simulate this effect on the mock.
+      act(() => {
+        mockUseFormReturnValue.formState.isDirty = false;
+      });
+      // Rerender to ensure hook picks up the change in mockUseFormReturnValue.formState.isDirty
+      rerender(getMockConfig({
+        entityId: initialEntityWithTwoSubItems.id,
+        subEntityPath: 'subItems',
+        transformSubCollectionToList: mockTransformSubCollectionToList,
+        enableSubEntityReordering: true, 
+      }));
+
+      await waitFor(() => { 
+        expect(result.current.originalEntity!).toEqual(savedEntityStateFromBackend); 
+        // Form and sub-list should be reset and not dirty
+        expect(result.current.isMainFormDirty).toBe(false); // Check main form first
+        expect(result.current.subEntityList).toEqual(savedEntityStateFromBackend.subItems); 
+        expect(result.current.isSubEntityListDirty).toBe(false); 
+        expect(result.current.isDirty).toBe(false); // Then check combined dirty state
       });
     });
 
-    test('resetState should revert subEntityList changes', async () => {
-      const { result } = setupHookWithSubItems();
+    test('resetState should revert subEntityList changes and main form', async () => {
+      // Define the specific config for this test instance
+      const currentTestConfig = getMockConfig({
+        entityId: initialEntityWithTwoSubItems.id,
+        subEntityPath: 'subItems',
+        transformSubCollectionToList: mockTransformSubCollectionToList,
+        enableSubEntityReordering: true, // Assuming this is intended for the initial setup
+      });
+
+      // Ensure mocks are configured according to initialEntityWithTwoSubItems for this test config
+      mockQueryHook.mockReturnValue({ data: initialEntityWithTwoSubItems, isLoading: false, isFetching: false, error: null });
+      mockUseFormReturnValue.getValues.mockReturnValue(mockTransformDataToForm(initialEntityWithTwoSubItems));
+      mockUseFormReturnValue.formState.isDirty = false; // Start clean for main form
+
+      const { result, rerender } = renderHook(
+        (props) => useEditableEntity(props),
+        { initialProps: currentTestConfig }
+      );
       
       act(() => {
         result.current.addSubItem({ subId: 'sub-c', text: 'Charlie' });
         result.current.updateSubItem('sub-a', { text: 'Alpha-Modified' });
         result.current.removeSubItem('sub-b');
+        mockUseFormReturnValue.formState.isDirty = true; // Also make main form dirty
       });
+      rerender(currentTestConfig); // Pass config explicitly
 
-      expect(result.current.subEntityList.length).toBe(2); // Alpha-Modified, Charlie
+      expect(result.current.subEntityList.length).toBe(2); 
       expect(result.current.isSubEntityListDirty).toBe(true);
+      expect(result.current.isMainFormDirty).toBe(true);
+      expect(result.current.isDirty).toBe(true);
       
       act(() => {
         result.current.resetState();
       });
+      rerender(currentTestConfig); // Pass config explicitly - This was the failing line (approx line 500)
 
-      // After reset, subEntityList should revert to original, and dirty state should be false
       await waitFor(() => {
         expect(result.current.subEntityList).toEqual(initialEntityWithTwoSubItems.subItems);
         expect(result.current.isSubEntityListDirty).toBe(false);
+        expect(mockUseFormReturnValue.reset).toHaveBeenCalledWith(mockTransformDataToForm(initialEntityWithTwoSubItems));
+        // Simulate RHF reset effect for the next check
+        mockUseFormReturnValue.formState.isDirty = false; 
       });
-      // Main form dirty state depends on RHF's reset behavior, which should also make it false
-      expect(result.current.isDirty).toBe(rhfFormStateIsDirty); // This might need to be expect(...).toBe(false) if RHF reset also clears its dirty state
+      
+      // We need to rerender again for the hook to pick up the changed mockUseFormReturnValue.formState.isDirty
+      rerender(currentTestConfig); 
+
+      expect(result.current.isMainFormDirty).toBe(false); 
+      expect(result.current.isDirty).toBe(false);
     });
   });
 }); 
