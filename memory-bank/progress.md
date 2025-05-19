@@ -35,9 +35,10 @@ This document tracks the active development progress for the CLI, Core Agent, Ba
 
 ## Task 9: Architect and Implement `useEditableEntity` Hook & Refactor `TaskDetailView`
 
-**Status:** COMPLETED
+**Status:** ARCHIVED
+**Archive Document:** `memory-bank/archive/archive-task9.md`
 
-**Summary:** This task focused on creating a reusable hook `useEditableEntity` for managing entity editing states, including form handling, sub-list management, and dirty state tracking. It also involved refactoring `TaskDetailView.tsx` to use this new hook, and finally cleaning up old hooks.
+**Summary:** This task focused on creating a reusable hook `useEditableEntity` for managing entity editing states, including form handling, sub-list management, and dirty state tracking. It also involved refactoring `TaskDetailView.tsx` to use this new hook, and finally cleaning up old hooks. The task has been fully documented, reflected upon, and archived. Some follow-up actions regarding sub-task ST-1 are noted in the reflection and archive documents.
 
 **Phases & Key Sub-tasks:**
 
@@ -46,17 +47,15 @@ This document tracks the active development progress for the CLI, Core Agent, Ba
 *   **Phase 9.3: Implementation - Integrate List Management into `useEditableEntity`** - COMPLETED
 *   **Phase 9.4: Implementation - Unit Testing for `useEditableEntity`** - COMPLETED
 *   **Phase 9.5: Refactor - Adapt `TaskDetailView.tsx` to use `useEditableEntity`** - COMPLETED
-*   **Phase 9.6: Testing - Comprehensive testing of refactored `TaskDetailView`** - COMPLETED
+*   **Phase 9.6: Testing - Comprehensive testing of refactored `TaskDetailView`** - COMPLETED (ST-1 pending, see archive)
 *   **Phase 9.7: Documentation - Create developer guides for `useEditableEntity` and pattern** - COMPLETED
 *   **Phase 9.8: Cleanup - Deprecate/remove old state management hooks** - COMPLETED
-    *   `9.8.1:` Evaluate Completeness of `useEditableEntity`. (COMPLETED)
-    *   `9.8.2:` Plan Migration for Other Components (if any use the old hooks). (COMPLETED - No other components found)
-    *   `9.8.3:` Mark old hooks as deprecated. (COMPLETED)
-    *   `9.8.4:` Remove old hook files. (COMPLETED)
+*   **Reflection & Archiving** - COMPLETED
 
 **Next Steps:**
 
-*   Task 9 is complete. Next major UI task can be prioritized from the backlog.
+*   Address pending items from Task 9 reflection (primarily ST-1 resolution).
+*   Next major UI task can be prioritized from the backlog.
 
 ## CLI & Core System Development Log
 
