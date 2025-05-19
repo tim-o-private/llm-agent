@@ -291,7 +291,8 @@ export function useEditableEntity<
 
   // Step 9.2.5: Implement handleSave
   const handleSave = useCallback(async () => {
-    console.log('%%% MEGA LOG 2: ENTERING useEditableEntity.handleSave %%%'); // Unique Log
+    console.log('[TEST_DEBUG] handleSave CALLED. isSavingState:', isSavingState, 'combinedIsDirty:', combinedIsDirty, 'config.entityId:', config?.entityId);
+    console.log('%%% MEGA LOG 2: ENTERING useEditableEntity.handleSave %%% '); // Unique Log
     console.log('[useEditableEntity] handleSave CALLED. isSaving:', isSavingState, 'isDirty:', combinedIsDirty);
     if (isSavingState || !combinedIsDirty) {
       console.log('[useEditableEntity] handleSave: Aborting save because isSaving or not isDirty.');
@@ -337,7 +338,14 @@ export function useEditableEntity<
         }
       }
     } catch (e) {
+      console.error('[useEditableEntity] handleSave: ERROR CAUGHT', e);
+      console.log('[useEditableEntity] handleSave: Current errorState BEFORE setErrorState:', errorState);
       setErrorState(e);
+      // Log after a brief timeout to see if state update has a chance to propagate
+      // This is a debugging step, not for production
+      setTimeout(() => {
+        console.log('[useEditableEntity] handleSave: Current errorState AFTER setErrorState (async check):', errorState);
+      }, 0);
       if (onSaveError) {
         onSaveError(e);
       }
