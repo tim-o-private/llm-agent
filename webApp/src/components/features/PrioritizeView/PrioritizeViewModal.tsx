@@ -2,12 +2,12 @@ import React, { useState, useEffect, ChangeEvent } from 'react';
 import * as RadixDialog from '@radix-ui/react-dialog';
 import { Cross2Icon } from '@radix-ui/react-icons';
 import { useFetchTaskById, useUpdateTask } from '@/api/hooks/useTaskHooks';
-import { Task, UpdateTaskData } from '@/api/types';
+import { Task } from '@/api/types';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
 import { Label } from '@/components/ui/Label';
 import { Spinner } from '@/components/ui/Spinner';
-import { toast } from 'react-hot-toast';
+import { toast } from '@/components/ui/toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/features/auth/useAuthStore';
 
@@ -65,7 +65,7 @@ export const PrioritizeViewModal: React.FC<PrioritizeViewModalProps> = ({
       return;
     }
 
-    const updates: UpdateTaskData = {};
+    const updates: Partial<Task> = {};
     let hasChanges = false;
 
     if (motivation !== (task.motivation || '')) {

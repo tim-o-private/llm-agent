@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import * as RadixDialog from '@radix-ui/react-dialog';
 import { Cross2Icon, TrashIcon } from '@radix-ui/react-icons';
 import { z } from 'zod';
 import { useTaskStore, useInitializeTaskStore } from '@/stores/useTaskStore';
-import { shallow } from 'zustand/shallow';
 import { Task, TaskStatus, TaskPriority } from '@/api/types';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -12,18 +11,12 @@ import { Label } from '@/components/ui/Label';
 import { Spinner } from '@/components/ui/Spinner';
 import { toast } from '@/components/ui/toast';
 import { SubtaskItem } from './SubtaskItem';
-import { Controller, DefaultValues } from 'react-hook-form';
-import { cloneDeep, isEqual } from 'lodash-es';
+import { Controller } from 'react-hook-form';
+import { isEqual } from 'lodash-es';
 
 // Dnd-kit imports - REINSTATE THESE
-import {
-  DndContext,
-  closestCenter,
-} from '@dnd-kit/core';
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
+import { DndContext } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 
 // IMPORT NEW HOOK
 import { useEditableEntity, EntityTypeConfig } from '@/hooks/useEditableEntity';
@@ -79,6 +72,9 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
   onTaskUpdated,
   onDeleteTaskFromDetail,
 }) => {
+  console.log('[TaskDetailView] TOP LEVEL - COMPONENT FUNCTION CALLED/RE-RENDERED. Props taskId:', taskId, 'isOpen:', isOpen);
+  const recentlyDraggedRef = useRef(false); // Changed ref name for clarity
+
   // Early return if the modal is not open, BEFORE any hook calls.
   if (!isOpen) {
     return null;
@@ -153,6 +149,12 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
       };
     },
     saveHandler: async (originalEntity, currentFormData, currentSubEntityList) => {
+      console.log('%%% MEGA LOG 3: ENTERING TaskDetailView.saveHandler %%%'); // Unique Log
+      console.log('[TaskDetailView/taskEntityTypeConfig.saveHandler] CALLED.');
+      console.log('[TaskDetailView/taskEntityTypeConfig.saveHandler] Original Entity:', JSON.parse(JSON.stringify(originalEntity)));
+      console.log('[TaskDetailView/taskEntityTypeConfig.saveHandler] Parent Changes:', JSON.parse(JSON.stringify(currentFormData)));
+      console.log('[TaskDetailView/taskEntityTypeConfig.saveHandler] Subtask Changes:', JSON.parse(JSON.stringify(currentSubEntityList)));
+
       const parentId = originalEntity?.id || taskId; // Prefer originalEntity.id if available
       if (!parentId) {
         toast.error("Cannot save, parent task ID is missing.");
@@ -251,15 +253,21 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
       return parentId ? storeActions.getTaskById(parentId) : Promise.resolve(undefined);
     },
     onSaveSuccess: (savedEntity?: Task) => {
+      // Log the isDirty state from useEditableEntity hook, available in TaskDetailView's scope
+      console.log(`[TaskDetailView/onSaveSuccess] CALLED. Current isDirty state from hook: ${isDirty}`); 
       toast.success(`Task ${savedEntity ? `"${savedEntity.title}"` : ''} saved successfully!`);
       onTaskUpdated();
-      onOpenChange(false);
+      wrappedOnOpenChange(false);
     },
     onSaveError: (error: any) => {
       console.error("Save error:", error);
       toast.error("Failed to save task. " + (error.message || ''));
     },
-    onCancel: () => { /* Modal closing is handled by wrappedOnOpenChange */ },
+    onCancel: () => {
+      // Modal closing is handled by wrappedOnOpenChange, 
+      // but if cancel is called programmatically, ensure wrapped is used.
+      wrappedOnOpenChange(false);
+    },
     enableSubEntityReordering: true,
     // cloneData and isDataEqual use defaults from useEditableEntity (lodash-es)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -293,18 +301,26 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
   }, [subEntityList]);
 
   const wrappedOnOpenChange = useCallback((open: boolean) => {
-    if (!open) { 
+    // ADDING LOG HERE
+    console.log(`[TaskDetailView] wrappedOnOpenChange called. Requested open state: ${open}. Current isDirty: ${isDirty}`);
+    
+    if (!open) {
       if (isDirty) {
+        console.log('[TaskDetailView] Modal about to close AND isDirty is true. Showing confirm dialog.');
         if (window.confirm("You have unsaved changes. Are you sure you want to discard them?")) {
+          console.log('[TaskDetailView] User CONFIRMED discard. Calling handleCancel and onOpenChange(false).');
           handleCancel(); 
           onOpenChange(false);
         } else {
-          return; 
+          console.log('[TaskDetailView] User CANCELLED discard. Modal should remain open.');
+          return; // Important to prevent onOpenChange(false) if user cancels discard
         }
       } else {
+        console.log('[TaskDetailView] Modal about to close and isDirty is false. Calling onOpenChange(false).');
         onOpenChange(false);
       }
     } else {
+      console.log('[TaskDetailView] Modal about to open. Calling onOpenChange(true).');
       onOpenChange(true);
     }
   }, [isDirty, handleCancel, onOpenChange]);
@@ -315,13 +331,13 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
     if (taskId) { // originalEntity might be null if still loading or error
         const taskToDelete = loadedParentTask || storeActions.getTaskById(taskId);
         if (taskToDelete) {
-            if (window.confirm('Are you sure you want to delete this parent task and all its subtasks?')) {
+        if (window.confirm('Are you sure you want to delete this parent task and all its subtasks?')) {
                 // Use subEntityList from the hook as it's the current working list
                 subEntityList.forEach(sub => storeActions.deleteTask(sub.id));
                 storeActions.deleteTask(taskToDelete.id); // Use the ID from the task object
                 if (onDeleteTaskFromDetail) onDeleteTaskFromDetail(taskToDelete.id);
-                onOpenChange(false);
-                toast.success("Task and subtasks deleted.");
+            onOpenChange(false);
+            toast.success("Task and subtasks deleted.");
             }
         } else {
             toast.error("Could not find task to delete.");
@@ -342,11 +358,43 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
   // Determine display title based on hook's loading state and data
   const displayTaskTitle = isLoading ? 'Loading...' : loadedParentTask ? 'Edit Task' : taskId ? 'Loading...' : 'Task Details';
 
+  const originalDndKitOnDragEnd = dndContextProps?.onDragEnd;
+
+  const customOnDragEnd = (event: any) => {
+    console.log('[TaskDetailView] Custom DND Drag End triggered');
+    recentlyDraggedRef.current = true; // Flag that a drag just ended
+    console.log('[TaskDetailView] recentlyDraggedRef.current set to true');
+
+    if (originalDndKitOnDragEnd) {
+      originalDndKitOnDragEnd(event); // Call the hook's onDragEnd
+    }
+    // No timeout needed here now, onSubmit will reset the flag if it consumes it.
+  };
+
+  // Create augmented DndContextProps
+  const finalDndContextProps = dndContextProps
+    ? {
+        ...dndContextProps,
+        // onDragStart: handleDragStart, // Not using for now
+        onDragEnd: customOnDragEnd, // Our new onDragEnd
+      }
+    : undefined;
+
   return (
     <RadixDialog.Root open={isOpen} onOpenChange={wrappedOnOpenChange}>
       <RadixDialog.Portal>
         <RadixDialog.Overlay className="fixed inset-0 bg-black/50 data-[state=open]:animate-overlayShow" />
-        <RadixDialog.Content className="fixed top-1/2 left-1/2 w-[90vw] max-w-lg max-h-[85vh] -translate-x-1/2 -translate-y-1/2 rounded-lg bg-white dark:bg-gray-800 p-6 shadow-lg data-[state=open]:animate-contentShow focus:outline-none flex flex-col">
+        <RadixDialog.Content 
+          className="fixed top-1/2 left-1/2 w-[90vw] max-w-lg max-h-[85vh] -translate-x-1/2 -translate-y-1/2 rounded-lg bg-white dark:bg-gray-800 p-6 shadow-lg data-[state=open]:animate-contentShow focus:outline-none flex flex-col"
+          onPointerDownOutside={(event) => {
+            console.log('[TaskDetailView] RadixDialog.Content onPointerDownOutside triggered.');
+            // Prevent default behavior which might lead to closing the dialog.
+            // This is often used to allow interactions with elements outside the modal 
+            // (e.g. custom popovers) without closing the modal. In our DND case,
+            // we want to ensure internal re-renders don't get misinterpreted as outside interactions.
+            event.preventDefault(); 
+          }}
+        >
           <RadixDialog.Title className="text-xl font-semibold text-gray-900 dark:text-white mb-1">
             {displayTaskTitle}
           </RadixDialog.Title>
@@ -381,7 +429,19 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
 
           {!isLoading && !error && loadedParentTask && ( // Only render form if task is loaded
             <>
-              <form onSubmit={(e) => { e.preventDefault(); handleSave(); }} className="flex-grow overflow-y-auto pr-2 space-y-4 custom-scrollbar">
+              <form onSubmit={(e) => { 
+                e.preventDefault(); 
+                console.log('%%% FORM ONSUBMIT TRIGGERED %%%'); 
+                if (recentlyDraggedRef.current) {
+                  console.log('%%% FORM ONSUBMIT IGNORED: recentlyDraggedRef was true %%%');
+                  recentlyDraggedRef.current = false; // Consume the flag
+                  console.log('[TaskDetailView] recentlyDraggedRef.current reset to false by onSubmit');
+                  return;
+                }
+                // If we reach here, it was not a DND-triggered submit
+                // console.log('Form submit allowed, not DND related or flag already consumed.');
+                handleSave(); // Re-enable this line
+              }} className="flex-grow overflow-y-auto pr-2 space-y-4 custom-scrollbar">
                 <div>
                   <Label htmlFor="title">Title</Label>
                   <Input 
@@ -469,27 +529,32 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
                 <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                   <h3 className="text-md font-semibold text-gray-800 dark:text-gray-100 mb-2">Subtasks</h3>
                   {dndContextProps && ( // Conditionally render DND context
-                    <DndContext {...dndContextProps} >
-                      <SortableContext 
-                        items={(getSortableListProps().items || []).map(s => s.id)} 
-                        strategy={verticalListSortingStrategy}
-                      >
-                        <div className="space-y-1 mb-3">
-                          {(subEntityList || []).length > 0 ? (
-                            (subEntityList || []).map(subtask => (
-                              <SubtaskItem 
-                                key={subtask.id} 
-                                subtask={subtask} 
-                                onUpdate={(id, updates) => updateSubItem(id, updates)}
-                                onRemove={(id) => removeSubItem(id)}
-                              />
-                            ))
-                          ) : (
-                            <p className="text-sm text-gray-500 dark:text-gray-400">No subtasks yet.</p>
-                          )}
-                        </div>
-                      </SortableContext>
-                    </DndContext>
+                    (() => {
+                      console.log('[TaskDetailView] DndContext IS BEING RENDERED because dndContextProps is truthy.');
+                      return (
+                        <DndContext {...finalDndContextProps} >
+                    <SortableContext 
+                            items={(getSortableListProps().items || []).map(s => s.id)} 
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <div className="space-y-1 mb-3">
+                              {(subEntityList || []).length > 0 ? (
+                                (subEntityList || []).map(subtask => (
+                                  <SubtaskItem 
+                                    key={subtask.id} 
+                                    subtask={subtask} 
+                                    onUpdate={(id, updates) => updateSubItem(id, updates)}
+                                    onRemove={(id) => removeSubItem(id)}
+                                  />
+                                ))
+                              ) : (
+                                <p className="text-sm text-gray-500 dark:text-gray-400">No subtasks yet.</p>
+                              )}
+                            </div>
+                          </SortableContext>
+                        </DndContext>
+                      );
+                    })()
                   )}
                   {!dndContextProps && ( // Render non-DND list if DND is not enabled
                      <div className="space-y-1 mb-3">

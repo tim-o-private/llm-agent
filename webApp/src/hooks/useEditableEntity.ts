@@ -2,7 +2,7 @@ import { UseFormReturn, FieldValues, Path, PathValue, useForm } from 'react-hook
 import { ZodSchema } from 'zod';
 import { DragEndEvent, DndContextProps as CoreDndContextProps, useSensors, useSensor, PointerSensor, KeyboardSensor } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates, arrayMove } from '@dnd-kit/sortable'; // Import arrayMove
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 // Placeholder for a robust deep clone and deep equal utility
 // You might use lodash, rfdc, fast-deep-equal, etc.
 import { cloneDeep, isEqual } from 'lodash-es';
@@ -118,7 +118,11 @@ export function useEditableEntity<
     TSubEntityListItemFormInputData
   >
 ): UseEditableEntityResult<TEntityData, TFormData, TSubEntityListItemData> {
-  
+  console.log('[useEditableEntity] TOP LEVEL - HOOK CALLED/RE-EXECUTED. Entity ID from config:', config.entityId);
+  // Log the entire config object upon entry and specifically enableSubEntityReordering
+  console.log('[useEditableEntity] Hook initialized. Config received:', config);
+  console.log(`[useEditableEntity] Config.enableSubEntityReordering upon entry: ${config.enableSubEntityReordering}`);
+
   const {
     entityId,
     queryHook,
@@ -244,6 +248,7 @@ export function useEditableEntity<
 
   // Notify on dirty state change
   useEffect(() => {
+    console.log('[useEditableEntity] useEffect for combinedIsDirty. New combinedIsDirty value:', combinedIsDirty, 'isMainFormDirty:', isMainFormDirty, 'isSubEntityListDirtyState:', isSubEntityListDirtyState);
     if (onDirtyStateChange) {
       onDirtyStateChange(combinedIsDirty);
     }
@@ -251,6 +256,12 @@ export function useEditableEntity<
 
   // Step 9.2.5: Implement handleSave
   const handleSave = useCallback(async () => {
+    console.log('%%% MEGA LOG 2: ENTERING useEditableEntity.handleSave %%%'); // Unique Log
+    console.log('[useEditableEntity] handleSave CALLED. isSaving:', isSavingState, 'isDirty:', combinedIsDirty);
+    if (isSavingState || !combinedIsDirty) {
+      console.log('[useEditableEntity] handleSave: Aborting save because isSaving or not isDirty.');
+      return;
+    }
     setErrorState(null);
     setIsSavingState(true);
     try {
@@ -297,8 +308,9 @@ export function useEditableEntity<
       }
     } finally {
       setIsSavingState(false);
+      console.log('[useEditableEntity] handleSave: Save attempt finished.');
     }
-  }, [formMethods, saveHandler, originalEntitySnapshot, cloneData, transformDataToForm, onSaveSuccess, onSaveError, internalSubEntityList, subEntityPath, transformSubCollectionToList]); // Added subEntityPath and transformSubCollectionToList to handleSave deps as they are used for re-initializing sub-list
+  }, [formMethods, saveHandler, originalEntitySnapshot, cloneData, transformDataToForm, onSaveSuccess, onSaveError, internalSubEntityList, subEntityPath, transformSubCollectionToList, isSavingState, combinedIsDirty]); // Added subEntityPath and transformSubCollectionToList to handleSave deps as they are used for re-initializing sub-list
 
   // Step 9.2.6: Implement handleCancel & resetState
   const internalResetState = useCallback((newEntityData?: TEntityData) => {
@@ -385,28 +397,35 @@ export function useEditableEntity<
     })
   );
 
+  const combinedIsDirtyRef = useRef<boolean>(combinedIsDirty);
+  useEffect(() => {
+    combinedIsDirtyRef.current = combinedIsDirty;
+  }, [combinedIsDirty]);
+
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
 
-    // Prevent default actions and stop propagation to avoid unintended side effects
-    // For example, if dragging text, it might try to do a browser drag-n-drop action.
-    if (event.originalEvent) {
-        event.originalEvent.preventDefault();
-        event.originalEvent.stopPropagation();
-    }
-
     if (over && active.id !== over.id) {
-      setInternalSubEntityList((items: TSubEntityListItemData[]) => { 
+      setInternalSubEntityList((items: TSubEntityListItemData[]) => {
+        console.log('%%% MEGA LOG 1: ENTERING setInternalSubEntityList CALLBACK %%%'); // Unique Log
         const oldIndex = items.findIndex((item: TSubEntityListItemData) => String(item[subEntityListItemIdField]) === String(active.id));
-        const newIndex = items.findIndex((item: TSubEntityListItemData) => String(item[subEntityListItemIdField]) === String(over.id)); 
+        const newIndex = items.findIndex((item: TSubEntityListItemData) => String(item[subEntityListItemIdField]) === String(over.id));
+
+        console.log(`[useEditableEntity] handleDragEnd CALLED. Active ID: ${active.id}, Over ID: ${over.id}, Old Index: ${oldIndex}, New Index: ${newIndex}`);
+
         if (oldIndex === -1 || newIndex === -1) {
-          console.warn('[useEditableEntity] DragEnd: कुड नॉट फाइंड आइटम इंडेक्स.', { activeId: active.id, overId: over.id, oldIndex, newIndex });
-          return items; // Return original items if something is wrong
+          console.warn('[useEditableEntity] DragEnd: Could not find item index for active or over.', { activeId: active.id, overId: over.id, oldIndex, newIndex });
+          return items; 
         }
-        return arrayMove(items, oldIndex, newIndex);
+        const newList = arrayMove(items, oldIndex, newIndex);
+        console.log('[useEditableEntity] setInternalSubEntityList: newList generated. Old length:', items.length, 'New length:', newList.length);
+        return newList;
       });
     }
   }, [subEntityListItemIdField]);
+
+  // Log the value of enableSubEntityReordering just before useMemo for dndContextProps
+  console.log(`[useEditableEntity] Value of 'enableSubEntityReordering' before dndContextProps useMemo: ${enableSubEntityReordering}`);
 
   const dndContextProps = useMemo(() => {
     if (!enableSubEntityReordering) return undefined;
