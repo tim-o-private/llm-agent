@@ -439,13 +439,13 @@ This file tracks the current tasks, steps, checklists, and component lists for t
             *   **Status:** Reported as complete. (Verification of test pass rate might be needed if issues arise during ST testing).
         *   **`9.5: Refactor - Adapt TaskDetailView.tsx to use useEditableEntity`**
             *   **Goal:** Replace existing state hooks in `TaskDetailView` with `useEditableEntity`.
-            *   **Status:** Parent Task section PASSING tests. Subtask section: ST-1 Failing (View Subtasks).
+            *   **Status:** COMPLETED (All PT, ST, OT tests passing)
         *   **`9.6: Testing - Comprehensive testing of refactored TaskDetailView`**
             *   **Goal:** Ensure all `TaskDetailView` functionality is preserved and robust.
-            *   **Status:** In Progress - Parent Task tests PASS. ST-1 (View Subtasks) FAILING.
+            *   **Status:** COMPLETED
         *   **`9.7: Documentation - Create developer guides for useEditableEntity and pattern`**
             *   **Goal:** Document how to use `useEditableEntity`, the `EntityTypeConfig`, and the overall pattern.
-            *   **Status:** To Do
+            *   **Status:** IN PROGRESS
         *   **`9.8: Cleanup - Deprecate/remove old state management hooks`**
             *   **Goal:** If `useEditableEntity` proves to be a complete replacement, remove `useObjectEditManager`, `useReorderableList`, `useTaskDetailStateManager`, `useEntityEditManager` to simplify the codebase.
             *   **Status:** To Do (Pending success of Task 9)

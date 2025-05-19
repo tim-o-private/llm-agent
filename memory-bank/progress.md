@@ -109,9 +109,35 @@ This document tracks the active development progress for the CLI, Core Agent, Ba
     *   Refactor of `TaskDetailView.tsx` to use `useEditableEntity` (Task `9.5`): Largely complete. Parent task functionalities (PT-1 to PT-7) have passed testing.
 *   **Current Test Results for `TaskDetailView.tsx` (from `task-detail-view-test-plan.md`):
     *   Parent Task Tests (PT-1 to PT-7): PASS
-    *   Subtask Test ST-1 (View Subtasks): FAIL
-*   **Next Steps:** Diagnose and fix ST-1. Continue with ST-2 through ST-8, and OT-1 through OT-3.
+    *   Subtask Tests (ST-1 to ST-8): PASS
+    *   Other Tests (OT-1 to OT-3): PASS
+*   **Next Steps:** Phase 9.6 (Comprehensive Testing) is COMPLETE. Now moving to Phase 9.7 (Documentation) and then Phase 9.8 (Cleanup).
 
 ## Previous Progress (Summary - To be Archived or Kept for Context)
 
 (...existing content of progress.md can follow here...)
+
+## Task 9: Architect and Implement `useEditableEntity` Hook & Refactor `TaskDetailView`
+
+**Status:** In Progress
+
+**Summary:** This task focuses on creating a reusable hook `useEditableEntity` for managing entity editing states, including form handling, sub-list management, and dirty state tracking. It also involves refactoring `TaskDetailView.tsx` to use this new hook, and finally cleaning up old hooks.
+
+**Phases & Key Sub-tasks:**
+
+*   **Phase 9.1: Design `useEditableEntity` Hook (Creative Phase)** - COMPLETED
+*   **Phase 9.2: Implementation - Build `useEditableEntity` Hook (Core Logic & Form Integration)** - COMPLETED
+*   **Phase 9.3: Implementation - Integrate List Management into `useEditableEntity`** - COMPLETED
+*   **Phase 9.4: Implementation - Unit Testing for `useEditableEntity`** - COMPLETED
+*   **Phase 9.5: Refactor - Adapt `TaskDetailView.tsx` to use `useEditableEntity`** - COMPLETED
+*   **Phase 9.6: Testing - Comprehensive testing of refactored `TaskDetailView`** - COMPLETED
+*   **Phase 9.7: Documentation - Create developer guides for `useEditableEntity` and pattern** - COMPLETED
+*   **Phase 9.8: Cleanup - Deprecate/remove old state management hooks** - In Progress (Starting 9.8.1)
+    *   `9.8.1:` Evaluate Completeness of `useEditableEntity`.
+    *   `9.8.2:` Plan Migration for Other Components (if any use the old hooks).
+    *   `9.8.3:` Mark old hooks as deprecated.
+    *   `9.8.4:` Remove old hook files.
+
+**Next Steps:**
+
+*   Begin `9.8.1:` Evaluate if `useEditableEntity` covers all necessary use cases of the old hooks intended for removal (`useObjectEditManager`, `useReorderableList`, `useEntityEditManager`, `useTaskDetailStateManager`).

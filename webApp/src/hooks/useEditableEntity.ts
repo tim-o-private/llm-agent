@@ -16,6 +16,15 @@ import { zodResolver } from '@hookform/resolvers/zod'; // Assuming zod resolver 
 // TSubEntityListItemData: The structure for a single item in the managed sub-entity list.
 // TSubEntityListItemFormInputData: Data structure for editing/creating a single sub-entity item's form.
 
+/**
+ * Configuration object for the `useEditableEntity` hook.
+ * Defines how the hook fetches, manages, and saves an entity and its potential sub-entities.
+ *
+ * @template TEntityData The complete data structure of the entity.
+ * @template TFormData The structure for the main entity's form (React Hook Form).
+ * @template TSubEntityListItemData The structure for a single item in the sub-entity list.
+ * @template TSubEntityListItemFormInputData Data structure for the form used to edit/create a sub-entity item.
+ */
 export interface EntityTypeConfig<
   TEntityData,
   TFormData extends FieldValues,
@@ -66,6 +75,14 @@ export interface EntityTypeConfig<
   // dndSensors?: SensorDescriptor[];
 }
 
+/**
+ * Result object returned by the `useEditableEntity` hook.
+ * Provides state variables, form management tools, and handlers for interacting with the editable entity.
+ *
+ * @template TEntityData The complete data structure of the entity.
+ * @template TFormData The structure for the main entity's form.
+ * @template TSubEntityListItemData The structure for a single item in the sub-entity list.
+ */
 export interface UseEditableEntityResult<
   TEntityData,
   TFormData extends FieldValues,
@@ -105,6 +122,24 @@ export interface UseEditableEntityResult<
 
 // --- Main Hook Function ---
 
+/**
+ * A comprehensive React hook for managing the state and lifecycle of an editable entity,
+ * including its main form data and an optional list of sub-entities.
+ *
+ * It handles data fetching, form state management (via React Hook Form), sub-list CRUD operations,
+ * drag-and-drop reordering for sub-lists, dirty state tracking, and save/cancel logic.
+ *
+ * @template TEntityData The complete data structure of the entity.
+ * @template TFormData The structure for the main entity's form (React Hook Form).
+ * @template TSubEntityListItemData The structure for a single item in the managed sub-entity list.
+ * @template TSubEntityListItemFormInputData Data structure for the form used to edit/create a sub-entity item.
+ *
+ * @param {EntityTypeConfig<TEntityData, TFormData, TSubEntityListItemData, TSubEntityListItemFormInputData>} config
+ *   The configuration object that defines the behavior of the hook for a specific entity type.
+ *
+ * @returns {UseEditableEntityResult<TEntityData, TFormData, TSubEntityListItemData>}
+ *   An object containing state variables, form methods, and handlers to manage the entity.
+ */
 export function useEditableEntity<
   TEntityData,
   TFormData extends FieldValues,

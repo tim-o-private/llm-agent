@@ -102,41 +102,28 @@ None for the current documentation task. For Task 7, the next step remains compr
 
 # Active Context - Project llm-agent
 
-**Current Task: Debug `TaskDetailView.tsx` - Test Case ST-1 (View Subtasks)**
+**Current Task: Task 9.7 - Documentation for `useEditableEntity`**
 
-**Goal:** Resolve the failing test case ST-1 ("View Subtasks") in `TaskDetailView.tsx`. This involves ensuring subtasks are correctly listed and ordered when the modal is opened for a task with existing subtasks.
+**Goal:** Create comprehensive documentation for the `useEditableEntity` hook and the associated `EntityTypeConfig`. This includes API details, usage examples, and best practices to ensure developers can effectively use this new pattern.
 
-**Key Achievements & Current Status (Task 9 - `useEditableEntity` & `TaskDetailView` Refactor):
-1.  **`useEditableEntity` Hook (`9.0` - `9.4`):** Architectural design, implementation (core logic, form integration, list management, DND), and unit testing are reported as complete.
-2.  **`TaskDetailView.tsx` Refactor (`9.5`):**
-    *   Successfully refactored to use `useEditableEntity`.
-    *   **Parent Task Functionality (PT-1 to PT-7): ALL PASSING.** This confirms the hook correctly handles data fetching for the parent, form state management, dirty checking, saving, and canceling for the main entity.
-3.  **Comprehensive Testing of `TaskDetailView.tsx` (`9.6`):**
-    *   Currently IN PROGRESS.
-    *   **ST-1 (View Subtasks): FAILING.** This is the immediate focus.
-    *   Other subtask tests (ST-2 to ST-8) and other tests (OT-1 to OT-3) are pending resolution of ST-1.
+**Background:**
+*   The `useEditableEntity` hook has been successfully implemented and integrated into `TaskDetailView.tsx`.
+*   All Parent Task (PT), Subtask (ST), and Other (OT) tests for the refactored `TaskDetailView.tsx` are PASSING.
+*   Phases 9.0 through 9.6 of Task 9 (Architect and Implement `useEditableEntity` Hook & Refactor `TaskDetailView`) are now COMPLETE.
 
-**Hypothesis for ST-1 Failure:**
-The issue might be related to:
-1.  **Data Flow for Subtasks:** How `useEditableEntity` fetches/receives subtask data via the `transformSubCollectionToList` in `taskEntityTypeConfig`.
-2.  **State Initialization:** How the `subEntityList` within `useEditableEntity` is initialized and made available to `TaskDetailView.tsx`.
-3.  **Rendering Logic:** How `TaskDetailView.tsx` iterates over and renders the `subEntityList`.
+**Current Focus: Phase 9.7 - Documentation**
+*   **`9.7.1:` Write Hook API Documentation:** Detail `EntityTypeConfig` options and `UseEditableEntityResult` properties/methods.
+*   **`9.7.2:` Create Usage Examples:** Provide examples of how to configure and use the hook for different scenarios (e.g., simple entity, entity with sub-list).
+*   **`9.7.3:` Document Best Practices and Patterns:** Explain how this hook fits into the broader state management strategy.
+*   **`9.7.4:` Store documentation in `memory-bank/clarity/references/patterns/` or a new dedicated file (e.g., `useEditableEntity-guide.md`).**
 
-**Next Immediate Steps:**
-1.  Diagnose why subtasks are not appearing correctly in `TaskDetailView.tsx`.
-    *   Verify `transformSubCollectionToList` in `taskEntityTypeConfig` is being called and is returning the correct subtask array from `useTaskStore`.
-    *   Inspect the `subEntityList` provided by `useEditableEntity` within `TaskDetailView.tsx`.
-    *   Check the rendering logic for subtasks in `TaskDetailView.tsx` and `SubtaskItem.tsx`.
-2.  Fix the root cause of ST-1.
-3.  Proceed with ST-2 and subsequent tests.
+**Next Steps (After Documentation - Phase 9.8):**
+*   Cleanup: Evaluate and potentially deprecate/remove the older state management hooks (`useObjectEditManager`, `useReorderableList`, `useTaskDetailStateManager`, `useEntityEditManager`) if `useEditableEntity` is deemed a complete replacement.
 
 **Key Supporting Documents:**
 *   `memory-bank/tasks.md` (Task 9 and its sub-phases)
 *   `memory-bank/progress.md`
 *   `memory-bank/clarity/plan-useEditableEntity.md`
-*   `memory-bank/clarity/testing/task-detail-view-test-plan.md`
+*   `memory-bank/clarity/creative-useEditableEntity-design.md`
 *   `webApp/src/hooks/useEditableEntity.ts`
-*   `webApp/src/components/features/TaskDetail/TaskDetailView.tsx`
-
-**Previous Blocker Context (TaskDetailView stabilization):**
-The complexity of `TaskDetailView.tsx` with its multiple state hooks prompted this strategic refactor. The `useEditableEntity` hook is designed to provide a robust and simpler pattern, which should inherently resolve the previous state synchronization issues once integrated.
+*   `webApp/src/components/features/TaskDetail/TaskDetailView.tsx` (as primary consumer example)

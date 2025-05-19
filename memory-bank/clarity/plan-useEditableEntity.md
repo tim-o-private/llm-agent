@@ -127,29 +127,32 @@ To implement the `useEditableEntity` hook as defined in the creative design docu
 ### Phase 9.6: Testing - Comprehensive testing of refactored `TaskDetailView`
 
 *   **Objective:** Ensure all functionality of `TaskDetailView.tsx` is preserved and robust after refactoring.
-*   **Status:** IN PROGRESS
+*   **Status:** COMPLETED
 *   **Steps:**
     1.  **`9.6.1:` Execute Manual Test Plan:** Use `memory-bank/clarity/testing/task-detail-view-test-plan.md`.
         *   Parent Task Tests (PT-1 to PT-7): PASS
-        *   Subtask Test ST-1 (View Subtasks): FAIL
-    2.  **`9.6.2:` Perform Exploratory Testing:** (Pending ST-1 fix)
+        *   Subtask Tests (ST-1 to ST-8): PASS
+        *   Other Tests (OT-1 to OT-3): PASS
+    2.  **`9.6.2:` Perform Exploratory Testing:** COMPLETED
+        *   Subtask Tests (ST-1 to ST-8): PASS 
+    2.  **`9.6.2:` Perform Exploratory Testing:** (Focus on OT tests now)
     3.  **`9.6.3:` Debug and Fix Issues:** Address any regressions or bugs found.
     4.  **`9.6.4:` Verify Responsiveness and Performance.**
 
 ### Phase 9.7: Documentation - Create developer guides for `useEditableEntity` and pattern
 
 *   **Objective:** Document how to use `useEditableEntity`, the `EntityTypeConfig`, and the overall pattern for developers.
-*   **Status:** To Do
+*   **Status:** COMPLETED
 *   **Steps:**
-    1.  **`9.7.1:` Write Hook API Documentation:** Detail `EntityTypeConfig` options and `UseEditableEntityResult` properties/methods.
-    2.  **`9.7.2:` Create Usage Examples:** Provide examples of how to configure and use the hook for different scenarios (e.g., simple entity, entity with sub-list).
-    3.  **`9.7.3:` Document Best Practices and Patterns:** Explain how this hook fits into the broader state management strategy.
-    4.  **`9.7.4:` Store documentation in `memory-bank/clarity/references/patterns/` or similar.
+    1.  **`9.7.1:` Write Hook API Documentation:** Detail `EntityTypeConfig` options and `UseEditableEntityResult` properties/methods. (COMPLETED)
+    2.  **`9.7.2:` Create Usage Examples:** Provide examples of how to configure and use the hook for different scenarios (e.g., simple entity, entity with sub-list). (COMPLETED)
+    3.  **`9.7.3:` Document Best Practices and Patterns:** Explain how this hook fits into the broader state management strategy. (COMPLETED)
+    4.  **`9.7.4:` Store documentation in `memory-bank/clarity/references/patterns/` or similar. (COMPLETED, stored at `memory-bank/clarity/references/patterns/useEditableEntity-guide.md`)
 
 ### Phase 9.8: Cleanup - Deprecate/remove old state management hooks
 
 *   **Objective:** If `useEditableEntity` proves to be a complete and preferred replacement, deprecate and eventually remove the older, more fragmented hooks to simplify the codebase.
-*   **Status:** To Do (Pending success of Task 9)
+*   **Status:** In Progress (Starting 9.8.1)
 *   **Steps:**
     1.  **`9.8.1:` Evaluate Completeness:** Assess if `useEditableEntity` covers all necessary use cases handled by the old hooks.
     2.  **`9.8.2:` Plan Migration for Other Components (if any use the old hooks).**
