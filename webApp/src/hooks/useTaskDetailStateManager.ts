@@ -1,9 +1,9 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { isEqual, cloneDeep } from 'lodash-es';
 import { Task, UpdateTaskData, NewTaskData, TaskPriority, TaskStatus } from '@/api/types';
 import { TaskFormData } from '@/components/features/TaskDetail/TaskDetailView';
 import { 
-  useEntityEditManager, 
+  useEntityEditManager,
   EntityEditManagerOptions,  
 } from '@/hooks/useEntityEditManager';
 
@@ -77,15 +77,23 @@ export function useTaskDetailStateManager({
   storeActions,
   onSaveComplete,
 }: UseTaskDetailStateManagerOptions): UseTaskDetailStateManagerResult {
+  console.log('[useTaskDetailStateManager] re-rendering. taskId:', taskId);
 
-  const initialData = prepareInitialTaskDetailData(storeParentTask, getParentFormValues(), localSubtasks);
+  const initialData = useMemo(() => {
+    console.log("[TaskDetailStateManager] Recalculating (useMemo) initialData for useEntityEditManager.");
+    return prepareInitialTaskDetailData(storeParentTask, getParentFormValues(), localSubtasks);
+  }, [storeParentTask, getParentFormValues, localSubtasks]);
 
-  const getLatestDataForManager = useCallback((): TaskDetailData => {
+  // Remove useCallback to ensure a new function reference is passed to EEM on each TDSM render,
+  // forcing EEM to re-render and its effects to re-evaluate when TDSM's inputs change.
+  const getLatestDataForManager = (): TaskDetailData => {
+    const parent = getParentFormValues();
+    console.log('[TDSM] getLatestDataForManager called. RHF Parent Form Values:', JSON.stringify(parent), 'Local Subtasks:', JSON.stringify(localSubtasks));
     return {
-      parentTask: getParentFormValues(),
+      parentTask: parent,
       subtasks: localSubtasks, 
     };
-  }, [getParentFormValues, localSubtasks]);
+  };
 
   const taskSaveHandler = useCallback(async (
     currentData: TaskDetailData,
@@ -195,6 +203,7 @@ export function useTaskDetailStateManager({
 
   // resetState can be directly returned if its signature matches or if TaskDetailView doesn't call it with params
   const resetState = useCallback(() => {
+    console.log('[TDSM] resetState called, which calls genericResetState from EEM.');
     // This resetState from useEntityEditManager will reset based on its own `initialData`.
     // We might need to ensure `initialData` for the generic hook is correctly re-evaluated if the modal
     // is closed and reopened for a *different* task, or if `storeParentTask` / `localSubtasks` (as props) change.

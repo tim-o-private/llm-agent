@@ -3,24 +3,26 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { DragHandleDots2Icon, Cross2Icon, Pencil1Icon, CheckIcon } from '@radix-ui/react-icons';
 import { Task } from '@/api/types';
-import { useTaskStore } from '@/stores/useTaskStore';
+// import { useTaskStore } from '@/stores/useTaskStore'; // Remove direct store usage
 
 interface SubtaskItemProps {
   subtask: Task;
-  parentTaskId?: string;
-  onSubtaskUpdate?: () => void;
+  // parentTaskId?: string; // Remove
+  // onSubtaskUpdate?: () => void; // Remove
+  onUpdate: (id: string, updates: Partial<Task>) => void; // Add
+  onRemove: (id: string) => void; // Add
 }
 
-export const SubtaskItem: React.FC<SubtaskItemProps> = ({ subtask, onSubtaskUpdate }) => {
+export const SubtaskItem: React.FC<SubtaskItemProps> = ({ subtask, onUpdate, onRemove }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(subtask.title);
   const inputRef = useRef<HTMLInputElement>(null);
   
-  // Get actions from the task store
-  const { updateTask, deleteTask } = useTaskStore(state => ({
-    updateTask: state.updateTask,
-    deleteTask: state.deleteTask
-  }));
+  // Get actions from the task store - REMOVE
+  // const { updateTask, deleteTask } = useTaskStore(state => ({
+  //   updateTask: state.updateTask,
+  //   deleteTask: state.deleteTask
+  // }));
 
   const {
     attributes,
@@ -45,22 +47,28 @@ export const SubtaskItem: React.FC<SubtaskItemProps> = ({ subtask, onSubtaskUpda
 
   const handleToggleComplete = () => {
     const newStatus = subtask.status === 'completed' ? 'pending' : 'completed';
-    updateTask(subtask.id, { 
+    // updateTask(subtask.id, { 
+    //   status: newStatus,
+    //   completed: newStatus === 'completed'
+    // });
+    onUpdate(subtask.id, { 
       status: newStatus,
-      completed: newStatus === 'completed'
+      completed: newStatus === 'completed',
+      completed_at: newStatus === 'completed' ? new Date().toISOString() : null 
     });
     
-    if (onSubtaskUpdate) {
-      onSubtaskUpdate();
-    }
+    // if (onSubtaskUpdate) { // Remove
+    //   onSubtaskUpdate();
+    // }
   };
 
   const handleDelete = () => {
-    deleteTask(subtask.id);
+    // deleteTask(subtask.id); // Remove
+    onRemove(subtask.id);
     
-    if (onSubtaskUpdate) {
-      onSubtaskUpdate();
-    }
+    // if (onSubtaskUpdate) { // Remove
+    //   onSubtaskUpdate();
+    // }
   };
 
   const startEditing = () => {
@@ -70,11 +78,12 @@ export const SubtaskItem: React.FC<SubtaskItemProps> = ({ subtask, onSubtaskUpda
 
   const saveEdit = () => {
     if (editValue.trim() !== subtask.title) {
-      updateTask(subtask.id, { title: editValue.trim() });
+      // updateTask(subtask.id, { title: editValue.trim() }); // Remove
+      onUpdate(subtask.id, { title: editValue.trim() });
       
-      if (onSubtaskUpdate) {
-        onSubtaskUpdate();
-      }
+      // if (onSubtaskUpdate) { // Remove
+      //   onSubtaskUpdate();
+      // }
     }
     setIsEditing(false);
   };

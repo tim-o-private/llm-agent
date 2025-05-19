@@ -38,51 +38,103 @@ export function useEntityEditManager<TData, TStoreActions>({
   cloneData = cloneDeep,
   getLatestData,
 }: EntityEditManagerOptions<TData, TStoreActions>): EntityEditManagerResult<TData> {
+  console.log('[useEntityEditManager] Hook (re-render/init). EntityId:', entityId, 'Received initialData prop:', initialData === undefined ? "undefined" : JSON.stringify(initialData));
   const [snapshot, setSnapshot] = useState<TData | null>(null);
-  const [isDirty, setIsDirty] = useState(false);
+  const [isDirtyState, _setIsDirty] = useState(false);
+  const setIsDirty = (val: boolean) => {
+    if (val === true) {
+      // Always log the compared objects when setting dirty to true
+      try {
+        const latestData = getLatestData?.();
+        console.log('[EntityEditManager] setIsDirty(true) called. Comparing:', { latestData, snapshot });
+      } catch (e) {
+        console.log('[EntityEditManager] setIsDirty(true) called, but could not get latestData:', e);
+      }
+    }
+    console.log('[EntityEditManager] setIsDirty called with', val, new Error().stack);
+    _setIsDirty(val);
+  };
+  const isDirty = isDirtyState;
   // const [currentData, setCurrentData] = useState<TData | undefined>(initialData);
 
   const initializeState = useCallback(
     (currentEntityData: TData) => {
-      // setCurrentData(cloneData(currentEntityData));
-      setSnapshot(cloneData(currentEntityData));
-      setIsDirty(false);
+      const newSnapshot = cloneData(currentEntityData);
+      console.log('[EEM] initializeState CALLED. Setting snapshot with:', JSON.stringify(newSnapshot));
+      setSnapshot(newSnapshot);
+      // DO NOT set isDirtyState here. Let the effect handle it.
+      // console.log('[EEM] initializeState explicitly setting EEM isDirtyState to false.');
+      // _setIsDirty(false); 
     },
     [cloneData]
   );
 
   const resetState = useCallback(() => {
-    // setCurrentData(initialData ? cloneData(initialData) : undefined);
-    setSnapshot(initialData ? cloneData(initialData) : null);
-    setIsDirty(false);
-    // Also re-initialize with current form values if modal is still open
-    // This will be handled by calling initializeState when the modal opens or data loads.
+    const newSnapshotFromInitial = initialData ? cloneData(initialData) : null;
+    console.log('[EEM] resetState CALLED. Setting snapshot with current initialData prop:', JSON.stringify(newSnapshotFromInitial));
+    setSnapshot(newSnapshotFromInitial);
+    // DO NOT set isDirtyState here. Let the effect handle it.
+    // console.log('[EEM] resetState explicitly setting EEM isDirtyState to false.');
+    // _setIsDirty(false);
   }, [initialData, cloneData]);
   
   // Effect to initialize when initialData is available and hook is first used
   useEffect(() => {
+    console.log('[EEM] Snapshot init effect (initialData prop dependency). Current initialData prop:', initialData === undefined ? "undefined" : JSON.stringify(initialData));
     if (initialData) {
-      // setCurrentData(cloneData(initialData));
-      setSnapshot(cloneData(initialData));
+      const newInitialSnapshot = cloneData(initialData);
+      console.log('[EEM] Snapshot init effect: Setting snapshot to:', JSON.stringify(newInitialSnapshot));
+      setSnapshot(newInitialSnapshot);
+      // DO NOT set isDirtyState here. Let the main dirty-checking effect determine it.
+      // console.log('[EEM] Snapshot init effect: Setting EEM isDirtyState to false (because snapshot is aligned with initialData).');
+      // _setIsDirty(false); 
     } else {
-      // setCurrentData(undefined);
+      console.log('[EEM] Snapshot init effect: initialData prop is undefined/null. Setting snapshot to null.');
       setSnapshot(null);
+      // DO NOT set isDirtyState here.
+      // console.log('[EEM] Snapshot init effect: Setting EEM isDirtyState to false (no snapshot).');
+      // _setIsDirty(false); 
     }
+  // }, [initialData, cloneData]); // Removed _setIsDirty -- This effect should ONLY set the snapshot.
+  // The main dirty checking effect will then compare against this new snapshot.
   }, [initialData, cloneData]);
 
-
   useEffect(() => {
-    if (!snapshot) {
-      if (isDirty) setIsDirty(false);
+    const latestData = getLatestData(); 
+    const currentSnapshot = snapshot;   
+    console.log('[EEM] Dirty Check Effect RUNS. Timestamp:', Date.now());
+    console.log('[EEM]   - Internal Snapshot (currentSnapshot):', currentSnapshot === null ? "null" : JSON.stringify(currentSnapshot));
+    console.log('[EEM]   - Latest Data (from getLatestData()):', latestData === undefined ? "undefined" : JSON.stringify(latestData));
+  
+    if (!currentSnapshot) {
+      if (isDirtyState) { // isDirtyState is the internal state boolean
+        console.log('[EEM]   - No snapshot, current EEM isDirtyState: true. Setting EEM isDirtyState: false.');
+        _setIsDirty(false); // _setIsDirty is the setter
+      } else {
+        console.log('[EEM]   - No snapshot, current EEM isDirtyState: false. No change to EEM isDirtyState.');
+      }
       return;
     }
-    const latestData = getLatestData();
-    const newDirtyState = !isDataEqual(latestData, snapshot);
-
-    if (newDirtyState !== isDirty) {
-      setIsDirty(newDirtyState);
+    
+    // Ensure latestData is not undefined before comparison, though getLatestData() should ideally always return TData
+    if (latestData === undefined) {
+        console.warn('[EEM]   - Latest Data is undefined. Cannot perform dirty check. Current EEM isDirtyState:', isDirtyState);
+        if (isDirtyState) _setIsDirty(false); // Or handle as an error/specific state
+        return;
     }
-  }, [getLatestData, snapshot, isDirty, isDataEqual]);
+  
+    const dataIsActuallyEqual = isDataEqual(latestData, currentSnapshot);
+    const newCalculatedDirtyState = !dataIsActuallyEqual;
+    console.log(`[EEM]   - Comparison Result: latestData is ${dataIsActuallyEqual ? "EQUAL" : "NOT EQUAL"} to currentSnapshot.`);
+    console.log(`[EEM]   - Calculated newDirtyState for EEM: ${newCalculatedDirtyState}. Current EEM isDirtyState: ${isDirtyState}`);
+  
+    if (newCalculatedDirtyState !== isDirtyState) {
+      console.log(`[EEM]   - FLIPPING EEM isDirtyState from ${isDirtyState} to ${newCalculatedDirtyState}`);
+      _setIsDirty(newCalculatedDirtyState);
+    } else {
+      console.log(`[EEM]   - EEM isDirtyState (${isDirtyState}) remains unchanged based on comparison.`);
+    }
+  }, [getLatestData, snapshot, isDataEqual, _setIsDirty]); // Removed isDirtyState from here
 
   const handleSaveChanges = useCallback(async () => {
     const latestData = getLatestData();

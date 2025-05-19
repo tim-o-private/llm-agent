@@ -2,47 +2,87 @@ export type TaskStatus = 'pending' | 'planning' | 'in_progress' | 'completed' | 
 export type TaskPriority = 0 | 1 | 2 | 3; // 0: None, 1: Low, 2: Medium, 3: High
 
 export interface Task {
-  id: string; // UUID, primary key
-  user_id: string; // Foreign key to auth.users.id
+  id: string;
+  user_id: string;
+  parent_task_id?: string | null;
   title: string;
+  description?: string | null;
   notes?: string | null;
-  description?: string | null; // Detailed description of the task
-  category?: string | null;
-  completed: boolean; // Consider if this is wholly derived from status === 'completed'
+  motivation?: string | null;
+  completion_note?: string | null;
   status: TaskStatus;
   priority: TaskPriority;
-  due_date?: string | null; // ISO date string
-  time_period?: 'Morning' | 'Afternoon' | 'Evening' | null; // Or a more flexible enum/string
-  created_at: string; // ISO timestamp string
-  updated_at?: string | null; // ISO timestamp string
-  position?: number | null; // For task ordering
-  parent_task_id?: string | null; // FK to tasks.id, for subtasks
-  subtask_position?: number | null; // For ordering subtasks under a parent
-  subtasks?: Task[]; // Populated if subtasks are fetched with the parent
-  motivation?: string | null; // Added for P-P-E-R cycle
-  completion_note?: string | null; // Added for P-P-E-R cycle (Definition of Done for this task)
-  // Add other fields like priority, reminders, etc. as needed
+  due_date?: string | null;
+  category?: string | null;
+  subtask_position?: number | null;
+  created_at: string;
+  updated_at: string;
+  completed: boolean; // Derived from status for easier filtering, ensure it's kept in sync
+  completed_at?: string | null; // Added this line
 }
 
-// You might also have types for task creation or updates if they differ
-export type NewTaskData = Pick<Task, 'title' | 'user_id' | 'status' | 'priority'> & Partial<Omit<Task, 'id' | 'created_at' | 'updated_at' | 'user_id' | 'title' | 'status' | 'priority' | 'subtasks'> >;
-export type UpdateTaskData = Partial<Omit<Task, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'subtasks'>>;
+export interface UserPreferences {
+  id: string;
+  user_id: string;
+  dark_mode_enabled?: boolean;
+  default_view?: string;
+  show_completed_tasks_in_today_view?: boolean;
+  // other preferences
+}
 
-export type FocusSessionMood = 'energized' | 'neutral' | 'drained' | 'focused' | 'distracted' | 'other';
-export type FocusSessionOutcome = 'completed_task' | 'made_progress' | 'got_stuck' | 'interrupted' | 'planned_next' | 'other';
+export type FocusSessionOutcome = 'completed' | 'incomplete' | 'skipped';
 
 export interface FocusSession {
-  id: string; // UUID, primary key
-  user_id: string; // Foreign key to auth.users.id
-  task_id: string; // Foreign key to public.tasks.id
-  started_at: string; // ISO timestamp string
-  ended_at?: string | null; // ISO timestamp string
-  duration_seconds?: number | null;
-  notes?: string | null; // User's reflection or notes on the session
-  mood?: FocusSessionMood | null;
+  id: string;
+  user_id: string;
+  task_id: string; // FK to tasks.id
+  start_time: string; // ISO timestamp string
+  end_time?: string | null; // ISO timestamp string
+  planned_duration_minutes: number;
+  actual_duration_minutes?: number | null;
+  interruptions?: number | null;
+  notes?: string | null; // Notes taken during/after the session
   outcome?: FocusSessionOutcome | null;
   created_at: string; // ISO timestamp string
+  motivation?: string | null; 
+  completion_note?: string | null; 
 }
 
-export type NewFocusSessionData = Pick<FocusSession, 'user_id' | 'task_id'> & Partial<Omit<FocusSession, 'id' | 'created_at' | 'user_id' | 'task_id'> >;
-export type UpdateFocusSessionData = Partial<Omit<FocusSession, 'id' | 'user_id' | 'task_id' | 'created_at'>>; 
+export type NewFocusSessionData = Pick<FocusSession, 'user_id' | 'task_id' | 'planned_duration_minutes'> & Partial<Omit<FocusSession, 'id' | 'created_at' | 'user_id' | 'task_id' | 'start_time' | 'planned_duration_minutes'>>;
+export type UpdateFocusSessionData = Partial<Omit<FocusSession, 'id' | 'user_id' | 'task_id' | 'created_at'>>;
+
+export type TaskCreate = Omit<Task, 'id' | 'created_at' | 'updated_at' | 'completed'> & { user_id: string };
+export type TaskUpdate = Partial<Omit<Task, 'id' | 'user_id' | 'created_at' | 'updated_at'>>;
+
+export interface Streak {
+    id: string;
+    user_id: string;
+    start_date: string; 
+    end_date?: string | null; 
+    current_length_days: number;
+    longest_length_days: number;
+}
+
+export interface Reflection {
+    id: string;
+    user_id: string;
+    date: string; 
+    content: string;
+    created_at: string;
+}
+
+export interface ScratchPadEntry {
+    id: string;
+    user_id: string;
+    content: string;
+    created_at: string;
+    updated_at: string;
+}
+
+// Generic type for API responses with pagination (if needed)
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+}

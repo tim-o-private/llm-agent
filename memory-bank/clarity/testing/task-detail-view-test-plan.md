@@ -11,7 +11,7 @@
 
 ## I. Parent Task - Core CRUD & Form Behavior (using React Hook Form)
 
-*   PASS **Test Case PT-1: Open Task Detail & Verify Data Population**
+*   **Test Case PT-1: Open Task Detail & Verify Data Population**
     *   **Steps:**
         1.  Click a task in `TodayView` to open `TaskDetailView`.
     *   **Expected:**
@@ -19,14 +19,14 @@
         *   All parent task fields (Title, Description, Notes, Status, Priority, Category, Due Date) are correctly populated with the task's current data using React Hook Form `defaultValues` or `reset`.
         *   "Save Changes" button is initially disabled (React Hook Form `formState.isDirty` should be `false`).
 
-*   PASS **Test Case PT-2: Edit Parent Task Field & Verify Dirty State**
+*   FAIL **Test Case PT-2: Edit Parent Task Field & Verify Dirty State**
     *   **Steps:**
         1.  Open modal for a task.
         2.  Modify the "Title" field.
     *   **Expected:**
         *   "Save Changes" button becomes enabled (due to `formState.isDirty` becoming `true`).
 
-*   PASS **Test Case PT-3: Edit Parent Task & Save**
+*   **Test Case PT-3: Edit Parent Task & Save**
     *   **Steps:**
         1.  Open modal.
         2.  Modify "Title" and "Description" fields.
@@ -36,7 +36,7 @@
         *   The `TodayView` list reflects the updated title/description on the corresponding `TaskCard`.
         *   (Optional Manual Check) Verify data persistence in the database.
 
-*   PASS **Test Case PT-4: Edit Parent Task & Cancel**
+*   **Test Case PT-4: Edit Parent Task & Cancel**
     *   **Steps:**
         1.  Open modal.
         2.  Modify the "Title" field (making `formState.isDirty` true).
@@ -46,7 +46,7 @@
         *   Click "OK" (or confirm the discard action on the prompt): Modal closes. Changes are NOT saved. `TodayView` shows the original title.
         *   Click "Cancel" (or the option to not discard, effectively cancelling the close action): The prompt closes. The modal remains open with the dirty changes.
 
-*   PASS **Test Case PT-5: Open, No Changes, Click Save**
+*   **Test Case PT-5: Open, No Changes, Click Save**
     *   **Steps:**
         1.  Open modal.
         2.  Ensure no fields are modified (`formState.isDirty` is `false`).
@@ -58,7 +58,7 @@
         *   A toast like "No changes to save" should appear, or no toast if no action is taken.
         *   The modal should remain open or close based on defined behavior for "no changes". (Preference: remain open, toast "No changes").
 
-*   PASS **Test Case PT-6: Open, No Changes, Click Cancel**
+*   **Test Case PT-6: Open, No Changes, Click Cancel**
     *   **Steps:**
         1.  Open modal.
         2.  Ensure no fields are modified.

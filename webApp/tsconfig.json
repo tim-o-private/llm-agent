@@ -23,7 +23,8 @@
       "@hooks/*": ["src/hooks/*"],
       "@lib/*": ["src/lib/*"],
       "@styles/*": ["src/styles/*"]
-    }
+    },
+    "types": ["jest"]
   },
   "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]
