@@ -118,7 +118,7 @@ None for the current documentation task. For Task 7, the next step remains compr
 *   **`9.7.4:` Store documentation in `memory-bank/clarity/references/patterns/` or a new dedicated file (e.g., `useEditableEntity-guide.md`).**
 
 **Next Steps (After Documentation - Phase 9.8):**
-*   Cleanup: Evaluate and potentially deprecate/remove the older state management hooks (`useObjectEditManager`, `useReorderableList`, `useTaskDetailStateManager`, `useEntityEditManager`) if `useEditableEntity` is deemed a complete replacement.
+*   Cleanup: Evaluate and potentially deprecate/remove the older state management hooks (`useObjectEditManager`, `useReorderableList`, `useEntityEditManager`, `useTaskDetailStateManager`) if `useEditableEntity` is deemed a complete replacement.
 
 **Key Supporting Documents:**
 *   `memory-bank/tasks.md` (Task 9 and its sub-phases)
@@ -127,3 +127,30 @@ None for the current documentation task. For Task 7, the next step remains compr
 *   `memory-bank/clarity/creative-useEditableEntity-design.md`
 *   `webApp/src/hooks/useEditableEntity.ts`
 *   `webApp/src/components/features/TaskDetail/TaskDetailView.tsx` (as primary consumer example)
+
+# Active Context & Focus
+
+**Last Updated:** (Current Date)
+
+**Current Overall Project Goal:** Stabilize and enhance the Clarity UI. Concurrently, progress on CLI and Core system enhancements.
+
+**Current Task Focus:**
+
+*   **Task 9: Architect and Implement `useEditableEntity` Hook & Refactor `TaskDetailView` - COMPLETE**
+
+**Brief Context:**
+
+Task 9, which involved designing, implementing, testing, and documenting the `useEditableEntity` hook, refactoring `TaskDetailView.tsx` to use it, and cleaning up superseded hooks (`useObjectEditManager`, `useReorderableList`, `useEntityEditManager`, `useTaskDetailStateManager`), is now fully complete.
+
+**Key Files & Artifacts (Related to completed Task 9):**
+
+*   `webApp/src/hooks/useEditableEntity.ts` (The new hook)
+*   `memory-bank/clarity/references/patterns/useEditableEntity-guide.md` (Documentation for the new hook)
+*   `webApp/src/features/TaskDetailView/TaskDetailView.tsx` (Primary consumer, successfully refactored)
+*   `memory-bank/clarity/plan-useEditableEntity.md` (Overall plan for Task 9 - now marked complete)
+*   `memory-bank/tasks.md` (Overall project tasks - Task 9 marked complete)
+*   `memory-bank/progress.md` (Project progress log - Task 9 marked complete)
+
+**Pending Decisions/Questions:**
+
+*   What is the next P0 or P1 task to focus on from `memory-bank/tasks.md`?

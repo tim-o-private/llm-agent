@@ -414,7 +414,7 @@ This file tracks the current tasks, steps, checklists, and component lists for t
 
 *   **Task 9 (Clarity UI): Architect and Implement `useEditableEntity` Hook & Refactor `TaskDetailView`**
     *   **Goal:** Design and build a new comprehensive hook, `useEditableEntity`, to manage editable entity state (forms, lists, dirty checking, saving) in a configurable and reusable way. Refactor `TaskDetailView.tsx` to use this hook, simplifying its logic and establishing a robust pattern for future editable components.
-    *   **Status:** Hook Implementation & Unit Tests Complete. Pending `TaskDetailView` Refactor.
+    *   **Status:** COMPLETED
     *   **Complexity:** Level 4 (Architectural refactor and new pattern definition)
     *   **Depends On:** Clear definition of common entity editing needs.
     *   **Phases & Sub-Tasks:**
@@ -445,10 +445,25 @@ This file tracks the current tasks, steps, checklists, and component lists for t
             *   **Status:** COMPLETED
         *   **`9.7: Documentation - Create developer guides for useEditableEntity and pattern`**
             *   **Goal:** Document how to use `useEditableEntity`, the `EntityTypeConfig`, and the overall pattern.
-            *   **Status:** IN PROGRESS
+            *   **Status:** COMPLETED
         *   **`9.8: Cleanup - Deprecate/remove old state management hooks`**
             *   **Goal:** If `useEditableEntity` proves to be a complete replacement, remove `useObjectEditManager`, `useReorderableList`, `useTaskDetailStateManager`, `useEntityEditManager` to simplify the codebase.
-            *   **Status:** To Do (Pending success of Task 9)
+            *   **Status:** COMPLETED
+            *   **Current Sub-Task:** `9.8.1` - Evaluate Completeness of `useEditableEntity` for replacing old hooks.
+            *   **Description:** Complete the full lifecycle of designing, implementing, testing, documenting the `useEditableEntity` hook, refactoring `TaskDetailView.tsx` to use it, and then cleaning up superseded hooks.
+            *   **Phases:**
+                *   `9.1` Design `useEditableEntity` Hook - COMPLETED
+                *   `9.2` Implement Core Logic & Form Integration - COMPLETED
+                *   `9.3` Implement List Management - COMPLETED
+                *   `9.4` Unit Testing for `useEditableEntity` - COMPLETED
+                *   `9.5` Refactor `TaskDetailView.tsx` - COMPLETED
+                *   `9.6` Comprehensive Testing of `TaskDetailView.tsx` - COMPLETED
+                *   `9.7` Documentation for `useEditableEntity` - COMPLETED
+                *   `9.8` Cleanup - Deprecate/remove old hooks - COMPLETED
+                    *   `9.8.1` Evaluate Completeness - COMPLETED
+                    *   `9.8.2` Plan Migration for Other Components - COMPLETED
+                    *   `9.8.3` Mark old hooks as deprecated - COMPLETED
+                    *   `9.8.4` Remove old hook files - COMPLETED
 
 ## III. Agent Memory & Tooling Enhancement (Supabase Integration)
     *   **Status:** Planning Complete - **Implementation ongoing, critical for Chat Panel and future agent capabilities.**
@@ -550,5 +565,66 @@ This file tracks the current tasks, steps, checklists, and component lists for t
 - Current blocker: Editing parent task fields updates RHF's isDirty but not TDSM's isDirty (modal dirty), so Save button remains disabled. Dirty check effect in useEntityEditManager is not triggered by form edits.
 - Last attempted fix: Subscribed to form value changes using RHF's watch() and passed watched values as a dependency to the state manager. This caused an infinite loop and was reverted.
 - Plan: User will start a new chat session to continue debugging. All recent changes have been reverted to a stable state.
+
+---
+
+## Task Backlog
+
+### P0: Critical Tasks (Immediate Focus)
+
+1.  **Clarity UI - Task 9: Architect and Implement `useEditableEntity` Hook & Refactor `TaskDetailView`**
+    *   **Status:** COMPLETED
+    *   **Current Sub-Task:** N/A (All phases complete)
+    *   **Description:** Complete the full lifecycle of designing, implementing, testing, documenting the `useEditableEntity` hook, refactoring `TaskDetailView.tsx` to use it, and then cleaning up superseded hooks.
+    *   **Phases:**
+        *   `9.1` Design `useEditableEntity` Hook - COMPLETED
+        *   `9.2` Implement Core Logic & Form Integration - COMPLETED
+        *   `9.3` Implement List Management - COMPLETED
+        *   `9.4` Unit Testing for `useEditableEntity` - COMPLETED
+        *   `9.5` Refactor `TaskDetailView.tsx` - COMPLETED
+        *   `9.6` Comprehensive Testing of `TaskDetailView.tsx` - COMPLETED
+        *   `9.7` Documentation for `useEditableEntity` - COMPLETED
+        *   `9.8` Cleanup - Deprecate/remove old hooks - COMPLETED
+            *   `9.8.1` Evaluate Completeness - COMPLETED
+            *   `9.8.2` Plan Migration for Other Components - COMPLETED
+            *   `9.8.3` Mark old hooks as deprecated - COMPLETED
+            *   `9.8.4` Remove old hook files - COMPLETED
+
+### P1: High Priority Tasks
+
+*   **(CLI) Implement `tool_code_execution` output observation:** Enhance the CLI to observe and report on the outputs of `tool_code_execution` calls, providing better visibility into agent actions.
+*   **(CLI) Advanced REPL Features:** Implement more robust command history, multi-line input, and potentially context-aware autocompletion in the REPL.
+*   **(Core) LangChain Deprecation Warnings:** Address remaining LangChain deprecation warnings to ensure future compatibility and stability.
+*   **(Core) Enhanced Error Handling & Logging:** Improve error handling across the system with more informative logging for easier debugging.
+*   **(Supabase) Agent Memory Enhancements:** Explore and implement more sophisticated agent memory solutions using Supabase, potentially moving beyond simple JSON persistence for long-term memory.
+*   **(Supabase) Tooling & Vector Store:** Develop a more robust system for managing and discovering tools, potentially leveraging Supabase for a tool registry and vector store for semantic tool search.
+*   **(Project Admin) Review `techContext.md`:** Ensure it reflects the latest architectural decisions and system patterns, especially after the `useEditableEntity` implementation.
+
+### P2: Medium Priority Tasks
+
+*   **(CLI) Token Usage Visibility:** Revisit and implement a reliable way to track and display token usage for LLM calls within the CLI.
+*   **(CLI) Output Streaming:** Implement streaming for LLM outputs in the CLI for a more responsive user experience.
+*   **(Core) Dynamic Tool Loading/Unloading:** Allow agents to dynamically load or unload tools during a session based on context or specific requests.
+*   **(Docs) Update `clarity-ui-api-development-guidance.md`:** Reflect recent changes and best practices, especially regarding state management and data flow with `useTaskStore` and new hooks.
+*   **(Testing) Expand LangSmith Evaluations:** Create more evaluation datasets and scenarios for testing agent performance and adherence to complex instructions.
+
+### P3: Low Priority Tasks
+
+*   **(Core) Configuration Schema Validation:** Implement schema validation for YAML configuration files to prevent errors.
+*   **(Docs) Comprehensive CLI User Guide:** Create a detailed user guide for all CLI commands and features.
+
+## Recently Completed
+
+*   **Clarity UI - Task 9.7: Documentation for `useEditableEntity`**
+*   **Clarity UI - Task 9.6: Comprehensive Testing of `TaskDetailView.tsx`**
+*   **Clarity UI - Task 9.5: Refactor `TaskDetailView.tsx`**
+*   **Clarity UI - Task 9.4: Unit Testing for `useEditableEntity`**
+*   **Clarity UI - Task 9.3: Implement List Management in `useEditableEntity`**
+*   **Clarity UI - Task 9.2: Implement Core Logic & Form Integration in `useEditableEntity`**
+*   **Clarity UI - Task 9.1: Design `useEditableEntity` Hook**
+*   **Clarity UI - Debug `TaskDetailView` Infinite Loop (Task 8 Prerequisite)**
+*   **Clarity UI - State Capture & Hook Pattern Documentation**
+*   **Memory Bank Documentation Overhaul & Core File Cleanup**
+*   **CLI - Architect Agent Implementation & LangSmith Evaluation Setup**
 
 ---

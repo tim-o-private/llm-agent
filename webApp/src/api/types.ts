@@ -15,6 +15,7 @@ export interface Task {
   due_date?: string | null;
   category?: string | null;
   subtask_position?: number | null;
+  position?: number | null;
   created_at: string;
   updated_at: string;
   completed: boolean; // Derived from status for easier filtering, ensure it's kept in sync

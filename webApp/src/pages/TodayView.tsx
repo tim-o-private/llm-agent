@@ -277,10 +277,8 @@ const TodayView: React.FC = () => {
 
       // 2. Optimistically update the Zustand store IMMEDIATELY
       // This ensures that topLevelTasksFromStore selector will return the new order quickly.
-      const storeUpdates: { [id: string]: Partial<Task> } = {};
       optimisticallyReorderedTasks.forEach((task, index) => {
         if (task.position !== index) { // Check if position actually changed
-          storeUpdates[task.id] = { position: index }; // Collect updates for Zustand state
           // Call the existing updateTask which handles local state and pendingChanges for sync
           useTaskStore.getState().updateTask(task.id, { position: index });
         }

@@ -293,7 +293,7 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
     getSortableListProps,
   } = useEditableEntity<Task, TaskFormData, Task>(taskEntityTypeConfig);
 
-  const { register, control, formState: { errors: formErrors }, getValues } = formMethods;
+  const { register, control, formState: { errors: formErrors } } = formMethods;
 
   // Log subEntityList received from the hook
   useEffect(() => {

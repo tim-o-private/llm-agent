@@ -152,12 +152,12 @@ To implement the `useEditableEntity` hook as defined in the creative design docu
 ### Phase 9.8: Cleanup - Deprecate/remove old state management hooks
 
 *   **Objective:** If `useEditableEntity` proves to be a complete and preferred replacement, deprecate and eventually remove the older, more fragmented hooks to simplify the codebase.
-*   **Status:** In Progress (Starting 9.8.1)
+*   **Status:** COMPLETED
 *   **Steps:**
-    1.  **`9.8.1:` Evaluate Completeness:** Assess if `useEditableEntity` covers all necessary use cases handled by the old hooks.
-    2.  **`9.8.2:` Plan Migration for Other Components (if any use the old hooks).**
-    3.  **`9.8.3:` Mark old hooks as deprecated.**
-    4.  **`9.8.4:` After a suitable period and successful migration, remove the old hook files.**
+    1.  **`9.8.1:` Evaluate Completeness:** Assess if `useEditableEntity` covers all necessary use cases handled by the old hooks. (COMPLETED)
+    2.  **`9.8.2:` Plan Migration for Other Components (if any use the old hooks).** (COMPLETED - No other components found)
+    3.  **`9.8.3:` Mark old hooks as deprecated.** (COMPLETED)
+    4.  **`9.8.4:` After a suitable period and successful migration, remove the old hook files.** (COMPLETED)
 
 ## 3. Timeline & Dependencies
 

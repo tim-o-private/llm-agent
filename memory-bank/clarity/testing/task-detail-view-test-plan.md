@@ -19,14 +19,14 @@
         *   All parent task fields (Title, Description, Notes, Status, Priority, Category, Due Date) are correctly populated with the task's current data using React Hook Form `defaultValues` or `reset`.
         *   "Save Changes" button is initially disabled (React Hook Form `formState.isDirty` should be `false`).
 
-*   FAIL **Test Case PT-2: Edit Parent Task Field & Verify Dirty State**
+*   PASS **Test Case PT-2: Edit Parent Task Field & Verify Dirty State**
     *   **Steps:**
         1.  Open modal for a task.
         2.  Modify the "Title" field.
     *   **Expected:**
         *   "Save Changes" button becomes enabled (due to `formState.isDirty` becoming `true`).
 
-*   **Test Case PT-3: Edit Parent Task & Save**
+*   PASS **Test Case PT-3: Edit Parent Task & Save**
     *   **Steps:**
         1.  Open modal.
         2.  Modify "Title" and "Description" fields.
@@ -36,7 +36,7 @@
         *   The `TodayView` list reflects the updated title/description on the corresponding `TaskCard`.
         *   (Optional Manual Check) Verify data persistence in the database.
 
-*   **Test Case PT-4: Edit Parent Task & Cancel**
+*   PASS **Test Case PT-4: Edit Parent Task & Cancel**
     *   **Steps:**
         1.  Open modal.
         2.  Modify the "Title" field (making `formState.isDirty` true).
@@ -46,7 +46,7 @@
         *   Click "OK" (or confirm the discard action on the prompt): Modal closes. Changes are NOT saved. `TodayView` shows the original title.
         *   Click "Cancel" (or the option to not discard, effectively cancelling the close action): The prompt closes. The modal remains open with the dirty changes.
 
-*   **Test Case PT-5: Open, No Changes, Click Save**
+*   PASS **Test Case PT-5: Open, No Changes, Click Save**
     *   **Steps:**
         1.  Open modal.
         2.  Ensure no fields are modified (`formState.isDirty` is `false`).
@@ -58,7 +58,7 @@
         *   A toast like "No changes to save" should appear, or no toast if no action is taken.
         *   The modal should remain open or close based on defined behavior for "no changes". (Preference: remain open, toast "No changes").
 
-*   **Test Case PT-6: Open, No Changes, Click Cancel**
+*   PASS **Test Case PT-6: Open, No Changes, Click Cancel**
     *   **Steps:**
         1.  Open modal.
         2.  Ensure no fields are modified.
@@ -66,7 +66,7 @@
     *   **Expected:**
         *   Modal closes immediately without any confirmation prompt.
 
-*   FAIL **Test Case PT-7: Test All Parent Field Types**
+*   PASS **Test Case PT-7: Test All Parent Field Types**
     *   **Steps:**
         1.  Open modal.
         2.  Systematically edit values for each parent task field:
@@ -90,14 +90,14 @@
 
 *Note: Subtask operations (add, edit, delete, reorder) are expected to trigger their own immediate mutations. The `childOperationsOccurredInSessionRef` flag is used to track if such operations happened during the modal session, primarily for the "Cancel" prompt logic.*
 
-*   **Test Case ST-1: View Subtasks**
+*  PASS **Test Case ST-1: View Subtasks**
     *   **Steps:**
         1.  Open modal for a task that has existing subtasks.
     *   **Expected:**
         *   Subtasks are listed correctly, displaying their titles and completion status.
         *   Subtasks are in the correct order (as per `subtask_position`).
 
-*   **Test Case ST-2: Add New Subtask (using Enter key)**
+*  PASS **Test Case ST-2: Add New Subtask (using Enter key)**
     *   **Steps:**
         1.  Open modal.
         2.  Type a title in the "Add new subtask..." input field.
@@ -110,7 +110,7 @@
         *   The "Save Changes" button for the parent task remains enabled/disabled based *only* on the parent task form's `isDirty` state. (Observation: Remained disabled. Follow-up task created to review if child operations should enable parent Save/prompt differently).
         *   The internal `childOperationsOccurredInSessionRef` flag becomes `true`.
 
-*   **Test Case ST-3: Add New Subtask (using "Add" Button)**
+*  PASS **Test Case ST-3: Add New Subtask (using "Add" Button)**
     *   **Steps:**
         1.  Open modal.
         2.  Type a title in the "Add new subtask..." input field.
@@ -119,7 +119,7 @@
         *   Same as Test Case ST-2.
         *   The "Add" button should be disabled while its `createTaskMutation` is pending.
 
-*   **Test Case ST-4: Attempt to Add Empty Subtask**
+*   PASS **Test Case ST-4: Attempt to Add Empty Subtask**
     *   **Steps:**
         1.  Open modal.
         2.  With the "Add new subtask..." input field empty, click the "Add" button or press Enter.
@@ -128,7 +128,7 @@
         *   The "Add" button might be disabled if the input is empty.
         *   No error toast, unless a backend error occurs (which it shouldn't for an empty title).
 
-*   **Test Case ST-5: Subtask Reordering (Drag and Drop)**
+*   PASS **Test Case ST-5: Subtask Reordering (Drag and Drop)**
     *   **Steps:**
         1.  Open modal for a task with multiple subtasks.
         2.  Drag a subtask and drop it into a new position in the list.
@@ -158,7 +158,7 @@
     *   **Notes:** This is a significant bug preventing subtask editing.
 
 *   **Test Case ST-7: Delete Subtask**
-    *   **Status:** PASS
+    *   **Status:**
     *   **Steps:**
         1.  Open modal.
         2.  Delete an existing subtask using controls within its `SubtaskItem`.
@@ -185,7 +185,7 @@
 ## III. Other Interactions & Edge Cases
 
 *   **Test Case OT-1: Delete Parent Task (from Modal Footer)**
-    *   **Status:** FAIL
+    *   **Status:** 
     *   **Steps:**
         1.  Open modal for an existing task.
         2.  Click the "Delete" button in the modal footer.

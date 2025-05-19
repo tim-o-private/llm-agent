@@ -1,13 +1,17 @@
+%% Notes:
+%% takeSnapshot captures the current state of parents and children
+%% Save does not immediately trigger a synch to the database, but 
+
 flowchart TD
-    A[Start Open Modal] --> B[Snapshot state of parent & child objects]
-    B --> C{Did user make any changes to parent or child state?}
-    C -- No --> D[State is pristine]
-    C -- Yes --> E[State is dirty]
-    D --> F{User clicks Cancel, Save, or Close}
-    F --> G[Close Modal]
-    E --> H{User clicks Cancel}
-    H --> I[Prompt: 'Discard changes?' Options: Yes, Cancel]
-    I -- Yes --> J[Reset state, close modal]
-    I -- Cancel --> K[Return to modal]
-    E --> L{User clicks Save}
+    openModal[User Opens Modal] --> takeSnapshot[Snapshot initial state of parents & children]
+    takeSnapshot --> isStateDirty{Did user make any changes to parents or children?}
+    isStateDirty -- No --> stateIsPristine[State is pristine]
+    isStateDirty -- Yes --> isDirty[State is dirty]
+    stateIsPristine --> pristineExit{User clicks cancel, Save, or close}
+    pristineExit --> discardSnapshot[Discard Snapshot, Close Modal]
+    isDirty --> dirtyCancel{User clicks cancel}
+    dirtyCancel --> discardPrompt[Prompt: 'Discard changes?' Options: Yes, Cancel]
+    discardPrompt -- Yes --> discardSnapshot
+    discardPrompt -- Cancel --> K[Return to modal]
+    isDirty --> L{User clicks Save}
     L -- Any --> M[Persist state, reset dirty flag, close modal]
