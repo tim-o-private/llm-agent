@@ -4,14 +4,14 @@
 **Archive Document:** `memory-bank/archive/archive-task9.md`
 
 **Immediate Focus / Next Steps:**
-1.  **[RESOLVED] Resolve Task 9 Fallout (ST-1 / Subtask Viewing):** Debug and fix the issue where `useEditableEntity.ts` is not calling the `transformSubCollectionToList` function provided by `TaskDetailView.tsx`. This is critical for restoring subtask functionality in `TaskDetailView`.
-    *   **Status Update (User):** User confirmed this bug has been fixed.
+1.  **[ACTIVE] CLI/Core Backend MVP Testing:** Resolve `RuntimeError: Event loop is closed` occurring during tool execution by the `CustomizableAgent` (`test_agent`). This is blocking further manual testing (Task 3.1 from `memory-bank/tasks.md`) of the backend MVP.
 
-**Next Action:** Identify the next P0 or P1 task from `memory-bank/tasks.md`.
+**Next Action:** Identify the next P0 or P1 task from `memory-bank/tasks.md` once the event loop issue is resolved.
 
-**Mode Recommendation:** PLAN
+**Mode Recommendation:** PLAN (after current bug fix)
 
-**General Project Goal:** Stabilize and enhance the Clarity UI. Concurrently, progress on CLI and Core system enhancements.
+**General Project Goal:** Stabilize and enhance the Clarity UI. Concurrently, progress on CLI and Core system enhancements, particularly resolving the current `CustomizableAgent` bug.
 
 **Pending Decisions/Questions:**
-*   What is the next P0 or P1 task to focus on from `memory-bank/tasks.md` now that ST-1 is resolved?
+*   What is the next P0 or P1 task to focus on from `memory-bank/tasks.md` now that ST-1 is resolved and after the event loop bug is fixed?
+*   How to resolve the `asyncio` event loop issue when `CustomizableAgent` (using Google GenAI as LLM) tries to invoke tools within the synchronous CLI REPL environment?

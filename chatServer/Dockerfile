@@ -5,6 +5,7 @@ WORKDIR /app
 ENV PYTHONUNBUFFERED=1
 ENV RUNNING_IN_DOCKER="true"
 ENV PYTHONPATH="/app/src"
+ENV CHAT_SERVER_BASE_URL="https://clarity-chatserver.fly.dev"
 
 # Set the working directory in the container
 WORKDIR /app

@@ -62,6 +62,7 @@ This document tracks the active development progress for the CLI, Core Agent, Ba
 ### Current Focus (CLI/Core)
 
 - Working on Phase: REPL Enhancements, Tool Expansion, and Refinement - specifically focusing on implementing additional tools and getting visibility/token use (see `tasks.md`).
+- Debugging `RuntimeError: Event loop is closed` when `CustomizableAgent` attempts to use tools (e.g., `web_search` with Google GenAI). This is currently blocking manual testing Task 3.1 in `tasks.md`.
 - Addressing LangChain deprecation warnings.
 - Improving logging and error handling.
 

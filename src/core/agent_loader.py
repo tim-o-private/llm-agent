@@ -1,7 +1,7 @@
 import os
 import logging
 import yaml
-from typing import List, Dict, Any, Optional, Type
+from typing import List, Dict, Any, Optional, Type, Callable, Awaitable
 from collections import defaultdict
 
 from langchain.agents import AgentExecutor, create_tool_calling_agent, create_react_agent
@@ -10,9 +10,17 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder, Prom
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.agent_toolkits.file_management.toolkit import FileManagementToolkit
 from langchain_community.tools import DuckDuckGoSearchRun
+from langchain_community.callbacks.manager import get_openai_callback
+from langchain.agents import ConversationalChatAgent
 from langchain.memory import ConversationBufferMemory
-# Added JSON import for potential future use, though not strictly needed for this change
-import json 
+from langchain_core.memory import BaseMemory
+from core.memory.supabase_chat_history import SupabaseChatMessageHistory
+from core.agents.customizable_agent import CustomizableAgent
+from core.tools.prompt_tools import UpdateSelfInstructionsTool
+from core.tools.search_tools import SafeDuckDuckGoSearchRun
+from core.prompting.prompt_manager import PromptManagerService
+from supabase import create_client as create_supabase_sync_client
+import asyncio
 
 from utils.config_loader import ConfigLoader
 # from core.context_manager import ContextManager # Not currently used
@@ -42,6 +50,7 @@ SCOPE_TO_PATH_FUNC = {
 
 TOOLKIT_MAPPING: Dict[str, Type[BaseTool]] = {
     "FileManagementToolkit": FileManagementToolkit,
+    "DuckDuckGoSearchRun": SafeDuckDuckGoSearchRun,
     # Add other toolkits here as needed
 }
 
@@ -50,7 +59,8 @@ SCOPE_MAPPING: Dict[str, callable] = {
     "AGENT_DATA": lambda config_loader, agent_name, user_id=None: get_agent_data_dir(agent_name, config_loader, user_id=user_id), 
     "MEMORY_BANK": lambda config_loader, agent_name=None, user_id=None: get_memory_bank_dir(config_loader),
     "AGENT_CONFIG": lambda config_loader, agent_name, user_id=None: get_agent_config_dir(agent_name, config_loader), 
-    "TASK_LIST": lambda config_loader, agent_name=None, user_id=None: get_task_list_dir(agent_name, config_loader) if agent_name else get_task_list_dir(None, config_loader) # Simplified example, might need better handling for optional agent_name
+    "TASK_LIST": lambda config_loader, agent_name=None, user_id=None: get_task_list_dir(agent_name, config_loader) if agent_name else get_task_list_dir(None, config_loader),
+    "STANDALONE": lambda config_loader=None, agent_name=None, user_id=None: None # For standalone tools that don't need a path
 }
 
 def load_tools(
@@ -89,71 +99,112 @@ def load_tools(
         original_names_list = list(instance_data['original_names'])
         configs = instance_data['configs']
 
-        # --- Get Scope Path --- 
-        scope_func = SCOPE_MAPPING.get(scope_key)
-        if not scope_func:
-            # This check might be redundant if the first pass catches it, but safe to keep
-            logger.error(f"Invalid scope '{scope_key}' for toolkit '{toolkit_key}' in agent '{agent_name}'. Available scopes: {list(SCOPE_MAPPING.keys())}")
-            continue
-        
+        # --- Get Scope Path (if not STANDALONE) --- 
         scope_path = "unknown"
-        try:
-            # Pass necessary arguments based on scope function requirements
-            if scope_key == "AGENT_DATA":
-                scope_path = scope_func(config_loader=config_loader, agent_name=agent_name, user_id=user_id)
-            elif scope_key == "AGENT_CONFIG": # Handle AGENT_CONFIG path
-                 scope_path = scope_func(config_loader=config_loader, agent_name=agent_name)
-            elif scope_key == "TASK_LIST":    # Handle TASK_LIST path (might not need agent_name? depends on helper)
-                 # Assuming get_task_list_dir might only need config_loader or be global
-                 try:
-                     scope_path = scope_func(config_loader=config_loader)
-                 except TypeError:
-                     try: 
-                         scope_path = scope_func(agent_name=agent_name, config_loader=config_loader)
-                     except TypeError:
-                          scope_path = scope_func() # Try calling with no args
-            elif scope_key == "MEMORY_BANK":
-                scope_path = scope_func(config_loader=config_loader)
-            else: # PROJECT_ROOT 
-                scope_path = scope_func()
-            
-            # Ensure directory exists if it's supposed to be writable (optional, depends on tool use)
-            # os.makedirs(scope_path, exist_ok=True) 
-        except Exception as e:
-            logger.error(f"Error getting scope path for '{scope_key}' for toolkit '{toolkit_key}' in agent '{agent_name}': {e}", exc_info=True)
-            continue
+        if scope_key != "STANDALONE":
+            scope_func = SCOPE_MAPPING.get(scope_key)
+            if not scope_func:
+                logger.error(f"Invalid scope '{scope_key}' for toolkit '{toolkit_key}' in agent '{agent_name}'. Available scopes: {list(SCOPE_MAPPING.keys())}")
+                continue
+            try:
+                # Pass necessary arguments based on scope function requirements
+                if scope_key == "AGENT_DATA":
+                    scope_path = scope_func(config_loader=config_loader, agent_name=agent_name, user_id=user_id)
+                elif scope_key == "AGENT_CONFIG":
+                    scope_path = scope_func(config_loader=config_loader, agent_name=agent_name)
+                elif scope_key == "TASK_LIST":
+                    try:
+                        scope_path = scope_func(config_loader=config_loader)
+                    except TypeError:
+                        try: 
+                            scope_path = scope_func(agent_name=agent_name, config_loader=config_loader)
+                        except TypeError:
+                            scope_path = scope_func()
+                elif scope_key == "MEMORY_BANK":
+                    scope_path = scope_func(config_loader=config_loader)
+                else: # PROJECT_ROOT 
+                    scope_path = scope_func()
+            except Exception as e:
+                logger.error(f"Error getting scope path for '{scope_key}' for toolkit '{toolkit_key}' in agent '{agent_name}': {e}", exc_info=True)
+                continue
+        else:
+            scope_path = None # Standalone tools don't have a scope_path
 
         # --- Get Toolkit Class --- 
-        toolkit_class = TOOLKIT_MAPPING.get(toolkit_key)
-        if not toolkit_class:
-            logger.error(f"Invalid toolkit '{toolkit_key}' for scope '{scope_key}' in agent '{agent_name}'. Available toolkits: {list(TOOLKIT_MAPPING.keys())}")
+        tool_class = TOOLKIT_MAPPING.get(toolkit_key) # Changed from toolkit_class to tool_class for clarity
+        if not tool_class:
+            logger.error(f"Invalid toolkit/tool class key '{toolkit_key}' for agent '{agent_name}'. Available: {list(TOOLKIT_MAPPING.keys())}")
             continue
 
-        # --- Instantiate Toolkit --- 
+        # --- Instantiate Toolkit or Standalone Tool --- 
+        # toolkit_instance = None # Renamed for clarity below
+        
+        if scope_key == "STANDALONE":
+            # Handle standalone tools
+            try:
+                # Standalone tools are instantiated directly.
+                # Their 'original_name' in config should match their conceptual name (e.g., 'duckduckgo_search')
+                # The 'tool_name' from config is what the agent will call it.
+                
+                # We only need one instance per standalone tool class.
+                # The loop over 'configs' for a standalone tool instance should ideally be just one config.
+                if tool_class not in toolkit_instances: # Instantiate only once
+                    standalone_tool_instance = tool_class()
+                    toolkit_instances[tool_class] = standalone_tool_instance # Cache by class
+                    logger.info(f"Instantiated standalone tool '{tool_class.__name__}'.")
+
+                # Process each configuration for this standalone tool (e.g. setting name, description)
+                for tool_name, tool_details in configs:
+                    current_tool_instance = toolkit_instances[tool_class]
+                    # We need to clone or ensure the tool instance is fresh for each specific agent config if names/descriptions differ
+                    # For now, let's assume Langchain tools can have their name/description properties modified.
+                    # A more robust way for standalone tools might be to instantiate them per config entry.
+                    # However, DuckDuckGoSearchRun is simple.
+                    
+                    final_tool = current_tool_instance 
+                    final_tool.name = tool_name # Agent's name for the tool
+                    
+                    description_override = tool_details.get('description')
+                    if description_override:
+                        final_tool.description = description_override
+                    
+                    # original_name in config for standalone tools helps to confirm it's the right tool
+                    # but the instance itself is the tool.
+                    loaded_tools.append(final_tool)
+                    logger.info(f"Configured standalone tool '{final_tool.name}' (from class '{tool_class.__name__}') for agent '{agent_name}'.")
+
+            except Exception as e:
+                logger.error(f"Failed to instantiate or configure standalone tool '{toolkit_key}': {e}", exc_info=True)
+            continue # Move to next instance_key (next toolkit or standalone tool class)
+        
+        # --- Existing Toolkit Logic (e.g., FileManagementToolkit) ---
+        # This part remains largely the same for actual toolkits
         toolkit_instance = None
         try:
-            # Instantiate the toolkit with the determined root_dir and ALL required tools for this instance
             if toolkit_key == "FileManagementToolkit":
-                toolkit_instance = toolkit_class(root_dir=scope_path, selected_tools=original_names_list)
+                toolkit_instance = tool_class(root_dir=scope_path, selected_tools=original_names_list)
                 logger.info(f"Instantiated toolkit '{toolkit_key}' for scope '{scope_key}' ({scope_path}) requesting tools: {original_names_list}")
             else:
                 # Fallback for other toolkits - might need refinement based on their constructors
-                toolkit_instance = toolkit_class() 
+                toolkit_instance = tool_class() 
                 logger.warning(f"Toolkit '{toolkit_key}' instantiated without specific scope/tool selection logic. Review if needed.")
+            # Cache the toolkit instance if it's a toolkit (not a standalone tool already handled)
+            # This caching by (toolkit_key, scope_key) might need review if multiple configs use the same toolkit but different scopes.
+            # For now, it seems each instance_key is unique.
             toolkit_instances[instance_key] = toolkit_instance
+
         except Exception as e:
             logger.error(f"Failed to instantiate toolkit '{toolkit_key}' for scope '{scope_key}' with tools {original_names_list}: {e}", exc_info=True)
-            continue # Skip processing tools for this failed instance
+            continue
 
-        # --- Configure and Add Individual Tools from this Instance --- 
         if not toolkit_instance:
-            continue # Skip if instantiation failed
+            continue
             
         try:
             available_tools_map = {t.name: t for t in toolkit_instance.get_tools()}
         except Exception as e:
              logger.error(f"Failed to get tools from toolkit instance {toolkit_key}/{scope_key}: {e}", exc_info=True)
-             continue # Skip this instance if get_tools fails
+             continue
 
         for tool_name, tool_details in configs:
             original_name = tool_details.get('original_name')
@@ -185,14 +236,31 @@ def load_tools(
 
     return loaded_tools
 
+# --- Placeholder for Auth Token Provider ---
+# This needs to be properly implemented or passed from chatServer
+# For now, it's a placeholder that would need to be correctly set up in the calling context (chatServer)
+# to provide the actual user JWT token for the PromptManagerService.
+# One way is to have chatServer pass an async callable that returns the token.
+async def get_auth_token_placeholder() -> Optional[str]:
+    logger.warning("Using placeholder auth token provider for PromptManagerService. This needs proper implementation.")
+    # In a real scenario, this would come from the request context in chatServer
+    # For agent_loader, if called outside a request, this is problematic.
+    # If chatServer calls load_agent_executor, it should pass a real token provider.
+    return os.getenv("SUPABASE_ANON_KEY") # Example: using anon key for testing, NOT FOR PRODUCTION
+
 # --- Agent Loading --- 
 
 def load_agent_executor(
     agent_name: str,
     config_loader: ConfigLoader,
-    log_level: int, # Keep log level for potential LLM/internal use
-    memory: ConversationBufferMemory,
-    user_id: Optional[str] = None # Added user_id parameter
+    log_level: int,
+    # memory: ConversationBufferMemory, # Old memory type, will be replaced if using Supabase
+    base_memory_override: Optional[BaseMemory] = None, # Allow overriding memory for testing or specific cases
+    user_id: Optional[str] = None,
+    # New parameter for chatServer to pass its Supabase client if available and configured for async
+    async_supabase_client: Optional[Any] = None, # AsyncClient type
+    # New parameter for chatServer to pass a real auth token provider
+    auth_token_provider_callable: Optional[Callable[[], Awaitable[Optional[str]]]] = None
 ) -> AgentExecutor:
     """Loads agent configuration, LLM, prompt, tools, and creates an AgentExecutor."""
     logger.info(f"Loading agent executor for: {agent_name}{f' (User: {user_id})' if user_id else ''}")
@@ -217,6 +285,60 @@ def load_agent_executor(
     except Exception as e:
         logger.error(f"Error loading agent configuration for '{agent_name}': {e}", exc_info=True)
         raise ValueError(f"Invalid configuration for agent '{agent_name}'.")
+
+    # --- Initialize Services (Supabase Client, PromptManagerService) ---
+    # Supabase client for SupabaseChatMessageHistory (sync version for direct use here if async_supabase_client not passed)
+    # chatServer should ideally pass its initialized async_supabase_client.
+    # For CustomizableAgent and its tool, we need PromptManagerService.
+    
+    actual_auth_token_provider = auth_token_provider_callable if auth_token_provider_callable else get_auth_token_placeholder
+    
+    prompt_manager_service: Optional[PromptManagerService] = None
+    chat_server_url = config_loader.get("chat_server_url", os.getenv("CHAT_SERVER_BASE_URL"))
+    if not chat_server_url:
+        logger.warning("CHAT_SERVER_BASE_URL not configured. PromptManagerService will not be available.")
+    
+    if chat_server_url and user_id: # PromptManagerService is user-specific due to token
+        prompt_manager_service = PromptManagerService(
+            base_url=chat_server_url,
+            auth_token_provider=actual_auth_token_provider
+        )
+        logger.info(f"PromptManagerService initialized for agent {agent_name}, user {user_id}.")
+    else:
+        logger.warning(f"PromptManagerService not initialized for agent {agent_name} (URL: {chat_server_url}, UserID: {user_id}). CustomizableAgent might lack dynamic prompt features.")
+
+    # --- 3. Determine Agent Class and Memory --- 
+    agent_class_name = agent_config.get('agent_class', 'default') # e.g., 'default', 'CustomizableAgent'
+    memory_type = agent_config.get('memory_type', 'buffer') # e.g., 'buffer', 'supabase_buffer'
+
+    current_memory: BaseMemory
+    if base_memory_override:
+        current_memory = base_memory_override
+        logger.info(f"Using overridden memory for agent {agent_name}.")
+    elif memory_type == 'supabase_buffer' and user_id and async_supabase_client:
+        # Ensure session_id is robustly generated or retrieved for the user
+        # For now, using agent_name as part of session_id for simplicity, might need a dedicated session manager.
+        session_id = f"user_{user_id}_agent_{agent_name}_session"
+        current_memory = ConversationBufferMemory(
+            chat_memory=SupabaseChatMessageHistory(
+                supabase_client=async_supabase_client, # Use the async client passed from chatServer
+                session_id=session_id,
+                user_id=user_id
+            ),
+            memory_key="chat_history", 
+            return_messages=True,
+            input_key="input"  # Explicitly set the input key for memory
+        )
+        logger.info(f"Using SupabaseChatMessageHistory for agent {agent_name}, user {user_id}, session {session_id}.")
+    else:
+        if memory_type == 'supabase_buffer' and (not user_id or not async_supabase_client):
+            logger.warning(f"Supabase memory type configured for '{agent_name}' but user_id or async_supabase_client is missing. Falling back to ConversationBufferMemory.")
+        current_memory = ConversationBufferMemory(
+            memory_key="chat_history", 
+            return_messages=True,
+            input_key="input"  # Explicitly set the input key for memory
+        )
+        logger.info(f"Using standard ConversationBufferMemory for agent {agent_name}.")
 
     # --- 2. Load LLM Configuration --- 
     try:
@@ -262,127 +384,177 @@ def load_agent_executor(
          logger.error(f"Unexpected error initializing LLM for '{agent_name}': {e}", exc_info=True)
          raise
 
-    # --- 3. Load Prompt Template --- 
-    # Check for direct system_prompt key first
-    if 'system_prompt' in agent_config:
-        prompt_template_str = agent_config['system_prompt']
-        logger.info(f"Using direct 'system_prompt' key from config for agent '{agent_name}'.")
-    else:
-        # Fallback to checking the 'prompt' key (string or dict)
-        prompt_config = agent_config.get('prompt', {})
-        prompt_template_str = None
-
-        if isinstance(prompt_config, str): # Simple case: prompt is just a filename
-            prompt_file = prompt_config
-            # Construct full path relative to agent config dir
-            agent_config_dir = get_agent_config_dir(agent_name, config_loader)
-            prompt_file_path = os.path.join(agent_config_dir, prompt_file)
-            try:
-                with open(prompt_file_path, 'r') as f:
-                    prompt_template_str = f.read()
-                logger.info(f"Loaded prompt template from file: {prompt_file_path}")
-            except FileNotFoundError:
-                logger.error(f"Prompt template file '{prompt_file_path}' not found for agent '{agent_name}'.")
-                raise
-            except Exception as e:
-                logger.error(f"Error loading prompt template from '{prompt_file_path}' for agent '{agent_name}': {e}", exc_info=True)
-                raise ValueError(f"Invalid prompt file '{prompt_file_path}' for agent '{agent_name}'.")
-        elif isinstance(prompt_config, dict): # Structured prompt config
-            # Check for inline template first
-            if 'template' in prompt_config:
-                prompt_template_str = prompt_config['template']
-                logger.info(f"Using inline prompt template from config for agent '{agent_name}'.")
-                # TODO: How to get input_variables if specified inline?
-                # Maybe require explicit input_variables list in this case?
-                # input_variables = prompt_config.get('input_variables', []) 
-            # Fallback to system_message_file
-            elif 'system_message_file' in prompt_config:
-                prompt_file = prompt_config.get('system_message_file')
-                # Construct full path relative to agent config dir
-                agent_config_dir = get_agent_config_dir(agent_name, config_loader)
-                prompt_file_path = os.path.join(agent_config_dir, prompt_file)
-                try:
-                    with open(prompt_file_path, 'r') as f:
-                        prompt_template_str = f.read()
-                    logger.info(f"Loaded prompt template from file specified in config: {prompt_file_path}")
-                except FileNotFoundError:
-                    logger.error(f"Prompt template file '{prompt_file_path}' (from config) not found for agent '{agent_name}'.")
-                    raise
-                except Exception as e:
-                    logger.error(f"Error loading prompt template from '{prompt_file_path}' (from config) for agent '{agent_name}': {e}", exc_info=True)
-                    raise ValueError(f"Invalid prompt file '{prompt_file_path}' (from config) for agent '{agent_name}'.")
-            else:
-                # Neither inline template nor system_message_file found in dict
-                logger.error(f"Invalid prompt configuration for agent '{agent_name}'. Neither 'system_prompt' key nor valid 'prompt' config (string filename or dict with 'template'/'system_message_file') found.")
-                raise ValueError(f"Invalid prompt configuration for agent '{agent_name}'.")
-        else:
-            logger.error(f"Invalid 'prompt' type in config for agent '{agent_name}': {type(prompt_config)}. Expected string or dict.")
-            raise ValueError(f"Invalid prompt configuration type for agent '{agent_name}'.")
-
-    # --- Load Previous Session Summary (USER-SPECIFIC) --- 
-    # Use the MODIFIED get_agent_data_dir with user_id
-    agent_data_dir = get_agent_data_dir(agent_name, config_loader, user_id=user_id)
-    summary_file_path = os.path.join(agent_data_dir, 'session_log.md')
-    previous_summary = ""
-    try:
-        if os.path.exists(summary_file_path):
-            # Ensure the directory for user-specific summary is created if it doesn't exist
-            # This should ideally be handled when saving, but good to ensure read doesn't fail if dir is missing.
-            os.makedirs(os.path.dirname(summary_file_path), exist_ok=True)
-            with open(summary_file_path, 'r') as f:
-                previous_summary = f.read()
-            if previous_summary:
-                logger.info(f"Loaded previous session summary for user '{user_id}' from {summary_file_path}")
-                prompt_template_str = f"PREVIOUS SESSION SUMMARY FOR THIS USER:\n{previous_summary}\n\n---\n\nCURRENT SESSION PROMPT:\n{prompt_template_str}"
-    except IOError as e:
-        logger.warning(f"Could not read summary file {summary_file_path} for user '{user_id}': {e}")
-    except Exception as e:
-        logger.error(f"Unexpected error loading summary from {summary_file_path} for user '{user_id}': {e}", exc_info=True)
-
-    # --- Create PromptTemplate Instance --- 
-    try:
-        if not prompt_template_str:
-            raise ValueError("Prompt template string could not be loaded or determined.")
-        
-        # Revert to creating a ChatPromptTemplate suitable for tool calling agent
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", prompt_template_str), # Use the loaded content as system message
-            MessagesPlaceholder(variable_name="chat_history", optional=True),
-            ("human", "{input}"),
-            MessagesPlaceholder(variable_name="agent_scratchpad"),
-        ])
-    except Exception as e:
-         logger.error(f"Failed to create PromptTemplate for agent '{agent_name}': {e}", exc_info=True)
-         raise ValueError(f"Invalid prompt template structure for agent '{agent_name}'.")
-
     # --- 4. Load Tools --- 
-    tools_config = agent_config.get('tools_config', {}) # Restore config usage
+    tools_config = agent_config.get('tools_config', {})
+    tools: List[BaseTool] = load_tools(agent_name, tools_config, config_loader, user_id=user_id)
     
-    tools = load_tools(agent_name, tools_config, config_loader, user_id=user_id)
-    logger.info(f"Loaded {len(tools)} tools for agent '{agent_name}'{f' (User: {user_id})' if user_id else ''}: {[t.name for t in tools]}")
+    # Add UpdateSelfInstructionsTool if CustomizableAgent and prompt_manager is available
+    if agent_class_name == 'CustomizableAgent' and prompt_manager_service:
+        update_instr_tool = UpdateSelfInstructionsTool(prompt_manager=prompt_manager_service)
+        tools.append(update_instr_tool)
+        logger.info(f"Added UpdateSelfInstructionsTool for CustomizableAgent '{agent_name}'.")
+    elif agent_class_name == 'CustomizableAgent' and not prompt_manager_service:
+        logger.warning(f"CustomizableAgent '{agent_name}' configured, but PromptManagerService is not available. UpdateSelfInstructionsTool will not be added.")
 
-    # --- 5. Create Agent --- 
+    # --- 5. Load Prompt Template --- 
+    prompt_template_config = agent_config.get('prompt', {})
+    prompt_template_str: Optional[str] = None
+    final_prompt_object_for_standard_agent: Optional[ChatPromptTemplate] = None
+
+    # Determine prompt file path and load base content
+    prompt_file_name = prompt_template_config.get('file')
+    if prompt_file_name:
+        # Try to load from agent-specific config directory first
+        prompt_file_path = os.path.join(get_agent_config_dir(agent_name, config_loader), prompt_file_name)
+        if not os.path.isfile(prompt_file_path):
+            # Fallback to global prompts directory if specified in config_loader
+            global_prompts_dir = config_loader.get(['paths', 'prompt_templates_dir'])
+            if global_prompts_dir:
+                prompt_file_path = os.path.join(get_base_path(), global_prompts_dir, prompt_file_name)
+            else: # Fallback to a default prompts dir relative to project root or agent_loader.py
+                prompt_file_path = os.path.join(get_base_path(), "config", "prompts", prompt_file_name)
+        
+        try:
+            if not os.path.isfile(prompt_file_path):
+                raise FileNotFoundError(f"Prompt template file '{prompt_file_name}' not found at attempted paths.")
+            with open(prompt_file_path, 'r') as f:
+                prompt_template_str = f.read()
+            logger.info(f"Loaded prompt template for '{agent_name}' from: {prompt_file_path}")
+        except FileNotFoundError as e:
+            logger.error(f"Prompt template file error for agent '{agent_name}': {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Error loading prompt template file for '{agent_name}': {e}", exc_info=True)
+            raise
+    elif 'template_string' in prompt_template_config:
+        prompt_template_str = prompt_template_config['template_string']
+        logger.info(f"Using inline prompt template string for '{agent_name}'.")
+    else:
+        # Default prompt if nothing is specified, this will differ for CustomizableAgent vs Standard
+        if agent_class_name != 'CustomizableAgent': # Only apply this default for standard agents
+            logger.warning(f"No prompt file or template_string specified for standard agent '{agent_name}'. Using a generic default.")
+            prompt_template_str = "You are a helpful assistant." # A very basic default system message part
+
+    if not prompt_template_str and agent_class_name != 'CustomizableAgent':
+         raise ValueError(f"Prompt template string could not be determined for standard agent '{agent_name}'.")
+    
+    # --- Load Previous Session Summary (USER-SPECIFIC, for standard agents primarily) ---
+    # CustomizableAgent might handle its own context/summary via memory or prompt construction.
+    # This logic is primarily for standard agents that expect summaries in the prompt.
+    # If CustomizableAgent also needs this, its _construct_prompt_with_customizations needs to be aware.
+
+    base_prompt_for_customizable_agent: Any = prompt_template_str # Default to string content for CustomizableAgent
+
+    if agent_class_name == 'CustomizableAgent':
+        # CustomizableAgent expects a base prompt template.
+        # It might load its own template if `prompt_template_str` is a path, or use it directly.
+        # For now, pass the loaded string content.
+        # The default below is a fallback if prompt_template_str is None (e.g. no config at all)
+        # but CustomizableAgent should ideally always have a configured base_template.
+        if not prompt_template_str:
+             base_prompt_for_customizable_agent = prompt_template_config.get('base_template', "You are a helpful assistant. {{custom_instructions}}\\nTOOLS:\\n------\\n{{tools}}\\n\\nUSER INPUT:\\n--------------------\\n{{input}}\\n\\n{{agent_scratchpad}}")
+        else:
+            base_prompt_for_customizable_agent = prompt_template_str
+        logger.info(f"Prepared base prompt template content for CustomizableAgent '{agent_name}'.")
+    else: # Standard agent types (tool_calling, react)
+        system_message_content = prompt_template_str # Use the loaded string as system message
+        
+        # --- Load Previous Session Summary (for standard agents) ---
+        # This was the original location for summary loading logic.
+        # Let's assume for now that CustomizableAgent handles its history/summary via its memory
+        # and its own prompt construction, so this summary injection is for standard agents.
+        if user_id: # Only load summary if user_id is present
+            agent_data_dir = get_agent_data_dir(agent_name, config_loader, user_id=user_id)
+            summary_file_path = os.path.join(agent_data_dir, 'session_log.md') # Standardized summary file
+            previous_summary = ""
+            try:
+                if os.path.exists(summary_file_path):
+                    os.makedirs(os.path.dirname(summary_file_path), exist_ok=True)
+                    with open(summary_file_path, 'r') as f:
+                        previous_summary = f.read()
+                    if previous_summary:
+                        logger.info(f"Loaded previous session summary for user '{user_id}' from {summary_file_path}")
+                        # Prepend summary to the system message for standard agents
+                        system_message_content = f"PREVIOUS SESSION SUMMARY FOR THIS USER:\\n{previous_summary}\\n\\n---\\n\\nCURRENT SESSION PROMPT:\\n{system_message_content}"
+            except IOError as e:
+                logger.warning(f"Could not read summary file {summary_file_path} for user '{user_id}': {e}")
+            except Exception as e:
+                logger.error(f"Unexpected error loading summary from {summary_file_path} for user '{user_id}': {e}", exc_info=True)
+
+        human_message_content = prompt_template_config.get('human_message', "{input}") # Default human message
+        
+        try:
+            final_prompt_object_for_standard_agent = ChatPromptTemplate.from_messages([
+                ("system", system_message_content),
+                MessagesPlaceholder(variable_name="chat_history"), # Already handled by memory
+                ("human", human_message_content),
+                MessagesPlaceholder(variable_name="agent_scratchpad"),
+            ])
+            logger.info(f"Using standard ChatPromptTemplate for agent '{agent_name}'.")
+        except Exception as e:
+            logger.error(f"Failed to create ChatPromptTemplate for standard agent '{agent_name}': {e}", exc_info=True)
+            raise ValueError(f"Invalid prompt template structure for standard agent '{agent_name}'.")
+
+    # --- 6. Create Agent --- 
     try:
-        # Switch back to create_tool_calling_agent
-        agent = create_tool_calling_agent(llm, tools, prompt)
-        logger.debug(f"Created tool-calling agent for '{agent_name}'")
-    except Exception as e:
-        logger.error(f"Failed to create tool-calling agent for '{agent_name}': {e}", exc_info=True)
-        raise RuntimeError(f"Could not create agent '{agent_name}'.")
+        if agent_class_name == 'CustomizableAgent':
+            # if not prompt_manager_service: # Allow running without PromptManagerService, e.g., for CLI testing
+            #     logger.warning(f"PromptManagerService is not available for CustomizableAgent '{agent_name}'. Dynamic prompt features will be disabled.")
+            #     # raise ValueError(f"Cannot create CustomizableAgent '{agent_name}' without a PromptManagerService.")
 
-    # --- 6. Create Agent Executor --- 
-    try:
-        agent_executor = AgentExecutor(
-            agent=agent,
-            tools=tools,
-            memory=memory,
-            verbose=False, # Disable LangChain AgentExecutor verbose output
-            handle_parsing_errors=True, # Add basic handling for parsing errors
-            max_iterations=agent_config.get('max_iterations', 15), # Configurable max iterations
-        )
-        logger.info(f"Created Agent Executor for '{agent_name}'{f' (User: {user_id})' if user_id else ''}")
-    except Exception as e:
-        logger.error(f"Failed to create Agent Executor for '{agent_name}': {e}", exc_info=True)
-        raise RuntimeError(f"Could not create agent executor for '{agent_name}'.")
+            if not user_id and prompt_manager_service: # User ID is needed if prompt manager is active
+                 logger.warning(f"CustomizableAgent '{agent_name}' has PromptManagerService but no user_id. Dynamic prompt features may not work correctly.")
+                 # raise ValueError(f"CustomizableAgent '{agent_name}' requires a user_id when PromptManagerService is active.")
 
+            if not base_prompt_for_customizable_agent: # Check the correct variable
+                raise ValueError(f"Base prompt template not loaded or configured for CustomizableAgent '{agent_name}'.")
+
+            custom_agent = CustomizableAgent(
+                llm=llm, # Pass the LLM
+                tools=tools, # Pass the loaded tools
+                base_prompt_template=base_prompt_for_customizable_agent, # Pass the specific prompt
+                prompt_manager=prompt_manager_service, # Pass the service (can be None)
+                agent_name=agent_name, # Pass the agent's name
+                user_id=user_id # Pass the user ID (can be None)
+            )
+            # AgentExecutor.from_agent_and_tools expects 'agent' and 'tools'
+            # The 'memory' is passed directly to AgentExecutor.
+            # The 'handle_parsing_errors' and 'verbose' are also AgentExecutor args.
+            agent_executor = AgentExecutor(
+                agent=custom_agent, 
+                tools=tools, # Tools are also passed to AgentExecutor
+                memory=current_memory, 
+                verbose=True, 
+                handle_parsing_errors=True,
+                max_iterations=agent_config.get("max_iterations", 15),
+            )
+            logger.info(f"CustomizableAgent '{agent_name}' initialized and wrapped in AgentExecutor.")
+        else: # Default agent type (e.g., tool_calling or react)
+            agent_type = agent_config.get('type', 'tool_calling') 
+            if not final_prompt_object_for_standard_agent:
+                raise ValueError("Prompt object not created for standard agent type.")
+
+            if agent_type == 'tool_calling':
+                created_agent = create_tool_calling_agent(llm, tools, final_prompt_object_for_standard_agent)
+            elif agent_type == 'react':
+                created_agent = create_react_agent(llm, tools, final_prompt_object_for_standard_agent)
+            else:
+                raise ValueError(f"Unsupported agent type: {agent_type} for agent '{agent_name}'")
+            
+            agent_executor = AgentExecutor(
+                agent=created_agent, 
+                tools=tools, 
+                memory=current_memory, 
+                verbose=True, 
+                handle_parsing_errors=True
+            )
+            logger.info(f"Agent '{agent_name}' of type '{agent_type}' created.")
+
+    except Exception as e:
+        logger.error(f"Error creating agent '{agent_name}': {e}", exc_info=True)
+        if prompt_manager_service: # Attempt to close if it was created
+            asyncio.run(prompt_manager_service.close()) # Hacky, ideally manage lifecycle better
+        raise
+
+    logger.info(f"Agent executor for '{agent_name}' loaded successfully.")
     return agent_executor

@@ -201,6 +201,7 @@ def process_user_command(
 
     try:
         # --- Invoke directly. AgentExecutor handles memory now. ---
+        # Revert to passing only the primary input. AgentExecutor should manage scratchpad.
         response = agent_executor.invoke({"input": user_input})
 
         output = response.get('output', 'Error: No output found.')
