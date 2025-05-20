@@ -428,6 +428,6 @@ async def supabase_webhook(payload: SupabasePayload):
 if __name__ == "__main__":
     import uvicorn
     # Ensure logging is configured to see messages from the application
-    logging.basicConfig(level=logging.INFO) 
+    logging.basicConfig(level=logging.DEBUG) 
     print("Starting API server with Uvicorn for local development...")
     uvicorn.run(app, host="0.0.0.0", port=3001) 

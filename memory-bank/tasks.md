@@ -89,13 +89,13 @@ This file tracks the current tasks, steps, checklists, and component lists for t
     *   **Task 3.1: Manual Testing of Backend MVP**
         *   **Goal:** Verify all new backend components (Supabase schemas, `SupabaseChatMessageHistory`, `PromptManagerService`, `CustomizableAgent`, `UpdateSelfInstructionsTool`, updated `agent_loader.py`, and `chatServer/main.py` endpoints) are functioning as expected.
         *   **Key Actions:**
-            *   Define test scenarios for chat history persistence with `test_agent`.
-            *   Define test scenarios for prompt customization using `UpdateSelfInstructionsTool` and verifying changes through `PromptManagerService` and direct API calls.
+            *   Define test scenarios for chat history persistence with `test_agent`. (Verified: Chat messages are persisted and retrieved across sessions via Supabase).
+            *   Define test scenarios for prompt customization using `UpdateSelfInstructionsTool` and verifying changes through `PromptManagerService` and direct API calls. (Next focus for manual testing).
             *   Execute tests (e.g., using `curl` to interact with `chatServer/main.py` API endpoints, and observing Supabase data changes, and using the CLI for `test_agent` tool usage).
             *   Document results and any issues found.
         *   **Files/Areas:** `chatServer/main.py` endpoints (`/api/chat`, `/api/agent/prompt_customizations`), Supabase tables (`agent_sessions`, `agent_chat_messages`, `user_agent_prompt_customizations`), `config/agents/test_agent/agent_config.yaml`, `src/cli/main.py`.
-        *   **Status:** In Progress - Blocked by `RuntimeError: Event loop is closed` during tool use with `CustomizableAgent`.
-        *   **Note:** The `test_agent` (a `CustomizableAgent`) encounters a `RuntimeError: Event loop is closed` when attempting to use tools (e.g., `web_search` via Google GenAI). This prevents full manual testing of tool integration and agent execution flow.
+        *   **Status:** In Progress - Core memory persistence (Supabase integration for chat history) is now working. The `RuntimeError: Event loop is closed` is resolved. Next is to verify prompt customization persistence.
+        *   **Note:** Initial `RuntimeError: Event loop is closed` issue during tool use has been resolved. Focus is now on verifying the full scope of Task 3.1.
 
     *   **Task 3.2: Implement Unit Tests for Backend MVP Components**
         *   **Goal:** Create unit tests for new Python classes and functions to ensure their correctness and facilitate future refactoring.

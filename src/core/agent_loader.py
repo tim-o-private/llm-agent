@@ -3,6 +3,7 @@ import logging
 import yaml
 from typing import List, Dict, Any, Optional, Type, Callable, Awaitable
 from collections import defaultdict
+import uuid # Import the uuid module
 
 from langchain.agents import AgentExecutor, create_tool_calling_agent, create_react_agent
 from langchain_core.tools import BaseTool
@@ -317,12 +318,22 @@ def load_agent_executor(
         logger.info(f"Using overridden memory for agent {agent_name}.")
     elif memory_type == 'supabase_buffer' and user_id and async_supabase_client:
         # Ensure session_id is robustly generated or retrieved for the user
-        # For now, using agent_name as part of session_id for simplicity, might need a dedicated session manager.
-        session_id = f"user_{user_id}_agent_{agent_name}_session"
+        # Create a namespace UUID (this can be a constant, well-known UUID)
+        # For example, uuid.NAMESPACE_DNS or a custom one.
+        # Let's define a custom namespace for our application sessions.
+        APP_NAMESPACE_UUID = uuid.UUID('1b671a64-40d5-491e-99b0-da01ff1f3341') # Example fixed namespace
+
+        # Create a name string that is unique for the user and agent combination
+        session_name_for_uuid = f"user_{user_id}_agent_{agent_name}"
+        
+        # Generate a UUIDv5 for the session ID
+        session_id_uuid = uuid.uuid5(APP_NAMESPACE_UUID, session_name_for_uuid)
+        session_id = str(session_id_uuid) # Convert UUID object to string for storage/use
+
         current_memory = ConversationBufferMemory(
             chat_memory=SupabaseChatMessageHistory(
-                supabase_client=async_supabase_client, # Use the async client passed from chatServer
-                session_id=session_id,
+                supabase_client=async_supabase_client, 
+                session_id=session_id, # Use the generated UUID string
                 user_id=user_id
             ),
             memory_key="chat_history", 

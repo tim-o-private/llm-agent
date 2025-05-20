@@ -4,7 +4,7 @@ This document tracks the active development progress for the CLI, Core Agent, Ba
 
 ## Current Project Focus
 
-**Status:** In Progress
+**Status:** ARCHIVED
 
 **Immediate Goals:**
 1.  **Clarity UI - Task 9: Refactor `TaskDetailView` with `useEditableEntity`:**
@@ -29,9 +29,9 @@ This document tracks the active development progress for the CLI, Core Agent, Ba
 **Next Steps (General Project):**
 
 1.  **[ACTIVE]** Finalize cleanup of `tasks.md` and progress logs (`memory-bank/progress.md`).
-2.  **[TODO]** Initialize/Update `memory-bank/activeContext.md` to reflect immediate project goals.
-3.  **[TODO]** Initialize/Update `memory-bank/systemPatterns.md`.
-4.  **[TODO]** Review and update `memory-bank/chatGPTConvo.md` or archive.
+2.  **[DONE]** Initialize/Update `memory-bank/activeContext.md` to reflect immediate project goals.
+3.  **[DONE]** Initialize/Update `memory-bank/systemPatterns.md`.
+4.  **[DONE]** Review and update `memory-bank/chatGPTConvo.md` or archive.
 
 ## Task 9: Architect and Implement `useEditableEntity` Hook & Refactor `TaskDetailView`
 
@@ -82,9 +82,18 @@ This document tracks the active development progress for the CLI, Core Agent, Ba
     - Refactored chat helpers.
     - Implemented session summarization (manual and auto on exit).
     - Major code refactoring and organization (utility modules, agent loading).
-    - Refactored tool loading to be configuration-driven (`tools_config` in YAML).
+    - Refactored tool loading to be configuration-driven (`tools_config` in YAMLs).
     - **Architect Agent Implementation:** Successfully configured and integrated the 'architect' agent.
     - **LangSmith Evaluation Setup:** Developed `langsmith/eval-permissions.py`.
+    - **Agent Memory Persistence with Supabase (Backend MVP):**
+        - Resolved `RuntimeError: Event loop is closed` issues for basic tool execution.
+        - Corrected `tools_config` loading in `agent_loader.py`.
+        - Implemented `SafeDuckDuckGoSearchRun` to gracefully handle tool errors.
+        - Successfully initialized Supabase `AsyncClient` using `acreate_client` in `chatServer/main.py`.
+        - Refactored `SupabaseChatMessageHistory` to use `async def aget_messages(self)` and correctly await operations in `add_message`.
+        - Added `memory_type: supabase_buffer` to agent configurations, enabling `SupabaseChatMessageHistory`.
+        - Corrected `session_id` generation in `agent_loader.py` to use UUIDs compatible with the database schema.
+        - Verified that agent chat messages are now being persisted to and retrieved from the Supabase `agent_chat_messages` table.
 - **Visibility Feature Attempt & Revert (2025-05-05):** Feature on hold.
 
 ### Notes & Decisions (CLI/Core - Selected)

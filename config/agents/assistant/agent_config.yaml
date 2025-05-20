@@ -2,6 +2,8 @@ description: "A helpful general-purpose AI assistant."
 llm:
   temperature: 0.75
 
+memory_type: supabase_buffer
+
 # Updated tools configuration
 tools_config:
   # Tools from the standard file_management toolkit (scoped to agent data dir)
