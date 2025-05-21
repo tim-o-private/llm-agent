@@ -1,5 +1,6 @@
 description: "A helpful general-purpose AI assistant."
 llm:
+  model: gemini-2.5-flash-preview-04-17
   temperature: 0.75
 
 memory_type: supabase_buffer

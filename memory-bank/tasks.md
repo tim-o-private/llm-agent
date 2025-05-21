@@ -8,6 +8,71 @@ This file tracks the current tasks, steps, checklists, and component lists for t
 
 ## PENDING / ACTIVE TASKS
 
+**NEW TASK: Refactor: Implement Robust Short-Term Memory (STM) with Persistent `session_id`**
+*   **Status:** Core Implementation (Phases 1-3) COMPLETE - Phase 4 (Testing & Refinement) Next
+*   **Complexity:** 3 (Moderately Complex - involves DB, Backend, Frontend, State Management)
+*   **Objective:** Implement a stable and persistent short-term memory solution for agents using `langchain-postgres` and a robust client-managed `session_id` strategy to ensure conversation continuity.
+*   **Associated Design Discussion:** Based on chat history leading to this plan.
+*   **Implementation Plan (Phased):**
+    *   **Phase 1: Database Setup**
+        *   **Status:** Implementation COMPLETE - Awaiting Testing
+        *   [X] Define & Apply DDL for `user_agent_active_sessions` table (PK: `user_id`, `agent_name`; Columns: `active_session_id`, `last_active_at`, `created_at`). Include RLS.
+        *   [X] Define & Apply DDL for `chat_message_history` table (compatible with `langchain-postgres`). Include RLS (application-level control focus initially).
+        *   [X] Document DDL in `memory-bank/clarity/ddl.sql`.
+    *   **Phase 2: Backend (`chatServer/main.py`) Adjustments**
+        *   **Status:** Implementation COMPLETE - Awaiting Testing
+        *   [X] Modify `ChatRequest` model (previously `ChatInput`): `session_id: str` becomes required.
+        *   [X] Update `chat_endpoint`: Remove server-side `session_id` generation; rely on client-provided `session_id`.
+        *   [X] Ensure `PostgresChatMessageHistory` uses the correct table name (e.g., "chat_message_history").
+        *   [X] Verify `PGEngine` initialization and `CHAT_MESSAGE_HISTORY_TABLE_NAME`.
+    *   **Phase 3: Client-Side (`webApp`) Implementation**
+        *   **Status:** Implementation COMPLETE - Awaiting Testing
+        *   [X] Create React Query Hooks (`useChatSessionHooks.ts` or similar):
+            *   [X] `useFetchActiveChatSession(userId, agentName)`: Fetches from `user_agent_active_sessions`.
+            *   [X] `useUpsertActiveChatSession()`: Mutation to upsert into `user_agent_active_sessions`.
+            *   [X] `generateNewSessionId()` utility.
+        *   [X] Update `useInitializeChatStore(agentName: string)` in `webApp/src/stores/useChatStore.ts`:
+            *   [X] Implement full initialization logic: localStorage -> DB fetch -> new session generation.
+            *   [X] Use `agentName` consistently (renamed from `agentId` in store state).
+            *   [X] Persist/retrieve `session_id` from `localStorage`.
+            *   [X] Ensure store state (`sessionId`, `currentAgentName`) is correctly set.
+        *   [X] Update `ChatPanel.tsx` (and `fetchAiResponse`):
+            *   [X] Pass `agentName` to `useInitializeChatStore`.
+            *   [X] Retrieve `sessionId` from `useChatStore`.
+            *   [X] Send `sessionId` in JSON body to `/api/chat`.
+        *   [X] Remove client-side archival logic (`doArchiveChatDirect`, associated hooks and store methods) and DDL for `recent_conversation_history` table.
+    *   **Phase 4: Testing & Refinement**
+        *   [ ] Test `session_id` persistence across browser refresh/reopen for the same user/agent.
+        *   [ ] Test `session_id` is correctly passed to and used by the backend.
+        *   [ ] E2E: Conversation continuity across tab/browser close.
+        *   [ ] E2E: Separate agent conversations have separate histories.
+        *   [ ] E2E: Cross-device session resumption (latest session from DB should win).
+    *   **Phase 5: Code Cleanup & Documentation**
+        *   [ ] Delete `src/core/history/supabase_chat_history.py`.
+        *   [ ] Remove old `session_id` logic from `chatServer/main.py`.
+        *   [ ] Refactor/remove client-side batch archival if deemed redundant.
+        *   [ ] Update relevant documentation (`activeContext.md`, `tasks.md` (this entry), READMEs).
+
+**NEW TASK: Feature: Display Existing Chat History in ChatPanel on Session Resume**
+*   **Status:** Planning
+*   **Complexity:** 3 (Moderately Complex - involves Client-side fetching & state management with direct DB access)
+*   **Objective:** When a user resumes a chat session with an agent, the `ChatPanel.tsx` should load and display the existing conversation history for that `session_id` from the `chat_message_history` table using client-side logic.
+*   **Associated UI Component:** `webApp/src/components/ChatPanel.tsx`
+*   **Associated Store:** `webApp/src/stores/useChatStore.ts`
+*   **Associated Hooks:** Similar to `webApp/src/api/hooks/useChatSessionHooks.ts` but for `chat_message_history` table.
+*   **Key Requirements & Considerations:**
+    *   **Client-Side Fetching & State Management (No Backend Endpoint Needed):**
+        *   [ ] Create a new React Query hook (e.g., `useFetchChatMessageHistory(sessionId)`) in a relevant hooks file (e.g., `useChatSessionHooks.ts` or a new `useChatMessageHistoryHooks.ts`).
+        *   [ ] This hook will use the Supabase client to directly query the `chat_message_history` table for records matching the active `session_id`.
+        *   [ ] Consider pagination or limiting the number of messages returned initially (e.g., last N messages, ordered by `created_at`).
+        *   [ ] In `useChatStore.ts` (likely within or called by `initializeSessionAsync`), after a `session_id` is established, call the new hook to fetch existing messages.
+        *   [ ] Transform/deserialize the `message` JSONB content from `chat_message_history` back into the client-side `ChatMessage` format if needed.
+        *   [ ] Populate the `messages` array in `useChatStore` with the fetched history instead of initializing it as empty.
+        *   [ ] Handle loading states in the UI (e.g., show a spinner while history is being fetched).
+        *   [ ] Ensure messages are displayed in the correct chronological order.
+    *   **User Experience:**
+        *   [ ] Determine how much history to load initially (e.g., last 50 messages, last 24 hours).
+        *   [ ] Optionally, implement a "load more messages" or infinite scrolling feature if initial load is partial.
 
 # Task Board
 
@@ -49,11 +114,44 @@ This file tracks the current tasks, steps, checklists, and component lists for t
 ## III. Agent Memory & Tooling Enhancement (Supabase Integration)
     *   **Status:** Backend MVP Implemented - **Critical for Chat Panel and future agent capabilities.**
 
-**1. Supabase Schema Design/Refinement (Agent Memory, Prompts, Tasks)**
-    *   **Task 1.1: Define Schema for Agent Memory**
-        *   **Goal:** Design tables & stores for `agent_sessions` and `agent_chat_messages`. Update `ddl.sql`.
+**0. Agent Memory System v2 Implementation (Efficient & Evolving)**
+    *   **Status:** In Progress
+    *   **Complexity:** 4 (Complex System)
+    *   **Associated Creative Design:** `memory-bank/creative/agent_memory_system_v2_efficient_evolving.md`
+    *   **Implementation Plan:** `memory-bank/implementation_plans/agent_memory_system_v2_impl_plan.md`
+    *   **Objective:** Refactor the agent memory system to minimize database writes, implement an evolving natural language LTM, leverage client-side buffering, and ensure robust short-term context.
+    *   **Sub-Tasks (Phased Implementation):**
+        *   **Phase 1: Backend Foundation - LTM & Short-Term Cache Core** (Status: DONE)
+            *   Define/migrate schemas for `agent_long_term_memory` and `agent_sessions` (optional). RLS.
+            *   Implement `server_session_cache` in `chatServer`.
+            *   Create `ManageLongTermMemoryTool` (`read`, `overwrite`/`append`).
+            *   Modify `agent_loader.py` and `CustomizableAgent` for LTM.
+            *   Unit/Integration tests for tool and LTM read/write.
+        *   **Phase 2: Client-Side Buffering & Direct DB Archival** (Status: UI Integration for Chat Store Init DONE - Testing Archival Next)
+            *   Define/migrate schema for `recent_conversation_history`. RLS. (Status: DONE)
+            *   Create `/api/chat/session/archive_messages` endpoint in `chatServer`. (Status: DONE - but to be deprecated)
+            *   Implement client-side archival triggers in `useChatStore.ts`. (Status: DONE)
+            *   Refactor client-side archival logic (`useChatStore.ts` and `useArchiveChatMutation` hook) to use direct Supabase client writes to `recent_conversation_history` instead of API endpoint. (Status: DONE)
+            *   Integrate `agentId` into `ChatPanel` and initialize `useChatStore` correctly. (Status: DONE)
+            *   Align client-side data synchronization triggers (for tasks and chat archival) towards a common event-driven or centralized mechanism where feasible. (Status: DEFERRED - Current separate mechanisms deemed acceptable for now)
+            *   Test client triggers and direct Supabase batch storage. (Status: To Do - Part of UI Integration Testing)
+        *   **Phase 3: Integrating Short-Term Context Flow & Debugging Core Agent Execution** (Status: In Progress -> **SUPERSEDED by "Refactor: Implement Robust STM"**)
+            *   Modify client `/api/chat` calls (send only new messages). (Status: To Do -> Covered by new plan)
+            *   Refactor `chatServer` `/api/chat` endpoint for `server_session_cache` and new client messages. (Status: To Do -> Covered by new plan, `server_session_cache` removed)
+            *   Ensure `CustomizableAgentExecutor` processes assembled short-term history. (Status: In Progress -> Core of new plan)
+            *   **[RESOLVED]** Resolve `InvalidArgument: 400 * GenerateContentRequest.contents[X].parts: contents.parts must not be empty.` error occurring after tool calls with Gemini model. (Status: RESOLVED - Switched to `format_to_tool_messages` and `ToolsAgentOutputParser`)
+            *   E2E testing of conversational flow. (Status: To Do - Unblocked)
+        *   **Phase 4: Refinements, Advanced LTM Operations & Pruning** (Status: To Do)
+            *   Enhance `ManageLongTermMemoryTool` (section-based editing).
+            *   Implement pruning/archival for `recent_conversation_history`.
+            *   Execute full test plan (`comprehensive_agent_memory_and_customization_test_plan_v1.md`).
+            *   Documentation updates.
+
+**1. Supabase Schema Design/Refinement (Original V1 approach - Review and Adapt for V2)**
+    *   **Task 1.1: Define Schema for Agent Memory (V1: `agent_sessions`, `agent_chat_messages`)**
+        *   **Goal:** Design tables & stores. (V1 `agent_chat_messages` is superseded by V2 `recent_conversation_history` and client/server caching. `agent_sessions` might still be used or adapted for V2).
         *   **Output:** DDL & store schema for agent memory tables.
-        *   **Status:** Backend MVP Implemented (DDL `20240801000000_agent_memory_schema.sql` created; `SupabaseChatMessageHistory` class implemented)
+        *   **Status:** V1 Backend MVP Implemented. **Action: Review and adapt for V2. `agent_chat_messages` likely removed/repurposed.**
     *   **Task 1.2: Define Schema for Storing Agent Configurations/Prompts**
         *   **Goal:** Design tables for user-specific agent configurations/overrides.
         *   **Action:** Draft DDL for `user_agent_prompt_customizations`. Update `ddl.sql`.
@@ -64,29 +162,28 @@ This file tracks the current tasks, steps, checklists, and component lists for t
         *   **Action:** Review existing DDL. Incorporate fields from `techContext.md`.
         *   **Output:** Updated `data/db/ddl.sql`.
         *   **Status:** To Do (Not part of this backend MVP iteration)
-    *   **Task 1.4: Define RLS Policies for Agent-Related Tables (and review UI tables)**
+    *   **Task 1.4: Define RLS Policies for Agent-Related Tables (Original V1 - Review and Adapt for V2)**
         *   **Goal:** Ensure appropriate Row Level Security.
-        *   **Action:** Implement RLS for `agent_sessions`, `agent_chat_messages`, `user_agent_prompt_customizations`.
+        *   **Action:** Implement RLS for V2 tables: `recent_conversation_history`, `agent_long_term_memory`, (and `agent_sessions` if used).
         *   **Output:** SQL migration scripts for RLS policies.
-        *   **Status:** Backend MVP Implemented (Included in DDL migration scripts)
+        *   **Status:** V1 Backend MVP Implemented. **Action: Ensure V2 tables have RLS.**
 
-**2. API Endpoints in `chatServer/` (for Supabase interactions by agents)**
-    *   **Task 2.1: Design and Implement Endpoints for Agent Memory**
+**2. API Endpoints in `chatServer/` (Original V1 - Review and Adapt for V2)**
+    *   **Task 2.1: Design and Implement Endpoints for Agent Memory (V1)**
         *   **Goal:** Allow agents (via `chatServer`) to save/load conversation history/summaries from Supabase.
         *   **Action:** Create FastAPI endpoints.
         *   **Output:** New API endpoints in `chatServer/main.py`.
-        *   **Status:** Achieved via direct Supabase client in `SupabaseChatMessageHistory` class (no separate API endpoints needed for agents to call for memory).
+        *   **Status:** Achieved via direct Supabase client in `SupabaseChatMessageHistory` class (V1). **Action: V2 uses new `/api/chat/session/archive_messages` and modified `/api/chat`. Direct Supabase client for per-message history (V1) is superseded.**
     *   **Task 2.2: Design and Implement Endpoints for Agent Prompts/Contexts**
         *   **Goal:** Allow agents to fetch/update their specific prompts/customizations from Supabase.
         *   **Action:** Create FastAPI endpoints for prompt customizations.
         *   **Output:** New API endpoints in `chatServer/main.py`.
         *   **Status:** Backend MVP Implemented (`/api/agent/prompt_customizations/...` endpoints created)
 
-**3. Backend MVP Validation & Documentation**
-    *   **Status:** To Do
+**3. Backend MVP Validation & Documentation (Original V1 - Superseded by V2 Implementation & Test Plan)**
+    *   **Status:** Partially Done for V1. **Action: This entire task section is superseded by the implementation and testing of Agent Memory System V2 (Task 0 above) and its associated test plan (`comprehensive_agent_memory_and_customization_test_plan_v1.md`).**
     *   **Objective:** Ensure the implemented backend MVP (agent memory, prompt customization, customizable agent) is robust, well-tested, and documented before proceeding to UI development.
-
-    *   **Task 3.1: Manual Testing of Backend MVP**
+    *   **Task 3.1: Manual Testing of Backend MVP (V1)**
         *   **Goal:** Verify all new backend components (Supabase schemas, `SupabaseChatMessageHistory`, `PromptManagerService`, `CustomizableAgent`, `UpdateSelfInstructionsTool`, updated `agent_loader.py`, and `chatServer/main.py` endpoints) are functioning as expected.
         *   **Key Actions:**
             *   Define test scenarios for chat history persistence with `test_agent`. (Verified: Chat messages are persisted and retrieved across sessions via Supabase).
@@ -96,8 +193,7 @@ This file tracks the current tasks, steps, checklists, and component lists for t
         *   **Files/Areas:** `chatServer/main.py` endpoints (`/api/chat`, `/api/agent/prompt_customizations`), Supabase tables (`agent_sessions`, `agent_chat_messages`, `user_agent_prompt_customizations`), `config/agents/test_agent/agent_config.yaml`, `src/cli/main.py`.
         *   **Status:** In Progress - Core memory persistence (Supabase integration for chat history) is now working. The `RuntimeError: Event loop is closed` is resolved. Next is to verify prompt customization persistence.
         *   **Note:** Initial `RuntimeError: Event loop is closed` issue during tool use has been resolved. Focus is now on verifying the full scope of Task 3.1.
-
-    *   **Task 3.2: Implement Unit Tests for Backend MVP Components**
+    *   **Task 3.2: Implement Unit Tests for Backend MVP Components (V1)**
         *   **Goal:** Create unit tests for new Python classes and functions to ensure their correctness and facilitate future refactoring.
         *   **Key Actions:**
             *   Write unit tests for `src/core/memory/supabase_chat_history.py` (`SupabaseChatMessageHistory`), mocking Supabase client interactions.
@@ -107,8 +203,7 @@ This file tracks the current tasks, steps, checklists, and component lists for t
             *   Write unit tests for relevant new/modified logic in `src/core/agent_loader.py`.
         *   **Files:** New test files in `tests/core/memory/`, `tests/core/prompting/`, `tests/core/agents/`, `tests/core/tools/`, and `tests/core/`.
         *   **Status:** To Do
-
-    *   **Task 3.3: Update Technical Documentation for Backend MVP**
+    *   **Task 3.3: Update Technical Documentation for Backend MVP (V1)**
         *   **Goal:** Document the new backend architecture, components, APIs, and Supabase schema changes for clarity and maintainability.
         *   **Key Actions:**
             *   Update `memory-bank/techContext.md` with details of the new agent memory system (`SupabaseChatMessageHistory`), `CustomizableAgent`, `PromptManagerService`, and associated Supabase tables (`agent_sessions`, `agent_chat_messages`, `user_agent_prompt_customizations`) including their schemas and RLS policies.
@@ -461,157 +556,31 @@ This file tracks the current tasks, steps, checklists, and component lists for t
     *   **Future Scope:** Apply these hooks to other parts of the application where similar patterns exist.
 
 *   **Task 8: Refactor `TaskDetailView` State Management (Align with Option 1 & Best Practices)**
-    *   **Goal:** Refactor `TaskDetailView.tsx` and its associated hooks (`useObjectEditManager`, `useReorderableList`, `useTaskDetailStateManager`) to align with "Option 1: Full Adherence to Zustand-First with Eventual Sync" as detailed in `memory-bank/clarity/creative-task8-state-management-refactor.md`. This will simplify `TaskDetailView`, make hooks more reusable and focused, and ensure all data persistence goes through `useTaskStore.ts`.
-    *   **Status:** SUPERSEDED by Task 9
-    *   **Complexity:** Level 3-4
-    *   **Depends On:** Successful completion of Task 7 (existing hooks provide a baseline).
-    *   **Creative Design:** `memory-bank/clarity/creative-task8-state-management-refactor.md` (Section 7).
-    *   **Phases:**
-        *   **Phase 0: Achieve Passing Test Suite for `TaskDetailView`**
-            *   **Objective:** Ensure the current `TaskDetailView.tsx` implementation is stable and bug-free by having all tests in `memory-bank/clarity/testing/task-detail-view-test-plan.md` pass.
-            *   **P0.1:** Resolve All Failing Tests in `task-detail-view-test-plan.md` (starting with PT-2).
-        *   **Phase 1: Refactor Core UI Logic Hooks**
-            *   **P1.1:** Refactor `useObjectEditManager.ts` (pure RHF management, no direct persistence).
-            *   **P1.2:** Refactor `useReorderableList.ts` (pure local list & DND, no direct persistence).
-        *   **Phase 2: Refactor `TaskDetailView.tsx` and Orchestration Logic**
-            *   **P2.1:** Update `TaskDetailView.tsx` for data sourcing from `useTaskStore` and snapshot creation.
-            *   **P2.2:** Integrate refactored `useObjectEditManager` and `useReorderableList`.
-            *   **P2.3:** Implement/Refine `useTaskDetailStateManager.ts` integration for dirty checking and save handling (delta calculation and dispatch to `useTaskStore`).
-            *   **P2.4:** Implement modal save/cancel/close logic according to `modal-editor-state-flow-v2.md`.
-        *   **Phase 3: Post-Refactor Integration Testing**
-            *   **P3.1:** Execute full test plan from `task-detail-view-test-plan.md`.
-            *   **P3.2:** Address any regressions.
-        *   **Phase 4: Unit Testing for Hooks**
-            *   **P4.1:** Unit Test `useObjectEditManager.ts`.
-            *   **P4.2:** Unit Test `useReorderableList.ts`.
-            *   **P4.3:** Unit Test `useTaskDetailStateManager.ts`.
-            *   **P4.4:** Unit Test `useEntityEditManager.ts`.
-        *   **Phase 5: Documentation & Cleanup**
-            *   **P5.1:** Update hook documentation (`reusable-ui-logic-hooks.md`).
-            *   **P5.2:** Update architectural diagrams.
-            *   **P5.3:** Code cleanup.
-            *   **P5.4:** Update `tasks.md` and `progress.md` upon completion.
-    *   **Files Affected (Primary):** Same as Task 7, but with significant refactoring based on the new plan.
+    *   **Goal:** Refactor `TaskDetailView` state management to align with the new state management approach and best practices.
+    *   **Status:** To Do
+    *   **Complexity:** Level 4 (involves refactoring a complex component and integrating new state management logic)
+    *   **Depends On:** Successful completion of Task 7 (abstraction of state management logic into reusable hooks)
+    *   **Key Actions:**
+        1.  **Phase 1: Refactor `TaskDetailView` to use the new state management approach**
+            *   Replace direct state management with the new state management pattern
+            *   Integrate the new state management logic into `TaskDetailView`
+        2.  **Phase 2: Refine and verify the new state management implementation**
+            *   Test the refactored `TaskDetailView` against the manual test plan in `memory-bank/clarity/testing/task-detail-view-test-plan.md`
+            *   Address any issues arising from the integration
+            *   Refine the implementation if necessary based on practical application
+    *   **Files Affected:** `webApp/src/components/features/TaskDetail/TaskDetailView.tsx`
 
-*   **Task 9 (Clarity UI): Architect and Implement `useEditableEntity` Hook & Refactor `TaskDetailView`**
-    *   **Goal:** Design and build a new comprehensive hook, `useEditableEntity`, to manage editable entity state (forms, lists, dirty checking, saving) in a configurable and reusable way. Refactor `TaskDetailView.tsx` to use this hook, simplifying its logic and establishing a robust pattern for future editable components.
-    *   **Status:**
-        *   [x] `9.1` Design `useEditableEntity` Hook - COMPLETED
-        *   [x] `9.2` Implement Core Logic & Form Integration - COMPLETED
-        *   [x] `9.3` Implement List Management - COMPLETED
-        *   [x] `9.4` Unit Testing for `useEditableEntity` - COMPLETED
-        *   [x] `9.5` Refactor `TaskDetailView.tsx` - COMPLETED
-        *   [x] `9.6` Comprehensive Testing of `TaskDetailView.tsx` - COMPLETED (Note: ST-1 failing, see reflection)
-        *   [x] `9.7` Documentation for `useEditableEntity` - COMPLETED
-        *   [x] `9.8` Cleanup - Deprecate/remove old hooks - COMPLETED
-        *   [x] Reflection complete (see `memory-bank/reflection/reflection-task9.md`)
-        *   [x] Archiving complete (see `memory-bank/archive/archive-task9.md`)
-    *   **Archive:**
-        *   **Date**: 2024-07-26 (Please update if specific)
-        *   **Archive Document**: `memory-bank/archive/archive-task9.md`
-        *   **Status**: COMPLETED (pending ST-1 resolution as noted in Reflection & Archive)
-    *   **Reflection Highlights:**
-        *   **What Went Well**: Core hook functionality for parent entities successful; `EntityTypeConfig` pattern effective; simplification of `TaskDetailView` state; cleanup of old hooks.
-        *   **Challenges**: Subtask display failure due to `transformSubCollectionToList` not being called by `useEditableEntity`; type system complexities (missing `completed_at`, `transformSubCollectionToList` signature, `saveHandler` type finessing); AI model struggles with precise diff application.
-        *   **Lessons Learned**: Crucial to verify interface contracts (especially callbacks) early; ensure data model completeness before integration; need for focused testing on sub-entity features during hook development; generics demand rigor; AI refactoring needs oversight.
-        *   **Next Steps from Reflection**: Critical: Debug and fix `transformSubCollectionToList` non-invocation in `useEditableEntity.ts`. Complete all subtask tests. Finalize documentation.
-    *   **Description:** Complete the full lifecycle of designing, implementing, testing, documenting the `useEditableEntity` hook, refactoring `TaskDetailView.tsx` to use it, and then cleaning up superseded hooks.
-    *   **Phases:**
-        *   `9.1` Design `useEditableEntity` Hook - COMPLETED
-        *   `9.2` Implement Core Logic & Form Integration - COMPLETED
-        *   `9.3` Implement List Management - COMPLETED
-        *   `9.4` Unit Testing for `useEditableEntity` - COMPLETED
-        *   `9.5` Refactor `TaskDetailView.tsx` - COMPLETED
-        *   `9.6` Comprehensive Testing of `TaskDetailView.tsx` - COMPLETED
-        *   `9.7` Documentation for `useEditableEntity` - COMPLETED
-        *   `9.8` Cleanup - Deprecate/remove old hooks - COMPLETED
-                    *   `9.8.1` Evaluate Completeness - COMPLETED
-                    *   `9.8.2` Plan Migration for Other Components - COMPLETED
-                    *   `9.8.3` Mark old hooks as deprecated - COMPLETED
-                    *   `9.8.4` Remove old hook files - COMPLETED
-
-## IV. Conversational UI/UX Implementation (Phase 1 - Based on `conversational_ui_ux_design_v1.md`)
-    *   **Status:** To Do (Blocked by Backend MVP Validation & Documentation)
-    *   **Objective:** Implement the UI/UX for conversational task management, including an integrated chat panel, in-line task previews, confirmation modals for agent actions, and a feedback mechanism.
-
-**1. Chat Panel Core Implementation (`webApp/src/components/features/ChatPanel/`)**
-    *   **Task 1.1: Basic ChatPanel Component Structure**
-        *   **Goal:** Create the main `ChatPanel.tsx` component with areas for message display, message input, and agent status.
-        *   **Key Actions:**
-            *   Develop `MessageList.tsx` to render a list of messages (user and agent).
-            *   Develop `MessageInput.tsx` for user text input and send button.
-            *   Style basic layout using Tailwind CSS.
-        *   **Files:** `ChatPanel.tsx`, `MessageList.tsx`, `MessageItem.tsx`, `MessageInput.tsx`
-        *   **Status:** To Do
-    *   **Task 1.2: Connect ChatPanel to `chatServer` API**
-        *   **Goal:** Enable sending user messages to `/api/chat` and displaying agent responses.
-        *   **Key Actions:**
-            *   Implement API call logic (e.g., using `fetch` or a library like `axios`/`tanstack-query`) in `ChatPanel.tsx` or a dedicated hook.
-            *   Manage chat history state (e.g., using `useState` or Zustand).
-            *   Handle streaming responses if applicable (initially, non-streaming is acceptable for MVP).
-            *   Display loading/pending states for agent responses.
-        *   **Files:** `ChatPanel.tsx`, `webApp/src/api/hooks/useChatApi.ts` (new or existing)
-        *   **Status:** To Do
-    *   **Task 1.3: Implement Thumbs Up/Down Feedback Mechanism**
-        *   **Goal:** Allow users to provide feedback on agent messages.
-        *   **Key Actions:**
-            *   Add UI elements (thumbs up/down icons) to each agent message in `MessageItem.tsx`.
-            *   Implement a handler to send feedback to a new `chatServer` endpoint (e.g., `/api/chat/feedback`). This endpoint will initially log feedback; Supabase integration can be a follow-up.
-        *   **Files:** `MessageItem.tsx`, `ChatPanel.tsx`, `chatServer/main.py` (new endpoint)
-        *   **Status:** To Do
-
-**2. In-line Task Previews and Confirmation**
-    *   **Task 2.1: Design "Draft" Task Card UI**
-        *   **Goal:** Create a distinct visual representation for tasks proposed by the agent but not yet confirmed by the user (Ghost/Draft cards).
-        *   **Key Actions:**
-            *   Adapt `TaskCard.tsx` or create a new `DraftTaskCard.tsx`.
-            *   Include "Confirm" and "Discard" buttons.
-        *   **Files:** `TaskCard.tsx` or `DraftTaskCard.tsx` (new)
-        *   **Status:** To Do
-    *   **Task 2.2: Agent Message Parsing for Task Proposals**
-        *   **Goal:** Identify when an agent's message contains a task proposal that should be rendered as a draft task card.
-        *   **Key Actions:**
-            *   Define a simple convention for agents to indicate a task proposal in their message (e.g., a special prefix or a structured JSON block).
-            *   Implement logic in `ChatPanel.tsx` or `MessageItem.tsx` to parse these messages and render `DraftTaskCard.tsx` instead of/alongside plain text.
-        *   **Files:** `ChatPanel.tsx`, `MessageItem.tsx`
-        *   **Status:** To Do
-    *   **Task 2.3: Implement Confirmation Modal for Complex Agent Actions**
-        *   **Goal:** For significant agent actions (e.g., creating multiple tasks, modifying existing critical tasks), show a confirmation modal.
-        *   **Key Actions:**
-            *   Design a generic `ConfirmationModal.tsx`.
-            *   Trigger this modal from agent messages that signify such actions (requires a convention similar to Task 2.2).
-            *   On confirmation, send a follow-up message to the agent/API to proceed.
-        *   **Files:** `ConfirmationModal.tsx` (new), `ChatPanel.tsx`
-        *   **Status:** To Do
-
-**3. Integration with Task Management and Agent State**
-    *   **Task 3.1: Connect Chat to Agent Session Management**
-        *   **Goal:** Ensure chat interactions are associated with the correct agent session using `agent_id` and `session_id` from `SupabaseChatMessageHistory`.
-        *   **Key Actions:**
-            *   Pass `agent_id` (e.g., "test_agent") to the `/api/chat` endpoint.
-            *   The backend (`chatServer/main.py` and `agent_loader.py`) should already handle session creation/loading.
-            *   Ensure `user_id` is correctly passed and used for RLS in Supabase.
-        *   **Files:** `ChatPanel.tsx`, `chatServer/main.py`
-        *   **Status:** To Do (Verify frontend correctly sends identifiers)
-    *   **Task 3.2: Real-time Task List Updates (Post-Confirmation)**
-        *   **Goal:** When a draft task is confirmed, it should be added to the main task list and persist.
-        *   **Key Actions:**
-            *   On "Confirm" in `DraftTaskCard.tsx`, call an API endpoint to create/update the task in Supabase.
-            *   Ensure the main task list (e.g., in `TodayView.tsx`) refreshes or an event is triggered to show the new task (Supabase real-time subscriptions can be leveraged here).
-        *   **Files:** `DraftTaskCard.tsx`, `TodayView.tsx`, relevant API endpoint in `chatServer/main.py` or direct Supabase call from frontend.
-        *   **Status:** To Do
-
-**4. UI Polish and Refinements**
-    *   **Task 4.1: Chat Panel Styling and Usability**
-        *   **Goal:** Ensure the chat panel is visually appealing and easy to use.
-        *   **Key Actions:**
-            *   Refine styles, message spacing, color scheme.
-            *   Implement auto-scrolling to the latest message.
-            *   Consider clear visual distinction for user vs. agent messages.
-        *   **Files:** `ChatPanel.tsx`, `MessageList.tsx`, `MessageItem.tsx`, `MessageInput.tsx`, Tailwind CSS config.
-        *   **Status:** To Do
-    *   **Task 4.2: Responsive Design for Chat Panel**
-        *   **Goal:** Ensure the chat panel works well on different screen sizes.
-        *   **Key Actions:** Apply responsive Tailwind CSS classes.
-        *   **Files:** `ChatPanel.tsx` and child components.
-        *   **Status:** To Do
+*   **Task 9: Refactor `TaskDetailView` State Management (Align with Option 2 & Best Practices)**
+    *   **Goal:** Refactor `TaskDetailView` state management to align with the new state management approach and best practices.
+    *   **Status:** To Do
+    *   **Complexity:** Level 4 (involves refactoring a complex component and integrating new state management logic)
+    *   **Depends On:** Successful completion of Task 7 (abstraction of state management logic into reusable hooks)
+    *   **Key Actions:**
+        1.  **Phase 1: Refactor `TaskDetailView` to use the new state management approach**
+            *   Replace direct state management with the new state management pattern
+            *   Integrate the new state management logic into `TaskDetailView`
+        2.  **Phase 2: Refine and verify the new state management implementation**
+            *   Test the refactored `TaskDetailView` against the manual test plan in `memory-bank/clarity/testing/task-detail-view-test-plan.md`
+            *   Address any issues arising from the integration
+            *   Refine the implementation if necessary based on practical application
+    *   **Files Affected:** `webApp/src/components/features/TaskDetail/TaskDetailView.tsx`

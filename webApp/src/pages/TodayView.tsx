@@ -147,7 +147,7 @@ const TodayView: React.FC = () => {
     console.log(`[TodayView] Attempting to start task (legacy): ${taskId}`);
     updateTask(taskId, { status: 'in_progress' });
     createFocusSession(
-      { task_id: taskId },
+      { task_id: taskId, planned_duration_minutes: 25 },
       {
         onSuccess: (_focusSession: FocusSession | null) => {
           toast.success('Focus session started for task.');
@@ -421,7 +421,7 @@ const TodayView: React.FC = () => {
         {/* Conditionally rendered ChatPanel content area */}
         {isChatPanelOpen && (
           <div className="flex-grow h-full relative"> {/* Container for ChatPanel to take remaining space */}
-            <ChatPanel />
+            <ChatPanel agentId={import.meta.env.VITE_DEFAULT_CHAT_AGENT_ID || "assistant"} />
           </div>
         )}
       </div>

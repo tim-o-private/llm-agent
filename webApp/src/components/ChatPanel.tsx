@@ -1,27 +1,30 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useChatStore } from '@/stores/useChatStore';
+import { useChatStore, useInitializeChatStore } from '@/stores/useChatStore';
 import { MessageHeader, MessageInput, MessageBubble } from '@/components/ui';
 import { supabase } from '@/lib/supabaseClient';
 
 
 
 // Actual function to fetch AI response from the backend
-async function fetchAiResponse(message: string, userId: string | null /*, sessionId?: string */): Promise<string> { // sessionId might become unused
-  console.log('Sending message to backend API (/api/chat):', message, 'UserId (for context, not body):', userId);
+async function fetchAiResponse(message: string, userId: string | null, sessionId: string | null): Promise<string> { 
+  console.log('Sending message to backend API (/api/chat):', message, 'UserId:', userId, 'SessionId:', sessionId);
   try {
-    const apiUrl = `${import.meta.env.VITE_API_BASE_URL || ''}/api/chat`; // CHANGED
+    const apiUrl = `${import.meta.env.VITE_API_BASE_URL || ''}/api/chat`;
     const { data: { session } } = await supabase.auth.getSession();
     const accessToken = session?.access_token;
-    // console.log('Access token:', accessToken); // Keep for debugging if needed
 
-    // Define a default agent_id. This should match an agent config YAML.
     const agentIdToUse = import.meta.env.VITE_DEFAULT_CHAT_AGENT_ID || "assistant";
 
+    if (!sessionId) {
+      // This should ideally not happen if the store initialization logic is correct
+      // and ChatPanel only allows sending messages when a session is active.
+      throw new Error("Session ID is missing. Cannot send message.");
+    }
+
     const requestBody = {
-      agent_id: agentIdToUse, // ADDED
-      message: message,       // REMAINS
-      // userId: userId,      // REMOVED from body (obtained from JWT on backend)
-      // sessionId: sessionId // REMOVED from body (not used by /api/chat in main.py)
+      agent_id: agentIdToUse, 
+      message: message,       
+      session_id: sessionId // ADDED: Pass the session_id from the store
     };
 
     const response = await fetch(apiUrl, {
@@ -43,8 +46,9 @@ async function fetchAiResponse(message: string, userId: string | null /*, sessio
     }
 
     const data = await response.json();
-    // /api/chat returns { "reply": "agent_response_text" }
-    return data.reply; // CHANGED from data.agentResponse
+    // /api/chat returns { "reply": "agent_response_text" }  <-- This comment is now incorrect
+    // Backend actually sends { "response": "agent_response_text" }
+    return data.response; // CHANGED from data.reply
   } catch (error) {
     console.error('Failed to fetch AI response from backend (/api/chat):', error);
     if (error instanceof Error && error.message.startsWith('API Error:')) {
@@ -54,10 +58,22 @@ async function fetchAiResponse(message: string, userId: string | null /*, sessio
   }
 }
 
-export const ChatPanel: React.FC = () => {
-  const { messages, addMessage } = useChatStore();
+// ADD agentId prop to the component's props interface
+interface ChatPanelProps {
+  agentId?: string; // MADE agentId optional
+}
+
+export const ChatPanel: React.FC<ChatPanelProps> = ({ agentId: agentIdProp }) => { // RENAMED prop to avoid conflict
+  // Use provided agentId or default to environment variable
+  const agentId = agentIdProp || import.meta.env.VITE_DEFAULT_CHAT_AGENT_ID || "assistant";
+
+  const { messages, addMessage, sessionId } = useChatStore(); // Get sessionId from store
   // const { isChatPanelOpen } = useChatStore(); // isChatPanelOpen is no longer used here
   
+  // Initialize the chat store with the provided agentId.
+  // The hook will handle session and message state internally based on this agentId.
+  useInitializeChatStore(agentId);
+
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
 
@@ -80,14 +96,18 @@ export const ChatPanel: React.FC = () => {
   }, [messages]);
 
   const handleSendMessage = async (messageText: string) => {
-    if (!messageText || isLoading || !userId) return; 
+    if (!messageText || isLoading || !userId || !sessionId) { // Ensure sessionId is present
+        if(!sessionId) console.error("Cannot send message: Session ID is null.");
+        return;
+    } 
 
     addMessage({ text: messageText, sender: 'user' });
     setIsLoading(true);
 
     try {
       // Pass userId for logging/context if needed by fetchAiResponse, but not for the request body to /api/chat
-      const aiResponseText = await fetchAiResponse(messageText, userId /*, currentSessionId */); // currentSessionId no longer sent in body
+      // sessionId is now passed to fetchAiResponse
+      const aiResponseText = await fetchAiResponse(messageText, userId, sessionId); 
       addMessage({ text: aiResponseText, sender: 'ai' });
     } catch (error) {
       addMessage({ text: error instanceof Error ? error.message : 'An unexpected error occurred.', sender: 'ai'});

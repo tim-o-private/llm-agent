@@ -1,3 +1,5 @@
+import datetime
+
 # Project Progress Log
 
 This document tracks the active development progress for the CLI, Core Agent, Backend Systems, and overall project initiatives.
@@ -32,6 +34,85 @@ This document tracks the active development progress for the CLI, Core Agent, Ba
 2.  **[DONE]** Initialize/Update `memory-bank/activeContext.md` to reflect immediate project goals.
 3.  **[DONE]** Initialize/Update `memory-bank/systemPatterns.md`.
 4.  **[DONE]** Review and update `memory-bank/chatGPTConvo.md` or archive.
+
+## Refactor: Implement Robust Short-Term Memory (STM) with Persistent `session_id`
+
+**Overall Status:** Core Implementation (Phases 1-3) Complete - Phase 4 (Testing & Refinement) Next
+**Associated Task:** `memory-bank/tasks.md` (NEW TASK: Refactor: Implement Robust Short-Term Memory (STM) with Persistent `session_id`)
+
+*   **Phase 1: Database Setup**
+    *   **Status:** COMPLETED - Awaiting Testing
+    *   **Key Outcomes:**
+        *   Defined and documented DDL for `user_agent_active_sessions` table with RLS.
+        *   Defined and documented DDL for `chat_message_history` table (compatible with `langchain-postgres`) with RLS.
+        *   All DDL changes applied to `memory-bank/clarity/ddl.sql`.
+    *   **Completion Date:** {datetime.datetime.now().strftime('%Y-%m-%d')}
+
+*   **Phase 2: Backend (`chatServer/main.py`) Adjustments**
+    *   **Status:** COMPLETED - Awaiting Testing
+    *   **Key Outcomes:**
+        *   `ChatRequest` model updated to require `session_id`.
+        *   `chat_endpoint` refactored to use client-provided `session_id`, `PostgresChatMessageHistory`, and `ConversationBufferWindowMemory`.
+        *   Old server-side session caching logic removed.
+        *   Verified usage of correct table name for chat history and `PGEngine` initialization.
+    *   **Completion Date:** {datetime.datetime.now().strftime('%Y-%m-%d')}
+
+*   **Phase 3: Client-Side (`webApp`) Implementation**
+    *   **Status:** COMPLETED - Awaiting Testing
+    *   **Key Outcomes:**
+        *   Created `useChatSessionHooks.ts` for fetching/upserting active sessions and generating session IDs.
+        *   Refactored `useChatStore.ts` with new `initializeSessionAsync` logic (localStorage, DB lookup, new session generation) and removed client-side batch archival.
+        *   Updated `ChatPanel.tsx` to use the new store logic and send `session_id` to the backend.
+        *   Removed redundant client-side archival code (`useChatApiHooks.ts`) and DDL (`recent_conversation_history`).
+    *   **Completion Date:** {datetime.datetime.now().strftime('%Y-%m-%d')}
+
+*   **Phase 4: Testing & Refinement**
+    *   **Status:** Pending - Next
+
+## Agent Memory System v2 Implementation (Efficient & Evolving)
+
+**Associated Creative Design:** `memory-bank/creative/agent_memory_system_v2_efficient_evolving.md`
+**Implementation Plan:** `memory-bank/implementation_plans/agent_memory_system_v2_impl_plan.md` (Note: Archival method shifted)
+
+**Overall Status:** In Progress
+
+*   **Phase 1: Backend Foundation - LTM & Short-Term Cache Core**
+    *   **Status:** COMPLETED
+    *   **Key Outcomes:**
+        *   `agent_long_term_memory` and `agent_sessions` (optional) schemas defined with RLS.
+        *   `server_session_cache` implemented in `chatServer/main.py`.
+        *   `ManageLongTermMemoryTool` created for LTM read/write.
+        *   `agent_loader.py` and `CustomizableAgentExecutor` updated for LTM integration.
+        *   Unit test structures created for the LTM tool and chat server API logic.
+    *   **Completion Date:** {datetime.now().strftime('%Y-%m-%d')} 
+
+*   **Phase 2: Client-Side Buffering & Direct DB Archival**
+    *   **Status:** UI Integration for Chat Store Initialization Complete - Testing Archival Next (Secondary to Core Agent Debugging)
+    *   **Objective:** Implement client-side message buffering and direct-to-Supabase batch archival of recent conversations, leveraging RLS.
+    *   **Key Activities & Status:**
+        *   Define/migrate schema for `recent_conversation_history` with RLS. (Status: DONE)
+        *   Create `/api/chat/session/archive_messages` endpoint. (Status: DONE - To be deprecated)
+        *   Refactor `webApp/src/api/hooks/useChatApiHooks.ts` for direct Supabase client writes (Status: DONE)
+        *   Update `webApp/src/stores/useChatStore.ts` for session management, archival triggers, and direct Supabase writes via `doArchiveChatDirect`. (Status: DONE)
+        *   Install `uuid` and `@types/uuid`. (Status: DONE)
+        *   Fix linter errors in `webApp/src/api/types.ts` and `webApp/src/api/hooks/useTaskHooks.ts`. (Status: DONE)
+        *   Integrate `agentId` into `ChatPanel` and initialize `useChatStore` correctly. (Status: DONE)
+        *   Align client-side data synchronization triggers (tasks vs. chat archival). (Status: DEFERRED - Separate mechanisms acceptable for now)
+    *   **Next Steps:** Test client archival triggers and direct Supabase batch storage (after core agent execution is unblocked).
+
+*   **Phase 3: Integrating Short-Term Context Flow & Debugging Core Agent Execution**
+    *   **Status:** In Progress (Gemini API Error RESOLVED)
+    *   **Objective:** Enable robust conversational flow by correctly managing short-term message history and resolving core agent execution errors with the Gemini model.
+    *   **Key Activities & Status:**
+        *   Modify client `/api/chat` calls (send only new messages). (Status: To Do)
+        *   Refactor `chatServer` `/api/chat` endpoint for `server_session_cache` and new client messages. (Status: To Do)
+        *   Ensure `CustomizableAgentExecutor` processes assembled short-term history. (Status: In Progress)
+        *   **[RESOLVED]** `InvalidArgument: 400 * GenerateContentRequest.contents[X].parts: contents.parts must not be empty.` error occurring after tool calls with Gemini model.
+            *   **Resolution:** Correctly configured the agent to use `format_to_tool_messages` and `ToolsAgentOutputParser` for handling tool calls with Gemini.
+        *   E2E testing of conversational flow. (Status: To Do - Unblocked)
+
+*   **Phase 4: Refinements, Advanced LTM Operations & Pruning**
+    *   **Status:** Pending
 
 ## Task 9: Architect and Implement `useEditableEntity` Hook & Refactor `TaskDetailView`
 
@@ -90,16 +171,4 @@ This document tracks the active development progress for the CLI, Core Agent, Ba
         - Corrected `tools_config` loading in `agent_loader.py`.
         - Implemented `SafeDuckDuckGoSearchRun` to gracefully handle tool errors.
         - Successfully initialized Supabase `AsyncClient` using `acreate_client` in `chatServer/main.py`.
-        - Refactored `SupabaseChatMessageHistory` to use `async def aget_messages(self)` and correctly await operations in `add_message`.
-        - Added `memory_type: supabase_buffer` to agent configurations, enabling `SupabaseChatMessageHistory`.
-        - Corrected `session_id` generation in `agent_loader.py` to use UUIDs compatible with the database schema.
-        - Verified that agent chat messages are now being persisted to and retrieved from the Supabase `agent_chat_messages` table.
-- **Visibility Feature Attempt & Revert (2025-05-05):** Feature on hold.
-
-### Notes & Decisions (CLI/Core - Selected)
-*   Prioritized YAML for structured data.
-*   Explicit agent selection favored over automatic context detection.
-*   Formalized separation of static config (`/config`) and dynamic data (`/data`).
-*   Implemented tool sandboxing for file access.
-*   Some LangChain deprecation warnings remain to be addressed.
-*   Decision to use configuration-driven tool loading for maintainability.
+        - Refactored `SupabaseChatMessageHistory`

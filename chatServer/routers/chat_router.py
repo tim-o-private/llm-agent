@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, Dict, Tuple
 
@@ -16,7 +16,6 @@ from langchain.agents import AgentExecutor
 router = APIRouter(
     prefix="/api/chat",
     tags=["chat"],
-    # dependencies=[Depends(get_current_user)], # Uncomment if auth is added
     responses={404: {"description": "Not found"}},
 )
 
@@ -68,7 +67,6 @@ async def send_message_to_agent(payload: ChatMessageIn):
             # based on payload.sessionId. For now, new memory per agent load.
             # If sessionId is present, one might try to load existing memory here.
             new_memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
-            
             agent_executor = agent_loader.load_agent_executor(
                 agent_name=agent_id_to_use,
                 config_loader=ROUTER_CONFIG_LOADER,
