@@ -65,7 +65,20 @@ This document tracks the active development progress for the CLI, Core Agent, Ba
     *   **Completion Date:** {datetime.datetime.now().strftime('%Y-%m-%d')}
 
 *   **Phase 4: Testing & Refinement**
-    *   **Status:** Pending
+    *   **Status:** In Progress - Core Functionality Restored, New Issues Identified
+    *   **Key Outcomes & Current State (as of YYYY-MM-DD HH:MM UTC):**
+        *   **RESOLVED:** Major PostgreSQL connection issues preventing server startup and basic chat history operations. The root cause was an incorrect database URL in the environment configuration.
+        *   **Short-term memory (STM) via `PostgresChatMessageHistory`:** VERIFIED WORKING. Messages are being saved to and retrieved from the database during a session.
+        *   **Long-term memory (LTM) DB writes (conceptual, if separate):** VERIFIED WORKING (Assuming this refers to any LTM mechanisms tested alongside STM).
+        *   **NEW ISSUE:** Session IDs appear not to be persisted correctly to the database or are not being correctly associated with users/chat histories across server restarts or new client sessions. This needs investigation.
+        *   **NEW ISSUE:** Noticeable latency in chat responses. This may be due to database operations, agent processing, or network. Further investigation with timestamps in logs is planned.
+        *   **Action Item:** User will resume detailed testing plan in the morning.
+        *   **Action Item:** Add timestamps to server logs for latency analysis.
+    *   **Next Steps:**
+        1.  Investigate session ID persistence.
+        2.  Add detailed timestamps to `chatServer/main.py` logs.
+        3.  Conduct thorough testing based on user's plan.
+        4.  Address identified latency issues.
 
 *   **Phase 5: Code Cleanup & Documentation**
     *   **Status:** Pending

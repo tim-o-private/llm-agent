@@ -39,11 +39,22 @@ This file tracks the current tasks, steps, checklists, and component lists for t
             *   [X] Send `sessionId` in JSON body to `/api/chat`.
         *   [X] Remove client-side archival logic (`doArchiveChatDirect`, associated hooks and store methods) and DDL for `recent_conversation_history` table.
     *   **Phase 4: Testing & Refinement**
-        *   [ ] Test `session_id` persistence across browser refresh/reopen for the same user/agent.
-        *   [ ] Test `session_id` is correctly passed to and used by the backend.
-        *   [ ] E2E: Conversation continuity across tab/browser close.
-        *   [ ] E2E: Separate agent conversations have separate histories.
-        *   [ ] E2E: Cross-device session resumption (latest session from DB should win).
+        *   **Current Status:** Core functionality (STM/LTM) working. New issues identified.
+        *   [X] **RESOLVED:** Major PostgreSQL connection issues (incorrect DB URL).
+        *   [X] **VERIFIED:** Short-term memory (STM) working (messages save/retrieve within a session).
+        *   [X] **VERIFIED:** Long-term memory (LTM) DB writes working (conceptual).
+        *   [ ] **NEW - CRITICAL:** Investigate and fix `session_id` persistence. Session IDs do not seem to persist across browser/server restarts or correctly link to user/chat history in the DB.
+            *   [ ] Review client-side `session_id` generation and storage (`localStorage`, `useChatSessionHooks.ts`, `useChatStore.ts`).
+            *   [ ] Review server-side handling of `session_id` in `chatServer/main.py` and its interaction with `PostgresChatMessageHistory`.
+            *   [ ] Verify `user_agent_active_sessions` table is correctly populated and utilized if part of the session persistence design.
+            *   [ ] Test `session_id` persistence across browser refresh/reopen for the same user/agent.
+            *   [ ] E2E: Conversation continuity across tab/browser close.
+            *   [ ] E2E: Separate agent conversations have separate histories.
+            *   [ ] E2E: Cross-device session resumption (latest session from DB should win, if applicable).
+        *   [ ] **NEW - IMPORTANT:** Investigate and address chat response latency.
+            *   [ ] Add detailed timestamps to `chatServer/main.py` logs (request received, agent invocation start/end, DB interaction start/end, response sent).
+            *   [ ] Analyze logs to pinpoint bottlenecks.
+        *   [ ] User to continue with detailed testing plan in the morning.
     *   **Phase 5: Code Cleanup & Documentation**
         *   [ ] Delete `src/core/history/supabase_chat_history.py`.
         *   [ ] Remove old `session_id` logic from `chatServer/main.py`.

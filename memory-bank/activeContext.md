@@ -7,10 +7,16 @@ import datetime
 
 **Immediate Focus / Next Steps:**
 1.  **[ACTIVE] Refactor: Implement Robust Short-Term Memory (STM) with Persistent `session_id` Strategy**
-    *   **Objective:** Ensure reliable agent short-term memory using `langchain-postgres` and a consistent `session_id` management flow involving client-side React Query hooks, a Supabase table (`user_agent_active_sessions`), and `localStorage`.
-    *   **Current Phase:** Core Implementation (Phases 1-3) Complete. **Next: Phase 4 (Testing & Refinement).**
-    *   **Key Components for Phase 4:** End-to-end testing of session persistence, conversation continuity, backend `session_id` usage.
-    *   **Previous Related Status:** `SUPABASE_DB_HOST` configuration error resolved. Old STM system (`server_session_cache`, client-side batch archival to `recent_conversation_history`) replaced.
+    *   **Objective:** Ensure reliable agent short-term memory using `langchain-postgres` and a consistent `session_id` management flow.
+    *   **Current Phase:** Phase 4 (Testing & Refinement) - CORE FUNCTIONALITY WORKING, NEW ISSUES IDENTIFIED.
+    *   **Key Outcomes & Current State:**
+        *   **RESOLVED:** Major PostgreSQL connection issues (incorrect DB URL).
+        *   **Short-term memory (STM):** VERIFIED WORKING (messages save/retrieve during session).
+        *   **Long-term memory (LTM) DB writes:** VERIFIED WORKING (conceptual).
+        *   **NEW ISSUE:** `session_id` persistence across sessions/restarts is NOT working.
+        *   **NEW ISSUE:** Chat response latency is high.
+    *   **Next Steps (User Action):** User to continue testing plan in the morning.
+    *   **Next Steps (System Action):** Investigate `session_id` persistence, add timestamps to server logs for latency analysis.
 
 2.  **[PREP] Code Health & Type Safety:**
     *   Address linter errors and type issues in `webApp/src/api/hooks/useTaskHooks.ts` and `webApp/src/api/types.ts` (as needed).
@@ -33,13 +39,15 @@ import datetime
 *   `src/core/agents/customizable_agent.py` (Formatter and Output parser updated)
 
 **Open Questions/Considerations:**
-*   (None currently related to the resolved STM implementation errors or the new STM plan)
+*   How are `session_id`s currently generated and managed on the client and server?
+*   What is the expected lifecycle of a `session_id`?
+*   Where in the database schema is `session_id` meant to be linked to a user or a specific conversation thread for persistence?
 
 Last updated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
-**Mode Recommendation:** IMPLEMENT (Robust STM - Phase 4 Testing & Refinement)
+**Mode Recommendation:** IMPLEMENT (Robust STM - Debugging `session_id` persistence and latency)
 
-**General Project Goal:** Complete Agent Memory System v2 implementation. Enable robust, evolving agent memory and conversational capabilities. **Updated Goal: Implement a stable and persistent short-term memory solution as a foundation for reliable agent conversations. Next step: Test the implemented solution.**
+**General Project Goal:** Complete Agent Memory System v2 implementation. Enable robust, evolving agent memory and conversational capabilities. **Updated Goal: Achieve stable and persistent short-term memory, resolve `session_id` persistence, and address chat latency.**
 
 **Pending Decisions/Questions:**
-*   Specific design for a common event-driven sync/archival trigger mechanism for the client-side (if current approach proves insufficient during broader testing).
+*   Strategy for ensuring `session_id` correctly links to `chat_message_history` and potentially a user/agent session table.
