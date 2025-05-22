@@ -1,5 +1,3 @@
-import datetime
-
 # Project Progress Log
 
 This document tracks the active development progress for the CLI, Core Agent, Backend Systems, and overall project initiatives.
@@ -37,11 +35,11 @@ This document tracks the active development progress for the CLI, Core Agent, Ba
 
 ## Refactor: Implement Robust Short-Term Memory (STM) with Persistent `session_id`
 
-**Overall Status:** Core Implementation (Phases 1-3) Complete - Phase 4 (Testing & Refinement) Next
+**Overall Status:** In Progress
 **Associated Task:** `memory-bank/tasks.md` (NEW TASK: Refactor: Implement Robust Short-Term Memory (STM) with Persistent `session_id`)
 
 *   **Phase 1: Database Setup**
-    *   **Status:** COMPLETED - Awaiting Testing
+    *   **Status:** COMPLETED
     *   **Key Outcomes:**
         *   Defined and documented DDL for `user_agent_active_sessions` table with RLS.
         *   Defined and documented DDL for `chat_message_history` table (compatible with `langchain-postgres`) with RLS.
@@ -49,7 +47,7 @@ This document tracks the active development progress for the CLI, Core Agent, Ba
     *   **Completion Date:** {datetime.datetime.now().strftime('%Y-%m-%d')}
 
 *   **Phase 2: Backend (`chatServer/main.py`) Adjustments**
-    *   **Status:** COMPLETED - Awaiting Testing
+    *   **Status:** COMPLETED
     *   **Key Outcomes:**
         *   `ChatRequest` model updated to require `session_id`.
         *   `chat_endpoint` refactored to use client-provided `session_id`, `PostgresChatMessageHistory`, and `ConversationBufferWindowMemory`.
@@ -58,7 +56,7 @@ This document tracks the active development progress for the CLI, Core Agent, Ba
     *   **Completion Date:** {datetime.datetime.now().strftime('%Y-%m-%d')}
 
 *   **Phase 3: Client-Side (`webApp`) Implementation**
-    *   **Status:** COMPLETED - Awaiting Testing
+    *   **Status:** COMPLETED
     *   **Key Outcomes:**
         *   Created `useChatSessionHooks.ts` for fetching/upserting active sessions and generating session IDs.
         *   Refactored `useChatStore.ts` with new `initializeSessionAsync` logic (localStorage, DB lookup, new session generation) and removed client-side batch archival.
@@ -67,7 +65,10 @@ This document tracks the active development progress for the CLI, Core Agent, Ba
     *   **Completion Date:** {datetime.datetime.now().strftime('%Y-%m-%d')}
 
 *   **Phase 4: Testing & Refinement**
-    *   **Status:** Pending - Next
+    *   **Status:** Pending
+
+*   **Phase 5: Code Cleanup & Documentation**
+    *   **Status:** Pending
 
 ## Agent Memory System v2 Implementation (Efficient & Evolving)
 

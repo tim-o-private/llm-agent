@@ -1,223 +1,214 @@
 # 🎨 CREATIVE PHASE: Architecture Design - Agent Memory System v2 (Efficient & Evolving)
 
-**Date:** 2025-05-21
-**Associated Task in `tasks.md`:** Refactor: Implement Robust Short-Term Memory (STM) with Persistent `session_id`
-**Supersedes in part:** `agent_memory_solution_design_v1.md` (specifically regarding persistence strategy and short-term memory approach).
+**Date:** ''' + '''{datetime.now().isoformat()}''' + '''
+**Associated Task in `tasks.md`:** BRAINPLN-001 / PLAN-STEP-2 (Revisiting Agent Memory Solution)
+**Supersedes in part:** `agent_memory_solution_design_v1.md` (specifically regarding persistence strategy and long-term memory approach).
 
-## 1. Component Description (Revised for Robust STM)
+## 1. Component Description (Revised)
 
 This document outlines a revised architecture for the AI agent's memory system. The primary goals are to:
-1.  **Implement a robust, persistent Short-Term Memory (STM)** using `langchain-postgres`, ensuring conversation continuity.
-2.  Manage `session_id` lifecycle effectively through a combination of client-side logic, a dedicated Supabase table (`user_agent_active_sessions`), and `localStorage`.
-3.  Implement a flexible, natural language-based long-term memory (LTM) store that agents can curate over time (remains a goal, LTM mechanism unchanged by this STM refactor).
-4.  Ensure agents maintain robust short-term conversational context via the `langchain-postgres` integration.
+1.  Drastically reduce database write operations per conversational turn compared to storing every message individually in real-time.
+2.  Implement a flexible, natural language-based long-term memory (LTM) store that agents can curate over time.
+3.  Ensure agents maintain robust short-term conversational context.
+4.  Leverage client-side state for buffering active conversation messages, enhancing UI responsiveness and enabling batched data persistence.
 
-This design prioritizes stability and persistence for STM, leveraging standard LangChain components for chat message history.
+This design prioritizes efficiency, cost-effectiveness (reducing DB load and potentially LLM processing on overly verbose histories), and an evolutionary approach to how agents store and utilize long-term knowledge about users.
 
-## 2. Core Requirements & Constraints (Re-emphasized for STM)
+## 2. Core Requirements & Constraints (Re-emphasized)
 
-*   **N1: Persistent STM:** Conversational history must persist across browser sessions, page reloads, and ideally across devices for the same user/agent.
-*   **N2: Reliable `session_id` Management:** A consistent `session_id` must be available and used for each user-agent conversational thread.
-*   **N3: Standard Tooling:** Utilize `langchain-postgres` for managing chat message history directly in the database.
-*   **N4: Client-Side Session Initiation:** The client is responsible for initiating or retrieving the correct `session_id`.
-*   **N5: Supabase Integration:** Leverage Supabase for storing `session_id` metadata and the chat message history itself.
-*   **N6: LangChain Compatibility:** The STM solution must integrate seamlessly with LangChain agents (e.g., `ConversationBufferWindowMemory`).
+*   **N1: Minimize DB Writes Per Turn:** Avoid multiple direct database write requests to Postgres for a single conversational turn involving user input, agent response, and tool calls.
+*   **N2: Evolving Natural Language LTM:** Start with an unstructured (natural language text) format for LTM, allowing agents to define what and how they remember, with the possibility of adding more structure later.
+*   **N3: Client-Side Buffering:** Utilize client-side state (e.g., Zustand store) to manage the active conversation log, with client-initiated triggers for persisting this data.
+*   **N4: Robust Short-Term Context:** Agents must have access to the immediate preceding conversation to maintain coherence and understand the current turn.
+*   **N5: Cross-Session Preference Persistence:** The system must allow agents to remember user needs, preferences, and key information across sessions.
+*   **N6: Efficient Pruning & Focus:** Memory (both short-term and long-term) should be manageable to maintain relevancy and control costs.
+*   **N7: Supabase Integration:** Leverage Supabase for persistent storage.
+*   **N8: LangChain Compatibility:** Integrate with LangChain patterns where beneficial, but adapt where necessary to meet core requirements (e.g., memory persistence).
+*   **N9: Scalability (Future Consideration):** While not an immediate P0, the design should not fundamentally prevent future horizontal scaling of `chatServer`.
 
-## 3. Recommended Architecture: Client-Managed `session_id` with `langchain-postgres` STM
+## 3. Recommended Architecture: Client-Buffered Interaction with Batched Persistence & Evolving LTM
 
-This architecture centralizes STM in Supabase via `langchain-postgres`, with the client orchestrating `session_id` management.
+This architecture distributes memory management across the client, the `chatServer`, and Supabase, optimizing for different needs at each layer.
 
-### 3.1. Client-Side `session_id` Management (`webApp`)
+### 3.1. Client-Side Message Buffering (`webApp/src/stores/useChatStore.ts`)
 
-*   **Role:** The client (`webApp`) is responsible for ensuring a valid `session_id` is available for any given user-agent interaction and passing it to the backend with each chat request.
-*   **Mechanism (`useChatStore.ts`, `useChatSessionHooks.ts`):**
-    1.  **Initialization (`initializeSessionAsync` in `useChatStore`):**
-        a.  Determine `userId` (from auth) and `agentName`.
-        b.  Construct `localStorageKey = \`chatSession_${userId}_${agentName}\``.
-        c.  **Attempt 1: `localStorage` Lookup:** Try to retrieve `persistedSessionId` from `localStorage`.
-            *   If found, validate this `persistedSessionId` against the `user_agent_active_sessions` table in Supabase (fetch by `userId`, `agentName`). If the `persistedSessionId` matches the `active_session_id` in the DB, it's considered valid.
-            *   If `localStorage` ID is invalid or not found in DB, clear it from `localStorage`.
-        d.  **Attempt 2: DB Lookup (`useFetchActiveChatSession`):** If no valid `session_id` from `localStorage`, query `user_agent_active_sessions` for the most recent `active_session_id` for the current `userId` and `agentName`.
-            *   If found, use this `session_id` and store it in `localStorage`.
-        e.  **Attempt 3: Generate New `session_id`:** If no `session_id` is found via `localStorage` or DB lookup:
-            *   Generate a new `session_id` (e.g., UUID v4 using `generateNewSessionId()`).
-            *   Store this new `session_id` in `localStorage`.
-            *   Upsert this new `session_id` into the `user_agent_active_sessions` table as the `active_session_id` for the `userId` and `agentName` (using `useUpsertActiveChatSession`).
-    2.  **Storage:** The determined `session_id` is stored in the Zustand `useChatStore` and in `localStorage`.
-    3.  **API Calls:** The `session_id` from `useChatStore` is included in every `/api/chat` request to `chatServer`.
-*   **Supabase Table: `user_agent_active_sessions`**
-    *   `user_id`: UUID (FK to `auth.users.id`, Part of PK)
-    *   `agent_name`: TEXT (Part of PK)
-    *   `active_session_id`: TEXT (Stores the current valid `session_id` for this user/agent pair)
-    *   `last_active_at`: TIMESTAMPTZ (Defaults to `now()`, updates on upsert)
-    *   `created_at`: TIMESTAMPTZ (Defaults to `now()`)
+*   **Role:** `useChatStore` acts as the primary, real-time buffer for all messages (user and AI) within the active, visible chat session. This ensures immediate UI updates and a responsive user experience.
+*   **Structure:** Adheres to `ChatMessage` interface (`id`, `text`, `sender`, `timestamp`).
+    ```typescript
+    // From useChatStore.ts
+    interface ChatMessage {
+      id: string;
+      text: string;
+      sender: 'user' | 'ai';
+      timestamp: Date;
+    }
+    ```
+*   **Principles (`zustand-store-design.md`):**
+    *   **Scope:** Manages UI state for the chat panel and the list of active messages.
+    *   **Actions:** `addMessage` for new messages, `toggleChatPanel`, etc.
+    *   **Immutability:** Uses Zustand's default mechanisms (implicitly with `immer` if configured globally, or by spreading state).
+*   **Data Flow:** New messages are added here first. This store represents the "source of truth" for the *currently displayed conversation*.
 
-### 3.2. Backend Short-Term Memory (`chatServer/main.py` with `langchain-postgres`)
+### 3.2. Client-Initiated Batch Archival of Recent Conversation History
 
-*   **Role:** To provide persistent short-term memory for the AI agent using `langchain-postgres`, automatically saving and loading conversation history to/from the Supabase database on a per-turn basis.
+*   **Role:** To persist the conversational record from `useChatStore` to long-term storage in Supabase in a batched manner, reducing write frequency.
+*   **Triggers (Client-Side):**
+    1.  User explicitly closes the chat panel/window.
+    2.  User navigates away from the page (e.g., using `navigator.sendBeacon()` in a `beforeunload` event listener for reliability).
+    3.  Periodically, if the chat session is long-running (e.g., every N messages accumulated in `useChatStore` or every M minutes – configurable).
 *   **Mechanism:**
-    1.  **`session_id` Reception:** The `chat_endpoint` in `chatServer/main.py` receives the `session_id` from the client in the `ChatRequest`.
-    2.  **`PostgresChatMessageHistory` Initialization:**
-        *   An instance of `PostgresChatMessageHistory` is created, configured with:
-            *   The global `PGEngine` (initialized at startup with DB connection details).
-            *   The `session_id` received from the client.
-            *   The designated table name (e.g., `chat_message_history`).
-    3.  **`ConversationBufferWindowMemory` Wrapper:**
-        *   The `PostgresChatMessageHistory` instance is wrapped by `ConversationBufferWindowMemory`.
-        *   Configuration:
-            *   `k`: Defines the window size (number of past messages to keep in context).
-            *   `return_messages=True`: Ensures `BaseMessage` objects are returned.
-            *   `memory_key="chat_history"`: Matches the prompt template variable.
-            *   `input_key="input"`: Matches the user input key for the agent.
-    4.  **Agent Integration:** The `ConversationBufferWindowMemory` instance is assigned to the `memory` attribute of the loaded `CustomizableAgentExecutor`.
-    5.  **Automatic Persistence:** `PostgresChatMessageHistory`, when used with `ConversationBufferWindowMemory`, automatically loads messages for the given `session_id` at the start of an interaction and saves new messages (user input, AI response, tool messages) to the `chat_message_history` table in Supabase at the end of the interaction.
-*   **Supabase Table: `chat_message_history`**
-    *   `id`: SERIAL PRIMARY KEY (or other auto-incrementing type)
-    *   `session_id`: TEXT NOT NULL (Index this column)
-    *   `message`: JSONB NOT NULL (Stores LangChain `BaseMessage` objects serialized to JSON)
-    *   `created_at`: TIMESTAMPTZ DEFAULT `now()` (Optional, but good for auditing)
-    *   (RLS policies should be in place, though `langchain-postgres` interacts using the service role or a specified DB user, so application-level session validation is key).
+    1.  The web app (client) gathers the current list of `ChatMessage` objects from `useChatStore.ts`.
+    2.  Client makes an API call to `chatServer` (e.g., `POST /api/chat/session/archive_messages`) with the batch of messages and the relevant `session_id`.
+    3.  `chatServer` receives this batch and performs a single database operation (e.g., upsert or insert) to store it.
+*   **Supabase Table: `recent_conversation_history`**
+    *   `id`: Primary Key (UUID)
+    *   `session_id`: TEXT or UUID (FK to `agent_sessions` if that table is used for session metadata)
+    *   `user_id`: UUID (FK to `users`)
+    *   `message_batch`: JSONB (stores an array of serialized `ChatMessage` objects)
+    *   `archived_at`: TIMESTAMPTZ (Defaults to `now()`)
+    *   `start_timestamp`: TIMESTAMPTZ (Timestamp of the first message in the batch)
+    *   `end_timestamp`: TIMESTAMPTZ (Timestamp of the last message in the batch)
+*   **Sync Logic Note:** This "client-initiated batch archival" is distinct from the continuous, entity-specific `syncWithServer` pattern described in `state-management-design.md` for stores like `useTaskStore`. It's a bulk save operation for a specific type of data (chat logs) triggered by different events. There isn't a "pending changes" queue for individual messages in `useChatStore` in the same way; the entire current state is archived.
 
-### 3.3. Server-Side Short-Term Cache (`chatServer`) - REMOVED
+### 3.3. Server-Side Short-Term Cache (`chatServer`)
 
-*   **Status: REMOVED.** The `server_session_cache` (in-memory Python dictionary) is no longer needed. `PostgresChatMessageHistory` directly handles fetching from and saving to the database, providing the necessary persistence and context. The database itself, with appropriate indexing on `session_id` in `chat_message_history`, serves as the "cache" and persistent store.
+*   **Role:** To provide the AI agent with the *immediate* conversational context (last few turns of the current exchange) efficiently, without needing to read from Supabase on every single user message. This cache helps bridge the gap between discrete client API calls.
+*   **Structure:** A Python dictionary in `chatServer`, e.g., `server_session_cache: Dict[str, List[SerializedBaseMessage]]`. The `session_id` is the key.
+    *   `SerializedBaseMessage` would be a dict representation of LangChain's `BaseMessage` objects.
+    *   This cache holds a *sliding window* of the most recent messages (e.g., last 5-10 messages or last 2-3 turns).
+*   **Population & Interaction:**
+    1.  When `chatServer` receives a `/api/chat` request with new user message(s):
+        a.  It retrieves the existing cached messages for that `session_id` from `server_session_cache`.
+        b.  It appends the new incoming user message(s) to this cached list.
+        c.  This combined list forms the short-term history provided to the agent for the current turn.
+    2.  After the agent generates a response (and any tool messages):
+        a.  The new user message(s), AI response, and any relevant tool messages are used to update the `server_session_cache` for that `session_id`, maintaining the sliding window.
+*   **Note on Scaling:** For initial implementation (no horizontal scaling of `chatServer`), this simple dictionary is sufficient. For future scaling, this cache would need to move to a distributed solution (e.g., Redis).
 
 ### 3.4. Evolving Natural Language Long-Term Memory (LTM - Supabase)
 
-*   **Status: Unchanged by this STM refactor.** This component remains as previously designed.
 *   **Role:** To store persistent, curated knowledge, preferences, summaries, and standing instructions related to a specific user, as understood and maintained by the agent.
-*   **Supabase Table: `agent_long_term_memory`** (Schema and interaction via `ManageLongTermMemoryTool` remain the same).
+*   **Supabase Table: `agent_long_term_memory`**
+    *   `id`: Primary Key (UUID)
+    *   `user_id`: UUID (FK to `users`, part of a composite key with `agent_name`)
+    *   `agent_name`: TEXT (e.g., "assistant", "test_agent", part of a composite key with `user_id`)
+    *   `notes`: TEXT (Stores the natural language memory content. Can be Markdown for light structure if desired by the agent.)
+    *   `created_at`: TIMESTAMPTZ
+    *   `updated_at`: TIMESTAMPTZ
+    *   (RLS policies must ensure users/agents can only access their respective notes).
+*   **Agent Interaction (CRUD via Tools):**
+    *   **Read:**
+        *   On agent initialization for a user (`agent_loader.py` via `chatServer`), the `notes` for the `user_id` and `agent_name` are fetched from `agent_long_term_memory`.
+        *   **Presentation to Agent:** Injected into a dedicated section of the agent's prompt template (e.g., a placeholder like `"{long_term_memory_notes}"`). The `CustomizableAgent` (from prompt customization design) would manage this injection.
+    *   **Write/Update/Delete (via `UpdateLongTermMemoryTool`):**
+        *   **Tool Name:** `manage_long_term_memory`
+        *   **Tool Input Schema:**
+            ```python
+            class ManageLTMInput(BaseModel):
+                operation: Literal['read', 'overwrite', 'append', 'prepend', 'delete_section_by_header', 'replace_section_by_header', 'delete_all_notes'] = 'read'
+                content: Optional[str] = None # For write operations
+                section_header: Optional[str] = None # For section-specific operations
+            ```
+        *   **Tool Action:**
+            *   The tool (running in `chatServer`) interacts with the `agent_long_term_memory` table in Supabase.
+            *   `read`: Returns the current `notes`.
+            *   `overwrite`: Replaces the entire `notes` field with new `content`.
+            *   `append`: Appends `content` to the existing `notes`.
+            *   `prepend`: Prepends `content` to the existing `notes`.
+            *   `delete_all_notes`: Clears the `notes` field.
+            *   Section-based operations would require a simple parsing convention for the `notes` text (e.g., Markdown headers).
+
+### 3.5. Ensuring Short-Term Memory for Agent (Per-Turn Context Flow)
+
+This explicitly details how an agent gets its immediate context for responding:
+1.  **Client (`useChatStore`)**: User types a message. It's added to `useChatStore`.
+2.  **Client API Call (`POST /api/chat`)**: The web app sends the *new user message(s)* to `chatServer`. (Payload: `{ "new_messages": [SerializedChatMessage], "session_id": "xyz" }`).
+3.  **`chatServer` Context Assembly**:
+    a.  Retrieves `List[SerializedBaseMessage]` from `server_session_cache[session_id]` (this is the context from the end of the previous turn).
+    b.  Appends the `new_messages` from the client payload to this list. This combined list is the full short-term history for the current turn.
+4.  **Agent Invocation**: The `CustomizableAgent` is invoked with this assembled short-term history, plus its LTM notes and other prompt customizations.
+5.  **`chatServer` Cache Update**: After the agent responds (e.g., with an AI message and maybe tool calls/responses), `chatServer` updates `server_session_cache[session_id]` with the new state of the short-term history (user message, AI response, tool messages if applicable), ready for the next turn.
+
+### 3.6. Supabase Realtime (Potential Uses)
+
+*   If LTM (`agent_long_term_memory.notes`) is updated, Realtime *could* potentially signal other active sessions for the same user/agent (e.g., on a different device) to refresh their LTM. This is an advanced feature.
+*   Could signal the client if a background process updates `recent_conversation_history` for the current session (less common).
+*   Not strictly necessary for the core loop of this memory design but offers avenues for richer real-time experiences later.
+
+## 4. Data Models & Schemas (Key Tables Recap)
+
+*   **`recent_conversation_history` (Supabase)**
+    *   `id: UUID PK`
+    *   `session_id: TEXT`
+    *   `user_id: UUID`
+    *   `message_batch: JSONB` (Array of serialized `ChatMessage`s: `[{id, text, sender, timestamp}, ...]`)
+    *   `archived_at: TIMESTAMPTZ`
+    *   `start_timestamp: TIMESTAMPTZ`
+    *   `end_timestamp: TIMESTAMPTZ`
+*   **`agent_long_term_memory` (Supabase)**
     *   `id: UUID PK`
     *   `user_id: UUID`
     *   `agent_name: TEXT`
     *   `notes: TEXT`
     *   `created_at: TIMESTAMPTZ`
     *   `updated_at: TIMESTAMPTZ`
+    *   (Composite UNIQUE constraint on `user_id, agent_name`)
+*   **`agent_sessions` (Supabase - Optional, for session metadata if needed beyond `session_id` string)**
+    *   `session_id: TEXT PK` (Could be UUID string)
+    *   `user_id: UUID`
+    *   `agent_name: TEXT`
+    *   `created_at: TIMESTAMPTZ`
+    *   `last_activity_at: TIMESTAMPTZ`
+    *   `summary: TEXT (Nullable)` (Could store an overall session summary if desired later)
 
-*   **Agent Interaction (CRUD via Tools):**
-    *   **Read:**
-        *   On agent initialization for a user (`agent_loader.py` via 
-        `chatServer`), the `notes` for the `user_id` and `agent_name` are fetched 
-        from `agent_long_term_memory`.
-        *   **Presentation to Agent:** Injected into a dedicated section of the 
-        agent's prompt template (e.g., a placeholder like `"{long_term_memory_notes}
-        "`). The `CustomizableAgent` (from prompt customization design) would 
-        manage this injection.
-    *   **Write/Update/Delete (via `UpdateLongTermMemoryTool`):**
-        *   **Tool Name:** `manage_long_term_memory`
-        *   **Tool Input Schema:**
-            ```python
-            class ManageLTMInput(BaseModel):
-                operation: Literal['read', 'overwrite', 'append', 'prepend', 
-                'delete_section_by_header', 'replace_section_by_header', 
-                'delete_all_notes'] = 'read'
-                content: Optional[str] = None # For write operations
-                section_header: Optional[str] = None # For section-specific 
-                operations
-            ```
-        *   **Tool Action:**
-            *   The tool (running in `chatServer`) interacts with the 
-            `agent_long_term_memory` table in Supabase.
-            *   `read`: Returns the current `notes`.
-            *   `overwrite`: Replaces the entire `notes` field with new `content`.
-            *   `append`: Appends `content` to the existing `notes`.
-            *   `prepend`: Prepends `content` to the existing `notes`.
-            *   `delete_all_notes`: Clears the `notes` field.
-            *   Section-based operations would require a simple parsing convention 
-            for the `notes` text (e.g., Markdown headers).
-
-### 3.5. Ensuring Short-Term Memory for Agent (Per-Turn Context Flow - REVISED)
-
-This explicitly details how an agent gets its immediate context for responding with the new STM system:
-1.  **Client (`useChatStore`, `useChatSessionHooks`):**
-    a.  User types a message. It's added to `useChatStore` for UI display.
-    b.  Client ensures it has a valid `session_id` through the initialization logic (localStorage -> DB (`user_agent_active_sessions`) -> generate new).
-2.  **Client API Call (`POST /api/chat`)**:
-    a.  The web app sends the new user message and the active `session_id` to `chatServer`.
-    b.  Payload: `{ "message": "User's new input", "session_id": "active-session-uuid", "agent_id": "test_agent" }`.
-3.  **`chatServer` Context Assembly & Agent Invocation**:
-    a.  `chat_endpoint` receives the request.
-    b.  `PostgresChatMessageHistory` is initialized with the `PGEngine` and the provided `session_id`.
-    c.  This history object is wrapped in `ConversationBufferWindowMemory`.
-    d.  The `ConversationBufferWindowMemory` instance is set as the `.memory` for the `CustomizableAgentExecutor`.
-    e.  When `agent_executor.ainvoke({"input": chat_input.message})` is called:
-        i.  `ConversationBufferWindowMemory` loads the last `k` messages for that `session_id` from the `chat_message_history` table.
-        ii. These messages, along with the current user input, are formatted into the agent's prompt.
-4.  **Agent Response & History Save**:
-    a.  The agent processes the input and generates a response.
-    b.  `ConversationBufferWindowMemory` automatically takes the user's input message and the AI's output message (and any tool messages) and instructs `PostgresChatMessageHistory` to save them to the `chat_message_history` table, associated with the `session_id`.
-5.  **Client Receives Response**: The AI's response is sent back to the client and displayed in the UI.
-
-### 3.6. Supabase Realtime (Potential Uses)
-
-*   **Status: Unchanged by this STM refactor.** Remains an option for future enhancements (e.g., multi-device LTM sync). Not critical for the current STM functionality.
-
-## 4. Data Models & Schemas (Key Tables Recap - REVISED)
-
-*   **`user_agent_active_sessions` (Supabase - NEW)**
-    *   `user_id: UUID PK` (Links to `auth.users.id`)
-    *   `agent_name: TEXT PK`
-    *   `active_session_id: TEXT NOT NULL`
-    *   `last_active_at: TIMESTAMPTZ DEFAULT now()`
-    *   `created_at: TIMESTAMPTZ DEFAULT now()`
-*   **`chat_message_history` (Supabase - NEW, for `langchain-postgres`)**
-    *   `id: SERIAL PK`
-    *   `session_id: TEXT NOT NULL` (Should be indexed)
-    *   `message: JSONB NOT NULL` (Stores serialized LangChain `BaseMessage` objects)
-    *   `created_at: TIMESTAMPTZ DEFAULT now()`
-*   **`recent_conversation_history` (Supabase - DEPRECATED/REMOVED)**
-    *   This table and the client-side batch archival mechanism are superseded by the direct, per-turn persistence provided by `PostgresChatMessageHistory` into `chat_message_history`.
-*   **`agent_long_term_memory` (Supabase - Unchanged)**
-    *   (Schema remains as previously defined)
-*   **`agent_sessions` (Supabase - DEPRECATED/REMOVED or REPURPOSED)**
-    *   The role of this table for managing session metadata is largely replaced by `user_agent_active_sessions`. If it existed, its direct use for STM is removed.
-
-## 5. API Endpoints (Key New/Modified - REVISED)
+## 5. API Endpoints (Key New/Modified)
 
 *   **`POST /api/chat` (Existing, Modified Interaction)**
-    *   Client sends `{ "message": "User's new input", "session_id": "active-session-uuid", "agent_id": "test_agent" }`. (Note: `agent_id` here is the agent's name/identifier).
-    *   `chatServer` uses the provided `session_id` to initialize `PostgresChatMessageHistory` and `ConversationBufferWindowMemory`, which then handles STM.
-*   **`POST /api/chat/session/archive_messages` (DEPRECATED/REMOVED)**
-    *   This endpoint is no longer needed as `PostgresChatMessageHistory` handles per-turn persistence.
+    *   Client sends `{ "new_messages": [SerializedChatMessage], "session_id": "xyz", "agent_id": "test_agent" }`.
+    *   `chatServer` uses this, its `server_session_cache`, and LTM to generate a response.
+*   **`POST /api/chat/session/archive_messages` (New)**
+    *   Client sends `{ "session_id": "xyz", "messages_batch": [SerializedChatMessage] }`.
+    *   `chatServer` saves this batch to `recent_conversation_history`.
+*   **(Internal to `chatServer` or via agent tools that call `PromptManagerService` or a new LTM service): Endpoints/functions to manage `agent_long_term_memory`.**
 
-## 6. Implementation Guidelines & Considerations (REVISED)
+## 6. Implementation Guidelines & Considerations
 
-*   **`webApp` (`useChatStore.ts`, `useChatSessionHooks.ts`, `ChatPanel.tsx`):**
-    *   Ensure robust implementation of the `session_id` lifecycle: `localStorage` check, DB lookup in `user_agent_active_sessions`, new ID generation, and persistence of the chosen/new ID back to `localStorage` and `user_agent_active_sessions`.
-    *   The `session_id` must be correctly passed in all `/api/chat` calls.
-*   **`chatServer/main.py`:**
-    *   Properly initialize `PGEngine` at startup using environment variables for DB connection.
-    *   In `/api/chat` endpoint:
-        *   Receive `session_id` from the client.
-        *   Instantiate `PostgresChatMessageHistory` with the engine, `session_id`, and table name.
-        *   Wrap with `ConversationBufferWindowMemory`.
-        *   Assign memory to the agent executor.
-    *   Remove any old `server_session_cache` logic.
-    *   Remove the `/api/chat/session/archive_messages` endpoint.
-*   **Database (`ddl.sql`):**
-    *   Ensure DDL for `user_agent_active_sessions` and `chat_message_history` is correct and applied.
-    *   Include RLS policies as appropriate (though `PGEngine` typically uses a privileged DB role).
-    *   Comment out or remove DDL for `recent_conversation_history` and potentially `agent_sessions` if fully deprecated.
+*   **`useChatStore.ts`:**
+    *   Implement logic for collecting messages and identifying triggers for calling `/api/chat/session/archive_messages`.
+    *   Consider using `navigator.sendBeacon` for `beforeunload` reliability.
+*   **`chatServer`:**
+    *   Implement the `server_session_cache` (simple Python dict initially). Define its window size.
+    *   Implement the `/api/chat/session/archive_messages` endpoint logic.
+    *   Implement the `manage_long_term_memory` agent tool, including its Supabase interactions.
+    *   Modify `agent_loader.py` to fetch LTM and pass it to `CustomizableAgent`.
+*   **`CustomizableAgent`:**
+    *   Adapt prompt template to include a section for LTM notes.
+    *   Ensure it correctly receives and uses the assembled short-term history.
+*   **Session Management:**
+    *   `session_id` needs to be generated (client or server on first interaction if not provided) and consistently used. UUIDs are suitable.
+    *   Client should store and send the current `session_id`.
 *   **Error Handling:**
-    *   Client: Handle potential errors during `session_id` fetching/creation.
-    *   Server: Robust error handling for `PGEngine` initialization and any issues during agent interaction with memory.
-*   **Testing (Phase 4):**
-    *   Verify `session_id` persistence across browser refreshes and new sessions for the same user/agent.
-    *   Confirm different agents for the same user get different `session_id`s (based on `agent_name` in `user_agent_active_sessions` primary key).
-    *   Test conversation continuity using the `chat_message_history` table.
-    *   Ensure data in `chat_message_history` is correctly associated with `session_id`.
+    *   Client: What if `/api/chat/session/archive_messages` fails? Retry logic? User notification?
+    *   Server: Robust error handling for DB interactions and agent tool execution.
+*   **Schema Migrations:** For the new Supabase tables.
 
-## 7. Verification Checkpoint (REVISED)
+## 7. Verification Checkpoint
 
-*   **Persistent STM:** YES (via `langchain-postgres` and `chat_message_history` table).
-*   **Reliable `session_id` Management:** YES (Client logic + `user_agent_active_sessions` table).
-*   **Standard Tooling for STM:** YES (`langchain-postgres`, `ConversationBufferWindowMemory`).
-*   **Client-Side Session Initiation:** YES.
-*   **Minimize DB Writes Per Turn (for STM):** NO - This has changed. `langchain-postgres` writes per turn to ensure persistence. The previous goal of batching STM writes is superseded by the goal of robust, standard, per-turn persistence for STM. LTM updates remain discrete.
-*   **Agent Has Short-Term Context:** YES (Loaded by `ConversationBufferWindowMemory` from `PostgresChatMessageHistory`).
-*   **Cross-Session Preference Persistence:** YES (Via LTM - unchanged by STM refactor).
+*   **Minimize DB Writes Per Turn:** YES (Client buffers, batch archival for recent history, LTM updates are discrete).
+*   **Natural Language LTM:** YES (Dedicated `notes` field, agent CRUD tool).
+*   **Agent Has Short-Term Context:** YES (Client new messages + server short-term cache).
+*   **Cross-Session Preference Persistence:** YES (Via LTM).
+*   **Efficient Pruning:**
+    *   `recent_conversation_history`: Can be pruned by `archived_at` date (e.g., keep last X days/months).
+    *   `agent_long_term_memory`: Curated by agent tools.
+    *   `server_session_cache`: Ephemeral or very short-lived.
+*   **Client-Side Buffering:** YES (`useChatStore`).
 
-This revised design provides a more robust and standard approach to Short-Term Memory using `langchain-postgres`, simplifying server-side logic by removing custom caching and client-side batching for STM.
+## 8. Impact on Existing Designs
+
+*   **`agent_memory_solution_design_v1.md`:** This v2 design significantly revises the persistence strategy. The concept of `SupabaseChatMessageHistory` writing every message individually to `agent_chat_messages` is replaced by the batched `recent_conversation_history` and the client/server caching mechanisms. The `agent_chat_messages` table (as a log of individual LangChain `BaseMessage` objects per DB row) may no longer be needed, or its role changes drastically.
+*   **`agent_execution_prompt_customization_design_v1.md`:** Largely compatible. The `CustomizableAgent` is still central and will now also be responsible for incorporating LTM `notes` into its prompt, in addition to other prompt customizations. The `manage_long_term_memory` tool fits into the planned tool architecture.
+*   **`state-management-design.md`:** The client-initiated batch archival of chat messages is a specific pattern for chat history and differs from the continuous, optimistic sync model proposed for generic entities like tasks. This distinction is important. Chat history is more of an append-only log that gets archived in chunks, whereas tasks have individual CRUD updates that benefit from optimistic UI and pending change queues.
 
 ---
 🎨🎨🎨 **EXITING CREATIVE PHASE: Architecture Design - Agent Memory System v2** 🎨🎨🎨 

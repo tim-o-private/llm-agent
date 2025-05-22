@@ -1,7 +1,8 @@
 import sys
 import os
 import logging # Added for log_level
-from typing import Dict, Optional, Any, List # Added Optional and List here
+from typing import Dict, Optional, Any, List, AsyncIterator # Added Optional and List here, NEW: AsyncIterator
+from contextlib import asynccontextmanager # NEW IMPORT
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Depends, Request, status
@@ -10,10 +11,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from jose import jwt, JWTError
 from supabase import acreate_client, AsyncClient
 
-# NEW: Import for psycopg connection pool
-import psycopg
-from psycopg_pool import AsyncConnectionPool
-
 # Correctly import ConfigLoader
 from utils.config_loader import ConfigLoader
 
@@ -21,12 +18,11 @@ from utils.config_loader import ConfigLoader
 from core import agent_loader
 from core.agents.customizable_agent import CustomizableAgentExecutor # Added import
 
-# For V2 Agent Memory System (New Approach)
-from langchain.memory import ConversationBufferWindowMemory
-from langchain_postgres import PostgresChatMessageHistory, PGEngine # NEW IMPORTS
+# For V2 Agent Memory System
+from langchain_postgres import PostgresChatMessageHistory # PGEngine removed from here
+import psycopg
+from psycopg_pool import AsyncConnectionPool # NEW IMPORT
 
-# NEW: Import the custom async memory class
-from core.memory.async_memory import AsyncPostgresBufferedWindowMemory
 
 # --- START Inserted Environment & Path Setup ---
 def add_project_root_to_path_for_local_dev():
@@ -88,8 +84,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-class ChatRequest(BaseModel):
-    agent_id: str
+class ChatRequest(BaseModel):    
+    agent_id: str 
     message: str
     session_id: str # Added: session_id is now required
 
@@ -130,151 +126,75 @@ async def get_jwt_from_request_context(request_for_token: Request) -> Optional[s
 # Initialize as None, will be created on startup
 supabase_client: AsyncClient | None = None
 
-# NEW: Global PGEngine for langchain-postgres (SQLAlchemy based)
-pg_engine_instance: Optional[PGEngine] = None
-
-# NEW: Global psycopg AsyncConnectionPool
-psycopg_async_pool: Optional[AsyncConnectionPool] = None
-
-@app.on_event("startup")
-async def startup_event():
-    global supabase_client, pg_engine_instance, psycopg_async_pool # Added psycopg_async_pool
-    supabase_url_env = os.getenv("VITE_SUPABASE_URL")
-    supabase_key_env = os.getenv("SUPABASE_SERVICE_KEY")
-
-    # Initialize supabase-py AsyncClient (if still needed for other parts like LTM, user auth, etc.)
-    if supabase_url_env and supabase_key_env:
-        try:
-            print(f"Attempting to initialize Supabase async client with URL: {supabase_url_env} and Key: {'[REDACTED]' if supabase_key_env else None}")
-            supabase_client_instance_val = await acreate_client(supabase_url_env, supabase_key_env) # Renamed var
-            
-            if isinstance(supabase_client_instance_val, AsyncClient):
-                supabase_client = supabase_client_instance_val
-                print("Supabase AsyncClient initialized successfully via acreate_client.")
-            else:
-                print(f"Supabase client initialized via acreate_client IS NOT AN ASYNCCLIENT. Type: {type(supabase_client_instance_val)}")
-                supabase_client = None 
-        except Exception as e:
-            print(f"Error initializing Supabase async client (supabase-py): {e}", exc_info=True)
-            supabase_client = None
-    else:
-        print("Supabase async client (supabase-py) not initialized due to missing URL or Key.")
-
-    # NEW: Initialize PGEngine for langchain-postgres
-    db_user = os.getenv("SUPABASE_DB_USER")
-    db_password = os.getenv("SUPABASE_DB_PASSWORD")
-    # Ensure this is the DB host, not the API host. Example: aws-0-us-east-1.pooler.supabase.com
-    db_host_env = os.getenv("SUPABASE_DB_HOST") # Renamed to avoid conflict
-    db_name_env = os.getenv("SUPABASE_DB_NAME", "postgres") # Renamed to avoid conflict
-    db_port_env = os.getenv("SUPABASE_DB_PORT", "5432") # Renamed to avoid conflict
-
-    if all([db_user, db_password, db_host_env, db_name_env, db_port_env]):
-        # Using +asyncpg for asynchronous operations with langchain-postgres
-        connection_string = f"postgresql+asyncpg://{db_user}:{db_password}@{db_host_env}:{db_port_env}/{db_name_env}"
-        logger.info(f"Attempting to initialize PGEngine with connection string: postgresql+asyncpg://{db_user}:[REDACTED]@{db_host_env}:{db_port_env}/{db_name_env}")
-        try:
-            # Use PGEngine.from_connection_string for sync initialization, async driver handles async ops
-            pg_engine_instance = PGEngine.from_connection_string(url=connection_string)
-            logger.info("PGEngine for langchain-postgres initialized successfully.")
-            
-            # Table creation for PostgresChatMessageHistory:
-            # It's recommended to do this manually via SQL editor or a separate sync script
-            # to avoid complexities with sync/async in app startup.
-            # Example table name: "chat_message_history"
-            # Schema typically: id SERIAL PRIMARY KEY, session_id TEXT NOT NULL, message JSONB NOT NULL, created_at TIMESTAMPTZ DEFAULT now()
-            # Plus an index on session_id.
-            # If PostgresChatMessageHistory.create_tables is used, it needs a sync connection.
-            logger.info("PGEngine initialized. Ensure 'chat_message_history' table exists or is created separately.")
-
-        except Exception as e:
-            logger.error(f"Error initializing PGEngine for langchain-postgres: {e}", exc_info=True)
-            pg_engine_instance = None
-    else:
-        missing_vars = [var for var, val in [("SUPABASE_DB_USER", db_user), ("SUPABASE_DB_PASSWORD", db_password), 
-                                             ("SUPABASE_DB_HOST", db_host_env), ("SUPABASE_DB_NAME", db_name_env),
-                                             ("SUPABASE_DB_PORT", db_port_env)] if not val]
-        logger.error(f"PGEngine for langchain-postgres not initialized due to missing DB connection variables: {', '.join(missing_vars)}")
-        pg_engine_instance = None
-
-    # NEW: Initialize psycopg AsyncConnectionPool
-    if all([db_user, db_password, db_host_env, db_name_env, db_port_env]):
-        # Add sslmode=require for Supabase
-        psycopg_conn_str = f"postgresql://{db_user}:{db_password}@{db_host_env}:{db_port_env}/{db_name_env}?sslmode=require"
-        logger.info(f"Attempting to initialize psycopg AsyncConnectionPool with connection string: postgresql://{db_user}:[REDACTED]@{db_host_env}:{db_port_env}/{db_name_env}?sslmode=require")
-        try:
-            psycopg_async_pool = AsyncConnectionPool(conninfo=psycopg_conn_str, open=False) # open=False: pool doesn't open connections immediately
-            await psycopg_async_pool.open()
-            # NEW: Test the pool by acquiring a connection and running a simple query
-            logger.info("Attempting to verify psycopg AsyncConnectionPool connectivity...")
-            async with psycopg_async_pool.connection() as conn:
-                async with conn.cursor() as cur:
-                    await cur.execute("SELECT 1")
-                    res = await cur.fetchone()
-                    if res and res[0] == 1:
-                        logger.info("psycopg AsyncConnectionPool connected and verified successfully.")
-                    else:
-                        logger.error("psycopg AsyncConnectionPool verification query failed or returned unexpected result.")
-        except Exception as e:
-            logger.error(f"Error initializing or verifying psycopg AsyncConnectionPool: {e}", exc_info=True) # Modified log message
-            psycopg_async_pool = None
-    else:
-        logger.error(f"psycopg AsyncConnectionPool not initialized due to missing DB connection variables: {', '.join(missing_vars)}")
-        psycopg_async_pool = None
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    global psycopg_async_pool
-    if psycopg_async_pool:
-        logger.info("Closing psycopg AsyncConnectionPool...")
-        await psycopg_async_pool.close()
-        logger.info("psycopg AsyncConnectionPool closed.")
-
 # Dependency to get Supabase client (supabase-py AsyncClient)
 async def get_supabase_client() -> AsyncClient:
     if supabase_client is None:
-        print("Supabase client not available during request.") # Changed log message
-        raise HTTPException(status_code=503, detail="Supabase client not available. Check server startup logs.")
+        logger.error("Supabase client (supabase-py) not available during request. Check server startup logs.")
+        raise HTTPException(status_code=503, detail="Supabase client (supabase-py) not available. Check server startup logs.")
     return supabase_client
 
-# NEW: Dependency to get PGEngine
-async def get_pg_engine() -> PGEngine:
-    if pg_engine_instance is None:
-        logger.error("PGEngine (langchain-postgres) not available during request. Check server startup logs.")
-        raise HTTPException(status_code=503, detail="Postgres engine for chat history not available.")
-    return pg_engine_instance
+# --- FastAPI App and Database Pool Lifecycle ---
 
-# NEW: Dependency to get a psycopg AsyncConnection
-async def get_psycopg_aconnection() -> psycopg.AsyncConnection:
-    if psycopg_async_pool is None:
-        logger.error("psycopg AsyncConnectionPool not available. Check server startup logs.")
-        raise HTTPException(status_code=503, detail="Database connection pool not available.")
+db_pool: Optional[AsyncConnectionPool] = None
+
+def get_db_conn_str():
+    db_user = os.getenv("SUPABASE_DB_USER")
+    db_password = os.getenv("SUPABASE_DB_PASSWORD")
+    db_host = os.getenv("SUPABASE_DB_HOST")
+    db_name = os.getenv("SUPABASE_DB_NAME", "postgres")
+    db_port = os.getenv("SUPABASE_DB_PORT", "5432")
+    if not all([db_user, db_password, db_host, db_name, db_port]):
+        missing = [v for v, k in [("SUPABASE_DB_USER",db_user), ("SUPABASE_DB_PASSWORD",db_password), ("SUPABASE_DB_HOST",db_host), ("SUPABASE_DB_NAME",db_name), ("SUPABASE_DB_PORT",db_port)] if not k]
+        logger.critical(f"Database connection pool cannot be initialized. Missing env vars: {missing}")
+        raise RuntimeError(f"Database connection pool cannot be initialized. Missing env vars: {missing}")
+    # Includes connect_timeout and explicitly requires SSL
+    return f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}?connect_timeout=10&sslmode=require"
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global db_pool, supabase_client # Added supabase_client here for completeness
+    logger.info("Application startup: Initializing resources...")
     try:
-        # The pool will manage when to actually establish the connection if not already open.
-        # Using "async with" ensures the connection is returned to the pool.
-        async with psycopg_async_pool.connection() as aconn:
-            yield aconn
+        conn_str = get_db_conn_str()
+        logger.info(f"Initializing AsyncConnectionPool with: postgresql://{os.getenv('SUPABASE_DB_USER')}:[REDACTED]@{os.getenv('SUPABASE_DB_HOST')}:{os.getenv('SUPABASE_DB_PORT')}/{os.getenv('SUPABASE_DB_NAME', 'postgres')}?connect_timeout=10")
+        db_pool = AsyncConnectionPool(conninfo=conn_str, open=False, min_size=2, max_size=10) # Example sizes
+        # Try to establish min_size connections and wait for up to, e.g., 30 seconds
+        await db_pool.open(wait=True, timeout=30)
+        logger.info("Database connection pool started successfully.")
     except Exception as e:
-        logger.error(f"Error getting a psycopg connection from pool: {e}", exc_info=True)
-        raise HTTPException(status_code=503, detail="Could not get database connection from pool.")
+        logger.critical(f"Failed to initialize database connection pool: {e}", exc_info=True)
+        db_pool = None # Ensure pool is None if init fails
 
+    # Initialize Supabase client (existing logic)
+    supabase_url_env = os.getenv("VITE_SUPABASE_URL")
+    supabase_key_env = os.getenv("SUPABASE_SERVICE_KEY")
+    if supabase_url_env and supabase_key_env:
+        try:
+            logger.info(f"Attempting to initialize Supabase async client with URL: {supabase_url_env}")
+            supabase_client_instance_val = await acreate_client(supabase_url_env, supabase_key_env)
+            if isinstance(supabase_client_instance_val, AsyncClient):
+                supabase_client = supabase_client_instance_val
+                logger.info("Supabase AsyncClient initialized successfully.")
+            else:
+                logger.error(f"Supabase client initialized but is not an AsyncClient. Type: {type(supabase_client_instance_val)}")
+                supabase_client = None
+        except Exception as e:
+            logger.error(f"Error initializing Supabase async client (supabase-py): {e}", exc_info=True)
+            supabase_client = None
+    else:
+        logger.warning("Supabase async client (supabase-py) not initialized due to missing URL or Key.")
 
-# Initialize PromptManagerService
-# prompt_manager_service = PromptManagerService() # Removed problematic instantiation
+    yield # Application runs here
 
-# V2 Agent Memory: Server-side short-term session cache -- REMOVED
-# server_session_cache: Dict[str, List[Dict[str, Any]]] = {} -- REMOVED
-# MAX_CACHE_HISTORY_LENGTH = 50 -- REMOVED
+    logger.info("Application shutdown: Cleaning up resources...")
+    if db_pool:
+        await db_pool.close()
+        logger.info("Database connection pool closed.")
+    if supabase_client:
+        await supabase_client.close() # Assuming supabase_client has an async close method
+        logger.info("Supabase client closed.")
 
-# class ChatInput(BaseModel): # Definition moved up
-# ... existing code ...
-
-# Helper to serialize BaseMessage to dict for server_session_cache -- REMOVED
-# def serialize_message_for_cache(message: BaseMessage) -> Dict[str, Any]: -- REMOVED
-# ... (implementation removed) ...
-
-# Helper to deserialize dict from cache to BaseMessage -- REMOVED
-# def deserialize_message_from_cache(msg_dict: Dict[str, Any]) -> BaseMessage: -- REMOVED
-# ... (implementation removed) ...
+app = FastAPI(lifespan=lifespan) # Apply lifespan manager
 
 # --- Logger setup ---
 # Ensure logger is available if not already globally configured
@@ -287,12 +207,26 @@ if not logger.handlers:
 
 CHAT_MESSAGE_HISTORY_TABLE_NAME = "chat_message_history" # Define globally or get from config
 
+# NEW: Dependency to get a DB connection from the pool
+async def get_db_connection() -> AsyncIterator[psycopg.AsyncConnection]:
+    if db_pool is None:
+        logger.error("Database connection pool is not available.")
+        raise HTTPException(status_code=503, detail="Database service not available. Pool not initialized.")
+    try:
+        async with db_pool.connection() as conn: # Acquire connection from pool
+            logger.debug("DB connection acquired from pool.")
+            yield conn # Connection is released when context exits
+        logger.debug("DB connection released back to pool.")
+    except Exception as e:
+        logger.error(f"Failed to get DB connection from pool: {e}", exc_info=True)
+        raise HTTPException(status_code=503, detail="Failed to acquire database connection.")
+
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat_endpoint(
     chat_input: ChatRequest, 
     request: Request, 
     user_id: str = Depends(get_current_user),
-    psycopg_conn: psycopg.AsyncConnection = Depends(get_psycopg_aconnection), # NEW: Use psycopg connection
+    pg_connection: psycopg.AsyncConnection = Depends(get_db_connection), # NEW: Use pooled connection
     # db_client: AsyncClient = Depends(get_supabase_client) # Keep if other parts need supabase-py client
 ):
     logger.info(f"Received chat request for agent {chat_input.agent_id} with session_id: {chat_input.session_id} from user {user_id}")
@@ -304,95 +238,109 @@ async def chat_endpoint(
 
     session_id = chat_input.session_id
 
-    # Initialize PostgresChatMessageHistory for the current session
     try:
+        # Initialize PostgresChatMessageHistory using the connection from the pool
         chat_memory = PostgresChatMessageHistory(
-            CHAT_MESSAGE_HISTORY_TABLE_NAME, # Positional: table_name
-            session_id,                      # Positional: session_id
-            async_connection=psycopg_conn    # Keyword: Pass the raw psycopg async connection
-        )
-        # The messages will be loaded by AsyncPostgresBufferedWindowMemory automatically
-        # await chat_memory.aadd_user_message(chat_input.message) # No, agent executor adds this
-    except Exception as e:
-        logger.error(f"Failed to initialize PostgresChatMessageHistory for session {session_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Could not initialize chat history: {e}")
-
-    # Wrap the chat_memory in ConversationBufferWindowMemory
-    # k is the number of past interactions (user + AI message) to keep in the window
-    # We can make k configurable if needed
-    # return_messages=True is important for the agent to get BaseMessage objects
-    agent_short_term_memory = AsyncPostgresBufferedWindowMemory( # CHANGED to use the new async class
-        chat_memory=chat_memory,
-        k=50, # Keep last 50 messages (user + AI). Was MAX_CACHE_HISTORY_LENGTH. Can be configured.
-        return_messages=True,
-        memory_key="chat_history", # Must match the input variable in the agent's prompt
-        input_key="input" # Must match the key for the user's input message
-    )
-
-    try:
-        # Get JWT token for agent_loader if needed by any tools that require user context via API calls
-        # This auth_token_provider now correctly uses the `request` from the endpoint context.
-        auth_token_provider = lambda: get_jwt_from_request_context(request)
-
-        agent_executor = agent_loader.load_agent_executor(
-            user_id=user_id,
-            agent_name=chat_input.agent_id,
-            session_id=session_id, 
-            config_loader=GLOBAL_CONFIG_LOADER,
-            # auth_token_provider=auth_token_provider, # Not currently accepted by load_agent_executor
-            # Pass the Supabase client if tools require it for direct DB ops not via API
-            # supabase_client=db_client # If any tool directly uses the Python Supabase client for this user
-        )
-        
-        # Ensure the loaded agent_executor is of the expected type and set its memory
-        if not isinstance(agent_executor, CustomizableAgentExecutor):
-            logger.error(f"Loaded agent is not a CustomizableAgentExecutor. Type: {type(agent_executor)}")
-            raise HTTPException(status_code=500, detail="Agent loading failed to produce a compatible executor.")
-
-        # Set the memory on the loaded agent executor
-        agent_executor.memory = agent_short_term_memory
-
-    except Exception as e:
-        logger.error(f"Error loading agent executor for agent {chat_input.agent_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Could not load agent: {e}")
-
-    try:
-        # Include chat_history for the agent memory. Agent will get it from memory object.
-        # The input to agent.ainvoke should match the agent's expected input keys.
-        # Typically, this includes an "input" key for the user's message and any other keys
-        # expected by the agent's prompt or memory system (e.g., "chat_history").
-        # The ConversationBufferWindowMemory (with memory_key="chat_history" and input_key="input")
-        # handles chat_history injection automatically when `agent_executor.ainvoke` is called
-        # with the user's input under the key specified by `input_key` (here, "input").
-        # For AsyncPostgresBufferedWindowMemory, aload_memory_variables will handle this.
-
-        response_data = await agent_executor.ainvoke({"input": chat_input.message})
-        ai_response_content = response_data.get("output", "No output from agent.")
-
-        # Response should already be in the agent_short_term_memory (and thus PostgresChatMessageHistory)
-        # because ConversationBufferWindowMemory automatically saves history.
-
-        # CustomizableAgentExecutor is expected to return a dict that might include tool usage info.
-        # Extract tool_name and tool_input if present in the response_data
-        tool_name = response_data.get("tool_name")
-        tool_input = response_data.get("tool_input")
-
-        return ChatResponse(
-            session_id=session_id, # Return the session_id used
-            response=ai_response_content,
-            tool_name=tool_name,
-            tool_input=tool_input
+            CHAT_MESSAGE_HISTORY_TABLE_NAME,
+            session_id,
+            async_connection=pg_connection # USE THE CONNECTION FROM THE POOL
         )
 
-    except Exception as e:
-        logger.error(f"Error during agent execution for session {session_id}: {e}", exc_info=True)
-        # Optionally, save the error to chat history as an AIMessage or SystemMessage
-        # await agent_short_term_memory.chat_memory.aadd_message(AIMessage(content=f"Error: {e}"))
-        return ChatResponse(
-            session_id=session_id,
-            response="An error occurred processing your request.", # Generic error to client
-            error=str(e) # Detailed error for logging or potential client display if desired
+        # Fix for ConversationBufferWindowMemory async implementation
+        from langchain.memory import ConversationBufferWindowMemory
+        from typing import Dict, Any, List
+        from langchain_core.messages import BaseMessage
+
+        class AsyncConversationBufferWindowMemory(ConversationBufferWindowMemory):
+            """Properly implemented async version of ConversationBufferWindowMemory.
+            
+            This fixes the default implementation which uses run_in_executor to run
+            the synchronous load_memory_variables method, causing it to try to access
+            chat_memory.messages synchronously.
+            """
+            
+            async def aload_memory_variables(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+                """Properly async implementation that directly calls aget_messages."""
+                messages = await self.chat_memory.aget_messages()
+                
+                # Apply window just like buffer_as_messages does, but asynchronously
+                if self.k > 0:
+                    messages = messages[-self.k * 2:]
+                
+                return {self.memory_key: messages if self.return_messages else self.messages_to_string(messages)}
+            
+            def messages_to_string(self, messages: List[BaseMessage]) -> str:
+                """Convert messages to string format, similar to buffer_as_str."""
+                from langchain.schema import get_buffer_string
+                return get_buffer_string(
+                    messages,
+                    human_prefix=self.human_prefix,
+                    ai_prefix=self.ai_prefix,
+                )
+
+        # Wrap the chat_memory in ConversationBufferWindowMemory
+        agent_short_term_memory = AsyncConversationBufferWindowMemory(
+            chat_memory=chat_memory,
+            k=50, # Keep last 50 messages (user + AI). Was MAX_CACHE_HISTORY_LENGTH. Can be configured.
+            return_messages=True,
+            memory_key="chat_history", # Must match the input variable in the agent\'s prompt
+            input_key="input" # Must match the key for the user\'s input message
         )
+
+        try:
+            # Get JWT token for agent_loader if needed by any tools that require user context via API calls
+            auth_token_provider = lambda: get_jwt_from_request_context(request)
+
+            agent_executor = agent_loader.load_agent_executor(
+                user_id=user_id,
+                agent_name=chat_input.agent_id,
+                session_id=session_id,
+                config_loader=GLOBAL_CONFIG_LOADER,
+                # auth_token_provider=auth_token_provider, # Not currently accepted by load_agent_executor
+                # supabase_client=db_client 
+            )
+            
+            if not isinstance(agent_executor, CustomizableAgentExecutor):
+                logger.error(f"Loaded agent is not a CustomizableAgentExecutor. Type: {type(agent_executor)}")
+                raise HTTPException(status_code=500, detail="Agent loading failed to produce a compatible executor.")
+
+            agent_executor.memory = agent_short_term_memory
+
+        except Exception as e:
+            logger.error(f"Error loading agent executor for agent {chat_input.agent_id}: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Could not load agent: {e}")
+
+        try:
+            response_data = await agent_executor.ainvoke({"input": chat_input.message})
+            ai_response_content = response_data.get("output", "No output from agent.")
+
+            tool_name = response_data.get("tool_name")
+            tool_input = response_data.get("tool_input")
+
+            return ChatResponse(
+                session_id=session_id, 
+                response=ai_response_content,
+                tool_name=tool_name,
+                tool_input=tool_input
+            )
+
+        except Exception as e:
+            logger.error(f"Error during agent execution for session {session_id}: {e}", exc_info=True)
+            return ChatResponse(
+                session_id=session_id,
+                response="An error occurred processing your request.", 
+                error=str(e)
+            )
+    except psycopg.Error as pe: # Catch psycopg specific errors for connection/query issues from chat_memory setup
+        logger.error(f"Database error (psycopg.Error) during chat_memory setup for session {session_id}: {pe}", exc_info=True)
+        # Ensure pg_connection is not closed here
+        raise HTTPException(status_code=503, detail=f"Database error during chat setup: {pe}")
+    except Exception as e: # General exception handler for other setup issues before agent execution
+        logger.error(f"Failed to process chat request before agent execution for session {session_id}: {e}", exc_info=True)
+        # Ensure pg_connection is not closed here
+        if isinstance(e, HTTPException): # Re-raise HTTP exceptions
+            raise
+        raise HTTPException(status_code=500, detail=f"Could not process chat request: {e}")
 
 # V2 Agent Memory: API endpoint for batch archival of messages -- REMOVED (or to be re-evaluated)
 # This was for client-side batching. With server-side per-turn history saving via PostgresChatMessageHistory,

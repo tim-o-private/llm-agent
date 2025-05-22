@@ -9,24 +9,21 @@ This file tracks the current tasks, steps, checklists, and component lists for t
 ## PENDING / ACTIVE TASKS
 
 **NEW TASK: Refactor: Implement Robust Short-Term Memory (STM) with Persistent `session_id`**
-*   **Status:** Core Implementation (Phases 1-3) COMPLETE - Phase 4 (Testing & Refinement) Next
+*   **Status:** Planning Complete - Implementation Next
 *   **Complexity:** 3 (Moderately Complex - involves DB, Backend, Frontend, State Management)
 *   **Objective:** Implement a stable and persistent short-term memory solution for agents using `langchain-postgres` and a robust client-managed `session_id` strategy to ensure conversation continuity.
 *   **Associated Design Discussion:** Based on chat history leading to this plan.
 *   **Implementation Plan (Phased):**
     *   **Phase 1: Database Setup**
-        *   **Status:** Implementation COMPLETE - Awaiting Testing
         *   [X] Define & Apply DDL for `user_agent_active_sessions` table (PK: `user_id`, `agent_name`; Columns: `active_session_id`, `last_active_at`, `created_at`). Include RLS.
         *   [X] Define & Apply DDL for `chat_message_history` table (compatible with `langchain-postgres`). Include RLS (application-level control focus initially).
         *   [X] Document DDL in `memory-bank/clarity/ddl.sql`.
     *   **Phase 2: Backend (`chatServer/main.py`) Adjustments**
-        *   **Status:** Implementation COMPLETE - Awaiting Testing
-        *   [X] Modify `ChatRequest` model (previously `ChatInput`): `session_id: str` becomes required.
+        *   [X] Modify `ChatInput` model: `session_id: str` becomes required.
         *   [X] Update `chat_endpoint`: Remove server-side `session_id` generation; rely on client-provided `session_id`.
         *   [X] Ensure `PostgresChatMessageHistory` uses the correct table name (e.g., "chat_message_history").
         *   [X] Verify `PGEngine` initialization and `CHAT_MESSAGE_HISTORY_TABLE_NAME`.
     *   **Phase 3: Client-Side (`webApp`) Implementation**
-        *   **Status:** Implementation COMPLETE - Awaiting Testing
         *   [X] Create React Query Hooks (`useChatSessionHooks.ts` or similar):
             *   [X] `useFetchActiveChatSession(userId, agentName)`: Fetches from `user_agent_active_sessions`.
             *   [X] `useUpsertActiveChatSession()`: Mutation to upsert into `user_agent_active_sessions`.
@@ -52,27 +49,6 @@ This file tracks the current tasks, steps, checklists, and component lists for t
         *   [ ] Remove old `session_id` logic from `chatServer/main.py`.
         *   [ ] Refactor/remove client-side batch archival if deemed redundant.
         *   [ ] Update relevant documentation (`activeContext.md`, `tasks.md` (this entry), READMEs).
-
-**NEW TASK: Feature: Display Existing Chat History in ChatPanel on Session Resume**
-*   **Status:** Planning
-*   **Complexity:** 3 (Moderately Complex - involves Client-side fetching & state management with direct DB access)
-*   **Objective:** When a user resumes a chat session with an agent, the `ChatPanel.tsx` should load and display the existing conversation history for that `session_id` from the `chat_message_history` table using client-side logic.
-*   **Associated UI Component:** `webApp/src/components/ChatPanel.tsx`
-*   **Associated Store:** `webApp/src/stores/useChatStore.ts`
-*   **Associated Hooks:** Similar to `webApp/src/api/hooks/useChatSessionHooks.ts` but for `chat_message_history` table.
-*   **Key Requirements & Considerations:**
-    *   **Client-Side Fetching & State Management (No Backend Endpoint Needed):**
-        *   [ ] Create a new React Query hook (e.g., `useFetchChatMessageHistory(sessionId)`) in a relevant hooks file (e.g., `useChatSessionHooks.ts` or a new `useChatMessageHistoryHooks.ts`).
-        *   [ ] This hook will use the Supabase client to directly query the `chat_message_history` table for records matching the active `session_id`.
-        *   [ ] Consider pagination or limiting the number of messages returned initially (e.g., last N messages, ordered by `created_at`).
-        *   [ ] In `useChatStore.ts` (likely within or called by `initializeSessionAsync`), after a `session_id` is established, call the new hook to fetch existing messages.
-        *   [ ] Transform/deserialize the `message` JSONB content from `chat_message_history` back into the client-side `ChatMessage` format if needed.
-        *   [ ] Populate the `messages` array in `useChatStore` with the fetched history instead of initializing it as empty.
-        *   [ ] Handle loading states in the UI (e.g., show a spinner while history is being fetched).
-        *   [ ] Ensure messages are displayed in the correct chronological order.
-    *   **User Experience:**
-        *   [ ] Determine how much history to load initially (e.g., last 50 messages, last 24 hours).
-        *   [ ] Optionally, implement a "load more messages" or infinite scrolling feature if initial load is partial.
 
 # Task Board
 
