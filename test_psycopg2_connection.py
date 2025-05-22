@@ -1,6 +1,13 @@
-import psycopg2
+import psycopg
 import os
 from dotenv import load_dotenv
+
+# Enable debug logging for psycopg2
+import logging
+
+
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s %(levelname)s %(message)s")
+logging.getLogger("psycopg").setLevel(logging.DEBUG)
 
 # Load environment variables from .env file
 # Assumes .env is in the same directory as this script or in the project root
@@ -17,7 +24,7 @@ if not os.path.exists(dotenv_path):
 else:
     load_dotenv(dotenv_path)
 
-print("Attempting to connect to PostgreSQL using psycopg2...")
+print("Attempting to connect to PostgreSQL using psycopg...")
 
 try:
     db_user = os.getenv("SUPABASE_DB_USER")
@@ -43,19 +50,19 @@ try:
         # psycopg2 can take this directly, or a space-separated string:
         # "dbname='x' user='y' host='z' password='p' port='123' connect_timeout=10 sslmode='require'"
         
-        dsn = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}?connect_timeout=10&sslmode=require"
-        print(f"Connecting with DSN: postgresql://{db_user}:[REDACTED]@{db_host}:{db_port}/{db_name}?connect_timeout=10&sslmode=require")
+        dsn = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}?connect_timeout=10&sslmode=disable"
+        print(f"Connecting with DSN: postgresql://{db_user}:[REDACTED]@{db_host}:{db_port}/{db_name}?connect_timeout=10&sslmode=disable")
 
         conn = None
         try:
-            conn = psycopg2.connect(dsn)
+            conn = psycopg.connect(dsn)
             cur = conn.cursor()
             cur.execute("SELECT version();")
             db_version = cur.fetchone()
             print(f"Successfully connected to PostgreSQL! Server version: {db_version[0]}")
             cur.close()
-        except psycopg2.Error as e:
-            print(f"Error connecting to PostgreSQL using psycopg2: {e}")
+        except psycopg.Error as e:
+            print(f"Error connecting to PostgreSQL using psycopg: {e}")
         finally:
             if conn:
                 conn.close()

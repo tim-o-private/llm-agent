@@ -23,6 +23,11 @@ from langchain_postgres import PostgresChatMessageHistory # PGEngine removed fro
 import psycopg
 from psycopg_pool import AsyncConnectionPool # NEW IMPORT
 
+# NEW: Agent Executor Cache
+from cachetools import TTLCache
+# Cache for (user_id, agent_name, session_id) -> CustomizableAgentExecutor
+# TTL set to 15 minutes (900 seconds), maxsize 100 (can be tuned)
+AGENT_EXECUTOR_CACHE: TTLCache[tuple[str, str, str], CustomizableAgentExecutor] = TTLCache(maxsize=100, ttl=900)
 
 # --- START Inserted Environment & Path Setup ---
 def add_project_root_to_path_for_local_dev():
@@ -237,6 +242,7 @@ async def chat_endpoint(
         raise HTTPException(status_code=400, detail="session_id is required")
 
     session_id = chat_input.session_id
+    agent_name = chat_input.agent_id # Added for clarity in cache key
 
     try:
         # Initialize PostgresChatMessageHistory using the connection from the pool
@@ -291,14 +297,22 @@ async def chat_endpoint(
             # Get JWT token for agent_loader if needed by any tools that require user context via API calls
             auth_token_provider = lambda: get_jwt_from_request_context(request)
 
-            agent_executor = agent_loader.load_agent_executor(
-                user_id=user_id,
-                agent_name=chat_input.agent_id,
-                session_id=session_id,
-                config_loader=GLOBAL_CONFIG_LOADER,
-                # auth_token_provider=auth_token_provider, # Not currently accepted by load_agent_executor
-                # supabase_client=db_client 
-            )
+            # NEW: Check cache for existing agent executor
+            cache_key = (user_id, agent_name, session_id)
+            if cache_key in AGENT_EXECUTOR_CACHE:
+                agent_executor = AGENT_EXECUTOR_CACHE[cache_key]
+                logger.info(f"Cache HIT for agent executor: key={cache_key}")
+            else:
+                logger.info(f"Cache MISS for agent executor: key={cache_key}. Loading new executor.")
+                agent_executor = agent_loader.load_agent_executor(
+                    user_id=user_id,
+                    agent_name=agent_name, # Use agent_name
+                    session_id=session_id,
+                    config_loader=GLOBAL_CONFIG_LOADER,
+                    # auth_token_provider=auth_token_provider, # Not currently accepted by load_agent_executor
+                    # supabase_client=db_client 
+                )
+                AGENT_EXECUTOR_CACHE[cache_key] = agent_executor # Store in cache
             
             if not isinstance(agent_executor, CustomizableAgentExecutor):
                 logger.error(f"Loaded agent is not a CustomizableAgentExecutor. Type: {type(agent_executor)}")

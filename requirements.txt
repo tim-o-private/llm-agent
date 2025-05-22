@@ -13,3 +13,4 @@ python-jose[cryptography]
 supabase>=2.0.0
 langchain-postgres
 psycopg2-binary
+cachetools

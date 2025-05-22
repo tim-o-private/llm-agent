@@ -1,6 +1,56 @@
 import datetime
 
-# Active Context
+# Active Context & Current Focus
+
+This document outlines the current high-priority task, relevant files, and key considerations for the AI agent.
+
+**Last Updated:** {{iso_timestamp}}
+
+## Current High-Priority Task:
+
+**Refactor: Implement Robust Session Management & Agent Executor Caching**
+
+*   **Status:** Commencing Implementation Phase.
+*   **Objective:** Implement a stable and persistent chat session management system using the `chat_sessions` table, and optimize server performance by caching AgentExecutors based on active client sessions.
+*   **Core Logic:** Utilize the `public.chat_sessions` table as the source of truth for active client engagement. The `AgentExecutor` cache on the server will be keyed by `(user_id, agent_name)` and its liveness determined by `chat_sessions.is_active` and `chat_sessions.updated_at`.
+*   **Design Document:** `session_management_and_executor_caching_plan.md`
+*   **Task Breakdown:** See `memory-bank/tasks.md` for detailed phases and sub-tasks.
+
+## Key Focus Areas for Implementation:
+
+1.  **Client-Side (`webApp`):**
+    *   `webApp/src/api/hooks/useChatSessionHooks.ts`: Adapt hooks to manage `chat_id` (persistent chat identifier) and `chat_sessions.id` (session instance identifier).
+    *   `webApp/src/stores/useChatStore.ts`: Refactor store state and logic for session initialization, message handling (heartbeat), and session deactivation.
+    *   `webApp/src/components/ChatPanel.tsx`: Integrate new store logic, manage session lifecycle (init, heartbeat, unload).
+2.  **Server-Side (`chatServer/main.py`):**
+    *   Adapt `AGENT_EXECUTOR_CACHE` to use `(user_id, agent_name)` as key and remove self-TTL.
+    *   Ensure `/api/chat` uses `chat_sessions.chat_id` (from request's `session_id` field) for `PostgresChatMessageHistory`.
+    *   Implement background tasks to deactivate stale `chat_session_instances` and evict corresponding inactive `AgentExecutors` from the cache.
+
+## Relevant Files (Under Active Development/Review):
+
+*   `session_management_and_executor_caching_plan.md` (Primary Plan)
+*   `memory-bank/tasks.md` (Detailed Task List)
+*   `chatServer/main.py` (Server-side logic)
+*   `webApp/src/api/hooks/useChatSessionHooks.ts` (Client-side Supabase hooks)
+*   `webApp/src/stores/useChatStore.ts` (Client-side state management)
+*   `webApp/src/components/ChatPanel.tsx` (Client-side UI and interaction)
+*   `DDL for public.chat_sessions` (Database schema - already implemented by user)
+
+## Key Constraints & Considerations:
+
+*   **Minimal Server Endpoints:** Client-side logic handles direct DB interactions with `chat_sessions` via RLS.
+*   **Idempotency & Race Conditions:** Consider potential race conditions in client-side session management and heartbeat mechanisms.
+*   **TTL Management:** Client-side heartbeats and server-side scheduled tasks will manage session and executor liveness.
+*   **Clarity of IDs:**
+    *   `chat_sessions.id`: PK, unique identifier for a specific client engagement/session instance.
+    *   `chat_sessions.chat_id`: Foreign key (conceptually) to a persistent chat conversation/memory.
+    *   `/api/chat` request body's `session_id` field will carry the `chat_sessions.chat_id` value.
+
+## Previous Context (To be phased out or archived as new implementation progresses):
+
+*   Old `user_agent_active_sessions` table and associated logic.
+*   Previous `TTLCache` implementation in `chatServer/main.py` based on `(user_id, agent_name, session_id)`.
 
 **Last Task Archived:** Task 9: Architect and Implement `useEditableEntity` Hook & Refactor `TaskDetailView`
 **Archive Document:** `memory-bank/archive/archive-task9.md`

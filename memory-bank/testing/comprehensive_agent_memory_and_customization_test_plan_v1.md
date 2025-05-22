@@ -33,29 +33,16 @@ This document outlines test cases for the integrated Agent Memory System v2 and 
     *   `UT.MEM.CS.2`: Test `addMessage` action correctly adds AI messages.
     *   `UT.MEM.CS.3`: Test message structure (id, text, sender, timestamp) is correct.
     *   `UT.MEM.CS.4`: Test `session_id` state management within or alongside the store.
-*   **Unit Tests (Archival Trigger Logic - e.g., hooks or services using `useChatStore`):**
-    *   `UT.MEM.CT.1`: Mock `onbeforeunload` / `navigator.sendBeacon`, verify archival API call is attempted with store messages.
-    *   `UT.MEM.CT.2`: Mock chat panel close event, verify archival API call.
-    *   `UT.MEM.CT.3`: Test periodic archival trigger (if implemented).
-    *   `UT.MEM.CT.4`: Test correct batch of messages is prepared for the API call.
 
-#### 3.1.2. Batch Archival API (`POST /api/chat/session/archive_messages`)
-*   **Integration Tests (`chatServer` Endpoint):**
-    *   `IT.MEM.BA.1`: Successful archival of a batch of messages to `recent_conversation_history`.
-    *   `IT.MEM.BA.2`: Verify `session_id`, `user_id`, `message_batch`, `archived_at`, `start_timestamp`, `end_timestamp` are stored correctly.
-    *   `IT.MEM.BA.3`: Test with empty `message_batch` (should ideally be a no-op or handled gracefully).
-    *   `IT.MEM.BA.4`: Test request with missing `session_id` or auth failure (expect 4xx error).
-    *   `IT.MEM.BA.5`: Test concurrent archival requests for different sessions.
-
-#### 3.1.3. Server-Side Short-Term Cache (`server_session_cache` in `chatServer`)
-*   **Unit Tests (Cache Logic):**
+#### 3.1.2. Server-Side Short-Term Cache (`server_session_cache` in `chatServer`)
+   **Unit Tests (Cache Logic):**
     *   `UT.MEM.SC.1`: Cache initialization for a new `session_id` (should be empty or default state).
     *   `UT.MEM.SC.2`: Correctly assemble short-term history from cache + new client messages.
     *   `UT.MEM.SC.3`: Cache update after agent response (includes user message, AI response, tool messages if applicable).
     *   `UT.MEM.SC.4`: Sliding window logic (if applicable, e.g., cache evicts oldest messages beyond N).
     *   `UT.MEM.SC.5`: Cache behavior if client sends full recent history vs. only new messages.
 
-#### 3.1.4. Long-Term Memory (LTM - `agent_long_term_memory` & `ManageLongTermMemoryTool`)
+#### 3.1.3. Long-Term Memory (LTM - `agent_long_term_memory` & `ManageLongTermMemoryTool`)
 *   **Unit Tests (`ManageLongTermMemoryTool`):**
     *   `UT.MEM.LTMTOOL.1`: `read` operation - empty notes for new user/agent.
     *   `UT.MEM.LTMTOOL.2`: `read` operation - retrieve existing notes.
@@ -71,7 +58,7 @@ This document outlines test cases for the integrated Agent Memory System v2 and 
     *   `IT.MEM.LTM.3`: Agent successfully uses tool to `read` its LTM `notes`.
     *   `IT.MEM.LTM.4`: New agent session for same user/agent correctly loads LTM `notes` into its prompt.
 
-#### 3.1.5. Short-Term Context Flow (End-to-End within Memory System)
+#### 3.1.4. Short-Term Context Flow (End-to-End within Memory System)
 *   **Integration Tests:**
     *   `IT.MEM.STC.1`: Simulate multi-turn conversation. Verify `server_session_cache` is updated correctly each turn.
     *   `IT.MEM.STC.2`: Verify agent receives correctly assembled short-term history on each turn (mock agent input).
