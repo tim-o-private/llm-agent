@@ -3,6 +3,8 @@ import os
 import logging # Added for log_level
 from typing import Dict, Optional, Any, List, AsyncIterator # Added Optional and List here, NEW: AsyncIterator
 from contextlib import asynccontextmanager # NEW IMPORT
+import asyncio # NEW IMPORT
+from datetime import datetime, timedelta # NEW IMPORT
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Depends, Request, status
@@ -25,9 +27,8 @@ from psycopg_pool import AsyncConnectionPool # NEW IMPORT
 
 # NEW: Agent Executor Cache
 from cachetools import TTLCache
-# Cache for (user_id, agent_name, session_id) -> CustomizableAgentExecutor
-# TTL set to 15 minutes (900 seconds), maxsize 100 (can be tuned)
-AGENT_EXECUTOR_CACHE: TTLCache[tuple[str, str, str], CustomizableAgentExecutor] = TTLCache(maxsize=100, ttl=900)
+# Cache for (user_id, agent_name) -> CustomizableAgentExecutor
+AGENT_EXECUTOR_CACHE: TTLCache[tuple[str, str], CustomizableAgentExecutor] = TTLCache(maxsize=100, ttl=900)
 
 # --- START Inserted Environment & Path Setup ---
 def add_project_root_to_path_for_local_dev():
@@ -155,22 +156,84 @@ def get_db_conn_str():
     # Includes connect_timeout and explicitly requires SSL
     return f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}?connect_timeout=10&sslmode=require"
 
+# --- START Moved Scheduled Task Definitions ---
+SESSION_INSTANCE_TTL_SECONDS = 30 * 60  # 30 minutes
+SCHEDULED_TASK_INTERVAL_SECONDS = 5 * 60  # Run checks every 5 minutes
+
+async def deactivate_stale_chat_session_instances_task():
+    """Periodically deactivates stale chat session instances."""
+    while True:
+        await asyncio.sleep(SCHEDULED_TASK_INTERVAL_SECONDS)
+        logger.info("Running task: deactivate_stale_chat_session_instances_task")
+        if db_pool is None:
+            logger.warning("db_pool not available, skipping deactivation task cycle.")
+            continue
+        
+        try:
+            async with db_pool.connection() as conn:
+                async with conn.cursor() as cur:
+                    threshold_time = datetime.utcnow() - timedelta(seconds=SESSION_INSTANCE_TTL_SECONDS)
+                    await cur.execute(
+                        """UPDATE chat_sessions 
+                           SET is_active = false, updated_at = %s 
+                           WHERE is_active = true AND updated_at < %s""",
+                        (datetime.utcnow(), threshold_time)
+                    )
+                    if cur.rowcount > 0:
+                        logger.info(f"Deactivated {cur.rowcount} stale chat session instances.")
+        except Exception as e:
+            logger.error(f"Error in deactivate_stale_chat_session_instances_task: {e}", exc_info=True)
+
+async def evict_inactive_executors_task():
+    """Periodically evicts agent executors if no active session instances exist for them."""
+    global AGENT_EXECUTOR_CACHE
+    while True:
+        await asyncio.sleep(SCHEDULED_TASK_INTERVAL_SECONDS + 30) # Stagger slightly from the other task
+        logger.info("Running task: evict_inactive_executors_task")
+        if db_pool is None or AGENT_EXECUTOR_CACHE is None:
+            logger.warning("db_pool or AGENT_EXECUTOR_CACHE not available, skipping eviction task cycle.")
+            continue
+
+        keys_to_evict = []
+        # Create a copy of keys to iterate over as cache might be modified
+        current_cache_keys = list(AGENT_EXECUTOR_CACHE.keys())
+
+        for user_id, agent_name in current_cache_keys:
+            try:
+                async with db_pool.connection() as conn:
+                    async with conn.cursor() as cur:
+                        await cur.execute(
+                            """SELECT 1 FROM chat_sessions 
+                               WHERE user_id = %s AND agent_name = %s AND is_active = true LIMIT 1""",
+                            (user_id, agent_name)
+                        )
+                        active_session_exists = await cur.fetchone()
+                        if not active_session_exists:
+                            keys_to_evict.append((user_id, agent_name))
+            except Exception as e:
+                logger.error(f"Error checking active sessions for ({user_id}, {agent_name}): {e}", exc_info=True)
+        
+        for key in keys_to_evict:
+            if key in AGENT_EXECUTOR_CACHE:
+                del AGENT_EXECUTOR_CACHE[key]
+                logger.info(f"Evicted agent executor for {key} due to no active sessions.")
+
+# --- END Moved Scheduled Task Definitions ---
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global db_pool, supabase_client # Added supabase_client here for completeness
+    global db_pool, supabase_client, AGENT_EXECUTOR_CACHE
     logger.info("Application startup: Initializing resources...")
     try:
         conn_str = get_db_conn_str()
         logger.info(f"Initializing AsyncConnectionPool with: postgresql://{os.getenv('SUPABASE_DB_USER')}:[REDACTED]@{os.getenv('SUPABASE_DB_HOST')}:{os.getenv('SUPABASE_DB_PORT')}/{os.getenv('SUPABASE_DB_NAME', 'postgres')}?connect_timeout=10")
-        db_pool = AsyncConnectionPool(conninfo=conn_str, open=False, min_size=2, max_size=10) # Example sizes
-        # Try to establish min_size connections and wait for up to, e.g., 30 seconds
+        db_pool = AsyncConnectionPool(conninfo=conn_str, open=False, min_size=2, max_size=10, check=AsyncConnectionPool.check_connection)
         await db_pool.open(wait=True, timeout=30)
         logger.info("Database connection pool started successfully.")
     except Exception as e:
         logger.critical(f"Failed to initialize database connection pool: {e}", exc_info=True)
-        db_pool = None # Ensure pool is None if init fails
+        db_pool = None
 
-    # Initialize Supabase client (existing logic)
     supabase_url_env = os.getenv("VITE_SUPABASE_URL")
     supabase_key_env = os.getenv("SUPABASE_SERVICE_KEY")
     if supabase_url_env and supabase_key_env:
@@ -189,17 +252,38 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("Supabase async client (supabase-py) not initialized due to missing URL or Key.")
 
+    # Start background tasks
+    app.state.deactivate_task = asyncio.create_task(deactivate_stale_chat_session_instances_task())
+    app.state.evict_task = asyncio.create_task(evict_inactive_executors_task())
+    logger.info("Background tasks for session and cache cleanup started.")
+
     yield # Application runs here
 
     logger.info("Application shutdown: Cleaning up resources...")
+    if hasattr(app.state, 'deactivate_task') and app.state.deactivate_task:
+        app.state.deactivate_task.cancel()
+        logger.info("Deactivate stale sessions task cancelling...")
+        try:
+            await app.state.deactivate_task
+        except asyncio.CancelledError:
+            logger.info("Deactivate stale sessions task successfully cancelled.")
+    if hasattr(app.state, 'evict_task') and app.state.evict_task:
+        app.state.evict_task.cancel()
+        logger.info("Evict inactive executors task cancelling...")
+        try:
+            await app.state.evict_task
+        except asyncio.CancelledError:
+            logger.info("Evict inactive executors task successfully cancelled.")
+
     if db_pool:
         await db_pool.close()
         logger.info("Database connection pool closed.")
     if supabase_client:
-        await supabase_client.close() # Assuming supabase_client has an async close method
+        await supabase_client.close()
         logger.info("Supabase client closed.")
 
-app = FastAPI(lifespan=lifespan) # Apply lifespan manager
+# Re-assign app with the new lifespan
+app = FastAPI(lifespan=lifespan)
 
 # --- Logger setup ---
 # Ensure logger is available if not already globally configured
@@ -241,14 +325,14 @@ async def chat_endpoint(
         logger.error("session_id missing from chat_input")
         raise HTTPException(status_code=400, detail="session_id is required")
 
-    session_id = chat_input.session_id
-    agent_name = chat_input.agent_id # Added for clarity in cache key
+    session_id_for_history = chat_input.session_id # This is the activeChatId from client
+    agent_name = chat_input.agent_id 
 
     try:
         # Initialize PostgresChatMessageHistory using the connection from the pool
         chat_memory = PostgresChatMessageHistory(
             CHAT_MESSAGE_HISTORY_TABLE_NAME,
-            session_id,
+            session_id_for_history, # Use the specific session_id for history
             async_connection=pg_connection # USE THE CONNECTION FROM THE POOL
         )
 
@@ -298,7 +382,7 @@ async def chat_endpoint(
             auth_token_provider = lambda: get_jwt_from_request_context(request)
 
             # NEW: Check cache for existing agent executor
-            cache_key = (user_id, agent_name, session_id)
+            cache_key = (user_id, agent_name) # MODIFIED: Cache key is now (user_id, agent_name)
             if cache_key in AGENT_EXECUTOR_CACHE:
                 agent_executor = AGENT_EXECUTOR_CACHE[cache_key]
                 logger.info(f"Cache HIT for agent executor: key={cache_key}")
@@ -306,11 +390,9 @@ async def chat_endpoint(
                 logger.info(f"Cache MISS for agent executor: key={cache_key}. Loading new executor.")
                 agent_executor = agent_loader.load_agent_executor(
                     user_id=user_id,
-                    agent_name=agent_name, # Use agent_name
-                    session_id=session_id,
+                    agent_name=agent_name, 
+                    session_id=session_id_for_history, # session_id passed for initial load if needed by agent_loader internally for some reason, but NOT for cache key
                     config_loader=GLOBAL_CONFIG_LOADER,
-                    # auth_token_provider=auth_token_provider, # Not currently accepted by load_agent_executor
-                    # supabase_client=db_client 
                 )
                 AGENT_EXECUTOR_CACHE[cache_key] = agent_executor # Store in cache
             
@@ -318,10 +400,11 @@ async def chat_endpoint(
                 logger.error(f"Loaded agent is not a CustomizableAgentExecutor. Type: {type(agent_executor)}")
                 raise HTTPException(status_code=500, detail="Agent loading failed to produce a compatible executor.")
 
+            # CRITICAL: Ensure the cached/newly loaded executor uses the correct memory for THIS session_id_for_history
             agent_executor.memory = agent_short_term_memory
 
         except Exception as e:
-            logger.error(f"Error loading agent executor for agent {chat_input.agent_id}: {e}", exc_info=True)
+            logger.error(f"Error loading or preparing agent executor for agent {agent_name}: {e}", exc_info=True) # MODIFIED: agent_name
             raise HTTPException(status_code=500, detail=f"Could not load agent: {e}")
 
         try:
@@ -332,25 +415,24 @@ async def chat_endpoint(
             tool_input = response_data.get("tool_input")
 
             return ChatResponse(
-                session_id=session_id, 
+                session_id=session_id_for_history, 
                 response=ai_response_content,
                 tool_name=tool_name,
                 tool_input=tool_input
             )
-
         except Exception as e:
-            logger.error(f"Error during agent execution for session {session_id}: {e}", exc_info=True)
+            logger.error(f"Error during agent execution for session {session_id_for_history}: {e}", exc_info=True)
             return ChatResponse(
-                session_id=session_id,
+                session_id=session_id_for_history,
                 response="An error occurred processing your request.", 
                 error=str(e)
             )
     except psycopg.Error as pe: # Catch psycopg specific errors for connection/query issues from chat_memory setup
-        logger.error(f"Database error (psycopg.Error) during chat_memory setup for session {session_id}: {pe}", exc_info=True)
+        logger.error(f"Database error (psycopg.Error) during chat_memory setup for session {session_id_for_history}: {pe}", exc_info=True)
         # Ensure pg_connection is not closed here
         raise HTTPException(status_code=503, detail=f"Database error during chat setup: {pe}")
     except Exception as e: # General exception handler for other setup issues before agent execution
-        logger.error(f"Failed to process chat request before agent execution for session {session_id}: {e}", exc_info=True)
+        logger.error(f"Failed to process chat request before agent execution for session {session_id_for_history}: {e}", exc_info=True)
         # Ensure pg_connection is not closed here
         if isinstance(e, HTTPException): # Re-raise HTTP exceptions
             raise

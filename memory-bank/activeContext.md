@@ -10,29 +10,34 @@ This document outlines the current high-priority task, relevant files, and key c
 
 **Refactor: Implement Robust Session Management & Agent Executor Caching**
 
-*   **Status:** Commencing Implementation Phase.
+*   **Status:** Implementation, Documentation, and Reflection Complete. See `memory-bank/clarity/references/guides/memory_system_v2.md` and `memory-bank/reflection/reflection-session-mgmt-v2.md`.
 *   **Objective:** Implement a stable and persistent chat session management system using the `chat_sessions` table, and optimize server performance by caching AgentExecutors based on active client sessions.
-*   **Core Logic:** Utilize the `public.chat_sessions` table as the source of truth for active client engagement. The `AgentExecutor` cache on the server will be keyed by `(user_id, agent_name)` and its liveness determined by `chat_sessions.is_active` and `chat_sessions.updated_at`.
+*   **Core Logic:** See new guide for details.
+*   **Next Steps:** Integration testing and future enhancements.
+*   **Recent Fixes:**
+    *   Resolved `NameError` on server startup by reordering scheduled task definitions.
+    *   Refactored client-side API call for sending messages into a `useSendMessageMutation` hook.
+    *   Prevented multiple session instance creation on chat open with an `isInitializingSession` flag in `useChatStore`.
 *   **Design Document:** `session_management_and_executor_caching_plan.md`
 *   **Task Breakdown:** See `memory-bank/tasks.md` for detailed phases and sub-tasks.
 
 ## Key Focus Areas for Implementation:
 
 1.  **Client-Side (`webApp`):**
-    *   `webApp/src/api/hooks/useChatSessionHooks.ts`: Adapt hooks to manage `chat_id` (persistent chat identifier) and `chat_sessions.id` (session instance identifier).
-    *   `webApp/src/stores/useChatStore.ts`: Refactor store state and logic for session initialization, message handling (heartbeat), and session deactivation.
-    *   `webApp/src/components/ChatPanel.tsx`: Integrate new store logic, manage session lifecycle (init, heartbeat, unload).
+    *   `webApp/src/api/hooks/useChatApiHooks.ts`: Implemented `useSendMessageMutation`.
+    *   `webApp/src/stores/useChatStore.ts`: Refactored store state and logic for session initialization (including `isInitializingSession` fix), message handling (heartbeat), and session deactivation.
+    *   `webApp/src/components/ChatPanel.tsx`: Integrated new mutation hook, manages session lifecycle (init, heartbeat, unload).
 2.  **Server-Side (`chatServer/main.py`):**
-    *   Adapt `AGENT_EXECUTOR_CACHE` to use `(user_id, agent_name)` as key and remove self-TTL.
-    *   Ensure `/api/chat` uses `chat_sessions.chat_id` (from request's `session_id` field) for `PostgresChatMessageHistory`.
-    *   Implement background tasks to deactivate stale `chat_session_instances` and evict corresponding inactive `AgentExecutors` from the cache.
+    *   Adapted `AGENT_EXECUTOR_CACHE` to use `(user_id, agent_name)` as key and remove self-TTL.
+    *   Ensured `/api/chat` uses `chat_sessions.chat_id` (from request's `session_id` field) for `PostgresChatMessageHistory`.
+    *   Implemented background tasks (and fixed startup error) to deactivate stale `chat_session_instances` and evict corresponding inactive `AgentExecutors` from the cache.
 
 ## Relevant Files (Under Active Development/Review):
 
 *   `session_management_and_executor_caching_plan.md` (Primary Plan)
 *   `memory-bank/tasks.md` (Detailed Task List)
 *   `chatServer/main.py` (Server-side logic)
-*   `webApp/src/api/hooks/useChatSessionHooks.ts` (Client-side Supabase hooks)
+*   `webApp/src/api/hooks/useChatApiHooks.ts` (Client-side Supabase hooks & mutations)
 *   `webApp/src/stores/useChatStore.ts` (Client-side state management)
 *   `webApp/src/components/ChatPanel.tsx` (Client-side UI and interaction)
 *   `DDL for public.chat_sessions` (Database schema - already implemented by user)
@@ -40,7 +45,7 @@ This document outlines the current high-priority task, relevant files, and key c
 ## Key Constraints & Considerations:
 
 *   **Minimal Server Endpoints:** Client-side logic handles direct DB interactions with `chat_sessions` via RLS.
-*   **Idempotency & Race Conditions:** Consider potential race conditions in client-side session management and heartbeat mechanisms.
+*   **Idempotency & Race Conditions:** Addressed a key race condition in `initializeSessionAsync`.
 *   **TTL Management:** Client-side heartbeats and server-side scheduled tasks will manage session and executor liveness.
 *   **Clarity of IDs:**
     *   `chat_sessions.id`: PK, unique identifier for a specific client engagement/session instance.
@@ -56,20 +61,17 @@ This document outlines the current high-priority task, relevant files, and key c
 **Archive Document:** `memory-bank/archive/archive-task9.md`
 
 **Immediate Focus / Next Steps:**
-1.  **[ACTIVE] Refactor: Implement Robust Short-Term Memory (STM) with Persistent `session_id` Strategy**
-    *   **Objective:** Ensure reliable agent short-term memory using `langchain-postgres` and a consistent `session_id` management flow.
-    *   **Current Phase:** Phase 4 (Testing & Refinement) - CORE FUNCTIONALITY WORKING, NEW ISSUES IDENTIFIED.
-    *   **Key Outcomes & Current State:**
-        *   **RESOLVED:** Major PostgreSQL connection issues (incorrect DB URL).
-        *   **Short-term memory (STM):** VERIFIED WORKING (messages save/retrieve during session).
-        *   **Long-term memory (LTM) DB writes:** VERIFIED WORKING (conceptual).
-        *   **NEW ISSUE:** `session_id` persistence across sessions/restarts is NOT working.
-        *   **NEW ISSUE:** Chat response latency is high.
-    *   **Next Steps (User Action):** User to continue testing plan in the morning.
-    *   **Next Steps (System Action):** Investigate `session_id` persistence, add timestamps to server logs for latency analysis.
+1.  **[ACTIVE] Refactor: Implement Robust Session Management & Agent Executor Caching**
+    *   **Objective:** Complete implementation and thoroughly test the new session management system.
+    *   **Current Phase:** Phase 3 (Testing & Refinement).
+    *   **Next Steps (User Action):** Perform comprehensive integration testing of the chat functionality, focusing on session persistence, conversation history, and executor caching behavior across various scenarios (e.g., multiple tabs, browser refresh, logout/login, agent switching).
 
-2.  **[PREP] Code Health & Type Safety:**
-    *   Address linter errors and type issues in `webApp/src/api/hooks/useTaskHooks.ts` and `webApp/src/api/types.ts` (as needed).
+**Mode Recommendation:** TESTING (Session Management & Executor Caching)
+
+**General Project Goal:** Deliver a stable and performant chat session management system.
+
+**Pending Decisions/Questions:**
+*   None immediately critical; focus is on testing the current implementation.
 
 **Previous Focus (Completed/Superseded in this context):**
 *   CLI/Core Backend MVP Testing (Task 3.1 from `memory-bank/tasks.md`):

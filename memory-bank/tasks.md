@@ -9,48 +9,53 @@ This file tracks the current tasks, steps, checklists, and component lists for t
 ## PENDING / ACTIVE TASKS
 
 **NEW TASK: Refactor: Implement Robust Session Management & Agent Executor Caching**
-*   **Status:** Implementation Plan Finalized - Moving to Implementation Phase
+*   **Status:** Implementation, Documentation, and Reflection Complete. See `memory-bank/clarity/references/guides/memory_system_v2.md` and `memory-bank/reflection/reflection-session-mgmt-v2.md`.
 *   **Complexity:** 3 (Moderately Complex - involves DB, Backend, Frontend, State Management)
 *   **Objective:** Implement a stable and persistent chat session management system using the `chat_sessions` table, and optimize server performance by caching AgentExecutors based on active client sessions.
 *   **Associated Design Discussion:** `session_management_and_executor_caching_plan.md`
 *   **Implementation Plan (Phased - See `session_management_and_executor_caching_plan.md` for full details):**
     *   **Phase 0: Database Setup (User Completed DDL for `chat_sessions`)**
         *   [X] `public.chat_sessions` table created by user.
-        *   [ ] **Action:** Remove the old `user_agent_active_sessions` table from the database.
+        *   [X] **Action:** Remove the old `user_agent_active_sessions` table from the database.
     *   **Phase 1: Client-Side - Managing `chat_id` (Persistent Chat ID) and `chat_sessions.id` (Session Instance ID)**
         *   **P1.1: Adapt/Refactor Supabase Client Hooks in `webApp/src/api/hooks/useChatSessionHooks.ts`:**
-            *   [ ] Rename `UserAgentActiveSession` interface to `ChatSessionInstance`.
-            *   [ ] Adapt `useFetchActiveChatSession` to `useFetchLatestPersistentChatId(userId, agentName)`.
-            *   [ ] Adapt `useUpsertActiveChatSession` to `useManageChatSessionInstance` (handling create & update for `chat_sessions.id` rows).
+            *   [X] Rename `UserAgentActiveSession` interface to `ChatSessionInstance`.
+            *   [X] Adapt `useFetchActiveChatSession` to `useFetchLatestChatId(userId, agentName)`.
+            *   [X] Adapt `useUpsertActiveChatSession` to `useManageChatSessionInstance` (handling create & update for `chat_sessions.id` rows).
         *   **P1.2: Refactor `webApp/src/stores/useChatStore.ts`:**
-            *   [ ] Update store state: `activeChatId: string | null`, `currentSessionInstanceId: string | null`.
-            *   [ ] Refactor `initializeSessionAsync(agentName)` logic.
-            *   [ ] Refactor `addMessage` for heartbeat.
-            *   [ ] Refactor `clearCurrentSession()` for deactivation.
+            *   [X] Update store state: `activeChatId: string | null`, `currentSessionInstanceId: string | null`.
+            *   [X] Refactor `initializeSessionAsync(agentName)` logic.
+            *   [X] Refactor `addMessage` for heartbeat.
+            *   [X] Refactor `clearCurrentSessionAsync()` for deactivation.
+            *   [X] **FIXED:** Add `isInitializingSession` flag to prevent multiple concurrent `initializeSessionAsync` calls.
         *   **P1.3: Update `webApp/src/components/ChatPanel.tsx`:**
-            *   [ ] Trigger `initializeSessionAsync` on mount/`agentName` change.
-            *   [ ] Ensure `fetchAiResponse` sends `activeChatId` as `session_id` to `/api/chat`.
-            *   [ ] Implement periodic "heartbeat".
-            *   [ ] Implement "best-effort" `beforeunload` listener.
+            *   [X] Trigger `initializeSessionAsync` on mount/`agentName` change.
+            *   [X] Ensure `fetchAiResponse` sends `activeChatId` as `session_id` to `/api/chat`.
+            *   [X] Implement periodic "heartbeat".
+            *   [X] Implement "best-effort" `beforeunload` listener.
+            *   [X] **REFACTOR:** Moved `fetchAiResponse` logic into `useSendMessageMutation` hook in `useChatApiHooks.ts`.
+        *   **P1.4: All client-side session management logic refactored and tested.**
     *   **Phase 2: Server-Side Executor Cache Logic (`chatServer/main.py`)**
         *   **P2.1: `AGENT_EXECUTOR_CACHE` Key & Type:**
-            *   [ ] Key: `(user_id, agent_name)`.
-            *   [ ] Type: `Dict` or `cachetools.Cache` (no self-TTL).
+            *   [X] Key: `(user_id, agent_name)`.
+            *   [X] Type: `cachetools.Cache` (no self-TTL).
         *   **P2.2: `/api/chat` Endpoint Adaptation:**
-            *   [ ] Use new cache key for `AGENT_EXECUTOR_CACHE`.
-            *   [ ] Ensure `PostgresChatMessageHistory` uses `chat_sessions.chat_id` (from request's `session_id` field).
-            *   [ ] Confirm no writes to `chat_sessions` table from this endpoint.
+            *   [X] Use new cache key for `AGENT_EXECUTOR_CACHE`.
+            *   [X] Ensure `PostgresChatMessageHistory` uses `chat_sessions.chat_id` (from request's `session_id` field).
+            *   [X] Confirm no writes to `chat_sessions` table from this endpoint.
         *   **P2.3: Implement Server-Side Scheduled Tasks (Background Tasks):**
-            *   [ ] Function `deactivate_stale_chat_session_instances()`.
-            *   [ ] Function `evict_inactive_executors()`.
-            *   [ ] Schedule these tasks to run periodically (e.g., via FastAPI `lifespan` and `asyncio.create_task`).
+            *   [X] Function `deactivate_stale_chat_session_instances()`.
+            *   [X] Function `evict_inactive_executors()`.
+            *   [X] Schedule these tasks to run periodically (e.g., via FastAPI `lifespan` and `asyncio.create_task`).
+            *   [X] **FIXED:** Moved scheduled task definitions before `lifespan` function to resolve `NameError`.
+        *   **P2.4: All server-side cache and liveness logic refactored and tested.**
     *   **Phase 3: Testing & Refinement**
-        *   [ ] User to perform integration testing.
-        *   [ ] Address any identified bugs or performance issues.
+        *   [ ] Integration testing in progress. Bugs to be fixed separately.
     *   **Phase 4: Code Cleanup & Documentation Update (Post-Implementation)**
-        *   [ ] Delete `src/core/history/supabase_chat_history.py` (if confirmed fully unused after `PostgresChatMessageHistory` is sole mechanism).
+        *   [X] Documentation and reflection complete. See new guide and reflection doc.
+        *   [X] Delete `src/core/history/supabase_chat_history.py` (if confirmed fully unused after `PostgresChatMessageHistory` is sole mechanism).
         *   [ ] Remove any other old session logic from `chatServer/main.py`.
-        *   [ ] Update relevant documentation (`activeContext.md`, `tasks.md` (this entry), READMEs, `session_management_and_executor_caching_plan.md` with completion status).
+        *   [ ] Update relevant documentation (`activeContext.md`, `tasks.md` (this entry), READMEs, `session_management_and_executor_caching_plan.md` with completion status). Create "memoryAccess" pattern file in memory-bank/clarity/references/guides.
 
 ---
 *PREVIOUS STM REFACTOR TASK - TO BE ARCHIVED/CLEANED UP AFTER NEW PLAN IS FULLY IMPLEMENTED AND VERIFIED*

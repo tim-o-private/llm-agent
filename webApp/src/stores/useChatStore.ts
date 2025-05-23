@@ -1,10 +1,10 @@
 import { create } from 'zustand';
-import { v4 as uuidv4 } from 'uuid'; // For generating session IDs
-import { supabase } from '@/lib/supabaseClient'; // For direct DB interaction
-import { useAuthStore } from '@/features/auth/useAuthStore'; // To get userId
-import { generateNewSessionId, UserAgentActiveSession } from '@/api/hooks/useChatSessionHooks'; // For new session IDs and type
-
+import { supabase } from '@/lib/supabaseClient';
+import { useAuthStore } from '@/features/auth/useAuthStore';
+import { generateNewChatId } from '@/api/hooks/useChatSessionHooks';
 import { useEffect } from 'react';
+import { toast } from '@/components/ui/toast';
+import { v4 as uuidv4 } from 'uuid'; // For client-side message IDs
 
 // Keep existing ChatMessage interface if it matches what the UI uses
 export interface ChatMessage {
@@ -20,27 +20,34 @@ export interface ChatMessage {
 interface ChatStore {
   messages: ChatMessage[];
   isChatPanelOpen: boolean;
-  sessionId: string | null;
+  activeChatId: string | null;
+  currentSessionInstanceId: string | null;
   currentAgentName: string | null; // Renamed from currentAgentId
+  isInitializingSession: boolean; // ADDED: Flag to prevent multiple initializations
+  sendHeartbeatAsync: () => Promise<void>;
 
-  addMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>, senderType?: 'user' | 'ai' | 'tool') => void;
+  addMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>, senderType?: 'user' | 'ai' | 'tool') => Promise<void>;
   toggleChatPanel: () => void;
   setChatPanelOpen: (isOpen: boolean) => void;
   initializeSessionAsync: (agentName: string) => Promise<void>; // Renamed and made async
-  clearCurrentSession: () => void;
+  clearCurrentSessionAsync: () => Promise<void>;
   setCurrentAgentName: (agentName: string | null) => void; // Renamed
 
   // Archival related methods and state are removed assuming backend handles all message history
 }
 
+const CHAT_ID_LOCAL_STORAGE_PREFIX = 'chatUI_activeChatId';
+
 export const useChatStore = create<ChatStore>((set, get) => ({
   messages: [], // Messages will be primarily managed by backend history; client might only hold current view if needed.
                 // For now, we keep it, but it might not be populated from DB on init if backend handles full history.
   isChatPanelOpen: false,
-  sessionId: null,
+  activeChatId: null,
+  currentSessionInstanceId: null,
   currentAgentName: null,
+  isInitializingSession: false, // ADDED: Initial state for the flag
 
-  addMessage: (message, senderTypeFromParam) => {
+  addMessage: async (message, senderTypeFromParam) => {
     const senderType = senderTypeFromParam || (message.sender || 'ai');
     set((state) => ({
       messages: [
@@ -53,6 +60,23 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         },
       ],
     }));
+
+    // Heartbeat: Update the current session instance
+    const { currentSessionInstanceId } = get();
+    const user = useAuthStore.getState().user;
+    if (currentSessionInstanceId && user) {
+      try {
+        await supabase
+          .from('chat_sessions')
+          .update({ updated_at: new Date().toISOString(), is_active: true })
+          .eq('id', currentSessionInstanceId)
+          .eq('user_id', user.id); // Ensure user owns it
+        // console.log('Heartbeat: Session instance updated', currentSessionInstanceId);
+      } catch (error) {
+        console.error('Error sending heartbeat update:', error);
+        // Non-critical, chat continues locally
+      }
+    }
   },
 
   toggleChatPanel: () =>
@@ -61,156 +85,224 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   setCurrentAgentName: (agentName) => set({ currentAgentName: agentName }),
 
   initializeSessionAsync: async (agentName: string) => {
+    if (get().isInitializingSession) {
+      console.log("Session initialization already in progress. Skipping.");
+      return;
+    }
+    set({ isInitializingSession: true });
+
     const user = useAuthStore.getState().user;
     if (!user) {
       console.warn("User not authenticated, cannot initialize session.");
-      set({ sessionId: null, currentAgentName: null, messages: [] });
+      set({ activeChatId: null, currentSessionInstanceId: null, currentAgentName: null, messages: [] });
       return;
     }
 
     console.log(`Initializing chat session for agent: ${agentName}, user: ${user.id}`);
-    let finalSessionId: string | null = null;
+    let chatIdToUse: string | null = null;
+    let newSessionInstanceId: string | null = null;
 
-    const localStorageKey = `chatSession_${user.id}_${agentName}`;
+    const localStorageKey = `${CHAT_ID_LOCAL_STORAGE_PREFIX}_${user.id}_${agentName}`;
 
-    // 1. Try localStorage
-    const persistedSessionId = localStorage.getItem(localStorageKey);
-    if (persistedSessionId) {
-      console.log(`Found persisted session ID in localStorage: ${persistedSessionId}`);
-      // Optional: Validate persistedSessionId against DB to ensure it's still the most recent / valid.
-      // For simplicity now, we trust it if found, but DB check is more robust.
-      // Let's add a simple check to see if it exists in user_agent_active_sessions.
-      const { data: dbSessionValidation, error: dbValidationError } = await supabase
-        .from('user_agent_active_sessions')
-        .select('active_session_id')
-        .eq('user_id', user.id)
-        .eq('agent_name', agentName)
-        .eq('active_session_id', persistedSessionId)
-        .maybeSingle();
-
-      if (dbValidationError && dbValidationError.code !== 'PGRST116') {
-        console.error("Error validating persisted session ID against DB:", dbValidationError);
-        // Proceed to fetch latest from DB or create new
-      } else if (dbSessionValidation) {
-        finalSessionId = persistedSessionId;
-        console.log("Validated persisted session ID with DB.");
-      } else {
-        console.log("Persisted session ID from localStorage not found or invalid in DB. Will fetch/create new.");
-        localStorage.removeItem(localStorageKey); // Clear invalid/stale ID
-      }
+    // 1. Try localStorage for an existing CHAT_ID
+    const persistedChatId = localStorage.getItem(localStorageKey);
+    if (persistedChatId) {
+      console.log(`Found persisted Chat ID in localStorage: ${persistedChatId}`);
+      chatIdToUse = persistedChatId;
+      // Later, we could re-validate this chat_id against DB if needed, but for now, trust and proceed.
     }
 
-    // 2. If not found/validated in localStorage, try fetching the latest from DB
-    if (!finalSessionId) {
-      console.log("Attempting to fetch latest active session from DB...");
-      const { data: latestDbSession, error: fetchError } = await supabase
-        .from('user_agent_active_sessions')
-        .select('*') 
+    // 2. If not in localStorage, try fetching the latest CHAT_ID from DB ( mimicking useFetchLatestChatId logic)
+    if (!chatIdToUse) {
+      console.log("Attempting to fetch latest Chat ID from DB...");
+      // Try active sessions first
+      const { data: activeSessions, error: activeError } = await supabase
+        .from('chat_sessions')
+        .select('chat_id')
         .eq('user_id', user.id)
         .eq('agent_name', agentName)
-        .order('last_active_at', { ascending: false })
-        .limit(1)
-        .maybeSingle<UserAgentActiveSession>();
+        .eq('is_active', true)
+        .order('updated_at', { ascending: false })
+        .limit(1);
 
-      if (fetchError) {
-        console.error("Error fetching latest active session from DB:", fetchError);
-      } else if (latestDbSession && latestDbSession.active_session_id) { 
-        const dbSessionId = latestDbSession.active_session_id; // dbSessionId is definitely a string here
-        finalSessionId = dbSessionId; // Assign to finalSessionId (which is string | null)
-        console.log(`Fetched latest active session ID from DB: ${dbSessionId}`);
-        localStorage.setItem(localStorageKey, dbSessionId); // Use the definitely-string dbSessionId for setItem
-      } else {
-        console.log("No active session found in DB or active_session_id was null.");
-      }
-    }
-
-    // 3. If still no session ID, generate a new one and save it
-    if (!finalSessionId) {
-      finalSessionId = generateNewSessionId();
-      console.log(`Generated new session ID: ${finalSessionId}`);
-      localStorage.setItem(localStorageKey, finalSessionId);
+      if (activeError) console.error('Error fetching active chat_id for init:', activeError);
       
-      const { error: upsertError } = await supabase
-        .from('user_agent_active_sessions')
-        .upsert({
+      if (activeSessions && activeSessions.length > 0 && activeSessions[0].chat_id) {
+        chatIdToUse = activeSessions[0].chat_id;
+      } else {
+        // If no active, try most recent inactive
+        const { data: inactiveSessions, error: inactiveError } = await supabase
+          .from('chat_sessions')
+          .select('chat_id')
+          .eq('user_id', user.id)
+          .eq('agent_name', agentName)
+          .order('updated_at', { ascending: false })
+          .limit(1);
+        if (inactiveError) console.error('Error fetching inactive chat_id for init:', inactiveError);
+        if (inactiveSessions && inactiveSessions.length > 0 && inactiveSessions[0].chat_id) {
+          chatIdToUse = inactiveSessions[0].chat_id;
+        }
+      }
+      if (chatIdToUse) {
+        console.log(`Fetched existing Chat ID from DB: ${chatIdToUse}`);
+        localStorage.setItem(localStorageKey, chatIdToUse);
+      }
+    }
+
+    // 3. If still no Chat ID, generate a new one
+    if (!chatIdToUse) {
+      chatIdToUse = generateNewChatId();
+      console.log(`Generated new Chat ID: ${chatIdToUse}`);
+      localStorage.setItem(localStorageKey, chatIdToUse);
+    }
+
+    // 4. Now, create a NEW SESSION INSTANCE in chat_sessions table for this client engagement
+    try {
+      const newSessionInstancePayload = {
           user_id: user.id,
           agent_name: agentName,
-          active_session_id: finalSessionId,
-          last_active_at: new Date().toISOString(),
-        }, { onConflict: 'user_id, agent_name' })
-        .select()
+        chat_id: chatIdToUse,
+        is_active: true,
+        updated_at: new Date().toISOString(),
+        // created_at is by DB default
+      };
+      const { data: newInstance, error: instanceError } = await supabase
+        .from('chat_sessions')
+        .insert(newSessionInstancePayload)
+        .select('id') // Only need the ID of the new row
         .single();
 
-      if (upsertError) {
-        console.error("Error upserting new active session to DB:", upsertError);
-        // If DB upsert fails, we still use the generated ID locally for this client session
-        // but it won't persist across devices/browsers until DB is reachable.
-      } else {
-        console.log("Successfully upserted new active session to DB.");
-      }
-    }
-    
-    set({
-      sessionId: finalSessionId,
+      if (instanceError) throw instanceError;
+      if (!newInstance || !newInstance.id) throw new Error('Failed to create session instance or get its ID.');
+      
+      newSessionInstanceId = newInstance.id;
+      console.log(`Successfully created new session instance in DB. ID: ${newSessionInstanceId}, Chat ID: ${chatIdToUse}`);
+      
+      set({
+        activeChatId: chatIdToUse,
+        currentSessionInstanceId: newSessionInstanceId,
       currentAgentName: agentName,
-      messages: [], // Messages will be loaded from PostgresChatMessageHistory by the backend
+        messages: [], // Messages are loaded from backend via PostgresChatMessageHistory, keyed by activeChatId
     });
-    console.log(`Chat session initialized. Agent: ${agentName}, Session ID: ${finalSessionId}`);
-    // Old archival listeners and timers are removed
+      console.log(`Chat store initialized. Agent: ${agentName}, Active Chat ID: ${chatIdToUse}, Session Instance ID: ${newSessionInstanceId}`);
+
+    } catch (error) {
+      console.error("Error creating new session instance in DB:", error);
+      toast.error('Failed to initialize chat session. Please try again.');
+      // Fallback: local session without DB instance, or clear out?
+      // For now, if DB interaction fails, we won't have a currentSessionInstanceId.
+      set({
+        activeChatId: chatIdToUse, // Keep chat_id for message history if possible
+        currentSessionInstanceId: null, 
+        currentAgentName: agentName,
+        messages: [],
+      });
+    } finally {
+      set({ isInitializingSession: false }); // ADDED: Reset the flag in finally block
+    }
   },
 
-  clearCurrentSession: () => {
-    // No client-side archival to trigger here anymore.
-    // Simply clear local state.
-    const state = get();
-    const currentUser = useAuthStore.getState().user;
+  clearCurrentSessionAsync: async () => {
+    const { currentSessionInstanceId, currentAgentName } = get();
+    const user = useAuthStore.getState().user;
 
-    if (currentUser && typeof state.currentAgentName === 'string') {
-        const agentNameForLocalStorage: string = state.currentAgentName; // Explicitly typed new variable
-        const localStorageKey = `chatSession_${currentUser.id}_${agentNameForLocalStorage}`;
-        localStorage.removeItem(localStorageKey);
-        console.log(`Cleared localStorage key for ${agentNameForLocalStorage}: ${localStorageKey}`);
+    if (currentSessionInstanceId && user) {
+      try {
+        console.log(`Deactivating session instance: ${currentSessionInstanceId}`);
+        await supabase
+          .from('chat_sessions')
+          .update({ is_active: false, updated_at: new Date().toISOString() })
+          .eq('id', currentSessionInstanceId)
+          .eq('user_id', user.id);
+      } catch (error) {
+        console.error('Error deactivating session instance in DB:', error);
+        // Proceed to clear local state anyway
+      }
+    }
+
+    if (user && typeof currentAgentName === 'string') {
+
+      // We keep the chat_id in localStorage, as it's persistent. 
+      // We only clear the session instance related things from the store.
+      // localStorage.removeItem(localStorageKey); // Do NOT remove chat_id from LS on clear session.
+      console.log(`Chat session instance ${currentSessionInstanceId} marked inactive (if applicable). Local store state clearing.`);
     }
 
     set({
       messages: [],
-      sessionId: null,
-      currentAgentName: null,
+      // activeChatId: null, // Keep activeChatId so user can resume later
+      currentSessionInstanceId: null,
+      // currentAgentName: null, // Keep currentAgentName if user might reopen same agent panel
     });
-    console.log("Chat session cleared locally.");
+    console.log("Current session instance ID cleared. Active chat ID and agent name retained for potential resumption.");
+  },
+
+  sendHeartbeatAsync: async () => {
+    const { currentSessionInstanceId } = get();
+    const user = useAuthStore.getState().user;
+    if (currentSessionInstanceId && user) {
+      try {
+        // console.log('Sending explicit heartbeat for session instance:', currentSessionInstanceId);
+        await supabase
+          .from('chat_sessions')
+          .update({ updated_at: new Date().toISOString(), is_active: true })
+          .eq('id', currentSessionInstanceId)
+          .eq('user_id', user.id);
+      } catch (error) {
+        console.error('Error sending explicit heartbeat:', error);
+      }
+    } else {
+      // console.warn('Cannot send heartbeat: no currentSessionInstanceId or user.');
+    }
   },
 }));
 
 // Hook to initialize and clean up the store's session management
 export const useInitializeChatStore = (agentName: string | null | undefined) => {
-  const user = useAuthStore((state) => state.user);
+  const user = useAuthStore.getState().user;
+  const initializeSessionAsync = useChatStore.getState().initializeSessionAsync;
+  const clearCurrentSessionAsync = useChatStore.getState().clearCurrentSessionAsync;
+  const currentStoreAgentName = useChatStore.getState().currentAgentName;
+  const currentStoreSessionInstanceId = useChatStore.getState().currentSessionInstanceId;
 
   useEffect(() => {
     if (agentName && user?.id) {
-      console.log(`useInitializeChatStore effect triggered for agent: ${agentName}`);
-      useChatStore.getState().initializeSessionAsync(agentName);
+      if (agentName !== currentStoreAgentName || !currentStoreSessionInstanceId) {
+        console.log(`useInitializeChatStore effect: Initializing for agent: ${agentName}`);
+        // If there was a different agent active, clear its session instance first.
+        // This check is important to avoid deactivating a session for an agent that's still open in another tab/component if we extend to that.
+        // For now, assuming one ChatPanel, if agentName changes, previous session instance should be cleared.
+        if (currentStoreSessionInstanceId && currentStoreAgentName && currentStoreAgentName !== agentName) {
+          console.log(`useInitializeChatStore: Agent changed from ${currentStoreAgentName} to ${agentName}. Clearing previous session instance.`);
+          clearCurrentSessionAsync(); // Deactivate previous session instance
+        }
+        initializeSessionAsync(agentName); 
+      }
     } else {
-      // If no agentName or user, ensure session is cleared or not initialized
-      // This might happen if agent is deselected or user logs out
-      console.log("useInitializeChatStore: No agentName or user, potentially clearing session or ensuring it's null.");
-      const currentSessionId = useChatStore.getState().sessionId;
-      if (currentSessionId !== null || useChatStore.getState().currentAgentName !== null) {
-          // If there was an active session, clear it. 
-          // Avoids clearing if it's already null to prevent loops if not careful with deps.
-          useChatStore.getState().clearCurrentSession();
+      console.log("useInitializeChatStore: No agentName or user. Clearing current session instance.");
+      if (currentStoreSessionInstanceId) { // Only clear if there was an active instance
+        clearCurrentSessionAsync();
       }
     }
 
-    // No specific cleanup needed here anymore as listeners are removed.
-    // If initializeSessionAsync were to set up anything that needs teardown per agent/user,
-    // it would go here.
+    // Cleanup on unmount or when agentName/user.id changes before re-init for a *new* agent.
+    // The logic inside the main effect body already handles clearing the *previous* if agentName changes.
+    // This specific return function is more for when the component using this hook unmounts entirely.
     return () => {
-        // Consider if any cleanup is needed when agentName/user changes *before* re-init.
-        // For now, clearCurrentSession handles removing localStorage for the *previous* agent
-        // if called directly.
-        // If an agent is simply switched, the new initializeSessionAsync will handle the new agent's localStorage.
+      // This cleanup will run if the component that uses useInitializeChatStore unmounts.
+      // For example, if ChatPanel is conditionally rendered and then removed from UI.
+      // We should mark its session as inactive.
+      const stillSameAgentAndUser = useChatStore.getState().currentAgentName === agentName && useAuthStore.getState().user?.id === user?.id;
+      const activeInstanceId = useChatStore.getState().currentSessionInstanceId;
+
+      if (activeInstanceId && stillSameAgentAndUser) {
+        // Only clear if this instance was the one this effect was responsible for.
+        console.log(`useInitializeChatStore cleanup: Deactivating session instance for agent ${agentName}`);
+        clearCurrentSessionAsync();
+      }
     };
-  }, [agentName, user?.id]); // Re-run if agentName or user.id changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentName, user?.id, initializeSessionAsync, clearCurrentSessionAsync]); // currentStoreAgentName and currentStoreSessionInstanceId are NOT dependencies here to avoid loops
 };
 
 // Example of how a component would use the store and the RQ mutation hook:

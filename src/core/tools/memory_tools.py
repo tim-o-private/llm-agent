@@ -1,15 +1,11 @@
-import json
-from typing import Type, Optional, Dict, Any, List
-from datetime import datetime
-from pydantic import BaseModel, Field, root_validator
+from typing import Type, Optional, Any
+from pydantic import BaseModel, Field
 from supabase import create_client, Client as SupabaseClient
 #from supabase.lib.client_options import ClientOptions
 
 from langchain_core.tools import BaseTool
-from langchain_core.callbacks import CallbackManagerForToolRun
 
 import logging # UPDATED to relative import
-# from core.db.supabase_client import get_supabase_client # For async client, if tool runs async
 
 logger = logging.getLogger(__name__)
 
