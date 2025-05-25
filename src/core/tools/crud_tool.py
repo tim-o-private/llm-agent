@@ -1,4 +1,3 @@
-import json
 from typing import Optional, Any, Dict, ClassVar, Type
 from pydantic import BaseModel, Field, ConfigDict, create_model
 from supabase import create_client
@@ -7,14 +6,6 @@ from utils.logging_utils import get_logger
 # Try to import Pydantic v1 specific tool for creating models from dicts, 
 # as a simpler first step than full JSON Schema to Pydantic v2 model.
 logger = get_logger(__name__)
-try:
-    from pydantic.v1.tools import create_model_from_typeddict # For Pydantic v1.x
-except ImportError:
-    try:
-        from pydantic.tools import create_model_from_typeddict # Pydantic v2 might have it in a different spot
-    except ImportError:
-        create_model_from_typeddict = None # Sentinel if not found
-        logger.warning("Failed to import create_model_from_typeddict from pydantic.v1.tools or pydantic.tools. Dynamic schema creation might be limited.")
 
 class CRUDToolInput(BaseModel):
     """
@@ -202,10 +193,11 @@ class CRUDTool(BaseTool):
         final_filters = filters.copy() if filters else {}
         final_filters["user_id"] = self.user_id # Always scope by user_id
         
-        # Original logic: Add agent_name as a filter for tables other than agent_long_term_memory
-        if self.table_name != "agent_long_term_memory":
-            if hasattr(self, 'agent_name') and self.agent_name: # Ensure agent_name exists and is not empty
-                 final_filters["agent_name"] = self.agent_name
+        # # Original logic: Add agent_name as a filter for tables other than agent_long_term_memory
+        # # This is now removed in favor of explicit schema definition if agent_name is needed.
+        # if self.table_name != "agent_long_term_memory":
+        #     if hasattr(self, 'agent_name') and self.agent_name: # Ensure agent_name exists and is not empty
+        #          final_filters["agent_name"] = self.agent_name
         
         logger.debug(f"CRUDTool '{self.name}': Applied mandatory filters. Initial: {filters}, Final: {final_filters}")
         return final_filters
@@ -276,37 +268,36 @@ class CRUDTool(BaseTool):
 
         db_payload["user_id"] = self.user_id
         
-        # Original logic: Add agent_name to payload for tables other than agent_long_term_memory
-        if self.table_name != "agent_long_term_memory":
-            if hasattr(self, 'agent_name') and self.agent_name:
-                db_payload["agent_name"] = self.agent_name
+        # # Original logic: Add agent_name to payload for tables other than agent_long_term_memory
+        # # This is now removed in favor of explicit schema definition if agent_name is needed.
+        # if self.table_name != "agent_long_term_memory":
+        #     if hasattr(self, 'agent_name') and self.agent_name:
+        #         db_payload["agent_name"] = self.agent_name
         
         # Check if there are any meaningful keys in the payload other than user_id/agent_name,
         # UNLESS it's agent_long_term_memory, in which case agent_name itself might be a meaningful field
         # if it were part of the field_map (e.g. if LTMs were per-agent rather than per-user).
         # Current LTM table doesn't have agent_name, so this complexity is less relevant for it now.
-        meaningful_db_keys = [
-            k for k in db_payload.keys() 
-            if k not in ("user_id", "agent_name") or \
-               (k == "agent_name" and self.table_name == "agent_long_term_memory" and "agent_name" in (self.field_map or {}).values()) # only if agent_name is an actual mapped DB field for LTM
-        ]
-        # A simpler check if agent_name is NOT a column in LTM and generally not directly settable by LLM for LTM:
-        # meaningful_db_keys = [k for k in db_payload.keys() if k not in ("user_id", "agent_name")]
-        # if self.table_name == "agent_long_term_memory" and "agent_name" in db_payload and "agent_name" in (self.field_map.values() if self.field_map else []):
-        #    pass # agent_name might be a legitimate field for LTM if field_mapped
-
-        # Revised meaningful_db_keys check based on typical structure: 
-        # user_id and agent_name (if added by the tool) are scoping fields, not primary data from LLM.
-        # Check if any *other* keys exist, or if agent_name was part of the original agent_data AND field_mapped for LTM.
-        keys_from_llm_data_or_mapped = set((self.field_map or agent_data).keys() if self.field_map else agent_data.keys())
-        
         # What are the actual database columns we are trying to set, apart from user_id/agent_name auto-added?
-        intended_payload_columns = set(db_payload.keys()) - {"user_id", "agent_name"}
-        # If agent_name was in the original data from LLM (via field_map), it's intended.
-        if "agent_name" in db_payload and self.field_map.get("agent_name") == "agent_name": # Simplified: if agent_name was mapped to agent_name
-            intended_payload_columns.add("agent_name")
-        elif "agent_name" in db_payload and not self.field_map and "agent_name" in agent_data:
-            intended_payload_columns.add("agent_name") # No field map, agent_name was in original data
+        # Since agent_name is no longer auto-added here, the logic simplifies to checking fields beyond user_id.
+        intended_payload_columns = set(db_payload.keys()) - {"user_id"}
+        # If agent_name (or any other field) was in the original data from LLM (via field_map or direct), it's intended.
+        # This check now relies on agent_data having the necessary fields if they are not user_id.
+        # For example, if 'agent_name' is a required part of the payload, it should have come from agent_data.
+        
+        # Re-evaluating intended_payload_columns considering agent_name is NOT auto-added here anymore.
+        # If agent_name is intended, it must have come from agent_data and been mapped by field_map or used directly.
+        raw_keys_from_llm = set(agent_data.keys())
+        mapped_keys_in_payload = set()
+        if self.field_map:
+            for k_llm, k_db in self.field_map.items():
+                if k_llm in raw_keys_from_llm:
+                    mapped_keys_in_payload.add(k_db)
+        else:
+            mapped_keys_in_payload = raw_keys_from_llm
+
+        # The keys in db_payload that are not 'user_id' should correspond to what the LLM intended to send.
+        intended_payload_columns = set(db_payload.keys()) - {"user_id"}
 
         if not intended_payload_columns:
             logger.error(
@@ -315,7 +306,7 @@ class CRUDTool(BaseTool):
             )
             raise ToolException(
                 f"Agent Error: Data provided for tool '{self.name}' (input keys: {list(agent_data.keys())}) "
-                f"results in no updatable/insertable fields beyond automatically added scoping IDs (user_id, agent_name). "
+                f"results in no updatable/insertable fields beyond automatically added scoping IDs (user_id). "
                 f"Check 'field_map' and input data structure."
             )
             
