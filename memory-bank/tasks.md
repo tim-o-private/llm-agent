@@ -8,6 +8,22 @@ This file tracks the current tasks, steps, checklists, and component lists for t
 
 ## PENDING / ACTIVE TASKS
 
+**NEW TASK: CRUD Tool Migration to DB Configuration**
+*   **Status:** In Progress
+*   **Complexity:** 2-3 (Simple to Moderate - DB, Backend Loader, Minimal Code)
+*   **Objective:** Move all CRUD tool logic (table, method, field_map, etc.) to the `agent_tools` table as config. Only the generic `CRUDTool` class remains in code. Loader instantiates tools from DB config and runtime values. No code changes are needed to add new CRUD tools.
+*   **Plan:**
+    *   All CRUD tool definitions (table, method, field_map) are now stored in the `config` column of `agent_tools`.
+    *   The loader reads these configs and instantiates the generic `CRUDTool` with runtime values (`user_id`, `agent_id`, `supabase_url`, `supabase_key`).
+    *   The registry only needs to include `CRUDTool` (and any custom tools).
+    *   To add a new CRUD tool, insert a row in `agent_tools` with the correct config—no code changes required.
+*   **Checklist:**
+    *   [X] Migrate all LTM CRUD tools to DB config (see pattern file for example inserts).
+    *   [X] Remove explicit CRUD tool subclasses from code (except generic `CRUDTool`).
+    *   [X] Update loader to instantiate tools from DB config and runtime values.
+    *   [ ] Test: Add a new CRUD tool by DB insert only—no code change.
+    *   [ ] Document the new pattern in `tool-creation-pattern.md` and update onboarding docs.
+
 **NEW TASK: Refactor: Implement Robust Session Management & Agent Executor Caching**
 *   **Status:** Implementation, Documentation, and Reflection Complete. See `memory-bank/clarity/references/guides/memory_system_v2.md` and `memory-bank/reflection/reflection-session-mgmt-v2.md`.
 *   **Complexity:** 3 (Moderately Complex - involves DB, Backend, Frontend, State Management)

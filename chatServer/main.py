@@ -4,7 +4,7 @@ import logging # Added for log_level
 from typing import Dict, Optional, Any, List, AsyncIterator # Added Optional and List here, NEW: AsyncIterator
 from contextlib import asynccontextmanager # NEW IMPORT
 import asyncio # NEW IMPORT
-from datetime import datetime, timedelta # NEW IMPORT
+from datetime import datetime, timedelta, timezone # Added timezone
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Depends, Request, status
@@ -91,7 +91,7 @@ app.add_middleware(
 )
 
 class ChatRequest(BaseModel):    
-    agent_id: str 
+    agent_name: str 
     message: str
     session_id: str # Added: session_id is now required
 
@@ -164,7 +164,7 @@ async def deactivate_stale_chat_session_instances_task():
     """Periodically deactivates stale chat session instances."""
     while True:
         await asyncio.sleep(SCHEDULED_TASK_INTERVAL_SECONDS)
-        logger.info("Running task: deactivate_stale_chat_session_instances_task")
+        logger.debug("Running task: deactivate_stale_chat_session_instances_task")
         if db_pool is None:
             logger.warning("db_pool not available, skipping deactivation task cycle.")
             continue
@@ -172,12 +172,12 @@ async def deactivate_stale_chat_session_instances_task():
         try:
             async with db_pool.connection() as conn:
                 async with conn.cursor() as cur:
-                    threshold_time = datetime.utcnow() - timedelta(seconds=SESSION_INSTANCE_TTL_SECONDS)
+                    threshold_time = datetime.now(timezone.utc) - timedelta(seconds=SESSION_INSTANCE_TTL_SECONDS)
                     await cur.execute(
                         """UPDATE chat_sessions 
                            SET is_active = false, updated_at = %s 
                            WHERE is_active = true AND updated_at < %s""",
-                        (datetime.utcnow(), threshold_time)
+                        (datetime.now(timezone.utc), threshold_time)
                     )
                     if cur.rowcount > 0:
                         logger.info(f"Deactivated {cur.rowcount} stale chat session instances.")
@@ -189,7 +189,7 @@ async def evict_inactive_executors_task():
     global AGENT_EXECUTOR_CACHE
     while True:
         await asyncio.sleep(SCHEDULED_TASK_INTERVAL_SECONDS + 30) # Stagger slightly from the other task
-        logger.info("Running task: evict_inactive_executors_task")
+        logger.debug("Running task: evict_inactive_executors_task")
         if db_pool is None or AGENT_EXECUTOR_CACHE is None:
             logger.warning("db_pool or AGENT_EXECUTOR_CACHE not available, skipping eviction task cycle.")
             continue
@@ -288,11 +288,8 @@ app = FastAPI(lifespan=lifespan)
 # --- Logger setup ---
 # Ensure logger is available if not already globally configured
 # This can be more sophisticated, e.g., using utils.logging_utils.get_logger
-logger = logging.getLogger(__name__)
-# Example: Set a basic config if no handlers are present
-if not logger.handlers:
-    logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper())
-# --- End Logger setup ---
+from utils.logging_utils import get_logger
+logger = get_logger(__name__)
 
 CHAT_MESSAGE_HISTORY_TABLE_NAME = "chat_message_history" # Define globally or get from config
 
@@ -318,7 +315,7 @@ async def chat_endpoint(
     pg_connection: psycopg.AsyncConnection = Depends(get_db_connection), # NEW: Use pooled connection
     # db_client: AsyncClient = Depends(get_supabase_client) # Keep if other parts need supabase-py client
 ):
-    logger.info(f"Received chat request for agent {chat_input.agent_id} with session_id: {chat_input.session_id} from user {user_id}")
+    logger.debug(f"Received chat request for agent {chat_input.agent_name} with session_id: {chat_input.session_id} from user {user_id}")
 
     if not chat_input.session_id:
         # This case should ideally not be reached if client ensures session_id is sent
@@ -326,7 +323,7 @@ async def chat_endpoint(
         raise HTTPException(status_code=400, detail="session_id is required")
 
     session_id_for_history = chat_input.session_id # This is the activeChatId from client
-    agent_name = chat_input.agent_id 
+    agent_name = chat_input.agent_name 
 
     try:
         # Initialize PostgresChatMessageHistory using the connection from the pool
@@ -385,14 +382,14 @@ async def chat_endpoint(
             cache_key = (user_id, agent_name) # MODIFIED: Cache key is now (user_id, agent_name)
             if cache_key in AGENT_EXECUTOR_CACHE:
                 agent_executor = AGENT_EXECUTOR_CACHE[cache_key]
-                logger.info(f"Cache HIT for agent executor: key={cache_key}")
+                logger.debug(f"Cache HIT for agent executor: key={cache_key}")
             else:
-                logger.info(f"Cache MISS for agent executor: key={cache_key}. Loading new executor.")
+                logger.debug(f"Cache MISS for agent executor: key={cache_key}. Loading new executor.")
                 agent_executor = agent_loader.load_agent_executor(
                     user_id=user_id,
-                    agent_name=agent_name, 
-                    session_id=session_id_for_history, # session_id passed for initial load if needed by agent_loader internally for some reason, but NOT for cache key
-                    config_loader=GLOBAL_CONFIG_LOADER,
+                    agent_name=agent_name,
+                    session_id=session_id_for_history,
+                    log_level=DEFAULT_LOG_LEVEL
                 )
                 AGENT_EXECUTOR_CACHE[cache_key] = agent_executor # Store in cache
             
@@ -411,30 +408,59 @@ async def chat_endpoint(
             response_data = await agent_executor.ainvoke({"input": chat_input.message})
             ai_response_content = response_data.get("output", "No output from agent.")
 
-            tool_name = response_data.get("tool_name")
-            tool_input = response_data.get("tool_input")
+            # Placeholder for tool_name and tool_input if we want to extract them
+            # from response_data['intermediate_steps'] in the future.
+            invoked_tool_name: Optional[str] = None
+            invoked_tool_input: Optional[Dict[str, Any]] = None
+            
+            # Example of how one might extract the last tool call, if needed by client
+            # if "intermediate_steps" in response_data and response_data["intermediate_steps"]:
+            #     last_step = response_data["intermediate_steps"][-1]
+            #     if isinstance(last_step, tuple) and len(last_step) > 0:
+            #         action, observation = last_step
+            #         if hasattr(action, 'tool'): invoked_tool_name = action.tool
+            #         if hasattr(action, 'tool_input'): invoked_tool_input = action.tool_input
 
-            return ChatResponse(
+            chat_response_payload = ChatResponse(
                 session_id=session_id_for_history, 
                 response=ai_response_content,
-                tool_name=tool_name,
-                tool_input=tool_input
+                tool_name=invoked_tool_name, # Will be None for now
+                tool_input=invoked_tool_input, # Will be None for now
+                error=None
             )
+            logger.info(f"Successfully processed chat. Returning to client: {chat_response_payload.model_dump_json(indent=2)}")
+            return chat_response_payload
         except Exception as e:
             logger.error(f"Error during agent execution for session {session_id_for_history}: {e}", exc_info=True)
-            return ChatResponse(
+            # Construct and log the error response
+            error_response_payload = ChatResponse(
                 session_id=session_id_for_history,
                 response="An error occurred processing your request.", 
                 error=str(e)
             )
-    except psycopg.Error as pe: # Catch psycopg specific errors for connection/query issues from chat_memory setup
+            logger.info(f"Error during agent execution. Returning to client: {error_response_payload.model_dump_json(indent=2)}")
+            return error_response_payload
+    except psycopg.Error as pe:
         logger.error(f"Database error (psycopg.Error) during chat_memory setup for session {session_id_for_history}: {pe}", exc_info=True)
-        # Ensure pg_connection is not closed here
+        # Construct and log the error response
+        db_error_payload = ChatResponse(
+            session_id=session_id_for_history,
+            response="A database error occurred during chat setup.",
+            error=f"Database error: {str(pe)}"
+        )
+        logger.info(f"Database error. Returning to client: {db_error_payload.model_dump_json(indent=2)}")
+        # Re-raise as HTTPException because this is a server infrastructure problem
         raise HTTPException(status_code=503, detail=f"Database error during chat setup: {pe}")
-    except Exception as e: # General exception handler for other setup issues before agent execution
+    except Exception as e:
         logger.error(f"Failed to process chat request before agent execution for session {session_id_for_history}: {e}", exc_info=True)
-        # Ensure pg_connection is not closed here
-        if isinstance(e, HTTPException): # Re-raise HTTP exceptions
+        # Construct and log the error response
+        setup_error_payload = ChatResponse(
+            session_id=session_id_for_history,
+            response="An error occurred setting up the chat environment.",
+            error=f"Setup error: {str(e)}"
+        )
+        logger.info(f"Setup error. Returning to client: {setup_error_payload.model_dump_json(indent=2)}")
+        if isinstance(e, HTTPException): 
             raise
         raise HTTPException(status_code=500, detail=f"Could not process chat request: {e}")
 

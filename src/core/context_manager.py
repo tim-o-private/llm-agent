@@ -6,9 +6,10 @@ from utils.config_loader import ConfigLoader
 from core.file_parser import read_markdown, read_yaml
 # Import path helpers
 from utils.path_helpers import get_data_base_dir, get_config_base_dir
+from utils.logging_utils import get_logger
 
 # Configure logging
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class ContextManager:
     """

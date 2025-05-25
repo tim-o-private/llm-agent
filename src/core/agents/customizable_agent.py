@@ -8,12 +8,13 @@ from langchain.agents.format_scratchpad.tools import format_to_tool_messages # N
 from langchain.agents.output_parsers import ToolsAgentOutputParser # User's preferred parser
 from langchain_core.runnables import RunnablePassthrough
 import os
+from utils.logging_utils import get_logger
 
 # Assuming PromptManagerService is in src.core.prompting
 # Adjust import path as necessary based on your project structure
 # Removed: from core.prompting.prompt_manager import PromptManagerService # Not used by executor directly if CustomizableAgent is removed
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Helper function for processing scratchpad data
 # Ensure observations are not None or empty, as this can cause API errors with Gemini

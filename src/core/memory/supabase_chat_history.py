@@ -3,10 +3,10 @@ from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_core.messages import BaseMessage, messages_from_dict, messages_to_dict
 from supabase import AsyncClient, PostgrestAPIResponse
 import json
-import logging # Import logging
+from utils.logging_utils import get_logger
 
 # Get a logger for this module
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class SupabaseChatMessageHistory(BaseChatMessageHistory):
     """Chat message history stored in a Supabase PostgREST table."""

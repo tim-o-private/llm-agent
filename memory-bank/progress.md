@@ -127,6 +127,14 @@ This document tracks the active development progress for the CLI, Core Agent, Ba
             *   **Resolution:** Correctly configured the agent to use `format_to_tool_messages` and `ToolsAgentOutputParser` for handling tool calls with Gemini.
         *   E2E testing of conversational flow. (Status: To Do - Unblocked)
 
+*   **Phase 3.1: CRUD Tool DB Migration & Refinement**
+    *   **Status:** In Progress
+    *   **Objective:** Ensure all CRUD tool definitions are fully migrated to database configuration, and refine `crud_tool.py` for simplicity and robustness.
+    *   **Key Activities & Status:**
+        *   Verified `CRUDTool` logic (table, method, field_map) is DB-driven. (Status: DONE)
+        *   Simplified `src/core/tools/crud_tool.py` by removing redundant `None` checks in the `_run` method for `data_for_processing` and `final_data_payload`. (Status: DONE)
+        *   Identified next step: Make `agent_name` filtering/payload injection in `CRUDTool` fully configuration-driven via a DB flag to remove table-specific hardcoding. (Status: TO DO)
+
 *   **Phase 4: Refinements, Advanced LTM Operations & Pruning**
     *   **Status:** Pending
 

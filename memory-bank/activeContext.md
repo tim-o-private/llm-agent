@@ -8,7 +8,19 @@ This document outlines the current high-priority task, relevant files, and key c
 
 ## Current High-Priority Task:
 
-**Refactor: Implement Robust Session Management & Agent Executor Caching**
+**1. CRUD Tool Migration to DB Configuration**
+
+*   **Status:** Completed
+*   **Objective:** Move all CRUD tool logic (table, method, field_map, etc.) to the `agent_tools` table as config. Only the generic `CRUDTool` class remains in code. Loader instantiates tools from DB config and runtime values. No code changes are needed to add new CRUD tools.
+*   **Key Points:**
+    *   All CRUD tool definitions (table, method, field_map) are now stored in the `config` column of `agent_tools`.
+    *   The loader reads these configs and instantiates the generic `CRUDTool` with runtime values (`user_id`, `agent_id`, `supabase_url`, `supabase_key`).
+    *   The registry only needs to include `CRUDTool` (and any custom tools).
+    *   To add a new CRUD tool, insert a row in `agent_tools` with the correct config—no code changes required.
+    *   Refactored `src/core/tools/crud_tool.py`: Removed redundant `None` checks in the `_run` method for `data_for_processing` and `final_data_payload`, relying on earlier Pydantic/loader validations and the robustness of internal helper methods like `_prepare_data_payload`.
+    *   See `tool-creation-pattern.md` for the new pattern and example inserts.
+
+**2. Refactor: Implement Robust Session Management & Agent Executor Caching**
 
 *   **Status:** Implementation, Documentation, and Reflection Complete. See `memory-bank/clarity/references/guides/memory_system_v2.md` and `memory-bank/reflection/reflection-session-mgmt-v2.md`.
 *   **Objective:** Implement a stable and persistent chat session management system using the `chat_sessions` table, and optimize server performance by caching AgentExecutors based on active client sessions.
@@ -23,17 +35,22 @@ This document outlines the current high-priority task, relevant files, and key c
 
 ## Key Focus Areas for Implementation:
 
-1.  **Client-Side (`webApp`):**
+1.  **CRUD Tool System:**
+    *   All CRUD tool logic is now DB-driven. No code changes are needed to add new CRUD tools—just DB inserts.
+    *   Loader and registry are minimal and generic.
+    *   See `tool-creation-pattern.md` for details.
+2.  **Client-Side (`webApp`):**
     *   `webApp/src/api/hooks/useChatApiHooks.ts`: Implemented `useSendMessageMutation`.
     *   `webApp/src/stores/useChatStore.ts`: Refactored store state and logic for session initialization (including `isInitializingSession` fix), message handling (heartbeat), and session deactivation.
     *   `webApp/src/components/ChatPanel.tsx`: Integrated new mutation hook, manages session lifecycle (init, heartbeat, unload).
-2.  **Server-Side (`chatServer/main.py`):**
+3.  **Server-Side (`chatServer/main.py`):**
     *   Adapted `AGENT_EXECUTOR_CACHE` to use `(user_id, agent_name)` as key and remove self-TTL.
     *   Ensured `/api/chat` uses `chat_sessions.chat_id` (from request's `session_id` field) for `PostgresChatMessageHistory`.
     *   Implemented background tasks (and fixed startup error) to deactivate stale `chat_session_instances` and evict corresponding inactive `AgentExecutors` from the cache.
 
 ## Relevant Files (Under Active Development/Review):
 
+*   `tool-creation-pattern.md` (CRUD tool pattern)
 *   `session_management_and_executor_caching_plan.md` (Primary Plan)
 *   `memory-bank/tasks.md` (Detailed Task List)
 *   `chatServer/main.py` (Server-side logic)
@@ -45,6 +62,7 @@ This document outlines the current high-priority task, relevant files, and key c
 ## Key Constraints & Considerations:
 
 *   **Minimal Server Endpoints:** Client-side logic handles direct DB interactions with `chat_sessions` via RLS.
+*   **CRUD Tool Extensibility:** All CRUD tools are now DB-configured. No code changes required for new tools.
 *   **Idempotency & Race Conditions:** Addressed a key race condition in `initializeSessionAsync`.
 *   **TTL Management:** Client-side heartbeats and server-side scheduled tasks will manage session and executor liveness.
 *   **Clarity of IDs:**
@@ -61,14 +79,15 @@ This document outlines the current high-priority task, relevant files, and key c
 **Archive Document:** `memory-bank/archive/archive-task9.md`
 
 **Immediate Focus / Next Steps:**
-1.  **[ACTIVE] Refactor: Implement Robust Session Management & Agent Executor Caching**
+1.  **[ACTIVE] CRUD Tool Migration to DB Configuration**
+    *   **Objective:** Complete migration and test adding new CRUD tools via DB only.
+    *   **Objective:** Review `crud_tool.py` for further simplification, particularly making `agent_name` filtering/payload injection fully configuration-driven via a DB flag (e.g., `apply_agent_name_context`).
+2.  **[ACTIVE] Refactor: Implement Robust Session Management & Agent Executor Caching**
     *   **Objective:** Complete implementation and thoroughly test the new session management system.
-    *   **Current Phase:** Phase 3 (Testing & Refinement).
-    *   **Next Steps (User Action):** Perform comprehensive integration testing of the chat functionality, focusing on session persistence, conversation history, and executor caching behavior across various scenarios (e.g., multiple tabs, browser refresh, logout/login, agent switching).
 
-**Mode Recommendation:** TESTING (Session Management & Executor Caching)
+**Mode Recommendation:** TESTING (CRUD Tool Migration & Session Management)
 
-**General Project Goal:** Deliver a stable and performant chat session management system.
+**General Project Goal:** Deliver a stable, extensible, and performant chat and agent tool system.
 
 **Pending Decisions/Questions:**
 *   None immediately critical; focus is on testing the current implementation.
