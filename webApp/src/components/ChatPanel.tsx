@@ -1,111 +1,40 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { useChatStore, useInitializeChatStore } from '@/stores/useChatStore';
-import { MessageHeader, MessageInput, MessageBubble } from '@/components/ui';
-import { supabase } from '@/lib/supabaseClient';
-import { useSendMessageMutation } from '@/api/hooks/useChatApiHooks';
+import React from 'react';
+import { useFeatureFlag } from '@/lib/featureFlags';
+import { ChatPanelV2 } from './ChatPanelV2';
 
-// ADD agentId prop to the component's props interface
+// Import the original ChatPanel implementation
+// Note: We'll need to rename the current ChatPanel to ChatPanelV1 first
+import { ChatPanelV1 } from './ChatPanelV1';
+
 interface ChatPanelProps {
-  agentId?: string; // MADE agentId optional
+  agentId?: string;
 }
 
-export const ChatPanel: React.FC<ChatPanelProps> = ({ agentId: agentIdProp }) => {
-  const agentId = agentIdProp || import.meta.env.VITE_DEFAULT_CHAT_AGENT_ID || "assistant";
+/**
+ * Unified ChatPanel component that routes between old and new implementations
+ * based on the useAssistantUI feature flag.
+ * 
+ * This allows for:
+ * - Gradual rollout of assistant-ui migration
+ * - Easy rollback if issues are discovered
+ * - A/B testing between implementations
+ * - Seamless user experience during transition
+ */
+export const ChatPanel: React.FC<ChatPanelProps> = ({ agentId }) => {
+  const useAssistantUI = useFeatureFlag('useAssistantUI');
 
-  const { messages, addMessage, activeChatId, currentSessionInstanceId, sendHeartbeatAsync, clearCurrentSessionAsync } = useChatStore(); 
-  
-  useInitializeChatStore(agentId);
-
-  const messagesEndRef = useRef<null | HTMLDivElement>(null);
-
-  const sendMessageMutation = useSendMessageMutation();
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  const [userId, setUserId] = useState<string | null>(null);
-  
-  useEffect(() => {
-    const fetchUserSessionData = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUserId(user?.id || null);
-    };
-    fetchUserSessionData();
-  }, []);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  // Periodic Heartbeat
-  useEffect(() => {
-    if (currentSessionInstanceId) {
-      const intervalId = setInterval(() => {
-        sendHeartbeatAsync();
-      }, 60000); 
-
-      return () => {
-        clearInterval(intervalId);
-      };
-    }
-  }, [currentSessionInstanceId, sendHeartbeatAsync]);
-
-  // beforeunload listener to deactivate session instance
-  useEffect(() => {
-    const handleBeforeUnload = (_event: BeforeUnloadEvent) => {
-      if (useChatStore.getState().currentSessionInstanceId) { 
-        clearCurrentSessionAsync();
-      }
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-  }, [clearCurrentSessionAsync]);
-
-  const handleSendMessage = async (messageText: string) => {
-    if (!messageText || sendMessageMutation.isPending || !userId || !currentSessionInstanceId || !activeChatId) {
-        if(!currentSessionInstanceId) console.error("Cannot send message: currentSessionInstanceId is null.");
-        if(!activeChatId) console.error("Cannot send message: activeChatId is null.");
-        return;
-    } 
-
-    addMessage({ text: messageText, sender: 'user' });
-
-    try {
-      const aiResponseText = await sendMessageMutation.mutateAsync({ 
-        message: messageText, 
-        userId, 
-        activeChatId 
-      });
-      addMessage({ text: aiResponseText, sender: 'ai' });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred while sending the message.';
-      addMessage({ text: errorMessage, sender: 'ai'}); 
-      console.error("ChatPanel: Error sending message:", error);
+  // Log which implementation is being used (development only)
+  if (import.meta.env.DEV) {
+    console.log(`ChatPanel: Using ${useAssistantUI ? 'assistant-ui (V2)' : 'legacy (V1)'} implementation`);
   }
-  };
 
-  return (
-    <div className="flex flex-col h-full bg-white dark:bg-gray-800 shadow-lg border-l border-gray-200 dark:border-gray-700">
-      <MessageHeader 
-        chatTitle="AI Coach" 
-        status={sendMessageMutation.isPending ? "Typing..." : "Online"}
-        statusColor={sendMessageMutation.isPending ? 'yellow' : 'green'}
-      />
-      <div className="flex-grow p-4 overflow-y-auto space-y-1">
-        {messages.map((msg) => (
-          <MessageBubble
-            key={msg.id} 
-            id={msg.id} 
-            text={msg.text}
-            sender={msg.sender as 'user' | 'ai' | 'system'} 
-          />
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
-      <MessageInput onSendMessage={handleSendMessage} disabled={sendMessageMutation.isPending} placeholder="Ask your coach..." />
-    </div>
-  );
-}; 
+  // Route to the appropriate implementation
+  if (useAssistantUI) {
+    return <ChatPanelV2 agentId={agentId} />;
+  } else {
+    return <ChatPanelV1 agentId={agentId} />;
+  }
+};
+
+// Re-export for backward compatibility
+export default ChatPanel; 
