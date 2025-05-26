@@ -1,23 +1,87 @@
 import sys
 import os
 import logging # Added for log_level
-from typing import Dict, Optional, Any, List, AsyncIterator, Protocol # Added Optional and List here, NEW: AsyncIterator, Protocol
+from typing import Dict, Optional, Any, List, AsyncIterator # Added Optional and List here, NEW: AsyncIterator
 from contextlib import asynccontextmanager # NEW IMPORT
 import asyncio # NEW IMPORT
 from datetime import datetime, timedelta, timezone # Added timezone
 
+# Add parent directory to path for imports when running directly
+if __name__ == "__main__":
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    parent_dir = os.path.dirname(current_dir)
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)
+
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Depends, Request, status
-from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-from jose import jwt, JWTError
-from supabase import acreate_client, AsyncClient
+
+
+# Import models and protocols from extracted modules
+try:
+    # Try relative imports first (when imported as a module)
+    from .models.chat import ChatRequest, ChatResponse
+    from .models.prompt_customization import (
+        PromptCustomizationBase,
+        PromptCustomizationCreate,
+        PromptCustomization,
+    )
+    from .models.webhook import SupabasePayload
+    from .protocols.agent_executor import AgentExecutorProtocol
+    from .config import (
+        get_settings,
+        SESSION_INSTANCE_TTL_SECONDS,
+        SCHEDULED_TASK_INTERVAL_SECONDS,
+        PROMPT_CUSTOMIZATIONS_TAG,
+        CHAT_MESSAGE_HISTORY_TABLE_NAME,
+        DEFAULT_LOG_LEVEL,
+    )
+    from .database import (
+        DatabaseManager,
+        get_db_connection,
+        SupabaseManager,
+        get_supabase_client,
+    )
+    from .dependencies import (
+        get_current_user,
+        get_jwt_from_request_context,
+        get_agent_loader,
+    )
+except ImportError:
+    # Fall back to absolute imports (when run directly)
+    from chatServer.models.chat import ChatRequest, ChatResponse
+    from chatServer.models.prompt_customization import (
+        PromptCustomizationBase,
+        PromptCustomizationCreate,
+        PromptCustomization,
+    )
+    from chatServer.models.webhook import SupabasePayload
+    from chatServer.protocols.agent_executor import AgentExecutorProtocol
+    from chatServer.config import (
+        get_settings,
+        SESSION_INSTANCE_TTL_SECONDS,
+        SCHEDULED_TASK_INTERVAL_SECONDS,
+        PROMPT_CUSTOMIZATIONS_TAG,
+        CHAT_MESSAGE_HISTORY_TABLE_NAME,
+        DEFAULT_LOG_LEVEL,
+    )
+    from chatServer.database import (
+        DatabaseManager,
+        get_db_connection,
+        SupabaseManager,
+        get_supabase_client,
+    )
+    from chatServer.dependencies import (
+        get_current_user,
+        get_jwt_from_request_context,
+        get_agent_loader,
+    )
 
 # Correctly import ConfigLoader
 from utils.config_loader import ConfigLoader
 
 # Import agent_loader
-from core import agent_loader
 from core.agents.customizable_agent import CustomizableAgentExecutor # Added import
 
 # For V2 Agent Memory System
@@ -30,17 +94,13 @@ from cachetools import TTLCache
 # Cache for (user_id, agent_name) -> CustomizableAgentExecutor
 AGENT_EXECUTOR_CACHE: TTLCache[tuple[str, str], CustomizableAgentExecutor] = TTLCache(maxsize=100, ttl=900)
 
-# Dependency for agent loader - can be overridden in tests
-def get_agent_loader():
-    return agent_loader
-
 # --- START Inserted Environment & Path Setup ---
 def add_project_root_to_path_for_local_dev():
     try:
         current_script_dir = os.path.dirname(os.path.abspath(__file__))
         project_root_dir = os.path.dirname(current_script_dir)
-        llm_agent_src_path_env = os.getenv("LLM_AGENT_SRC_PATH", "src")
-        full_src_path = os.path.join(project_root_dir, llm_agent_src_path_env)
+        settings = get_settings()
+        full_src_path = os.path.join(project_root_dir, settings.llm_agent_src_path)
         if os.path.isdir(full_src_path):
             if full_src_path not in sys.path:
                 sys.path.insert(0, full_src_path)
@@ -49,7 +109,10 @@ def add_project_root_to_path_for_local_dev():
     except Exception as e:
         print(f"Error setting up sys.path for local dev: {e}", file=sys.stderr)
 
-if os.getenv("RUNNING_IN_DOCKER") == "true":
+# Initialize settings and environment
+settings = get_settings()
+
+if settings.running_in_docker:
     load_dotenv(override=True) # In Docker, load .env from /app if present
 else:
     project_root_for_env = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -79,102 +142,38 @@ except Exception as e:
 # Cache for active agent executors: (user_id, agent_id) -> AgentExecutor
 # AgentExecutor type hint needs to be imported, e.g., from langchain.agents import AgentExecutor
 # ACTIVE_AGENTS: Dict[Tuple[str, str], AgentExecutor] = {} # REMOVED - Per documentation, this is not used.
-DEFAULT_LOG_LEVEL = logging.INFO # Or use a level from your config
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://clarity-webapp.fly.dev",
-        "http://localhost:3000"
-    ],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-class ChatRequest(BaseModel):    
-    agent_name: str 
-    message: str
-    session_id: str # Added: session_id is now required
-
-class ChatResponse(BaseModel):
-    session_id: str
-    response: str
-    tool_name: Optional[str] = None
-    tool_input: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
-
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")  # Set this in your .env or Fly secrets
 
-def get_current_user(request: Request):
-    auth_header = request.headers.get("Authorization")
-    print("Authorization header:", auth_header)
-    print("JWT secret (first 8 chars):", SUPABASE_JWT_SECRET[:8])  # For debug only, don't log full secret
-    token = auth_header.split(" ")[1]
-    try:
-        payload = jwt.decode(token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated")
-        print("Decoded payload:", payload)
-        user_id = payload.get("sub")
-        if not user_id:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found in token")
-        return user_id
-    except JWTError as e:
-        print("JWTError:", e)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-
-# --- Auth Token Provider for Agent Loader ---
-# This callable will be created within the request context to capture the token.
-async def get_jwt_from_request_context(request_for_token: Request) -> Optional[str]:
-    auth_header = request_for_token.headers.get("Authorization")
-    if auth_header and auth_header.startswith("Bearer "):
-        return auth_header.split(" ")[1]
-    return None
-
-# Global Supabase client instance
-# Initialize as None, will be created on startup
-supabase_client: AsyncClient | None = None
-
-# Dependency to get Supabase client (supabase-py AsyncClient)
-async def get_supabase_client() -> AsyncClient:
-    if supabase_client is None:
-        logger.error("Supabase client (supabase-py) not available during request. Check server startup logs.")
-        raise HTTPException(status_code=503, detail="Supabase client (supabase-py) not available. Check server startup logs.")
-    return supabase_client
-
-# --- FastAPI App and Database Pool Lifecycle ---
-
-db_pool: Optional[AsyncConnectionPool] = None
-
-def get_db_conn_str():
-    db_user = os.getenv("SUPABASE_DB_USER")
-    db_password = os.getenv("SUPABASE_DB_PASSWORD")
-    db_host = os.getenv("SUPABASE_DB_HOST")
-    db_name = os.getenv("SUPABASE_DB_NAME", "postgres")
-    db_port = os.getenv("SUPABASE_DB_PORT", "5432")
-    if not all([db_user, db_password, db_host, db_name, db_port]):
-        missing = [v for v, k in [("SUPABASE_DB_USER",db_user), ("SUPABASE_DB_PASSWORD",db_password), ("SUPABASE_DB_HOST",db_host), ("SUPABASE_DB_NAME",db_name), ("SUPABASE_DB_PORT",db_port)] if not k]
-        logger.critical(f"Database connection pool cannot be initialized. Missing env vars: {missing}")
-        raise RuntimeError(f"Database connection pool cannot be initialized. Missing env vars: {missing}")
-    # Includes connect_timeout and explicitly requires SSL
-    return f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}?connect_timeout=10&sslmode=require"
-
 # --- START Moved Scheduled Task Definitions ---
-SESSION_INSTANCE_TTL_SECONDS = 30 * 60  # 30 minutes
-SCHEDULED_TASK_INTERVAL_SECONDS = 5 * 60  # Run checks every 5 minutes
-
 async def deactivate_stale_chat_session_instances_task():
     """Periodically deactivates stale chat session instances."""
+    try:
+        from .database.connection import get_database_manager
+    except ImportError:
+        from chatServer.database.connection import get_database_manager
+    
     while True:
         await asyncio.sleep(SCHEDULED_TASK_INTERVAL_SECONDS)
         logger.debug("Running task: deactivate_stale_chat_session_instances_task")
-        if db_pool is None:
+        
+        db_manager = get_database_manager()
+        if db_manager.pool is None:
             logger.warning("db_pool not available, skipping deactivation task cycle.")
             continue
         
         try:
-            async with db_pool.connection() as conn:
+            async with db_manager.pool.connection() as conn:
                 async with conn.cursor() as cur:
                     threshold_time = datetime.now(timezone.utc) - timedelta(seconds=SESSION_INSTANCE_TTL_SECONDS)
                     await cur.execute(
@@ -190,11 +189,18 @@ async def deactivate_stale_chat_session_instances_task():
 
 async def evict_inactive_executors_task():
     """Periodically evicts agent executors if no active session instances exist for them."""
+    try:
+        from .database.connection import get_database_manager
+    except ImportError:
+        from chatServer.database.connection import get_database_manager
+    
     global AGENT_EXECUTOR_CACHE
     while True:
         await asyncio.sleep(SCHEDULED_TASK_INTERVAL_SECONDS + 30) # Stagger slightly from the other task
         logger.debug("Running task: evict_inactive_executors_task")
-        if db_pool is None or AGENT_EXECUTOR_CACHE is None:
+        
+        db_manager = get_database_manager()
+        if db_manager.pool is None or AGENT_EXECUTOR_CACHE is None:
             logger.warning("db_pool or AGENT_EXECUTOR_CACHE not available, skipping eviction task cycle.")
             continue
 
@@ -204,7 +210,7 @@ async def evict_inactive_executors_task():
 
         for user_id, agent_name in current_cache_keys:
             try:
-                async with db_pool.connection() as conn:
+                async with db_manager.pool.connection() as conn:
                     async with conn.cursor() as cur:
                         await cur.execute(
                             """SELECT 1 FROM chat_sessions 
@@ -226,35 +232,26 @@ async def evict_inactive_executors_task():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global db_pool, supabase_client, AGENT_EXECUTOR_CACHE
-    logger.info("Application startup: Initializing resources...")
     try:
-        conn_str = get_db_conn_str()
-        logger.info(f"Initializing AsyncConnectionPool with: postgresql://{os.getenv('SUPABASE_DB_USER')}:[REDACTED]@{os.getenv('SUPABASE_DB_HOST')}:{os.getenv('SUPABASE_DB_PORT')}/{os.getenv('SUPABASE_DB_NAME', 'postgres')}?connect_timeout=10")
-        db_pool = AsyncConnectionPool(conninfo=conn_str, open=False, min_size=2, max_size=10, check=AsyncConnectionPool.check_connection)
-        await db_pool.open(wait=True, timeout=30)
-        logger.info("Database connection pool started successfully.")
+        from .database.connection import get_database_manager
+        from .database.supabase_client import get_supabase_manager
+    except ImportError:
+        from chatServer.database.connection import get_database_manager
+        from chatServer.database.supabase_client import get_supabase_manager
+    
+    global AGENT_EXECUTOR_CACHE
+    logger.info("Application startup: Initializing resources...")
+    
+    # Initialize database manager
+    db_manager = get_database_manager()
+    try:
+        await db_manager.initialize()
     except Exception as e:
-        logger.critical(f"Failed to initialize database connection pool: {e}", exc_info=True)
-        db_pool = None
+        logger.critical(f"Failed to initialize database: {e}", exc_info=True)
 
-    supabase_url_env = os.getenv("VITE_SUPABASE_URL")
-    supabase_key_env = os.getenv("SUPABASE_SERVICE_KEY")
-    if supabase_url_env and supabase_key_env:
-        try:
-            logger.info(f"Attempting to initialize Supabase async client with URL: {supabase_url_env}")
-            supabase_client_instance_val = await acreate_client(supabase_url_env, supabase_key_env)
-            if isinstance(supabase_client_instance_val, AsyncClient):
-                supabase_client = supabase_client_instance_val
-                logger.info("Supabase AsyncClient initialized successfully.")
-            else:
-                logger.error(f"Supabase client initialized but is not an AsyncClient. Type: {type(supabase_client_instance_val)}")
-                supabase_client = None
-        except Exception as e:
-            logger.error(f"Error initializing Supabase async client (supabase-py): {e}", exc_info=True)
-            supabase_client = None
-    else:
-        logger.warning("Supabase async client (supabase-py) not initialized due to missing URL or Key.")
+    # Initialize Supabase manager
+    supabase_manager = get_supabase_manager()
+    await supabase_manager.initialize()
 
     # Start background tasks
     app.state.deactivate_task = asyncio.create_task(deactivate_stale_chat_session_instances_task())
@@ -279,9 +276,7 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             logger.info("Evict inactive executors task successfully cancelled.")
 
-    if db_pool:
-        await db_pool.close()
-        logger.info("Database connection pool closed.")
+    await db_manager.close()
 
 # Re-assign app with the new lifespan
 app = FastAPI(lifespan=lifespan)
@@ -291,22 +286,6 @@ app = FastAPI(lifespan=lifespan)
 # This can be more sophisticated, e.g., using utils.logging_utils.get_logger
 from utils.logging_utils import get_logger
 logger = get_logger(__name__)
-
-CHAT_MESSAGE_HISTORY_TABLE_NAME = "chat_message_history" # Define globally or get from config
-
-# NEW: Dependency to get a DB connection from the pool
-async def get_db_connection() -> AsyncIterator[psycopg.AsyncConnection]:
-    if db_pool is None:
-        logger.error("Database connection pool is not available.")
-        raise HTTPException(status_code=503, detail="Database service not available. Pool not initialized.")
-    try:
-        async with db_pool.connection() as conn: # Acquire connection from pool
-            logger.debug("DB connection acquired from pool.")
-            yield conn # Connection is released when context exits
-        logger.debug("DB connection released back to pool.")
-    except Exception as e:
-        logger.error(f"Failed to get DB connection from pool: {e}", exc_info=True)
-        raise HTTPException(status_code=503, detail="Failed to acquire database connection.")
 
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat_endpoint(
@@ -480,34 +459,13 @@ async def chat_endpoint(
 # ... existing code ...
 
 
-# --- Pydantic Models for Prompt Customizations ---
-class PromptCustomizationBase(BaseModel):
-    agent_name: str
-    customization_type: str = 'instruction_set'
-    content: Dict[str, Any] # JSONB content
-    is_active: bool = True
-    priority: int = 0
-
-class PromptCustomizationCreate(PromptCustomizationBase):
-    pass
-
-class PromptCustomization(PromptCustomizationBase):
-    id: str # UUID as string
-    user_id: str # UUID as string
-    created_at: Any # datetime, will be serialized to string
-    updated_at: Any # datetime
-
-    class Config:
-        orm_mode = True # For Pydantic V1, or from_attributes = True for V2
-
 # --- API Endpoints for Prompt Customizations ---
-PROMPT_CUSTOMIZATIONS_TAG = "Prompt Customizations"
 
 @app.post("/api/agent/prompt_customizations/", response_model=PromptCustomization, tags=[PROMPT_CUSTOMIZATIONS_TAG])
 async def create_prompt_customization(
     customization_data: PromptCustomizationCreate,
     user_id: str = Depends(get_current_user),
-    db: AsyncClient = Depends(get_supabase_client) # This still uses supabase-py client
+    db = Depends(get_supabase_client) # This still uses supabase-py client
 ):
     try:
         response = await db.table("user_agent_prompt_customizations").insert({
@@ -531,7 +489,7 @@ async def create_prompt_customization(
 async def get_prompt_customizations_for_agent(
     agent_name: str,
     user_id: str = Depends(get_current_user),
-    db: AsyncClient = Depends(get_supabase_client) # This still uses supabase-py client
+    db = Depends(get_supabase_client) # This still uses supabase-py client
 ):
     try:
         response = await db.table("user_agent_prompt_customizations") \
@@ -553,7 +511,7 @@ async def update_prompt_customization(
     customization_id: str,
     customization_data: PromptCustomizationCreate, # Re-use create model, user_id is fixed by RLS
     user_id: str = Depends(get_current_user), # Ensures user owns the record via RLS
-    db: AsyncClient = Depends(get_supabase_client) # This still uses supabase-py client
+    db = Depends(get_supabase_client) # This still uses supabase-py client
 ):
     try:
         # RLS will ensure the user can only update their own records.
@@ -590,7 +548,7 @@ async def root():
 # This is just an example, actual task management might be more complex
 # and involve user authentication/authorization through JWT tokens passed from frontend
 @app.get("/api/tasks")
-async def get_tasks(request: Request, db: AsyncClient = Depends(get_supabase_client)): # This still uses supabase-py client
+async def get_tasks(request: Request, db = Depends(get_supabase_client)): # This still uses supabase-py client
     print("Attempting to fetch tasks from Supabase.")
     try:
         # Example: Fetch tasks. In a real app, you'd filter by user_id from JWT.
@@ -620,13 +578,6 @@ async def get_tasks(request: Request, db: AsyncClient = Depends(get_supabase_cli
 # uvicorn chatServer.main:app --reload
 
 # Placeholder for webhook endpoint from Supabase
-class SupabasePayload(BaseModel):
-    type: str
-    table: str
-    record: Optional[dict] = None
-    old_record: Optional[dict] = None
-    webhook_schema: Optional[str] = None # Renamed from schema to avoid conflict
-
 @app.post("/api/supabase-webhook")
 async def supabase_webhook(payload: SupabasePayload):
     print(f"Received Supabase webhook: Type={payload.type}, Table={payload.table}")
@@ -666,14 +617,6 @@ async def supabase_webhook(payload: SupabasePayload):
 #         raise HTTPException(status_code=500, detail=f"Error invoking agent: {str(e)}")
 
 # Define a protocol for what we expect from an agent executor
-class AgentExecutorProtocol(Protocol):
-    """Protocol defining the interface we expect from agent executors."""
-    memory: Any  # The memory system
-    
-    async def ainvoke(self, inputs: Dict[str, Any], config: Optional[Any] = None) -> Dict[str, Any]:
-        """Asynchronously invoke the agent with inputs."""
-        ...
-
 if __name__ == "__main__":
     import uvicorn
     # Ensure logging is configured to see messages from the application
