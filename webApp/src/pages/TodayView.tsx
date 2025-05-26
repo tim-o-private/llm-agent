@@ -14,16 +14,12 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
-
 import TaskListGroup from '@/components/tasks/TaskListGroup';
 import { TaskCardProps } from '@/components/ui/TaskCard';
 import { FastTaskInput } from '@/components/features/TodayView/FastTaskInput';
 import { TaskDetailView } from '@/components/features/TaskDetail/TaskDetailView';
 import { PrioritizeViewModal } from '@/components/features/PrioritizeView/PrioritizeViewModal';
-import { ChatPanel } from '@/components/ChatPanel';
-import { useChatStore } from '@/stores/useChatStore';
-import { PlusIcon, ChatBubbleIcon, DoubleArrowRightIcon } from '@radix-ui/react-icons';
+import { PlusIcon } from '@radix-ui/react-icons';
 import { Button } from '@/components/ui/Button';
 
 import { useTaskStore } from '@/stores/useTaskStore';
@@ -61,9 +57,6 @@ const mapTaskToTaskCardViewModel = (
 });
 
 const TodayView: React.FC = () => {
-  // Chat store
-  const isChatPanelOpen = useChatStore((state) => state.isChatPanelOpen);
-  const toggleChatPanel = useChatStore((state) => state.toggleChatPanel);
   
   const { isLoading: isLoadingTasks, error: fetchError, initialized } = useTaskStoreInitializer();
   const {
@@ -320,205 +313,87 @@ const TodayView: React.FC = () => {
 
   if (fetchError) {
     return (
-      <div className="text-red-500 p-4">
+      <div className="text-destructive p-4">
         Error loading tasks: {fetchError instanceof Error ? fetchError.message : String(fetchError)}
       </div>
     );
   }
 
   return (
-    <div className="h-full flex">
-      {/* Main Content Area */}
-      {isChatPanelOpen ? (
-        <PanelGroup direction="horizontal" className="flex-1">
-          {/* Main Content Panel */}
-          <Panel 
-            defaultSize={50} 
-            minSize={30}
-            className="flex flex-col"
-          >
-            <div className="flex-1 flex flex-col p-4 md:p-6 lg:p-8 overflow-y-auto relative">
-              <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold text-gray-800 dark:text-white">Today</h1>
-                <div className="flex items-center space-x-2">
-                  <Button variant="secondary" onClick={() => {
-                    setIsFastInputUiFocused(true);
-                    // FastTaskInput's onFocused will call setInputFocusState(true)
-                  }}>
-                    <PlusIcon className="mr-2 h-4 w-4" /> New Task
-                  </Button>
-                </div>
-              </div>
-              <div className="mb-6">
-                <FastTaskInput 
-                    ref={fastInputRef}
-                    isFocused={isFastInputUiFocused} 
-                    onTaskCreated={handleTaskCreatedByFastInput} 
-                    onBlurred={() => {
-                      setIsFastInputUiFocused(false);
-                      setInputFocusState(false);
-                    }}
-                    onFocused={() => { 
-                      // setIsFastInputUiFocused(true); // Already set by button click or requestFocusFastInput effect
-                      setInputFocusState(true);
-                    }}
-                />
-              </div>
-              {displayTasksWithSubtasks.length === 0 ? (
-                <div className="flex-grow flex flex-col items-center justify-center text-gray-500 dark:text-gray-400">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                  </svg>
-                  <p className="text-lg">Your day is clear!</p>
-                  <p>Add some tasks to get started.</p>
-                </div>
-              ) : (
-                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                  <SortableContext items={displayTasksWithSubtasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
-                    <TaskListGroup tasks={displayTasksWithSubtasks} title="Today's Tasks" />
-                  </SortableContext>
-                </DndContext>
-              )}
-
-              {currentDetailTaskId && (
-                <TaskDetailView
-                  taskId={currentDetailTaskId}
-                  isOpen={currentDetailTaskId !== null}
-                  onOpenChange={(isOpenFromDialog) => { 
-                    setModalOpenState(currentDetailTaskId, isOpenFromDialog);
-                    if (!isOpenFromDialog) {
-                      setCurrentDetailTaskId(null); 
-                      if (currentDetailTaskId === requestOpenDetailForTaskId) {
-                          clearDetailOpenRequest();
-                      }
-                    }
-                  }}
-                  onTaskUpdated={() => {}} 
-                  onDeleteTaskFromDetail={handleDeleteTask}
-                />
-              )}
-
-              {currentPrioritizeTaskId && (
-                <PrioritizeViewModal
-                  taskId={currentPrioritizeTaskId}
-                  isOpen={currentPrioritizeTaskId !== null}
-                  onOpenChange={(isOpenFromDialog) => { 
-                    setModalOpenState(currentPrioritizeTaskId, isOpenFromDialog);
-                    if (!isOpenFromDialog) {
-                      setCurrentPrioritizeTaskId(null);
-                    }
-                  }}
-                  onStartFocusSession={handleStartFocusSessionConfirmed}
-                />
-              )}
-            </div>
-          </Panel>
-
-          {/* Resizable Handle */}
-          <PanelResizeHandle className="w-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors duration-500 ease-in-out cursor-col-resize" />
-
-          {/* Chat Panel */}
-          <Panel 
-            defaultSize={50} 
-            minSize={25} 
-            maxSize={70}
-            className="bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 shadow-xl"
-          >
-            <div className="h-full relative">
-              <ChatPanel agentId={import.meta.env.VITE_DEFAULT_CHAT_AGENT_ID || "assistant"} />
-            </div>
-          </Panel>
-        </PanelGroup>
-      ) : (
-        /* Full width main content when chat is closed */
-        <div className="flex-1 flex flex-col p-4 md:p-6 lg:p-8 overflow-y-auto relative">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold text-gray-800 dark:text-white">Today</h1>
-            <div className="flex items-center space-x-2">
-              <Button variant="secondary" onClick={() => {
-                setIsFastInputUiFocused(true);
-                // FastTaskInput's onFocused will call setInputFocusState(true)
-              }}>
-                <PlusIcon className="mr-2 h-4 w-4" /> New Task
-              </Button>
-            </div>
-          </div>
-          <div className="mb-6">
-            <FastTaskInput 
-                ref={fastInputRef}
-                isFocused={isFastInputUiFocused} 
-                onTaskCreated={handleTaskCreatedByFastInput} 
-                onBlurred={() => {
-                  setIsFastInputUiFocused(false);
-                  setInputFocusState(false);
-                }}
-                onFocused={() => { 
-                  // setIsFastInputUiFocused(true); // Already set by button click or requestFocusFastInput effect
-                  setInputFocusState(true);
-                }}
-            />
-          </div>
-          {displayTasksWithSubtasks.length === 0 ? (
-            <div className="flex-grow flex flex-col items-center justify-center text-gray-500 dark:text-gray-400">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-              </svg>
-              <p className="text-lg">Your day is clear!</p>
-              <p>Add some tasks to get started.</p>
-            </div>
-          ) : (
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={displayTasksWithSubtasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
-                <TaskListGroup tasks={displayTasksWithSubtasks} title="Today's Tasks" />
-              </SortableContext>
-            </DndContext>
-          )}
-
-          {currentDetailTaskId && (
-            <TaskDetailView
-              taskId={currentDetailTaskId}
-              isOpen={currentDetailTaskId !== null}
-              onOpenChange={(isOpenFromDialog) => { 
-                setModalOpenState(currentDetailTaskId, isOpenFromDialog);
-                if (!isOpenFromDialog) {
-                  setCurrentDetailTaskId(null); 
-                  if (currentDetailTaskId === requestOpenDetailForTaskId) {
-                      clearDetailOpenRequest();
-                  }
-                }
-              }}
-              onTaskUpdated={() => {}} 
-              onDeleteTaskFromDetail={handleDeleteTask}
-            />
-          )}
-
-          {currentPrioritizeTaskId && (
-            <PrioritizeViewModal
-              taskId={currentPrioritizeTaskId}
-              isOpen={currentPrioritizeTaskId !== null}
-              onOpenChange={(isOpenFromDialog) => { 
-                setModalOpenState(currentPrioritizeTaskId, isOpenFromDialog);
-                if (!isOpenFromDialog) {
-                  setCurrentPrioritizeTaskId(null);
-                }
-              }}
-              onStartFocusSession={handleStartFocusSessionConfirmed}
-            />
-          )}
+    <div className="flex flex-col h-full">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold text-text-primary">Today</h1>
+        <div className="flex items-center space-x-2">
+          <Button variant="secondary" onClick={() => {
+            setIsFastInputUiFocused(true);
+            // FastTaskInput's onFocused will call setInputFocusState(true)
+          }}>
+            <PlusIcon className="mr-2 h-4 w-4" /> New Task
+          </Button>
         </div>
+      </div>
+      <div className="mb-6">
+        <FastTaskInput 
+            ref={fastInputRef}
+            isFocused={isFastInputUiFocused} 
+            onTaskCreated={handleTaskCreatedByFastInput} 
+            onBlurred={() => {
+              setIsFastInputUiFocused(false);
+              setInputFocusState(false);
+            }}
+            onFocused={() => { 
+              // setIsFastInputUiFocused(true); // Already set by button click or requestFocusFastInput effect
+              setInputFocusState(true);
+            }}
+        />
+      </div>
+      {displayTasksWithSubtasks.length === 0 ? (
+        <div className="flex-grow flex flex-col items-center justify-center text-text-muted">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+          </svg>
+          <p className="text-lg">Your day is clear!</p>
+          <p>Add some tasks to get started.</p>
+        </div>
+      ) : (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={displayTasksWithSubtasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+            <TaskListGroup tasks={displayTasksWithSubtasks} title="Today's Tasks" />
+          </SortableContext>
+        </DndContext>
       )}
 
-      {/* Always visible Chat Toggle Button on the right */}
-      <div className="fixed top-0 right-0 h-full z-50 flex">
-        <button
-          onClick={toggleChatPanel}
-          className="w-16 h-full flex flex-col items-center justify-center py-4 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 shadow-xl transition-all duration-500 ease-in-out"
-          aria-label={isChatPanelOpen ? "Close chat panel" : "Open chat panel"}
-        >
-          {isChatPanelOpen ? <DoubleArrowRightIcon className="h-6 w-6" /> : <ChatBubbleIcon className="h-6 w-6" />}
-          {!isChatPanelOpen && <span className="text-xs mt-1">Chat</span>}
-        </button>
-      </div>
+      {currentDetailTaskId && (
+        <TaskDetailView
+          taskId={currentDetailTaskId}
+          isOpen={currentDetailTaskId !== null}
+          onOpenChange={(isOpenFromDialog) => { 
+            setModalOpenState(currentDetailTaskId, isOpenFromDialog);
+            if (!isOpenFromDialog) {
+              setCurrentDetailTaskId(null); 
+              if (currentDetailTaskId === requestOpenDetailForTaskId) {
+                  clearDetailOpenRequest();
+              }
+            }
+          }}
+          onTaskUpdated={() => {}} 
+          onDeleteTaskFromDetail={handleDeleteTask}
+        />
+      )}
+
+      {currentPrioritizeTaskId && (
+        <PrioritizeViewModal
+          taskId={currentPrioritizeTaskId}
+          isOpen={currentPrioritizeTaskId !== null}
+          onOpenChange={(isOpenFromDialog) => { 
+            setModalOpenState(currentPrioritizeTaskId, isOpenFromDialog);
+            if (!isOpenFromDialog) {
+              setCurrentPrioritizeTaskId(null);
+            }
+          }}
+          onStartFocusSession={handleStartFocusSessionConfirmed}
+        />
+      )}
     </div>
   );
 };

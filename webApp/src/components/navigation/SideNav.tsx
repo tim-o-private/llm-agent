@@ -3,9 +3,9 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { navItems } from '@/navigation/navConfig';
 
 const SideNav: React.FC = () => {
-  const baseStyle = "group flex items-center px-3 py-3 text-sm font-medium rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-800";
-  const inactiveStyle = "text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white";
-  const activeStyle = "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white";
+  const baseStyle = "group flex items-center px-3 py-3 text-sm font-medium rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-accent-subtle focus-visible:ring-offset-ui-bg";
+  const inactiveStyle = "text-text-secondary hover:bg-ui-interactive-bg-hover hover:text-text-primary";
+  const activeStyle = "bg-accent-surface text-text-accent border-l-2 border-brand-primary";
 
   const navRef = useRef<HTMLElement>(null);
   const location = useLocation();
@@ -59,6 +59,7 @@ const SideNav: React.FC = () => {
           className={({ isActive }) =>
             `${baseStyle} ${isActive ? activeStyle : inactiveStyle}`
           }
+
           end={item.exact}
           tabIndex={index === focusedIndex ? 0 : -1}
           aria-current={location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path)) ? "page" : undefined}

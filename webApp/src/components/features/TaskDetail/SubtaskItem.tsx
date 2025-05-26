@@ -101,13 +101,13 @@ export const SubtaskItem: React.FC<SubtaskItemProps> = ({ subtask, onUpdate, onR
     <div 
       ref={setNodeRef}
       style={style}
-      className={`flex items-center p-2 border rounded-md mb-2 bg-white dark:bg-gray-800 shadow-sm
-                ${subtask.status === 'completed' ? 'border-green-200 dark:border-green-900' : 'border-gray-200 dark:border-gray-700'}`}
+      className={`flex items-center p-2 border rounded-md mb-2 bg-ui-element-bg shadow-sm
+                ${subtask.status === 'completed' ? 'border-success-indicator' : 'border-ui-border'}`}
     >
       <button
         {...listeners}
         {...attributes}
-        className="mr-2 cursor-grab active:cursor-grabbing p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
+        className="mr-2 cursor-grab active:cursor-grabbing p-1 rounded-md hover:bg-ui-interactive-bg-hover text-text-muted"
         aria-label="Drag to reorder"
       >
         <DragHandleDots2Icon />
@@ -117,7 +117,7 @@ export const SubtaskItem: React.FC<SubtaskItemProps> = ({ subtask, onUpdate, onR
         type="checkbox"
         checked={subtask.status === 'completed'}
         onChange={handleToggleComplete}
-        className="mr-3 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+        className="mr-3 h-4 w-4 rounded border-ui-border text-brand-primary focus:ring-brand-primary cursor-pointer"
       />
       
       {isEditing ? (
@@ -128,11 +128,11 @@ export const SubtaskItem: React.FC<SubtaskItemProps> = ({ subtask, onUpdate, onR
           onChange={(e) => setEditValue(e.target.value)}
           onBlur={saveEdit}
           onKeyDown={handleKeyDown}
-          className="flex-grow p-1 rounded border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+          className="flex-grow p-1 rounded border border-ui-border focus:outline-none focus:ring-2 focus:ring-brand-primary bg-ui-element-bg text-text-primary"
         />
       ) : (
         <span 
-          className={`flex-grow ${subtask.status === 'completed' ? 'line-through text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-white'}`}
+          className={`flex-grow ${subtask.status === 'completed' ? 'line-through text-text-muted' : 'text-text-primary'}`}
         >
           {subtask.title}
         </span>
@@ -142,7 +142,7 @@ export const SubtaskItem: React.FC<SubtaskItemProps> = ({ subtask, onUpdate, onR
         {isEditing ? (
           <button
             onClick={saveEdit}
-            className="p-1 rounded-md hover:bg-green-100 dark:hover:bg-green-900 text-green-600 dark:text-green-400"
+            className="p-1 rounded-md hover:bg-success-subtle text-success-strong"
             aria-label="Save changes"
           >
             <CheckIcon />
@@ -150,7 +150,7 @@ export const SubtaskItem: React.FC<SubtaskItemProps> = ({ subtask, onUpdate, onR
         ) : (
           <button
             onClick={startEditing}
-            className="p-1 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900 text-blue-600 dark:text-blue-400"
+            className="p-1 rounded-md hover:bg-accent-subtle text-brand-primary"
             aria-label="Edit subtask"
           >
             <Pencil1Icon />
@@ -159,7 +159,7 @@ export const SubtaskItem: React.FC<SubtaskItemProps> = ({ subtask, onUpdate, onR
         
         <button
           onClick={handleDelete}
-          className="p-1 rounded-md hover:bg-red-100 dark:hover:bg-red-900 text-red-600 dark:text-red-400"
+          className="p-1 rounded-md hover:bg-destructive-subtle text-destructive"
           aria-label="Delete subtask"
         >
           <Cross2Icon />

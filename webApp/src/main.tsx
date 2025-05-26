@@ -4,7 +4,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Theme } from '@radix-ui/themes';
 import App from './App';
 import { useThemeStore, getEffectiveAppearance } from '@/stores/useThemeStore'; // Changed to @/ alias
-import '@radix-ui/themes/styles.css'; // Radix Themes CSS
 import '@/styles/index.css'; // Changed to @/ alias
 import '@/styles/ui-components.css'; // Changed to @/ alias
 
@@ -32,7 +31,7 @@ function ThemedApp() {
   }, [effectiveAppearance]); // Rerun effect when effectiveAppearance changes
 
   return (
-    <Theme accentColor="indigo" grayColor="slate" appearance={effectiveAppearance}>
+    <Theme accentColor="green" grayColor="slate" appearance={effectiveAppearance}>
       <App />
     </Theme>
   );

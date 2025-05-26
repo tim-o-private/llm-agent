@@ -17,11 +17,11 @@ const TopBar: React.FC = () => {
         <div className="flex items-center flex-shrink-0 px-4 h-full">
            {/* The h-16 on AppShell for TopBar and border-b from SideNav logo div are now implicitly handled by TopBar's fixed height if needed */}
            {/* For alignment, ensure TopBar container (in AppShell) has items-center if logo isn't full height */}
-          <span className="text-xl font-semibold text-gray-800 dark:text-white">Clarity</span>
+          <span className="text-xl font-semibold text-text-primary">Clarity</span>
         </div>
         {/* <button className="md:hidden ..."> Mobile Nav Toggle </button> */}
         {/* Date can be here or moved further right if logo takes precedence */}
-        <span className="text-sm text-gray-600 dark:text-gray-400 hidden sm:block ml-4">
+        <span className="text-sm text-text-muted hidden sm:block ml-4">
           {currentDate}
         </span>
       </div>
@@ -41,7 +41,7 @@ const TopBar: React.FC = () => {
       <div className="ml-4 flex items-center md:ml-6 space-x-3"> {/* Added space-x-3 for item spacing */}
         {/* Streak Progress Placeholder */}
         <div className="mr-3"> {/* This mr-3 might be redundant due to space-x-3 on parent */}
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Streak:  N/A</span>
+          <span className="text-sm font-medium text-text-secondary">Streak:  N/A</span>
           {/* TODO: Add streak icon/progress bar */}
         </div>
         

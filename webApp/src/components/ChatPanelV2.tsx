@@ -5,6 +5,8 @@ import { Thread } from '@assistant-ui/react-ui';
 import { useChatStore, useInitializeChatStore } from '@/stores/useChatStore';
 import { useAuthStore } from '@/features/auth/useAuthStore';
 import { useTaskViewStore } from '@/stores/useTaskViewStore';
+import { MessageHeader } from '@/components/ui/chat/MessageHeader';
+import { useSendMessageMutation } from '@/api/hooks/useChatApiHooks';
 
 interface ChatPanelV2Props {
   agentId?: string;
@@ -20,6 +22,9 @@ export const ChatPanelV2: React.FC<ChatPanelV2Props> = ({ agentId: agentIdProp }
   const { activeChatId, currentSessionInstanceId, sendHeartbeatAsync, clearCurrentSessionAsync } = useChatStore();
   const { user } = useAuthStore();
   const { setInputFocusState } = useTaskViewStore();
+
+  // Get mutation state for header status
+  const sendMessageMutation = useSendMessageMutation();
 
   // Create chat model adapter with provider functions that get current values
   const chatModelAdapter = useMemo(() => {
@@ -98,10 +103,22 @@ export const ChatPanelV2: React.FC<ChatPanelV2Props> = ({ agentId: agentIdProp }
   }, [setInputFocusState]);
 
   return (
-    <div className="h-full">
-      <AssistantRuntimeProvider runtime={runtime}>
-        <Thread />
-      </AssistantRuntimeProvider>
+    <div className="flex flex-col h-full bg-ui-bg shadow-lg border-l border-ui-border">
+      {/* Header matching the existing design */}
+      <MessageHeader 
+        chatTitle="AI Coach" 
+        status={sendMessageMutation.isPending ? "Typing..." : "Online"}
+        statusColor={sendMessageMutation.isPending ? 'yellow' : 'green'}
+      />
+      
+      {/* Assistant-UI Thread with comprehensive theming from assistant-ui-theme.css */}
+      <div className="flex-1 relative">
+        <AssistantRuntimeProvider runtime={runtime}>
+          <div className="h-full">
+            <Thread />
+          </div>
+        </AssistantRuntimeProvider>
+      </div>
     </div>
   );
 }; 

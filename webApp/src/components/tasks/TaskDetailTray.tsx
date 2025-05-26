@@ -76,7 +76,7 @@ const TaskDetailTray: React.FC<TaskDetailTrayProps> = ({
             id="detail-time-period" 
             value={timePeriod} 
             onChange={(e) => setTimePeriod(e.target.value)} 
-            className="w-full mt-1 block pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            className="w-full mt-1 block pl-3 pr-10 py-2 text-base border-ui-border dark:border-gray-600 focus:outline-none focus:border-ui-border-focus focus:ring-2 focus:ring-accent-subtle sm:text-sm rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
           >
             <option>Morning</option>
             <option>Afternoon</option>
@@ -91,7 +91,7 @@ const TaskDetailTray: React.FC<TaskDetailTrayProps> = ({
             value={notes}
             onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNotes(e.target.value)} // Typed event
             placeholder="Add any details, links, or sub-tasks here..."
-            className="w-full mt-1 block pl-3 pr-3 py-2 text-base border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm" // Added common input styling + shadow-sm
+            className="w-full mt-1 block pl-3 pr-3 py-2 text-base border-ui-border dark:border-gray-600 focus:outline-none focus:border-ui-border-focus focus:ring-2 focus:ring-accent-subtle sm:text-sm rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm" // Added common input styling + shadow-sm
             rows={4}
           />
         </div>

@@ -1,4 +1,6 @@
+@import "@radix-ui/themes/styles.css";
 @import "@assistant-ui/react-ui/styles/index.css";
+@import "./assistant-ui-theme.css";
 
 @tailwind base;
 @tailwind components;

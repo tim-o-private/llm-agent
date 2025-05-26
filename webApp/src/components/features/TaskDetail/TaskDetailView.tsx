@@ -385,7 +385,7 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
       <RadixDialog.Portal>
         <RadixDialog.Overlay className="fixed inset-0 bg-black/50 data-[state=open]:animate-overlayShow" />
         <RadixDialog.Content 
-          className="fixed top-1/2 left-1/2 w-[90vw] max-w-lg max-h-[85vh] -translate-x-1/2 -translate-y-1/2 rounded-lg bg-white dark:bg-gray-800 p-6 shadow-lg data-[state=open]:animate-contentShow focus:outline-none flex flex-col"
+          className="fixed top-1/2 left-1/2 w-[90vw] max-w-lg max-h-[85vh] -translate-x-1/2 -translate-y-1/2 rounded-lg bg-ui-modal-bg p-6 shadow-lg data-[state=open]:animate-contentShow focus:outline-none flex flex-col"
           onPointerDownOutside={(event) => {
             console.log('[TaskDetailView] RadixDialog.Content onPointerDownOutside triggered.');
             // Prevent default behavior which might lead to closing the dialog.
@@ -395,10 +395,10 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
             event.preventDefault(); 
           }}
         >
-          <RadixDialog.Title className="text-xl font-semibold text-gray-900 dark:text-white mb-1">
+          <RadixDialog.Title className="text-xl font-semibold text-text-primary mb-1">
             {displayTaskTitle}
           </RadixDialog.Title>
-          <RadixDialog.Description className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+          <RadixDialog.Description className="text-sm text-text-muted mb-4">
             View and edit task information. Changes are saved to local store.
           </RadixDialog.Description>
 
@@ -410,19 +410,19 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
           )}
           
           {!isLoading && error && (
-            <div className="text-red-500 dark:text-red-400 p-4">
+            <div className="text-destructive p-4">
               Error loading task: {typeof error === 'string' ? error : (error as Error)?.message || 'Unknown error'}
             </div>
           )}
 
           {!isLoading && !error && !loadedParentTask && taskId && (
-             <div className="text-gray-500 dark:text-gray-400 p-4">
+             <div className="text-text-muted p-4">
                 Task with ID '{taskId}' not found.
             </div>
           )}
           
           {!taskId && isOpen && !isLoading && !error && ( // Handles create mode or no task selected scenario
-             <div className="text-gray-500 dark:text-gray-400 p-4">
+             <div className="text-text-muted p-4">
                 No task selected or task ID is missing.
             </div>
           )}
@@ -449,7 +449,7 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
                     {...register('title')}
                     className="mt-1" 
                   />
-                  {formErrors.title && <p className="text-red-500 text-sm mt-1">{formErrors.title.message}</p>}
+                  {formErrors.title && <p className="text-destructive text-sm mt-1">{formErrors.title.message}</p>}
                 </div>
                 <div>
                   <Label htmlFor="description">Description</Label>
@@ -458,7 +458,7 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
                     {...register('description')}
                     className="mt-1" 
                   />
-                  {formErrors.description && <p className="text-red-500 text-sm mt-1">{formErrors.description.message}</p>}
+                  {formErrors.description && <p className="text-destructive text-sm mt-1">{formErrors.description.message}</p>}
                 </div>
                 <div>
                   <Label htmlFor="notes">Notes</Label>
@@ -467,7 +467,7 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
                     {...register('notes')}
                     className="mt-1" 
                   />
-                  {formErrors.notes && <p className="text-red-500 text-sm mt-1">{formErrors.notes.message}</p>}
+                  {formErrors.notes && <p className="text-destructive text-sm mt-1">{formErrors.notes.message}</p>}
                 </div>
                 <div>
                   <Label htmlFor="category">Category</Label>
@@ -476,7 +476,7 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
                     {...register('category')}
                     className="mt-1" 
                   />
-                  {formErrors.category && <p className="text-red-500 text-sm mt-1">{formErrors.category.message}</p>}
+                  {formErrors.category && <p className="text-destructive text-sm mt-1">{formErrors.category.message}</p>}
                 </div>
                 <div>
                   <Label htmlFor="due_date">Due Date</Label>
@@ -486,7 +486,7 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
                     {...register('due_date')}
                     className="mt-1"
                   />
-                  {formErrors.due_date && <p className="text-red-500 text-sm mt-1">{formErrors.due_date.message}</p>}
+                  {formErrors.due_date && <p className="text-destructive text-sm mt-1">{formErrors.due_date.message}</p>}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -498,13 +498,13 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
                         <select 
                           {...field} 
                           id="status" 
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm p-2"
+                          className="mt-1 block w-full rounded-md border-ui-border shadow-sm focus:border-ui-border-focus focus:ring-2 focus:ring-accent-subtle bg-ui-element-bg text-text-primary sm:text-sm p-2"
                         >
                           {ALL_STATUSES_INTERNAL.map(s => <option key={s} value={s}>{s.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</option>)}
                         </select>
                       )}
                     />
-                    {formErrors.status && <p className="text-red-500 text-sm mt-1">{formErrors.status.message}</p>}
+                    {formErrors.status && <p className="text-destructive text-sm mt-1">{formErrors.status.message}</p>}
                   </div>
                   <div>
                     <Label htmlFor="priority">Priority</Label>
@@ -515,19 +515,19 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
                         <select 
                           {...field} 
                           id="priority" 
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm p-2"
+                          className="mt-1 block w-full rounded-md border-ui-border shadow-sm focus:border-ui-border-focus focus:ring-2 focus:ring-accent-subtle bg-ui-element-bg text-text-primary sm:text-sm p-2"
                           onChange={e => field.onChange(parseInt(e.target.value, 10) as TaskPriority)}
                         >
                           {ALL_PRIORITIES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                         </select>
                       )}
                     />
-                    {formErrors.priority && <p className="text-red-500 text-sm mt-1">{formErrors.priority.message}</p>}
+                    {formErrors.priority && <p className="text-destructive text-sm mt-1">{formErrors.priority.message}</p>}
                   </div>
                 </div>
 
-                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <h3 className="text-md font-semibold text-gray-800 dark:text-gray-100 mb-2">Subtasks</h3>
+                <div className="mt-4 pt-4 border-t border-ui-border">
+                  <h3 className="text-md font-semibold text-text-primary mb-2">Subtasks</h3>
                   {dndContextProps && ( // Conditionally render DND context
                     (() => {
                       console.log('[TaskDetailView] DndContext IS BEING RENDERED because dndContextProps is truthy.');
@@ -548,7 +548,7 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
                                   />
                                 ))
                               ) : (
-                                <p className="text-sm text-gray-500 dark:text-gray-400">No subtasks yet.</p>
+                                <p className="text-sm text-text-muted">No subtasks yet.</p>
                               )}
                             </div>
                           </SortableContext>
@@ -568,7 +568,7 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
                             />
                           ))
                         ) : (
-                          <p className="text-sm text-gray-500 dark:text-gray-400">No subtasks yet.</p>
+                          <p className="text-sm text-text-muted">No subtasks yet.</p>
                         )}
                       </div>
                   )}
@@ -597,13 +597,13 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
                 </div>
               </form>
 
-              <div className="mt-6 flex justify-between items-center pt-4 border-t border-gray-200 dark:border-gray-700">
+              <div className="mt-6 flex justify-between items-center pt-4 border-t border-ui-border">
                 <div className="flex space-x-2 ml-auto">
                   <Button variant="secondary" type="button" onClick={() => wrappedOnOpenChange(false)}>Cancel</Button>
                   <Button 
                     type="button"
                     onClick={handleSave}
-                    className="bg-blue-500 hover:bg-blue-600 text-white"
+                    className="bg-brand-primary hover:bg-brand-primary-hover text-brand-primary-text"
                     disabled={isSaveButtonDisabled}
                   >
                     {isSaving ? <Spinner size={16} className="mr-2" /> : null}
@@ -629,7 +629,7 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
 
           <RadixDialog.Close asChild>
             <button
-              className="absolute top-3.5 right-3.5 inline-flex h-6 w-6 appearance-none items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-400"
+              className="absolute top-3.5 right-3.5 inline-flex h-6 w-6 appearance-none items-center justify-center rounded-full text-text-muted hover:bg-ui-interactive-bg-hover focus:outline-none focus:ring-2 focus:ring-ui-border-focus"
               aria-label="Close"
               type="button"
               onClick={() => wrappedOnOpenChange(false)}

@@ -12,16 +12,16 @@
   }
 
   .btn-primary {
-    background-color: var(--indigo-9);
-    color: white; /* --indigo-1 is white, or use a fixed white */
+    background-color: var(--accent-9);
+    color: var(--accent-contrast);
     /* box-shadow for focus, as outline might be complex with themes */
     /* Instead of Tailwind rings, using a direct outline for Radix vars */
   }
   .btn-primary:hover:not(:disabled) {
-    background-color: var(--indigo-10);
+    background-color: var(--accent-10);
   }
   .btn-primary:focus-visible:not(:disabled) {
-    outline: 2px solid var(--indigo-7);
+    outline: 2px solid var(--accent-7);
     outline-offset: 2px;
   }
 
