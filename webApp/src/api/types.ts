@@ -19,7 +19,8 @@ export interface Task {
   created_at: string;
   updated_at: string;
   completed: boolean; // Derived from status for easier filtering, ensure it's kept in sync
-  completed_at?: string | null; // Added this line
+  completed_at?: string | null;
+  subtasks?: Task[]; // Added for client-side handling of subtasks
 }
 
 export interface UserPreferences {
@@ -49,11 +50,11 @@ export interface FocusSession {
   completion_note?: string | null; 
 }
 
+export type NewTaskData = Omit<Task, 'id' | 'created_at' | 'updated_at' | 'completed' | 'subtasks'> & { user_id: string };
+export type UpdateTaskData = Partial<Omit<Task, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'subtasks'>>;
+
 export type NewFocusSessionData = Pick<FocusSession, 'user_id' | 'task_id' | 'planned_duration_minutes'> & Partial<Omit<FocusSession, 'id' | 'created_at' | 'user_id' | 'task_id' | 'start_time' | 'planned_duration_minutes'>>;
 export type UpdateFocusSessionData = Partial<Omit<FocusSession, 'id' | 'user_id' | 'task_id' | 'created_at'>>;
-
-export type TaskCreate = Omit<Task, 'id' | 'created_at' | 'updated_at' | 'completed'> & { user_id: string };
-export type TaskUpdate = Partial<Omit<Task, 'id' | 'user_id' | 'created_at' | 'updated_at'>>;
 
 export interface Streak {
     id: string;

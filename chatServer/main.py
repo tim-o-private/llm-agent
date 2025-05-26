@@ -1,31 +1,74 @@
 import sys
 import os
 import logging # Added for log_level
-from typing import Dict, Tuple, Optional # Added Optional here
+from typing import List # Added Optional and List here, NEW: AsyncIterator
+from contextlib import asynccontextmanager # NEW IMPORT
+
+# Add parent directory to path for imports when running directly
+if __name__ == "__main__":
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    parent_dir = os.path.dirname(current_dir)
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Depends, Request, status
-from pydantic import BaseModel
-# from typing import Any # No longer explicitly needed here with more specific types
-from langchain.memory import ConversationBufferMemory # Added
-from langchain.agents import AgentExecutor # Added for type hinting
 from fastapi.middleware.cors import CORSMiddleware
-from jose import jwt, JWTError
-from supabase import create_client, AsyncClient
+
+
+# Import models and protocols from extracted modules
+try:
+    # Try relative imports first (when imported as a module)
+    from .models.chat import ChatRequest, ChatResponse
+    from .models.prompt_customization import PromptCustomization, PromptCustomizationCreate
+    from .models.webhook import SupabasePayload
+    from .config.settings import get_settings
+    from .config.constants import (
+        PROMPT_CUSTOMIZATIONS_TAG,
+    )
+    from .database.connection import get_db_connection
+    from .database.supabase_client import get_supabase_client
+    from .dependencies.auth import get_current_user
+    from .dependencies.agent_loader import get_agent_loader
+    from .services.chat import get_chat_service
+    from .services.prompt_customization import get_prompt_customization_service
+except ImportError:
+    # Fall back to absolute imports (when run directly)
+    from models.chat import ChatRequest, ChatResponse
+    from models.prompt_customization import PromptCustomization, PromptCustomizationCreate
+    from models.webhook import SupabasePayload
+    from config.settings import get_settings
+    from config.constants import (  
+        PROMPT_CUSTOMIZATIONS_TAG
+    )
+    from database.connection import get_db_connection
+    from database.supabase_client import get_supabase_client
+    from dependencies.auth import get_current_user
+    from dependencies.agent_loader import get_agent_loader
+    from services.chat import get_chat_service
+    from services.prompt_customization import get_prompt_customization_service
 
 # Correctly import ConfigLoader
 from utils.config_loader import ConfigLoader
 
 # Import agent_loader
-from core import agent_loader
+from core.agents.customizable_agent import CustomizableAgentExecutor # Added import
+
+# For V2 Agent Memory System
+import psycopg
+
+# NEW: Agent Executor Cache
+from cachetools import TTLCache
+# Cache for (user_id, agent_name) -> CustomizableAgentExecutor
+AGENT_EXECUTOR_CACHE: TTLCache[tuple[str, str], CustomizableAgentExecutor] = TTLCache(maxsize=100, ttl=900)
 
 # --- START Inserted Environment & Path Setup ---
 def add_project_root_to_path_for_local_dev():
     try:
         current_script_dir = os.path.dirname(os.path.abspath(__file__))
         project_root_dir = os.path.dirname(current_script_dir)
-        llm_agent_src_path_env = os.getenv("LLM_AGENT_SRC_PATH", "src")
-        full_src_path = os.path.join(project_root_dir, llm_agent_src_path_env)
+        settings = get_settings()
+        full_src_path = os.path.join(project_root_dir, settings.llm_agent_src_path)
         if os.path.isdir(full_src_path):
             if full_src_path not in sys.path:
                 sys.path.insert(0, full_src_path)
@@ -34,7 +77,10 @@ def add_project_root_to_path_for_local_dev():
     except Exception as e:
         print(f"Error setting up sys.path for local dev: {e}", file=sys.stderr)
 
-if os.getenv("RUNNING_IN_DOCKER") == "true":
+# Initialize settings and environment
+settings = get_settings()
+
+if settings.running_in_docker:
     load_dotenv(override=True) # In Docker, load .env from /app if present
 else:
     project_root_for_env = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -63,116 +109,145 @@ except Exception as e:
 
 # Cache for active agent executors: (user_id, agent_id) -> AgentExecutor
 # AgentExecutor type hint needs to be imported, e.g., from langchain.agents import AgentExecutor
-ACTIVE_AGENTS: Dict[Tuple[str, str], AgentExecutor] = {}
-DEFAULT_LOG_LEVEL = logging.INFO # Or use a level from your config
+# ACTIVE_AGENTS: Dict[Tuple[str, str], AgentExecutor] = {} # REMOVED - Per documentation, this is not used.
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://clarity-webapp.fly.dev",
-        "http://localhost:3000"
-    ],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-class ChatRequest(BaseModel):    
-    agent_id: str 
-    message: str
-
-class ChatResponse(BaseModel):
-    reply: str
-
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")  # Set this in your .env or Fly secrets
 
-def get_current_user(request: Request):
-    auth_header = request.headers.get("Authorization")
-    print("Authorization header:", auth_header)
-    print("JWT secret (first 8 chars):", SUPABASE_JWT_SECRET[:8])  # For debug only, don't log full secret
-    token = auth_header.split(" ")[1]
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     try:
-        payload = jwt.decode(token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated")
-        print("Decoded payload:", payload)
-        user_id = payload.get("sub")
-        if not user_id:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found in token")
-        return user_id
-    except JWTError as e:
-        print("JWTError:", e)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        from .database.connection import get_database_manager
+        from .database.supabase_client import get_supabase_manager
+        from .services.background_tasks import get_background_task_service
+    except ImportError:
+        from database.connection import get_database_manager
+        from database.supabase_client import get_supabase_manager
+        from services.background_tasks import get_background_task_service
+    
+    global AGENT_EXECUTOR_CACHE
+    logger.info("Application startup: Initializing resources...")
+    
+    # Initialize database manager
+    db_manager = get_database_manager()
+    try:
+        await db_manager.initialize()
+    except Exception as e:
+        logger.critical(f"Failed to initialize database: {e}", exc_info=True)
+
+    # Initialize Supabase manager
+    supabase_manager = get_supabase_manager()
+    await supabase_manager.initialize()
+
+    # Initialize and start background tasks
+    background_service = get_background_task_service()
+    background_service.set_agent_executor_cache(AGENT_EXECUTOR_CACHE)
+    background_service.start_background_tasks()
+
+    yield # Application runs here
+
+    logger.info("Application shutdown: Cleaning up resources...")
+    
+    # Stop background tasks
+    await background_service.stop_background_tasks()
+    
+    # Close database manager
+    await db_manager.close()
+
+# Re-assign app with the new lifespan
+app = FastAPI(lifespan=lifespan)
+
+# --- Logger setup ---
+# Ensure logger is available if not already globally configured
+# This can be more sophisticated, e.g., using utils.logging_utils.get_logger
+from utils.logging_utils import get_logger
+logger = get_logger(__name__)
 
 @app.post("/api/chat", response_model=ChatResponse)
-async def handle_chat(
-    request: ChatRequest,
-    user_id: str = Depends(get_current_user)
-) -> ChatResponse:
-    print(f"Received chat request for user: {user_id}, agent: {request.agent_id}, message: '{request.message}'")
-    llm_agent_src_path_env = os.getenv("LLM_AGENT_SRC_PATH")
-    if not llm_agent_src_path_env:
-        raise HTTPException(status_code=500, detail="LLM_AGENT_SRC_PATH not configured in .env")
-    if GLOBAL_CONFIG_LOADER is None:
-        raise HTTPException(status_code=500, detail="Critical configuration error: ConfigLoader not initialized.")
+async def chat_endpoint(
+    chat_input: ChatRequest, 
+    request: Request, 
+    user_id: str = Depends(get_current_user),
+    pg_connection: psycopg.AsyncConnection = Depends(get_db_connection),
+    agent_loader_module = Depends(get_agent_loader),
+):
+    """Chat endpoint that processes user messages through agents."""
+    chat_service = get_chat_service(AGENT_EXECUTOR_CACHE)
+    return await chat_service.process_chat(
+        chat_input=chat_input,
+        user_id=user_id,
+        pg_connection=pg_connection,
+        agent_loader_module=agent_loader_module,
+        request=request
+    )
 
-    agent_key = (user_id, request.agent_id)
-    try:
-        if agent_key not in ACTIVE_AGENTS:
-            print(f"No active agent for {agent_key}. Creating a new one.")
-            new_memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
-            agent_executor = agent_loader.load_agent_executor(
-                agent_name=request.agent_id,
-                config_loader=GLOBAL_CONFIG_LOADER,
-                log_level=DEFAULT_LOG_LEVEL,
-                memory=new_memory,
-                user_id=user_id
-            )
-            ACTIVE_AGENTS[agent_key] = agent_executor
-            print(f"Agent for {agent_key} created and cached.")
-        else:
-            print(f"Using cached agent for {agent_key}.")
-            agent_executor = ACTIVE_AGENTS[agent_key]
+# V2 Agent Memory: API endpoint for batch archival of messages -- REMOVED (or to be re-evaluated)
+# This was for client-side batching. With server-side per-turn history saving via PostgresChatMessageHistory,
+# this specific endpoint's role might change or become redundant if the new history table
+# serves as the complete, viewable chat log.
+# For now, commenting out:
+# class ArchiveMessagesPayload(BaseModel):
+# ... (rest of the old archive endpoint code commented out or removed) ...
+    
+# Placeholder for PromptManagerService if not fully defined elsewhere for this snippet
+# class PromptManagerService:
+# ... existing code ...
 
-        response = await agent_executor.ainvoke({"input": request.message})
-        ai_reply = response.get("output", "Agent did not provide an output.")
 
-    except FileNotFoundError as e:
-        print(f"Agent configuration error for {request.agent_id} (User: {user_id}): {e}")
-        raise HTTPException(status_code=500, detail=f"Agent configuration error for {request.agent_id}. Check server logs. {e}")
-    except ImportError as e:
-        print(f"Failed to import agent dependencies for {request.agent_id} (User: {user_id}): {e}")
-        raise HTTPException(status_code=500, detail=f"Agent import error. Check server logs. {e}")
-    except Exception as e:
-        print(f"Error processing message with agent {request.agent_id} for user {user_id}: {e}")
-        logging.error(f"Agent execution error for {agent_key}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error processing message with agent. Check server logs. {str(e)}")
+# --- API Endpoints for Prompt Customizations ---
 
-    return ChatResponse(reply=ai_reply)
+@app.post("/api/agent/prompt_customizations/", response_model=PromptCustomization, tags=[PROMPT_CUSTOMIZATIONS_TAG])
+async def create_prompt_customization(
+    customization_data: PromptCustomizationCreate,
+    user_id: str = Depends(get_current_user),
+    db = Depends(get_supabase_client) # This still uses supabase-py client
+):
+    """Create a new prompt customization."""
+    prompt_service = get_prompt_customization_service()
+    return await prompt_service.create_prompt_customization(
+        customization_data=customization_data,
+        user_id=user_id,
+        supabase_client=db
+    )
 
-# Global Supabase client instance
-# Initialize as None, will be created on startup
-supabase_client: AsyncClient | None = None
+@app.get("/api/agent/prompt_customizations/{agent_name}", response_model=List[PromptCustomization], tags=[PROMPT_CUSTOMIZATIONS_TAG])
+async def get_prompt_customizations_for_agent(
+    agent_name: str,
+    user_id: str = Depends(get_current_user),
+    db = Depends(get_supabase_client) # This still uses supabase-py client
+):
+    """Get prompt customizations for a specific agent."""
+    prompt_service = get_prompt_customization_service()
+    return await prompt_service.get_prompt_customizations_for_agent(
+        agent_name=agent_name,
+        user_id=user_id,
+        supabase_client=db
+    )
 
-@app.on_event("startup")
-async def startup_event():
-    global supabase_client
-    if os.getenv("SUPABASE_URL") and os.getenv("SUPABASE_SERVICE_KEY"):
-        try:
-            supabase_client = await create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KEY"))
-            print("Supabase client initialized successfully.")
-        except Exception as e:
-            print(f"Error initializing Supabase client: {e}")
-            supabase_client = None # Ensure it's None if initialization fails
-    else:
-        print("Supabase client not initialized due to missing URL or Key.")
-
-# Dependency to get Supabase client
-async def get_supabase_client() -> AsyncClient:
-    if supabase_client is None:
-        print("Supabase client not available.")
-        raise HTTPException(status_code=503, detail="Supabase client not available")
-    return supabase_client
+@app.put("/api/agent/prompt_customizations/{customization_id}", response_model=PromptCustomization, tags=[PROMPT_CUSTOMIZATIONS_TAG])
+async def update_prompt_customization(
+    customization_id: str,
+    customization_data: PromptCustomizationCreate, # Re-use create model, user_id is fixed by RLS
+    user_id: str = Depends(get_current_user), # Ensures user owns the record via RLS
+    db = Depends(get_supabase_client) # This still uses supabase-py client
+):
+    """Update an existing prompt customization."""
+    prompt_service = get_prompt_customization_service()
+    return await prompt_service.update_prompt_customization(
+        customization_id=customization_id,
+        customization_data=customization_data,
+        user_id=user_id,
+        supabase_client=db
+    )
 
 @app.get("/")
 async def root():
@@ -183,7 +258,7 @@ async def root():
 # This is just an example, actual task management might be more complex
 # and involve user authentication/authorization through JWT tokens passed from frontend
 @app.get("/api/tasks")
-async def get_tasks(request: Request, db: AsyncClient = Depends(get_supabase_client)):
+async def get_tasks(request: Request, db = Depends(get_supabase_client)): # This still uses supabase-py client
     print("Attempting to fetch tasks from Supabase.")
     try:
         # Example: Fetch tasks. In a real app, you'd filter by user_id from JWT.
@@ -213,13 +288,6 @@ async def get_tasks(request: Request, db: AsyncClient = Depends(get_supabase_cli
 # uvicorn chatServer.main:app --reload
 
 # Placeholder for webhook endpoint from Supabase
-class SupabasePayload(BaseModel):
-    type: str
-    table: str
-    record: Optional[dict] = None
-    old_record: Optional[dict] = None
-    webhook_schema: Optional[str] = None # Renamed from schema to avoid conflict
-
 @app.post("/api/supabase-webhook")
 async def supabase_webhook(payload: SupabasePayload):
     print(f"Received Supabase webhook: Type={payload.type}, Table={payload.table}")
@@ -258,9 +326,10 @@ async def supabase_webhook(payload: SupabasePayload):
 #         logger.error(f"Error invoking agent '{agent_name}': {e}", exc_info=True)
 #         raise HTTPException(status_code=500, detail=f"Error invoking agent: {str(e)}")
 
+# Define a protocol for what we expect from an agent executor
 if __name__ == "__main__":
     import uvicorn
     # Ensure logging is configured to see messages from the application
-    logging.basicConfig(level=logging.INFO) 
+    logging.basicConfig(level=logging.DEBUG) 
     print("Starting API server with Uvicorn for local development...")
     uvicorn.run(app, host="0.0.0.0", port=3001) 

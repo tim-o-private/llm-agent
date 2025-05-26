@@ -1,156 +1,168 @@
-**Task 7: Abstract TaskDetailView State Management into Reusable Hooks**
+import datetime
 
-Following the successful refactor of `TaskDetailView.tsx` to use React Hook Form for its main form state (Task 6), the next major initiative is to abstract the complex state management and interaction logic into reusable custom hooks. This aims to significantly simplify `TaskDetailView.tsx`, making it more of a presentational component, and to create generalizable solutions for object editing and reorderable list management across the application.
+# Active Context & Current Focus
 
-**Key Objectives for Task 7:**
-1.  **Develop `useObjectEditManager` Hook:** This hook will manage the lifecycle of editing a single data object, integrating with React Hook Form, handling data fetching (via a provided query hook), mutations (update/create), and save/cancel logic (including dirty checking and confirmation).
-2.  **Develop `useReorderableList` Hook:** This hook will manage a list of items that can be reordered using `dnd-kit`. It will handle list fetching, optimistic updates for reordering, committing order changes, and potentially adding/editing items within the list.
-3.  **Refactor `TaskDetailView.tsx`:** Systematically replace its internal logic for parent task editing with `useObjectEditManager` and its subtask management logic with `useReorderableList`.
+This document outlines the current high-priority task, relevant files, and key considerations for the AI agent.
 
-**Conceptual Design & API Proposal:**
-*   The detailed design for these hooks, including proposed API signatures and features, is documented in `memory-bank/clarity/references/patterns/reusable-ui-logic-hooks.md`.
+**Last Updated:** 2025-01-25
 
-**Next Steps:**
-1.  [DONE] Finalize the API design for `useObjectEditManager` and `useReorderableList` based on the proposal.
-2.  [DONE] Begin implementation of `useObjectEditManager` (Phase 1 of Task 7).
-3.  [DONE] Follow with the implementation of `useReorderableList` (Phase 2 of Task 7).
-4.  [IN PROGRESS] Proceed with the phased refactoring of `TaskDetailView.tsx` (Phases 3 & 4 of Task 7).
-5.  Thoroughly test the refactored component and the new hooks (Phase 5 of Task 7).
+## Current High-Priority Task:
 
-This abstraction is a critical step towards improving code quality, reusability, and maintainability in the Clarity application.
+**1. ChatServer Main.py Decomposition - Phase 3: Extract Services and Background Tasks**
 
-**🛑 CRITICAL REMINDERS FOR AGENT 🛑**
-*   **ALWAYS consult `memory-bank/tasks.md` and the new `reusable-ui-logic-hooks.md` BEFORE starting implementation of Task 7.**
-*   **Adhere to `ui-dev` rule (Radix UI, Radix Icons, Tailwind CSS).**
-*   **Prioritize generic, reusable design for the new hooks.**
-*   **Ensure comprehensive unit testing for the hooks.**
-*   **Update `tasks.md` and `memory-bank/progress.md` diligently as Task 7 progresses.**
+*   **Status:** Active - Just Started
+*   **Objective:** Extract business logic into service classes and background task management into dedicated modules, further reducing main.py complexity and improving maintainability.
+*   **Key Points:**
+    *   Create `chatServer/services/` module for business logic services
+    *   Extract background task management into `chatServer/services/background_tasks.py`
+    *   Create service abstractions for chat processing, session management
+    *   Extract prompt customization logic into dedicated service
+    *   Update main.py to use service layer
+*   **Current Step:** Creating services module structure and extracting background tasks
+*   **Previous Success:** Phase 2 completed successfully - removed 200+ lines from main.py, created 18 new files, achieved 94 tests passing
 
----
+**2. CRUD Tool Migration to DB Configuration**
 
-# Active Context Update - 2025-05-18 (End of Session)
+*   **Status:** Completed
+*   **Objective:** Move all CRUD tool logic (table, method, field_map, etc.) to the `agent_tools` table as config. Only the generic `CRUDTool` class remains in code. Loader instantiates tools from DB config and runtime values. No code changes are needed to add new CRUD tools.
+*   **Key Points:**
+    *   All CRUD tool definitions (table, method, field_map) are now stored in the `config` column of `agent_tools`.
+    *   The loader reads these configs and instantiates the generic `CRUDTool` with runtime values (`user_id`, `agent_id`, `supabase_url`, `supabase_key`).
+    *   The registry only needs to include `CRUDTool` (and any custom tools).
+    *   To add a new CRUD tool, insert a row in `agent_tools` with the correct config—no code changes required.
+    *   Refactored `src/core/tools/crud_tool.py`: Removed redundant `None` checks in the `_run` method for `data_for_processing` and `final_data_payload`, relying on earlier Pydantic/loader validations and the robustness of internal helper methods like `_prepare_data_payload`.
+    *   See `tool-creation-pattern.md` for the new pattern and example inserts.
 
-## Current Mode
-ANALYSIS / DOCUMENTATION
+**3. Refactor: Implement Robust Session Management & Agent Executor Caching**
 
-## Current Focus
-**Task: Capture Current State & Document Hook Patterns (User Request)**
+*   **Status:** Implementation, Documentation, and Reflection Complete. See `memory-bank/clarity/references/guides/memory_system_v2.md` and `memory-bank/reflection/reflection-session-mgmt-v2.md`.
+*   **Objective:** Implement a stable and persistent chat session management system using the `chat_sessions` table, and optimize server performance by caching AgentExecutors based on active client sessions.
+*   **Core Logic:** See new guide for details.
+*   **Next Steps:** Integration testing and future enhancements.
+*   **Recent Fixes:**
+    *   Resolved `NameError` on server startup by reordering scheduled task definitions.
+    *   Refactored client-side API call for sending messages into a `useSendMessageMutation` hook.
+    *   Prevented multiple session instance creation on chat open with an `isInitializingSession` flag in `useChatStore`.
+*   **Design Document:** `session_management_and_executor_caching_plan.md`
+*   **Task Breakdown:** See `memory-bank/tasks.md` for detailed phases and sub-tasks.
 
-Following a user report of issues with a previous chat session, the current focus is to thoroughly review and document the state of development, particularly concerning the custom hooks used in `TaskDetailView.tsx`.
+## Key Focus Areas for Implementation:
 
-**Activities Completed:**
-1.  Reviewed `memory-bank/clarity/chatHistory` to understand the preceding context.
-2.  Read and analyzed the following hook files:
-    *   `webApp/src/hooks/useEntityEditManager.ts`
-    *   `webApp/src/hooks/useObjectEditManager.ts`
-    *   `webApp/src/hooks/useReorderableList.ts`
-    *   `webApp/src/hooks/useTaskDetailStateManager.ts`
-3.  Read and analyzed `webApp/src/components/features/TaskDetail/TaskDetailView.tsx` to understand its interaction with these hooks.
-4.  Documented the established patterns and created a MermaidJS sequence diagram illustrating the data flow. This has been saved to `memory-bank/clarity/diagrams/hook-data-flow-tdv.md`.
+1.  **ChatServer Services Architecture (Phase 3):**
+    *   Create services module structure (`chatServer/services/__init__.py`)
+    *   Extract background tasks into `chatServer/services/background_tasks.py`
+    *   Create `ChatService` for chat processing logic
+    *   Create `SessionService` for session management
+    *   Create `PromptCustomizationService` for prompt management
+    *   Update main.py to use service layer
+    *   Create comprehensive unit tests for all services
+2.  **CRUD Tool System:**
+    *   All CRUD tool logic is now DB-driven. No code changes are needed to add new CRUD tools—just DB inserts.
+    *   Loader and registry are minimal and generic.
+    *   See `tool-creation-pattern.md` for details.
+3.  **Client-Side (`webApp`):**
+    *   `webApp/src/api/hooks/useChatApiHooks.ts`: Implemented `useSendMessageMutation`.
+    *   `webApp/src/stores/useChatStore.ts`: Refactored store state and logic for session initialization (including `isInitializingSession` fix), message handling (heartbeat), and session deactivation.
+    *   `webApp/src/components/ChatPanel.tsx`: Integrated new mutation hook, manages session lifecycle (init, heartbeat, unload).
+4.  **Server-Side (`chatServer/main.py`):**
+    *   Adapted `AGENT_EXECUTOR_CACHE` to use `(user_id, agent_name)` as key and remove self-TTL.
+    *   Ensured `/api/chat` uses `chat_sessions.chat_id` (from request's `session_id` field) for `PostgresChatMessageHistory`.
+    *   Implemented background tasks (and fixed startup error) to deactivate stale `chat_session_instances` and evict corresponding inactive `AgentExecutors` from the cache.
 
-**Task 7: Abstract TaskDetailView State Management into Reusable Hooks (Status Update)**
+## Relevant Files (Under Active Development/Review):
 
-The development and initial integration of `useObjectEditManager`, `useReorderableList`, and the orchestrating `useTaskDetailStateManager` (which uses `useEntityEditManager`) into `TaskDetailView.tsx` are confirmed to be largely complete based on code review.
+*   **Phase 3 Focus:**
+    *   `chatServer/main.py` (Source for service extraction)
+    *   `chatServer/services/` (New module to be created)
+    *   `chatServer/services/background_tasks.py` (Background task service)
+    *   `tests/chatServer/services/` (New test module)
+*   **Completed Phases:**
+    *   `chatServer/models/` (Phase 1 - Models and Protocols)
+    *   `chatServer/protocols/` (Phase 1 - Models and Protocols)
+    *   `chatServer/config/` (Phase 2 - Configuration)
+    *   `chatServer/database/` (Phase 2 - Database)
+    *   `chatServer/dependencies/` (Phase 2 - Dependencies)
+*   **Other Active Files:**
+    *   `tool-creation-pattern.md` (CRUD tool pattern)
+    *   `session_management_and_executor_caching_plan.md` (Primary Plan)
+    *   `memory-bank/tasks.md` (Detailed Task List)
 
-**Immediate Blocker:**
-None for the current documentation task. For Task 7, the next step remains comprehensive testing.
+## Key Constraints & Considerations:
 
-**Next Steps Upon Resuming (for Task 7):**
-1.  **Perform Thorough Integration Testing:** Execute the manual test plan in `memory-bank/clarity/testing/task-detail-view-test-plan.md` to verify all parent task and subtask functionalities in the refactored `TaskDetailView.tsx`.
-2.  **Address Issues:** Resolve any bugs or unexpected behaviors identified during integration testing (e.g., issues noted in `tasks.md` like ST-6, OT-1 if still relevant after recent refactors).
-3.  **Write Unit Tests:** Implement unit tests for `useObjectEditManager.ts`, `useReorderableList.ts`, `useEntityEditManager.ts`, and `useTaskDetailStateManager.ts`.
-4.  **Finalize Task 7 Documentation:** Update `reusable-ui-logic-hooks.md` if any further API refinements occur during testing. Ensure all related documentation is consistent.
+*   **Service Layer Architecture:** Extract business logic while maintaining clean separation of concerns
+*   **Background Task Management:** Centralize scheduled task logic for better maintainability
+*   **Minimal Server Endpoints:** Client-side logic handles direct DB interactions with `chat_sessions` via RLS.
+*   **CRUD Tool Extensibility:** All CRUD tools are now DB-configured. No code changes required for new tools.
+*   **Idempotency & Race Conditions:** Addressed a key race condition in `initializeSessionAsync`.
+*   **TTL Management:** Client-side heartbeats and server-side scheduled tasks will manage session and executor liveness.
+*   **Clarity of IDs:**
+    *   `chat_sessions.id`: PK, unique identifier for a specific client engagement/session instance.
+    *   `chat_sessions.chat_id`: Foreign key (conceptually) to a persistent chat conversation/memory.
+    *   `/api/chat` request body's `session_id` field will carry the `chat_sessions.chat_id` value.
 
-**🛑 CRITICAL REMINDERS FOR AGENT 🛑**
-*   **ALWAYS consult `memory-bank/tasks.md` and the new `memory-bank/clarity/diagrams/hook-data-flow-tdv.md` before resuming work on Task 7 or related UI tasks.**
-*   **The source of truth for hook APIs is the code itself and its accompanying documentation (`reusable-ui-logic-hooks.md` and `hook-data-flow-tdv.md`).**
-*   **Prioritize systematic testing and issue resolution for Task 7.**
-*   **Update `tasks.md` and `memory-bank/progress.md` diligently as Task 7 progresses post-testing.**
+## Previous Context (Completed):
 
-**Task: Achieve Passing Test Suite for `TaskDetailView.tsx` (Task 8 - Phase 0)**
+*   **Phase 2 (COMPLETED):** Configuration, database, and dependencies extraction
+    *   Successfully removed 200+ lines from main.py
+    *   Created 18 new files (9 implementation + 9 test files)
+    *   Achieved 94 tests passing with 100% pass rate
+    *   Fixed import compatibility for both module and direct execution
+*   **Phase 1 (COMPLETED):** Models and protocols extraction
+    *   Clean separation of data models and interfaces
+    *   Comprehensive test coverage (31 tests)
+    *   Fixed Pydantic deprecation warnings
 
-**Current Focus:** Stabilize `TaskDetailView.tsx` by ensuring all tests in `memory-bank/clarity/testing/task-detail-view-test-plan.md` pass.
+**Last Task Archived:** Task 9: Architect and Implement `useEditableEntity` Hook & Refactor `TaskDetailView`
+**Archive Document:** `memory-bank/archive/archive-task9.md`
 
-**Immediate Blocker / Next Step:** Resolve **Test Case PT-2 (Edit Parent Task Field & Verify Dirty State)**, where the "Save Changes" button flickers but does not stay enabled upon editing parent task fields.
+**Immediate Focus / Next Steps:**
+1.  **[ACTIVE] ChatServer Main.py Decomposition - Phase 3**
+    *   **Objective:** Extract services and background tasks to complete the decomposition
+    *   **Current Step:** Create services module structure and extract background tasks
+2.  **[ACTIVE] CRUD Tool Migration to DB Configuration**
+    *   **Objective:** Complete testing and documentation of the new DB-driven pattern
+3.  **[ACTIVE] Refactor: Implement Robust Session Management & Agent Executor Caching**
+    *   **Objective:** Complete integration testing of the new session management system
 
-**Overall Goal for Task 8:** Refactor `TaskDetailView.tsx` and its associated hooks (`useObjectEditManager`, `useReorderableList`, `useTaskDetailStateManager`) to align with "Option 1: Full Adherence to Zustand-First with Eventual Sync", as detailed in `memory-bank/clarity/creative-task8-state-management-refactor.md`. This major refactoring is **blocked** until all tests in `task-detail-view-test-plan.md` are passing.
+**Mode Recommendation:** IMPLEMENT (ChatServer Services Extraction - Phase 3)
 
-**Supporting Documents:**
-*   Test Plan: `memory-bank/clarity/testing/task-detail-view-test-plan.md`
-*   Task 8 Creative Brief: `memory-bank/clarity/creative-task8-state-management-refactor.md`
-*   Overall Task List: `memory-bank/tasks.md` (see Task 8 under Clarity UI)
-*   Project Progress: `memory-bank/progress.md`
-
-**🛑 CRITICAL REMINDERS FOR AGENT 🛑**
-*   Prioritize fixing PT-2 in `TaskDetailView.tsx`.
-*   Consult `task-detail-view-test-plan.md` to understand the expected behavior for PT-2.
-*   Once PT-2 is resolved, proceed to address other failing tests in the test plan until all are passing.
-*   Only after all tests pass can the main refactoring work for Task 8 (Phases 1-5) begin.
-
----
-
-# State Log - 2025-05-19
-
-## TaskDetailView & Hooks - Current State
-
-- **TaskDetailView.tsx** is integrated with `useObjectEditManager`, `useReorderableList`, and `useTaskDetailStateManager`.
-- **Current Blocker:** Editing a parent task field updates RHF's `isDirty` but does NOT update TDSM's `isDirty` (modal dirty), so the Save button remains disabled. The dirty check effect in `useEntityEditManager` is not triggered by form edits.
-- **Last Attempted Fix:** Subscribing to form value changes using RHF's `watch()` and passing the watched values as a dependency to the state manager. This caused an infinite loop and was reverted.
-- **Current Plan:** User will start a new chat session to continue debugging. All recent changes have been reverted to a stable state.
-
----
-
-# Active Context - Project llm-agent
-
-**Current Task: Task 9.7 - Documentation for `useEditableEntity`**
-
-**Goal:** Create comprehensive documentation for the `useEditableEntity` hook and the associated `EntityTypeConfig`. This includes API details, usage examples, and best practices to ensure developers can effectively use this new pattern.
-
-**Background:**
-*   The `useEditableEntity` hook has been successfully implemented and integrated into `TaskDetailView.tsx`.
-*   All Parent Task (PT), Subtask (ST), and Other (OT) tests for the refactored `TaskDetailView.tsx` are PASSING.
-*   Phases 9.0 through 9.6 of Task 9 (Architect and Implement `useEditableEntity` Hook & Refactor `TaskDetailView`) are now COMPLETE.
-
-**Current Focus: Phase 9.7 - Documentation**
-*   **`9.7.1:` Write Hook API Documentation:** Detail `EntityTypeConfig` options and `UseEditableEntityResult` properties/methods.
-*   **`9.7.2:` Create Usage Examples:** Provide examples of how to configure and use the hook for different scenarios (e.g., simple entity, entity with sub-list).
-*   **`9.7.3:` Document Best Practices and Patterns:** Explain how this hook fits into the broader state management strategy.
-*   **`9.7.4:` Store documentation in `memory-bank/clarity/references/patterns/` or a new dedicated file (e.g., `useEditableEntity-guide.md`).**
-
-**Next Steps (After Documentation - Phase 9.8):**
-*   Cleanup: Evaluate and potentially deprecate/remove the older state management hooks (`useObjectEditManager`, `useReorderableList`, `useEntityEditManager`, `useTaskDetailStateManager`) if `useEditableEntity` is deemed a complete replacement.
-
-**Key Supporting Documents:**
-*   `memory-bank/tasks.md` (Task 9 and its sub-phases)
-*   `memory-bank/progress.md`
-*   `memory-bank/clarity/plan-useEditableEntity.md`
-*   `memory-bank/clarity/creative-useEditableEntity-design.md`
-*   `webApp/src/hooks/useEditableEntity.ts`
-*   `webApp/src/components/features/TaskDetail/TaskDetailView.tsx` (as primary consumer example)
-
-# Active Context & Focus
-
-**Last Updated:** (Current Date)
-
-**Current Overall Project Goal:** Stabilize and enhance the Clarity UI. Concurrently, progress on CLI and Core system enhancements.
-
-**Current Task Focus:**
-
-*   **Task 9: Architect and Implement `useEditableEntity` Hook & Refactor `TaskDetailView` - COMPLETE**
-
-**Brief Context:**
-
-Task 9, which involved designing, implementing, testing, and documenting the `useEditableEntity` hook, refactoring `TaskDetailView.tsx` to use it, and cleaning up superseded hooks (`useObjectEditManager`, `useReorderableList`, `useEntityEditManager`, `useTaskDetailStateManager`), is now fully complete.
-
-**Key Files & Artifacts (Related to completed Task 9):**
-
-*   `webApp/src/hooks/useEditableEntity.ts` (The new hook)
-*   `memory-bank/clarity/references/patterns/useEditableEntity-guide.md` (Documentation for the new hook)
-*   `webApp/src/features/TaskDetailView/TaskDetailView.tsx` (Primary consumer, successfully refactored)
-*   `memory-bank/clarity/plan-useEditableEntity.md` (Overall plan for Task 9 - now marked complete)
-*   `memory-bank/tasks.md` (Overall project tasks - Task 9 marked complete)
-*   `memory-bank/progress.md` (Project progress log - Task 9 marked complete)
+**General Project Goal:** Complete the chatServer main.py decomposition to achieve a clean, maintainable, and well-tested service architecture.
 
 **Pending Decisions/Questions:**
+*   Service interface design for chat processing and session management
+*   Background task scheduling and lifecycle management approach
+*   Integration testing strategy for the new service layer
 
-*   What is the next P0 or P1 task to focus on from `memory-bank/tasks.md`?
+**Previous Focus (Completed/Superseded in this context):**
+*   CLI/Core Backend MVP Testing (Task 3.1 from `memory-bank/tasks.md`):
+    *   Core agent memory persistence via Supabase (original V1 approach) was working.
+    *   RuntimeError during tool execution was resolved.
+    *   Prompt customization persistence verified.
+*   Agent Memory System v1 Design & Implementation (Superseded by V2)
+*   Linter error fixes in `useTaskHooks.ts` and `types.ts`.
+*   Refactor `useChatApiHooks.ts` for direct Supabase writes.
+*   Update `useChatStore.ts` to use direct archival logic.
+*   UI integration of `agentId` for `ChatPanel` and `useChatStore` initialization.
+
+**Upcoming Focus (Post ChatServer Decomposition):**
+*   Agent Memory System v2 - Phase 4: Refinements, Advanced LTM & Pruning
+*   Additional agent tool development and testing
+
+**Key Files Recently Modified/Reviewed (related to Phase 2 completion):**
+*   `chatServer/config/settings.py` (Configuration management)
+*   `chatServer/database/connection.py` (Database connection pooling)
+*   `chatServer/database/supabase_client.py` (Supabase client management)
+*   `chatServer/dependencies/auth.py` (Authentication dependencies)
+*   `chatServer/main.py` (Updated to use extracted modules)
+*   `pytest.ini` (Async test configuration)
+
+**Open Questions/Considerations:**
+*   How should the service layer interfaces be designed for maximum testability?
+*   What's the best approach for dependency injection in the service layer?
+*   How should background tasks be managed and monitored?
+
+Last updated: 2025-01-25
+
+**Mode Recommendation:** IMPLEMENT (ChatServer Services Extraction - Phase 3)
+
+**General Project Goal:** Complete chatServer main.py decomposition with service layer architecture. Enable clean separation of business logic and improved maintainability.

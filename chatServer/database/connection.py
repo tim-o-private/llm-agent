@@ -1,0 +1,83 @@
+"""Database connection management."""
+
+import logging
+from typing import Optional, AsyncIterator
+import psycopg
+from psycopg_pool import AsyncConnectionPool
+from fastapi import HTTPException
+
+try:
+    from ..config.settings import get_settings
+except ImportError:
+    from chatServer.config.settings import get_settings
+
+logger = logging.getLogger(__name__)
+
+
+class DatabaseManager:
+    """Manages the database connection pool."""
+    
+    def __init__(self):
+        self.pool: Optional[AsyncConnectionPool] = None
+        self.settings = get_settings()
+    
+    async def initialize(self) -> None:
+        """Initialize the database connection pool."""
+        try:
+            conn_str = self.settings.database_url
+            logger.info(f"Initializing AsyncConnectionPool with: postgresql://{self.settings.db_user}:[REDACTED]@{self.settings.db_host}:{self.settings.db_port}/{self.settings.db_name}?connect_timeout=10")
+            
+            self.pool = AsyncConnectionPool(
+                conninfo=conn_str, 
+                open=False, 
+                min_size=2, 
+                max_size=10, 
+                check=AsyncConnectionPool.check_connection
+            )
+            await self.pool.open(wait=True, timeout=30)
+            logger.info("Database connection pool started successfully.")
+        except Exception as e:
+            logger.critical(f"Failed to initialize database connection pool: {e}", exc_info=True)
+            self.pool = None
+            raise
+    
+    async def close(self) -> None:
+        """Close the database connection pool."""
+        if self.pool:
+            await self.pool.close()
+            logger.info("Database connection pool closed.")
+            self.pool = None
+    
+    async def get_connection(self) -> AsyncIterator[psycopg.AsyncConnection]:
+        """Get a database connection from the pool."""
+        if self.pool is None:
+            logger.error("Database connection pool is not available.")
+            raise HTTPException(status_code=503, detail="Database service not available. Pool not initialized.")
+        
+        try:
+            async with self.pool.connection() as conn:
+                logger.debug("DB connection acquired from pool.")
+                yield conn
+            logger.debug("DB connection released back to pool.")
+        except Exception as e:
+            logger.error(f"Failed to get DB connection from pool: {e}", exc_info=True)
+            raise HTTPException(status_code=503, detail="Failed to acquire database connection.")
+
+
+# Global database manager instance
+_db_manager: Optional[DatabaseManager] = None
+
+
+def get_database_manager() -> DatabaseManager:
+    """Get the global database manager instance."""
+    global _db_manager
+    if _db_manager is None:
+        _db_manager = DatabaseManager()
+    return _db_manager
+
+
+async def get_db_connection() -> AsyncIterator[psycopg.AsyncConnection]:
+    """FastAPI dependency to get a database connection."""
+    db_manager = get_database_manager()
+    async for conn in db_manager.get_connection():
+        yield conn 

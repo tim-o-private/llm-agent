@@ -1,15 +1,63 @@
-description: "A model aware of a secret password."
-model_parameters: 
+description: "A test agent for verifying CustomizableAgent, Supabase memory, and prompt customization."
+agent_class: CustomizableAgent # Use the new customizable agent
+memory_type: supabase_buffer # Use Supabase for memory
+
+llm:
+  model: gemini-2.5-flash-preview-04-17 # Example model, adjust as needed
   temperature: 0.75
-tools:
-  - file_management # Grants R/W access to data/agents/test_agent/
-  - read_config_tool # Grants Read access to config/agents/test_agent/
+
 prompt:
-  system_message_file: "system_prompt.md" 
-project_details:
-  name: Test Agent Alpha # Renamed for consistency
-  goal: Verify context integration in llm-agent.
+  # base_template can be an inline string or refer to a file that CustomizableAgent loads.
+  # This example uses an inline string. Ensure {{custom_instructions}}, {{tools}}, {{input}}, 
+  # and {{agent_scratchpad}} placeholders are handled by your CustomizableAgent._construct_prompt_with_customizations method.
+  base_template: |
+    You are Test Agent Alpha. Your goal is to verify context integration and customization.
+    The secret codeword for Agent Alpha is 'zircon'.
+    This is your base instruction set.
+
+    Custom User-Defined Instructions (if any will appear below):
+    {{custom_instructions}}
+
+    TOOLS:
+    ------
+    You have access to the following tools:
+    web_search - A tool for searching the internet using DuckDuckGo to find information like the weather.
+
+    Use the following format:
+
+    Thought: Do I need to use a tool? Yes
+    Action: the action to take, should be one of [{{tool_names}}]
+    Action Input: the input to the action
+    Observation: the result of the action
+
+    Thought: Do I need to use a tool? No
+    Final Answer: [your response here]
+
+    USER INPUT:
+    --------------------
+    {{input}}
+
+    {{agent_scratchpad}}
+
+# Tools configuration needs to follow the structure expected by agent_loader.py
+# Example: 
+# tools_config:
+#   my_search_tool:
+#     toolkit: "DuckDuckGoSearchRun" # This would require DuckDuckGoSearchRun to be in TOOLKIT_MAPPING
+#     scope: "PROJECT_ROOT" # Or other valid scope
+#     original_name: "duckduckgo_search" # The actual tool name if the toolkit provides multiple
+#     description: "A tool for searching the web with DuckDuckGo."
+tools_config:
+  web_search: # This is the name your agent will use for the tool
+    toolkit: "DuckDuckGoSearchRun" # We'll map this to the actual class in agent_loader
+    scope: "STANDALONE" # Using a conceptual scope for standalone tools
+    original_name: "duckduckgo_search" # Standard name for this tool
+    description: "A search tool for finding information about the weather."
+
+project_details: # This section is for human reference, not directly used by current agent loader
+  name: Test Agent Alpha
+  goal: Verify context integration in llm-agent, and new agent capabilities.
   key_fact: "The secret codeword for Agent Alpha is 'zircon'."
 relevant_notes:
-  - Context should be passed as a system message.
-  - The LLM should be able to recall information from this context. 
+  - Context should be passed via base_template and user customizations.
+  - The LLM should be able to recall information from this context and adapt to customizations. 

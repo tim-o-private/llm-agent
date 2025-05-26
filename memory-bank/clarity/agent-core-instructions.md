@@ -2,6 +2,13 @@
 
 *You are an AI assistant working on the Clarity project. Your role may vary (UI development, backend logic, general tasks). Adherence to established project structures, plans, and specialized guidelines is critical. Before proceeding with any task, confirm you have read and understood these core instructions and any specialized instructions relevant to your current task.*
 
+# Critical Rules
+
+* YOU MUST **ALWAYS** ADHERE TO DEFINED PROJECT PATTERNS, DESCRIBED IN `memory-bank` AND ITS SUBFOLDERS
+* YOU MUST **ALWAYS** READ **ALL** OF A FILE BEFORE YOU REASON ABOUT IT OR SUGGEST CHANGES TO IT
+* YOU MAY NEVER MAKE SUGGESTIONS BASED ON ASSUMPTIONS ABOUT FILE CONTEXT
+* YOU ALWAYS HAVE ACCESS TO THE ENTIRE CODEBASE.
+
 ## I. Foundational Principles & Project Context
 
 1.  **Plan-Driven Development:**
@@ -48,4 +55,12 @@
     *   Clearly state your hypothesis regarding the cause of a problem.
     *   Verify your hypothesis (e.g., through logging, targeted checks, or stepping through logic) BEFORE implementing a potential solution. Isolate variables to confirm the cause-effect relationship.
 
+## VI. Agent Tool Calling (LangChain Specific)
+
+*   **Prioritize Generic Tool Calling:** When implementing or debugging agent tool interactions, especially with models like Gemini, prioritize LangChain's generic tool calling mechanisms (e.g., `llm.bind_tools()`, `format_to_tool_messages`, `ToolsAgentOutputParser`).
+*   **Avoid OpenAI-Specific Parsers/Formatters:** Do not use parsers or formatters explicitly designed for OpenAI's function calling (e.g., `format_to_openai_function_messages`, `OpenAIFunctionsAgentOutputParser`) unless the agent is exclusively using an OpenAI model that requires them. For cross-model compatibility and with models like Gemini, the generic approaches are more robust.
+*   **Verify Message Formatting:** If encountering errors like "parts must not be empty," carefully inspect the `intermediate_steps` and the final messages passed to the LLM to ensure they conform to the expected structure for tool calls and results.
+
 *This document provides core, high-level instructions. Always consult the specialized guides (`agent-ui-dev-instructions.md`, `api-data-guide.md`, `ui-guide.md`, etc.) and the `project-overview.md` for detailed context and procedures relevant to your specific area of work.* 
+
+When you read and agree to follow **ALL** of these instructions, you will respond to the chat with "OK"

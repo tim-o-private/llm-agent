@@ -3,8 +3,8 @@ import { supabase } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/features/auth/useAuthStore';
 import type { 
   Task, 
-  NewTaskData, 
-  UpdateTaskData, 
+  NewTaskData,
+  UpdateTaskData,
   FocusSession, 
   NewFocusSessionData, 
   UpdateFocusSessionData 
@@ -47,14 +47,13 @@ export function useFetchTasks() {
  */
 export function useFetchSubtasks(parentTaskId: string | undefined | null) {
   const user = useAuthStore((state) => state.user);
-  // Construct a more specific query key for subtasks
   const queryKey: QueryKey = [TASKS_QUERY_KEY_PREFIX, user?.id, 'subtasks', parentTaskId];
 
   return useQuery<Task[], Error, Task[], QueryKey>({
     queryKey: queryKey,
     queryFn: async () => {
       if (!user) throw new Error('User not authenticated');
-      if (!parentTaskId) return []; // If no parentTaskId, return empty array or handle as needed
+      if (!parentTaskId) return [];
 
       const { data, error } = await supabase
         .from('tasks')
@@ -62,12 +61,12 @@ export function useFetchSubtasks(parentTaskId: string | undefined | null) {
         .eq('user_id', user.id)
         .eq('parent_task_id', parentTaskId)
         .order('subtask_position', { ascending: true, nullsFirst: true })
-        .order('created_at', { ascending: true }); // Secondary sort by creation time
+        .order('created_at', { ascending: true });
 
       if (error) throw error;
       return data || [];
     },
-    enabled: !!user && !!parentTaskId, // Only run if user is authenticated and parentTaskId is provided
+    enabled: !!user && !!parentTaskId,
   });
 }
 
@@ -89,13 +88,13 @@ export function useCreateTask() {
 
       const { data, error } = await supabase
         .from('tasks')
-        .insert([taskWithUser])
+        .insert([taskWithUser] as any)
         .select()
         .single();
 
       if (error) throw error;
       if (!data) throw new Error('Failed to create task: no data returned');
-      return data;
+      return data as Task;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [TASKS_QUERY_KEY_PREFIX] });
@@ -113,14 +112,14 @@ export function useUpdateTask() {
     mutationFn: async ({ id, updates }: { id: string; updates: UpdateTaskData }) => {
       const { data, error } = await supabase
         .from('tasks')
-        .update(updates)
+        .update(updates as any)
         .eq('id', id)
         .select()
         .single();
 
       if (error) throw error;
       if (!data) throw new Error('Failed to update task: no data returned');
-      return data;
+      return data as Task;
     },
     onSuccess: (updatedTaskFromServer, variables) => {
       console.log('[useUpdateTask] onSuccess - Calling useTaskStore.updateTask with:', updatedTaskFromServer);
@@ -202,7 +201,7 @@ export const useUpdateSubtaskOrder = () => {
   const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
 
-  return useMutation<Task[], Error, { parentTaskId: string; orderedSubtasks: SubtaskOrderUpdate[] }, { previousTasks?: Task[] }>({
+  return useMutation<Task[], Error, { parentTaskId: string; orderedSubtasks: SubtaskOrderUpdate[] }, { previousTasks?: Task[] }>({ 
     mutationFn: async ({ parentTaskId, orderedSubtasks }) => {
       console.log('[useUpdateSubtaskOrder] mutationFn started. Parent:', parentTaskId, 'Ordered Subtasks:', JSON.stringify(orderedSubtasks));
       if (!user) throw new Error('User not authenticated');
@@ -228,8 +227,8 @@ export const useUpdateSubtaskOrder = () => {
       }));
       console.log('[useUpdateSubtaskOrder] Raw results from Supabase:', JSON.stringify(results));
       
-      const filteredResults = results.filter(r => r !== null) as Task[];
-      console.log('[useUpdateSubtaskOrder] Filtered results (returned by mutationFn):', JSON.stringify(filteredResults));
+      const filteredResults = results.filter((r: Task | null): r is Task => r !== null);
+      console.log('[useUpdateSubtaskOrder] Filtered results (returned by mutationFn):_filteredResults');
       return filteredResults; // Return the updated subtasks from the server
     },
     onMutate: async (variables) => {
@@ -237,32 +236,30 @@ export const useUpdateSubtaskOrder = () => {
       if (!user?.id) return;
       const allTasksQueryKey = [TASKS_QUERY_KEY_PREFIX, user.id];
 
-      // Cancel any outgoing refetches (so they don't overwrite our optimistic update)
       await queryClient.cancelQueries({ queryKey: allTasksQueryKey });
 
-      // Snapshot the previous value
       const previousTasks = queryClient.getQueryData<Task[]>(allTasksQueryKey);
       console.log('[useUpdateSubtaskOrder] onMutate. Previous tasks from cache:', JSON.stringify(previousTasks?.map(t => t.id)));
 
-      // Optimistically update to the new value
       if (previousTasks) {
-        const newOptimisticTasks = previousTasks.map(task => {
+        const newOptimisticTasks = previousTasks.map((task: Task) => {
           if (task.id === variables.parentTaskId) {
-            // Create a map of new positions for quick lookup
-            const newSubtaskPositions = new Map(variables.orderedSubtasks.map(st => [st.id, st.subtask_position]));
-            // Reorder existing subtasks and update their positions
-            const updatedParentSubtasks = (task.subtasks || [])
-              .map(st => ({ ...st, subtask_position: newSubtaskPositions.get(st.id) || st.subtask_position }))
-              .sort((a, b) => (a.subtask_position ?? Infinity) - (b.subtask_position ?? Infinity));
+            const newSubtaskPositions = new Map(variables.orderedSubtasks.map((st: SubtaskOrderUpdate) => [st.id, st.subtask_position]));
+            // Ensure task.subtasks is treated as Task[] or empty array for mapping
+            const currentSubtasks: Task[] = task.subtasks || [];
+            const updatedParentSubtasks = currentSubtasks
+              .map((st: Task) => ({ ...st, subtask_position: newSubtaskPositions.get(st.id) || st.subtask_position }))
+              .sort((a: Task, b: Task) => (a.subtask_position ?? Infinity) - (b.subtask_position ?? Infinity));
             
             return { ...task, subtasks: updatedParentSubtasks };
           }
           return task;
         });
-        console.log('[useUpdateSubtaskOrder] onMutate. Setting optimistic tasks to cache:', JSON.stringify(newOptimisticTasks.find(t => t.id === variables.parentTaskId)?.subtasks?.map(st => ({id: st.id, pos: st.subtask_position}))));
+        const parentForLog = newOptimisticTasks.find(t => t.id === variables.parentTaskId);
+        console.log('[useUpdateSubtaskOrder] onMutate. Setting optimistic tasks to cache:', JSON.stringify(parentForLog?.subtasks?.map((st: Task) => ({id: st.id, pos: st.subtask_position}))));
         queryClient.setQueryData<Task[]>(allTasksQueryKey, newOptimisticTasks);
       }
-      return { previousTasks }; // Return context with previous data
+      return { previousTasks }; 
     },
     onError: (err, variables, context) => {
       console.error('[useUpdateSubtaskOrder] onError. Error:', err, 'Variables:', variables);
@@ -274,19 +271,14 @@ export const useUpdateSubtaskOrder = () => {
     },
     onSettled: (_data, error, variables) => {
       console.log('[useUpdateSubtaskOrder] onSettled. Variables:', variables, 'Error:', error);
-      // Always refetch after error or success to ensure server state
       if (user?.id) {
         queryClient.invalidateQueries({ queryKey: [TASKS_QUERY_KEY_PREFIX, user.id] });
         console.log('[useUpdateSubtaskOrder] onSettled. Invalidated all tasks query key.');
       }
     },
-    // onSuccess callback is now primarily for side-effects like Toasts if not handled by onSettled, 
-    // or if specific data from mutationFn is needed beyond what onMutate handles for optimistic UI.
-    // The UI should react to cache changes from onMutate or refetch from onSettled.
     onSuccess: (updatedSubtasksFromServer, variables) => {
       console.log('[useUpdateSubtaskOrder] onSuccess hook. Parent:', variables.parentTaskId, 'Updated Subtasks from mutationFn:', JSON.stringify(updatedSubtasksFromServer));
       toast.success('Subtask order updated successfully!');
-      // The main invalidation is in onSettled. If specific data is needed for other caches, handle here.
     },
   });
 };
@@ -301,17 +293,18 @@ export const useCreateFocusSession = () => {
   return useMutation<
     FocusSession | null, 
     Error,
-    Pick<NewFocusSessionData, 'task_id'> 
+    Pick<NewFocusSessionData, 'task_id' | 'planned_duration_minutes'> 
   >({
-    mutationFn: async ({ task_id }) => {
+    mutationFn: async ({ task_id, planned_duration_minutes }) => {
       if (!user) throw new Error('User not authenticated');
       const newSessionData: NewFocusSessionData = {
         user_id: user.id,
         task_id,
+        planned_duration_minutes,
       };
       const { data, error } = await supabase
         .from('focus_sessions')
-        .insert(newSessionData)
+        .insert(newSessionData as any)
         .select()
         .single();
 
@@ -320,7 +313,7 @@ export const useCreateFocusSession = () => {
         throw error;
       }
       console.log('[useCreateFocusSession] Success, data:', data);
-      return data;
+      return data as FocusSession;
     },
     onSuccess: (_data) => {
       toast.success('Focus session started!');
@@ -342,19 +335,19 @@ export const useEndFocusSession = () => {
   return useMutation<
     FocusSession | null,
     Error,
-    { sessionId: string; reflectionData: UpdateFocusSessionData }
+    { sessionId: string; reflectionData: Omit<UpdateFocusSessionData, 'end_time'> }
   >({
     mutationFn: async ({ sessionId, reflectionData }) => {
       if (!user) throw new Error('User not authenticated');
       
-      const updates: UpdateFocusSessionData = {
+      const updates: UpdateFocusSessionData & { end_time: string } = {
         ...reflectionData,
-        ended_at: new Date().toISOString(),
+        end_time: new Date().toISOString(),
       };
 
       const { data, error } = await supabase
         .from('focus_sessions')
-        .update(updates)
+        .update(updates as any)
         .eq('id', sessionId)
         .eq('user_id', user.id) 
         .select()
@@ -365,7 +358,7 @@ export const useEndFocusSession = () => {
         throw error;
       }
       console.log('[useEndFocusSession] Success, data:', data);
-      return data;
+      return data as FocusSession;
     },
     onSuccess: (_data) => {
       toast.success('Focus session ended & reflection saved!');
@@ -391,18 +384,18 @@ export function useFetchTaskById(taskId: string | null | undefined) {
 
       const { data, error } = await supabase
         .from('tasks')
-        .select('*') // Select all columns for the detail view
+        .select('*')
         .eq('user_id', user.id)
         .eq('id', taskId)
-        .single(); // Expect a single record or null
+        .single();
 
-      if (error && error.code !== 'PGRST116') { // PGRST116: Row to abort not found (ok if task DNE)
+      if (error && error.code !== 'PGRST116') {
         console.error(`[useFetchTaskById] Error fetching task ${taskId}:`, error);
         throw error;
       }
       return data;
     },
-    enabled: !!user && !!taskId, // Only run the query if the user is authenticated and taskId is provided
+    enabled: !!user && !!taskId,
   });
 }
 
@@ -412,30 +405,28 @@ export const useDeleteTask = () => {
   const { user } = useAuthStore();
 
   return useMutation<
-    Task | null, // Supabase delete might return the deleted record or null/count
+    Task | null,
     Error,
-    { id: string } // Variables for the mutation: task ID
-  >({ 
+    { id: string }
+  >({
     mutationFn: async ({ id }) => {
       if (!user) throw new Error('User not authenticated');
       
-      // Perform the delete operation
       const { data, error } = await supabase
         .from('tasks')
         .delete()
-        .match({ id, user_id: user.id }); // Ensure user can only delete their own tasks
+        .match({ id, user_id: user.id });
 
       if (error) {
         console.error('Error deleting task from Supabase:', error);
         throw error;
       }
       
-      console.log('Task deleted from Supabase:', data ); // `data` might be an empty array or count
-      return null; // Or adjust based on actual Supabase client return for delete
+      console.log('Task deleted from Supabase:', data );
+      return null;
     },
     onSuccess: (_, variables) => {
       toast.success('Task deleted successfully!');
-      // Invalidate tasks query to refetch and update the list
       if (user) {
         queryClient.invalidateQueries({ queryKey: [TASKS_QUERY_KEY_PREFIX, user.id] });
       } else {
