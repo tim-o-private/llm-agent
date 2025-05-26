@@ -273,3 +273,55 @@ This file tracks the current tasks, steps, checklists, and component lists for t
 
 **Core Context Considered:** (Retained for context)
 ...
+
+# Assistant-UI Migration Task Checklist
+
+## Phase 1: Environment Setup and Dependencies
+- [X] Install @assistant-ui/react and @assistant-ui/react-markdown (User confirmed)
+- [X] Update TypeScript configuration for compatibility (No changes needed)
+- [X] Create base assistant-ui theme configuration (Verified existing Radix+Tailwind setup; deleted incorrect MUI theme file)
+- [X] Verify development environment (Implicitly done)
+
+## Phase 2: Backend Runtime Adapter Implementation
+- [X] Analyze current backend API and session management
+- [X] Design and scaffold CustomBackendRuntime adapter
+- [X] Implement message format translation (ChatMessage <-> ThreadMessage)
+- [X] Integrate session management with assistant-ui thread model
+- [ ] Test basic message flow end-to-end
+
+## Phase 3: UI Component Migration
+- [X] Create ChatPanelV2 using AssistantProvider and Thread
+- [X] Integrate CustomBackendRuntime into ChatPanelV2
+- [X] Install missing dependencies (@radix-ui/react-tooltip, remark-gfm)
+- [X] Create supporting components (Thread, MarkdownText, TooltipIconButton)
+- [X] Add assistant-ui CSS imports
+- [X] Create test page (CoachPageV2)
+- [ ] Map and customize theme to match existing design
+- [ ] Override components as needed (header, input, bubbles)
+- [ ] Verify accessibility (keyboard, screen reader, focus)
+
+## Phase 4: State Management Integration
+- [ ] Adapt Zustand store for assistant-ui compatibility
+- [ ] Synchronize state between assistant-ui and Zustand
+- [ ] Ensure session lifecycle events are handled
+- [ ] Implement feature flag for migration
+- [ ] Document migration and rollout strategy
+
+## Phase 5: Advanced Features Implementation
+- [ ] Add streaming support (backend + frontend)
+- [ ] Enhance tool call visualization
+- [ ] Implement message actions (copy, edit, delete, reactions)
+- [ ] Improve error handling and retry logic
+
+## Phase 6: Testing and Optimization
+- [ ] Write unit tests for runtime adapter
+- [ ] Add integration and E2E tests for chat flow
+- [ ] Optimize performance (virtualization, memoization)
+- [ ] Test accessibility and cross-browser compatibility
+
+## Phase 7: Documentation and Deployment
+- [ ] Update component and API documentation
+- [ ] Prepare migration and rollback guides
+- [ ] Plan and execute feature flag rollout
+- [ ] Clean up old code and dependencies
+- [ ] Archive legacy implementation

@@ -8,18 +8,24 @@ This document outlines the current high-priority task, relevant files, and key c
 
 ## Current High-Priority Task:
 
-**1. ChatServer Main.py Decomposition - Phase 3: Extract Services and Background Tasks**
+**1. Assistant-UI Migration Implementation**
 
-*   **Status:** Active - Just Started
-*   **Objective:** Extract business logic into service classes and background task management into dedicated modules, further reducing main.py complexity and improving maintainability.
+*   **Status:** Active - Planning Complete, Ready for Implementation
+*   **Objective:** Migrate existing custom ChatPanel implementation to assistant-ui library for enhanced functionality, better accessibility, and improved maintainability.
 *   **Key Points:**
-    *   Create `chatServer/services/` module for business logic services
-    *   Extract background task management into `chatServer/services/background_tasks.py`
-    *   Create service abstractions for chat processing, session management
-    *   Extract prompt customization logic into dedicated service
-    *   Update main.py to use service layer
-*   **Current Step:** Creating services module structure and extracting background tasks
-*   **Previous Success:** Phase 2 completed successfully - removed 200+ lines from main.py, created 18 new files, achieved 94 tests passing
+    *   Implement custom runtime adapter to preserve existing backend API
+    *   Replace custom chat components with assistant-ui's production-ready interface
+    *   Maintain session management and state synchronization
+    *   Add streaming support and enhanced tool visualization
+    *   Preserve all existing functionality while gaining rich message types, accessibility, and performance improvements
+*   **Current Step:** Ready to begin Phase 1 - Environment Setup and Dependencies
+*   **Implementation Plan:** `memory-bank/implementation_plans/assistant-ui-migration-plan.md`
+
+**2. ChatServer Main.py Decomposition - Phase 3: Extract Services and Background Tasks**
+
+*   **Status:** Completed
+*   **Objective:** Extract business logic into service classes and background task management into dedicated modules, further reducing main.py complexity and improving maintainability.
+*   **Results:** Successfully completed all services extraction - ChatService, PromptCustomizationService, and BackgroundTaskService implemented with comprehensive testing (40 tests total)
 
 **2. CRUD Tool Migration to DB Configuration**
 
@@ -48,14 +54,14 @@ This document outlines the current high-priority task, relevant files, and key c
 
 ## Key Focus Areas for Implementation:
 
-1.  **ChatServer Services Architecture (Phase 3):**
-    *   Create services module structure (`chatServer/services/__init__.py`)
-    *   Extract background tasks into `chatServer/services/background_tasks.py`
-    *   Create `ChatService` for chat processing logic
-    *   Create `SessionService` for session management
-    *   Create `PromptCustomizationService` for prompt management
-    *   Update main.py to use service layer
-    *   Create comprehensive unit tests for all services
+1.  **Assistant-UI Migration (Primary Focus):**
+    *   Phase 1: Install dependencies and setup environment
+    *   Phase 2: Implement custom runtime adapter for backend integration
+    *   Phase 3: Replace ChatPanel with assistant-ui components
+    *   Phase 4: Integrate with existing Zustand state management
+    *   Phase 5: Add advanced features (streaming, tool visualization)
+    *   Phase 6: Comprehensive testing and optimization
+    *   Phase 7: Documentation and deployment
 2.  **CRUD Tool System:**
     *   All CRUD tool logic is now DB-driven. No code changes are needed to add new CRUD tools—just DB inserts.
     *   Loader and registry are minimal and generic.
@@ -71,12 +77,15 @@ This document outlines the current high-priority task, relevant files, and key c
 
 ## Relevant Files (Under Active Development/Review):
 
-*   **Phase 3 Focus:**
-    *   `chatServer/main.py` (Source for service extraction)
-    *   `chatServer/services/` (New module to be created)
-    *   `chatServer/services/background_tasks.py` (Background task service)
-    *   `tests/chatServer/services/` (New test module)
-*   **Completed Phases:**
+*   **Assistant-UI Migration Focus:**
+    *   `webApp/src/components/ChatPanel.tsx` (Current implementation to be migrated)
+    *   `webApp/src/stores/useChatStore.ts` (State management integration)
+    *   `webApp/src/api/hooks/useChatApiHooks.ts` (Backend integration)
+    *   `webApp/src/lib/assistantui/` (New runtime adapter module)
+    *   `webApp/src/components/ChatPanelV2.tsx` (New assistant-ui implementation)
+    *   `memory-bank/implementation_plans/assistant-ui-migration-plan.md` (Implementation plan)
+*   **Completed ChatServer Decomposition:**
+    *   `chatServer/services/` (All services implemented)
     *   `chatServer/models/` (Phase 1 - Models and Protocols)
     *   `chatServer/protocols/` (Phase 1 - Models and Protocols)
     *   `chatServer/config/` (Phase 2 - Configuration)
@@ -116,17 +125,21 @@ This document outlines the current high-priority task, relevant files, and key c
 **Archive Document:** `memory-bank/archive/archive-task9.md`
 
 **Immediate Focus / Next Steps:**
-1.  **[ACTIVE] ChatServer Main.py Decomposition - Phase 3**
+1.  **[ACTIVE] Assistant-UI Migration Implementation**
+    *   **Objective:** Migrate ChatPanel to assistant-ui for enhanced functionality and maintainability
+    *   **Current Step:** Phase 1 - Environment Setup and Dependencies
+    *   **Implementation Plan:** `memory-bank/implementation_plans/assistant-ui-migration-plan.md`
+2.  **[COMPLETED] ChatServer Main.py Decomposition - Phase 3**
     *   **Objective:** Extract services and background tasks to complete the decomposition
-    *   **Current Step:** Create services module structure and extract background tasks
-2.  **[ACTIVE] CRUD Tool Migration to DB Configuration**
+    *   **Status:** All services implemented with comprehensive testing
+3.  **[ACTIVE] CRUD Tool Migration to DB Configuration**
     *   **Objective:** Complete testing and documentation of the new DB-driven pattern
-3.  **[ACTIVE] Refactor: Implement Robust Session Management & Agent Executor Caching**
+4.  **[ACTIVE] Refactor: Implement Robust Session Management & Agent Executor Caching**
     *   **Objective:** Complete integration testing of the new session management system
 
-**Mode Recommendation:** IMPLEMENT (ChatServer Services Extraction - Phase 3)
+**Mode Recommendation:** IMPLEMENT (Assistant-UI Migration - Phase 1)
 
-**General Project Goal:** Complete the chatServer main.py decomposition to achieve a clean, maintainable, and well-tested service architecture.
+**General Project Goal:** Migrate to assistant-ui for enhanced chat functionality while maintaining existing backend architecture and session management.
 
 **Pending Decisions/Questions:**
 *   Service interface design for chat processing and session management
