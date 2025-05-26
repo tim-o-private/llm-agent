@@ -47,7 +47,7 @@ export const FastTaskInput = forwardRef<HTMLInputElement, FastTaskInputProps>((
       priority: parsedResult.priority ?? 0,
       category: parsedResult.category ?? null,
       due_date: parsedResult.due_date ?? null,
-      completed: parsedResult.completed ?? false,
+      completed_at: parsedResult.completed_at ?? null,
     };
     
     try {

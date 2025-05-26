@@ -116,7 +116,7 @@ export const useTaskStore = create<TaskStore>()(
           
           // Normalize the data into a record
           const normalizedTasks: Record<string, Task> = {};
-          (data || []).forEach(task => {
+          (data || []).forEach((task: Task) => {
             normalizedTasks[task.id] = task;
           });
           
