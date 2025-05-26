@@ -201,8 +201,8 @@ def load_tools_from_db(
         db_tool_type_str = str(tool_row["type"]) # 'type' column from agent_tools table
         db_tool_config_json = tool_row.get("config") or {} # JSONB 'config' column from agent_tools
 
-        db_tool_name = str(tool_row.get("name")) # 'name' column (for Langchain tool name)
-        db_tool_description = str(tool_row.get("description")) # 'description' column (for LLM)
+        db_tool_name = tool_row.get("name") # 'name' column (for Langchain tool name)
+        db_tool_description = tool_row.get("description") # 'description' column (for LLM)
 
         if not db_tool_name:
             logger.error(f"DB entry for tool type '{db_tool_type_str}' is missing 'name'. Skipping. Row: {tool_row}")
@@ -210,6 +210,10 @@ def load_tools_from_db(
         if not db_tool_description:
             logger.error(f"DB entry for tool '{db_tool_name}' (type '{db_tool_type_str}') is missing 'description'. Skipping. Row: {tool_row}")
             continue
+        
+        # Convert to strings after validation
+        db_tool_name = str(db_tool_name)
+        db_tool_description = str(db_tool_description)
             
         original_python_tool_class = TOOL_REGISTRY.get(db_tool_type_str)
         if not original_python_tool_class:

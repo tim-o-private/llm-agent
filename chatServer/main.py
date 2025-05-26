@@ -1,7 +1,7 @@
 import sys
 import os
 import logging # Added for log_level
-from typing import Dict, Optional, Any, List, AsyncIterator # Added Optional and List here, NEW: AsyncIterator
+from typing import Dict, Optional, Any, List, AsyncIterator, Protocol # Added Optional and List here, NEW: AsyncIterator, Protocol
 from contextlib import asynccontextmanager # NEW IMPORT
 import asyncio # NEW IMPORT
 from datetime import datetime, timedelta, timezone # Added timezone
@@ -29,6 +29,10 @@ from psycopg_pool import AsyncConnectionPool # NEW IMPORT
 from cachetools import TTLCache
 # Cache for (user_id, agent_name) -> CustomizableAgentExecutor
 AGENT_EXECUTOR_CACHE: TTLCache[tuple[str, str], CustomizableAgentExecutor] = TTLCache(maxsize=100, ttl=900)
+
+# Dependency for agent loader - can be overridden in tests
+def get_agent_loader():
+    return agent_loader
 
 # --- START Inserted Environment & Path Setup ---
 def add_project_root_to_path_for_local_dev():
@@ -278,9 +282,6 @@ async def lifespan(app: FastAPI):
     if db_pool:
         await db_pool.close()
         logger.info("Database connection pool closed.")
-    if supabase_client:
-        await supabase_client.close()
-        logger.info("Supabase client closed.")
 
 # Re-assign app with the new lifespan
 app = FastAPI(lifespan=lifespan)
@@ -313,6 +314,7 @@ async def chat_endpoint(
     request: Request, 
     user_id: str = Depends(get_current_user),
     pg_connection: psycopg.AsyncConnection = Depends(get_db_connection), # NEW: Use pooled connection
+    agent_loader_module = Depends(get_agent_loader), # NEW: Inject agent loader
     # db_client: AsyncClient = Depends(get_supabase_client) # Keep if other parts need supabase-py client
 ):
     logger.debug(f"Received chat request for agent {chat_input.agent_name} with session_id: {chat_input.session_id} from user {user_id}")
@@ -385,7 +387,7 @@ async def chat_endpoint(
                 logger.debug(f"Cache HIT for agent executor: key={cache_key}")
             else:
                 logger.debug(f"Cache MISS for agent executor: key={cache_key}. Loading new executor.")
-                agent_executor = agent_loader.load_agent_executor(
+                agent_executor = agent_loader_module.load_agent_executor(
                     user_id=user_id,
                     agent_name=agent_name,
                     session_id=session_id_for_history,
@@ -393,8 +395,9 @@ async def chat_endpoint(
                 )
                 AGENT_EXECUTOR_CACHE[cache_key] = agent_executor # Store in cache
             
-            if not isinstance(agent_executor, CustomizableAgentExecutor):
-                logger.error(f"Loaded agent is not a CustomizableAgentExecutor. Type: {type(agent_executor)}")
+            # Check if agent_executor implements the required interface
+            if not hasattr(agent_executor, 'ainvoke') or not hasattr(agent_executor, 'memory'):
+                logger.error(f"Loaded agent does not implement required interface. Type: {type(agent_executor)}")
                 raise HTTPException(status_code=500, detail="Agent loading failed to produce a compatible executor.")
 
             # CRITICAL: Ensure the cached/newly loaded executor uses the correct memory for THIS session_id_for_history
@@ -661,6 +664,15 @@ async def supabase_webhook(payload: SupabasePayload):
 #     except Exception as e:
 #         logger.error(f"Error invoking agent '{agent_name}': {e}", exc_info=True)
 #         raise HTTPException(status_code=500, detail=f"Error invoking agent: {str(e)}")
+
+# Define a protocol for what we expect from an agent executor
+class AgentExecutorProtocol(Protocol):
+    """Protocol defining the interface we expect from agent executors."""
+    memory: Any  # The memory system
+    
+    async def ainvoke(self, inputs: Dict[str, Any], config: Optional[Any] = None) -> Dict[str, Any]:
+        """Asynchronously invoke the agent with inputs."""
+        ...
 
 if __name__ == "__main__":
     import uvicorn
