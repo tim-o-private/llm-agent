@@ -13,11 +13,77 @@ This document outlines the visual and interaction style guidelines for the Clari
 
 ## 2. Color Palette & Theming Engine
 
-*   **Primary Theming Engine:** Radix UI Themes (`@radix-ui/themes`) is the foundation for our color system and base component theming. Its `<Theme>` provider (used at the application root) manages light/dark modes, accent color palettes, gray scales, and other thematic concerns by exposing CSS custom properties.
-*   **TailwindCSS Integration:** TailwindCSS is used for layout, spacing, typography, and custom component styling. Tailwind color utilities should be configured to map to Radix Theme CSS custom properties to ensure consistency (e.g., a Tailwind class like `bg-primary` would use `var(--accent-9)` from Radix Themes).
-*   **Color Scales:** Leverage the accessible color scales provided by Radix UI Colors (which are integral to Radix UI Themes).
-*   **Accent Colors:** Theme accent colors (e.g., different brand palettes like "blue", "green", "violet") will be managed via the `accentColor` prop on the Radix `<Theme>` provider.
-*   **Themes (Modes):** Support for Light and Dark modes is managed by the Radix `<Theme>` provider (`appearance` prop).
+### 2.1 Core Principles
+
+*   **Single Source of Truth:** All colors MUST originate from Radix UI Themes CSS custom properties (`--accent-*`, `--gray-*`, etc.)
+*   **No Hardcoded Colors:** Components MUST NOT use hardcoded color values (hex, rgb, hsl) or Tailwind's default color palette
+*   **Theme-Aware Only:** All color usage must respond to theme changes (accent color, gray scale, light/dark mode)
+
+### 2.2 Approved Color Sources (In Order of Preference)
+
+1. **Semantic Tailwind Tokens** (Preferred for React components):
+   ```tsx
+   // ✅ CORRECT - Uses semantic tokens from tailwind.config.js
+   <div className="bg-ui-element-bg text-text-primary border-ui-border">
+   ```
+
+2. **Raw Radix Variables** (For standalone CSS files):
+   ```css
+   /* ✅ CORRECT - Direct Radix variables in CSS */
+   .my-component {
+     background-color: var(--gray-3);
+     color: var(--gray-12);
+     border: 1px solid var(--accent-9);
+   }
+   ```
+
+3. **Radix Component Props** (When using Radix primitives):
+   ```tsx
+   // ✅ CORRECT - Radix component color props
+   <Button color="grass" variant="solid">Save</Button>
+   ```
+
+### 2.3 FORBIDDEN Color Usage
+
+❌ **NEVER use these in components:**
+```tsx
+// ❌ FORBIDDEN - Hardcoded colors
+<div className="bg-blue-500 text-white border-red-400">
+
+// ❌ FORBIDDEN - Tailwind default colors
+<div className="bg-gray-100 text-gray-900">
+
+// ❌ FORBIDDEN - Inline styles with hardcoded colors
+<div style={{ backgroundColor: '#3b82f6', color: '#ffffff' }}>
+
+// ❌ FORBIDDEN - CSS with hardcoded colors
+.my-component {
+  background-color: #f3f4f6;
+  color: #111827;
+}
+```
+
+### 2.4 Color Validation & Testing
+
+**Automated Validation Rules:**
+1. **ESLint Rule:** Detect hardcoded color classes in JSX `className` props
+2. **CSS Linting:** Detect hardcoded color values in CSS files
+3. **Build-time Validation:** Fail builds that contain non-semantic color usage
+4. **Test Coverage:** Unit tests to verify theme responsiveness
+
+**Implementation Requirements:**
+- Add ESLint plugin to detect `className` patterns like `bg-blue-*`, `text-red-*`, etc.
+- Configure stylelint to flag hex/rgb/hsl values in CSS
+- Create test utilities to verify components respond to theme changes
+- Document approved color patterns in component stories
+
+### 2.5 Technical Implementation
+
+*   **Primary Theming Engine:** Radix UI Themes (`@radix-ui/themes`) provides CSS custom properties
+*   **Semantic Token Layer:** Tailwind config maps semantic names to Radix variables
+*   **Component Integration:** Components use semantic tokens, not raw Radix variables
+*   **CSS Files:** Standalone CSS (like `assistant-ui-theme.css`) uses raw Radix variables
+*   **Theme Control:** `accentColor` and `grayColor` props on `<Theme>` provider control global palette
 
 ## 3. Typography
 

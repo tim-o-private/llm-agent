@@ -31,7 +31,7 @@ function ThemedApp() {
   }, [effectiveAppearance]); // Rerun effect when effectiveAppearance changes
 
   return (
-    <Theme accentColor="green" grayColor="slate" appearance={effectiveAppearance}>
+    <Theme accentColor="violet" grayColor="slate" appearance={effectiveAppearance}>
       <App />
     </Theme>
   );
