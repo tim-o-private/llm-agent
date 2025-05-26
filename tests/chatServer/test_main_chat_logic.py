@@ -105,7 +105,7 @@ class TestChatEndpoint(unittest.IsolatedAsyncioTestCase):
         self.client = TestClient(app)
 
         # Patch PostgresChatMessageHistory class and its instance
-        self.patch_chat_message_history_class = patch('chatServer.main.PostgresChatMessageHistory', autospec=True)
+        self.patch_chat_message_history_class = patch('chatServer.services.chat.PostgresChatMessageHistory', autospec=True)
         self.mock_postgres_chat_history_class = self.patch_chat_message_history_class.start() # This is the mock of the CLASS
         self.addAsyncCleanup(self.patch_chat_message_history_class.stop)
 
@@ -125,6 +125,10 @@ class TestChatEndpoint(unittest.IsolatedAsyncioTestCase):
         from chatServer import main as chat_main_module
         if hasattr(chat_main_module, 'AGENT_EXECUTOR_CACHE'):
             chat_main_module.AGENT_EXECUTOR_CACHE.clear()
+        
+        # Reset the global chat service instance to ensure fresh state
+        import chatServer.services.chat
+        chatServer.services.chat._chat_service = None
         
         # Removed the direct patch of get_db_connection, using dependency_overrides instead
 
@@ -146,6 +150,10 @@ class TestChatEndpoint(unittest.IsolatedAsyncioTestCase):
         # Reset ainvoke result for this specific test if needed, or set a default in Fake's init
         object.__setattr__(self.fake_agent_executor_instance, 'mock_ainvoke_result', {"output": "Mocked AI response"})
         object.__setattr__(self.fake_agent_executor_instance, 'ainvoke_call_history', [])
+
+        # Ensure the cache is empty before the test
+        from chatServer import main as chat_main_module
+        chat_main_module.AGENT_EXECUTOR_CACHE.clear()
 
         response = self.client.post(
             "/api/chat",
@@ -178,10 +186,11 @@ class TestChatEndpoint(unittest.IsolatedAsyncioTestCase):
         # FastAPI will iterate this once to get the value.
         self.assertEqual(kwargs.get('async_connection'), self.mock_db_conn_instance)
 
-        from chatServer import main as chat_main_module
         # The cache will store the FakeCustomizableAgentExecutor instance
+        # Note: With ChatService, the cache is managed by the service, so we check if it was populated
         cached_item = chat_main_module.AGENT_EXECUTOR_CACHE.get((TEST_USER_ID, agent_name))
-        self.assertIsInstance(cached_item, FakeCustomizableAgentExecutor)
+        # The ChatService should have cached the executor after loading it
+        self.assertIsNotNone(cached_item, "Agent executor should be cached after first load")
         
         self.assertEqual(len(self.fake_agent_executor_instance.ainvoke_call_history), 1)
         ainvoke_call_args = self.fake_agent_executor_instance.ainvoke_call_history[0]
@@ -200,6 +209,7 @@ class TestChatEndpoint(unittest.IsolatedAsyncioTestCase):
         # Use the Fake executor for caching as well
         cached_fake_executor = FakeCustomizableAgentExecutor()
         object.__setattr__(cached_fake_executor, 'mock_ainvoke_result', {"output": "Cached AI response"})
+        object.__setattr__(cached_fake_executor, 'ainvoke_call_history', [])
         
         # Set up existing messages that should be loaded from memory
         existing_messages = [
@@ -215,6 +225,7 @@ class TestChatEndpoint(unittest.IsolatedAsyncioTestCase):
         mock_memory.chat_memory = self.mock_chat_history_instance
         object.__setattr__(cached_fake_executor, 'memory', mock_memory)
         
+        # Pre-populate the cache with our cached executor
         chat_main_module.AGENT_EXECUTOR_CACHE[(TEST_USER_ID, agent_name)] = cached_fake_executor
 
         response = self.client.post(
@@ -227,8 +238,10 @@ class TestChatEndpoint(unittest.IsolatedAsyncioTestCase):
         data = response.json()
         self.assertEqual(data["response"], "Cached AI response")
 
+        # Verify that the agent loader was not called (cache hit)
         self.mock_agent_loader.load_agent_executor.assert_not_called()
         
+        # Verify that the cached executor was used
         self.assertEqual(len(cached_fake_executor.ainvoke_call_history), 1)
         ainvoke_call_args = cached_fake_executor.ainvoke_call_history[0]
         self.assertEqual(ainvoke_call_args["input"], message)

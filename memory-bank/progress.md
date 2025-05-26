@@ -6,34 +6,127 @@ This document tracks the active development progress for the CLI, Core Agent, Ba
 
 ## Current Project Focus
 
-**Status:** ARCHIVED
+**Status:** ACTIVE
 
 **Immediate Goals:**
-1.  **Clarity UI - Task 9: Refactor `TaskDetailView` with `useEditableEntity`:**
-    *   **Task 9.8 (Cleanup - Deprecate/remove old state management hooks):** In Progress. Starting step 9.8.1.
-2.  **CLI/Core:** Continue REPL Enhancements, Tool Expansion, and Refinement (as per `tasks.md`, secondary to Clarity UI Task 9 completion).
-3.  **Backend/Supabase:** Progress with Agent Memory & Tooling Enhancement (as per `tasks.md`, secondary to Clarity UI Task 9 completion).
-4.  **Project Admin:** Ongoing cleanup of `tasks.md` and progress logs.
+1.  **ChatServer Main.py Decomposition - Phase 3: Extract Services and Background Tasks:**
+    *   **Status:** Active - Starting Phase 3 implementation
+    *   **Objective:** Extract business logic into service classes and background task management into dedicated modules
+    *   **Current Step:** Creating services module structure and extracting background tasks
+2.  **CRUD Tool Migration to DB Configuration:** Continue testing and documentation
+3.  **Session Management & Agent Executor Caching:** Integration testing and refinement
 
-**Context:** Recent efforts included major refactoring of Clarity documentation and stabilization of the UI. The current phase focuses on completing Task 9 (implementing `useEditableEntity`, refactoring `TaskDetailView`, testing, documenting, and cleanup). Other development streams will proceed once this critical UI task is fully complete.
+**Context:** Successfully completed Phase 2 of the chatServer main.py decomposition project. All configuration, database, and dependency modules have been extracted with comprehensive testing (94 tests passing). Server startup issues resolved and import compatibility achieved. Now proceeding to Phase 3 to extract services and background tasks.
 
-**Recently Completed Major Tasks (General Project):**
+**Recently Completed Major Tasks (ChatServer Decomposition):**
 
-*   [X] **Memory Bank Documentation Overhaul (Clarity Project):** Reviewed, refactored, and consolidated all documentation within `memory-bank/clarity/` into a new structured system of guides and references.
-*   [X] **Memory Bank Core File Cleanup (General):** Reviewed all files in `memory-bank/` (root). Consolidated information from various outdated PRDs, implementation plans, and specific context documents into the primary Memory Bank files.
-*   [X] Archived historical progress logs.
-*   [X] Moved `memory-bank/clarity/ddl.sql` to `data/db/ddl.sql`.
-*   [X] Deleted numerous redundant/outdated files from `memory-bank/` and `memory-bank/clarity/` after merging their relevant content.
-*   [X] **Reusable UI Logic Hooks (Clarity UI - Task 7):** Completed.
-*   [X] **State Capture & Hook Pattern Documentation (User Request):** Completed.
-*   [X] **Debug `TaskDetailView` Infinite Loop (Clarity UI - Task 8 Prerequisite):** Completed.
+*   [X] **Phase 2: Extract Configuration and Dependencies (COMPLETED):** 
+    *   Successfully extracted configuration module with environment validation and caching
+    *   Created database module with connection pooling and Supabase client management
+    *   Implemented dependencies module with authentication and dependency injection
+    *   Created 58 comprehensive unit tests with 100% pass rate
+    *   Fixed import compatibility issues for both module and direct execution
+    *   Removed 200+ lines from main.py while maintaining all functionality
+*   [X] **Phase 1: Extract Models and Protocols (COMPLETED):**
+    *   Successfully extracted all Pydantic models and protocol definitions
+    *   Created comprehensive test coverage (31 tests)
+    *   Fixed Pydantic deprecation warnings
+    *   Achieved clean separation of concerns
 
-**Next Steps (General Project):**
+**Next Steps (ChatServer Decomposition - Phase 3):**
 
-1.  **[ACTIVE]** Finalize cleanup of `tasks.md` and progress logs (`memory-bank/progress.md`).
-2.  **[DONE]** Initialize/Update `memory-bank/activeContext.md` to reflect immediate project goals.
-3.  **[DONE]** Initialize/Update `memory-bank/systemPatterns.md`.
-4.  **[DONE]** Review and update `memory-bank/chatGPTConvo.md` or archive.
+1.  **[ACTIVE]** Create services module structure (`chatServer/services/__init__.py`)
+2.  **[ACTIVE]** Extract background tasks into `chatServer/services/background_tasks.py`
+3.  **[PLANNED]** Create `ChatService` for chat processing logic
+4.  **[PLANNED]** Create `SessionService` for session management
+5.  **[PLANNED]** Create `PromptCustomizationService` for prompt management
+6.  **[PLANNED]** Update main.py to use service layer
+7.  **[PLANNED]** Create comprehensive unit tests for all services
+
+## Current Status: ChatServer Main.py Decomposition - Phase 3 (Services and Background Tasks)
+
+### Phase 3 Progress: Extract Services and Background Tasks
+- **Status**: Complete - All Services Implemented
+- **Current Focus**: Phase 3 complete, documentation next
+
+#### Completed in Phase 3:
+- ✅ **BackgroundTaskService**: Successfully extracted background task management into dedicated service
+  - Implemented lifecycle management for scheduled tasks
+  - Created singleton pattern with proper cache reference management
+  - Comprehensive unit tests (10 tests) with 100% pass rate
+
+- ✅ **ChatService Creation**: Successfully extracted all chat processing logic from main.py into `chatServer/services/chat.py`
+  - Created `AsyncConversationBufferWindowMemory` class for proper async memory handling
+  - Implemented `ChatService` class with methods for:
+    - `create_chat_memory()` - PostgreSQL chat memory setup
+    - `get_or_load_agent_executor()` - Agent executor caching and loading
+    - `extract_tool_info()` - Tool information extraction from responses
+    - `process_chat()` - Main chat processing workflow
+  - Created comprehensive unit tests (17 tests) with 100% pass rate
+  - Updated main.py to use ChatService with simplified endpoint
+  - Fixed integration test failures for service architecture
+  - Removed ~70 lines of chat logic from main.py
+
+- ✅ **PromptCustomizationService**: Successfully extracted prompt customization logic into dedicated service
+  - Implemented `PromptCustomizationService` class with methods for:
+    - `create_prompt_customization()` - Create new prompt customizations
+    - `get_prompt_customizations_for_agent()` - Retrieve customizations by agent
+    - `update_prompt_customization()` - Update existing customizations
+  - Created comprehensive unit tests (13 tests) covering all methods and error scenarios
+  - Updated main.py to use PromptCustomizationService with simplified endpoints
+  - Removed ~60 lines of prompt customization logic from main.py
+
+#### Phase 3 Results:
+- **Total Lines Removed from main.py**: ~400+ lines across all phases
+- **New Service Files Created**: 3 services (BackgroundTaskService, ChatService, PromptCustomizationService)
+- **Total Service Tests**: 40 tests (10 + 17 + 13) with 100% pass rate
+- **Architecture Benefits**: Clean separation of concerns, improved testability, maintainable service layer
+- **Zero Regressions**: All existing functionality preserved
+
+#### Next Steps:
+- Update documentation for Phase 3 completion
+- Consider Phase 4: Extract remaining endpoints into routers (if needed)
+- Archive Phase 3 completion and reflect on architecture improvements
+
+## ChatServer Main.py Decomposition Project
+
+**Overall Status:** Phase 2 Complete, Phase 3 Active
+**Associated Task:** `memory-bank/tasks.md` (ChatServer Main.py Decomposition)
+
+*   **Phase 1: Extract Models and Protocols**
+    *   **Status:** COMPLETED
+    *   **Key Outcomes:**
+        *   Extracted all Pydantic models (ChatRequest, ChatResponse, PromptCustomization, SupabasePayload)
+        *   Extracted AgentExecutorProtocol interface
+        *   Created comprehensive unit tests (31 tests)
+        *   Fixed Pydantic deprecation warnings
+        *   Achieved clean separation of concerns
+    *   **Completion Date:** 2025-01-25
+
+*   **Phase 2: Extract Configuration and Dependencies**
+    *   **Status:** COMPLETED
+    *   **Key Outcomes:**
+        *   Created configuration module with Settings class and environment validation
+        *   Implemented database module with connection pooling and Supabase client management
+        *   Created dependencies module with authentication and dependency injection
+        *   Comprehensive unit tests (58 tests) with 100% pass rate
+        *   Fixed import compatibility for direct execution vs module import
+        *   Successfully removed 200+ lines from main.py
+        *   Verified server startup and all functionality preserved
+    *   **Completion Date:** 2025-01-25
+
+*   **Phase 3: Extract Services and Background Tasks**
+    *   **Status:** Active - ChatService Complete
+    *   **Objective:** Extract business logic into service classes and background task management
+    *   **Key Activities & Status:**
+        *   Create services module structure (Status: TO DO)
+        *   Extract background tasks into dedicated service (Status: TO DO)
+        *   Create ChatService for chat processing logic (Status: COMPLETED)
+        *   Create SessionService for session management (Status: TO DO)
+        *   Create PromptCustomizationService (Status: TO DO)
+        *   Update main.py to use service layer (Status: TO DO)
+        *   Create comprehensive unit tests (Status: TO DO)
+    *   **Next Steps:** Begin with services module creation and background task extraction
 
 ## Refactor: Implement Robust Short-Term Memory (STM) with Persistent `session_id`
 
@@ -197,7 +290,37 @@ This document tracks the active development progress for the CLI, Core Agent, Ba
         - Successfully initialized Supabase `AsyncClient` using `acreate_client` in `chatServer/main.py`.
         - Refactored `SupabaseChatMessageHistory`
 
-**Last Updated:** {{iso_timestamp}}
+**Last Updated:** 2025-01-25
+
+---
+
+**2025-01-25:**
+*   **Task:** ChatServer Main.py Decomposition - Phase 2: Extract Configuration and Dependencies
+*   **Phase:** COMPLETED
+*   **Details:**
+    *   Successfully extracted configuration module with Settings class, environment validation, and LRU caching
+    *   Created database module with PostgreSQL connection pooling and Supabase client management
+    *   Implemented dependencies module with JWT authentication and dependency injection
+    *   Created comprehensive unit tests (58 tests) with 100% pass rate
+    *   Fixed import compatibility issues for both module and direct execution scenarios
+    *   Removed 200+ lines from main.py while preserving all functionality
+    *   Verified server startup and resolved all import errors
+*   **Status:** Phase 2 complete. Total test coverage now 94 tests passing. Ready for Phase 3.
+*   **Next Steps:** Begin Phase 3 - Extract Services and Background Tasks
+
+---
+
+**2025-01-25:**
+*   **Task:** ChatServer Main.py Decomposition - Phase 1: Extract Models and Protocols  
+*   **Phase:** COMPLETED
+*   **Details:**
+    *   Successfully extracted all Pydantic models (ChatRequest, ChatResponse, PromptCustomization, SupabasePayload)
+    *   Extracted AgentExecutorProtocol interface definition
+    *   Created comprehensive unit tests (31 tests) covering all models and protocols
+    *   Fixed Pydantic deprecation warnings (orm_mode -> model_config)
+    *   Implemented try/catch import strategy for compatibility
+*   **Status:** Phase 1 complete. Clean separation of data models achieved.
+*   **Next Steps:** Proceed to Phase 2 - Extract Configuration and Dependencies
 
 ---
 

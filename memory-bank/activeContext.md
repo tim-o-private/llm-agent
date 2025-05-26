@@ -4,11 +4,24 @@ import datetime
 
 This document outlines the current high-priority task, relevant files, and key considerations for the AI agent.
 
-**Last Updated:** {{iso_timestamp}}
+**Last Updated:** 2025-01-25
 
 ## Current High-Priority Task:
 
-**1. CRUD Tool Migration to DB Configuration**
+**1. ChatServer Main.py Decomposition - Phase 3: Extract Services and Background Tasks**
+
+*   **Status:** Active - Just Started
+*   **Objective:** Extract business logic into service classes and background task management into dedicated modules, further reducing main.py complexity and improving maintainability.
+*   **Key Points:**
+    *   Create `chatServer/services/` module for business logic services
+    *   Extract background task management into `chatServer/services/background_tasks.py`
+    *   Create service abstractions for chat processing, session management
+    *   Extract prompt customization logic into dedicated service
+    *   Update main.py to use service layer
+*   **Current Step:** Creating services module structure and extracting background tasks
+*   **Previous Success:** Phase 2 completed successfully - removed 200+ lines from main.py, created 18 new files, achieved 94 tests passing
+
+**2. CRUD Tool Migration to DB Configuration**
 
 *   **Status:** Completed
 *   **Objective:** Move all CRUD tool logic (table, method, field_map, etc.) to the `agent_tools` table as config. Only the generic `CRUDTool` class remains in code. Loader instantiates tools from DB config and runtime values. No code changes are needed to add new CRUD tools.
@@ -20,7 +33,7 @@ This document outlines the current high-priority task, relevant files, and key c
     *   Refactored `src/core/tools/crud_tool.py`: Removed redundant `None` checks in the `_run` method for `data_for_processing` and `final_data_payload`, relying on earlier Pydantic/loader validations and the robustness of internal helper methods like `_prepare_data_payload`.
     *   See `tool-creation-pattern.md` for the new pattern and example inserts.
 
-**2. Refactor: Implement Robust Session Management & Agent Executor Caching**
+**3. Refactor: Implement Robust Session Management & Agent Executor Caching**
 
 *   **Status:** Implementation, Documentation, and Reflection Complete. See `memory-bank/clarity/references/guides/memory_system_v2.md` and `memory-bank/reflection/reflection-session-mgmt-v2.md`.
 *   **Objective:** Implement a stable and persistent chat session management system using the `chat_sessions` table, and optimize server performance by caching AgentExecutors based on active client sessions.
@@ -35,32 +48,49 @@ This document outlines the current high-priority task, relevant files, and key c
 
 ## Key Focus Areas for Implementation:
 
-1.  **CRUD Tool System:**
+1.  **ChatServer Services Architecture (Phase 3):**
+    *   Create services module structure (`chatServer/services/__init__.py`)
+    *   Extract background tasks into `chatServer/services/background_tasks.py`
+    *   Create `ChatService` for chat processing logic
+    *   Create `SessionService` for session management
+    *   Create `PromptCustomizationService` for prompt management
+    *   Update main.py to use service layer
+    *   Create comprehensive unit tests for all services
+2.  **CRUD Tool System:**
     *   All CRUD tool logic is now DB-driven. No code changes are needed to add new CRUD tools—just DB inserts.
     *   Loader and registry are minimal and generic.
     *   See `tool-creation-pattern.md` for details.
-2.  **Client-Side (`webApp`):**
+3.  **Client-Side (`webApp`):**
     *   `webApp/src/api/hooks/useChatApiHooks.ts`: Implemented `useSendMessageMutation`.
     *   `webApp/src/stores/useChatStore.ts`: Refactored store state and logic for session initialization (including `isInitializingSession` fix), message handling (heartbeat), and session deactivation.
     *   `webApp/src/components/ChatPanel.tsx`: Integrated new mutation hook, manages session lifecycle (init, heartbeat, unload).
-3.  **Server-Side (`chatServer/main.py`):**
+4.  **Server-Side (`chatServer/main.py`):**
     *   Adapted `AGENT_EXECUTOR_CACHE` to use `(user_id, agent_name)` as key and remove self-TTL.
     *   Ensured `/api/chat` uses `chat_sessions.chat_id` (from request's `session_id` field) for `PostgresChatMessageHistory`.
     *   Implemented background tasks (and fixed startup error) to deactivate stale `chat_session_instances` and evict corresponding inactive `AgentExecutors` from the cache.
 
 ## Relevant Files (Under Active Development/Review):
 
-*   `tool-creation-pattern.md` (CRUD tool pattern)
-*   `session_management_and_executor_caching_plan.md` (Primary Plan)
-*   `memory-bank/tasks.md` (Detailed Task List)
-*   `chatServer/main.py` (Server-side logic)
-*   `webApp/src/api/hooks/useChatApiHooks.ts` (Client-side Supabase hooks & mutations)
-*   `webApp/src/stores/useChatStore.ts` (Client-side state management)
-*   `webApp/src/components/ChatPanel.tsx` (Client-side UI and interaction)
-*   `DDL for public.chat_sessions` (Database schema - already implemented by user)
+*   **Phase 3 Focus:**
+    *   `chatServer/main.py` (Source for service extraction)
+    *   `chatServer/services/` (New module to be created)
+    *   `chatServer/services/background_tasks.py` (Background task service)
+    *   `tests/chatServer/services/` (New test module)
+*   **Completed Phases:**
+    *   `chatServer/models/` (Phase 1 - Models and Protocols)
+    *   `chatServer/protocols/` (Phase 1 - Models and Protocols)
+    *   `chatServer/config/` (Phase 2 - Configuration)
+    *   `chatServer/database/` (Phase 2 - Database)
+    *   `chatServer/dependencies/` (Phase 2 - Dependencies)
+*   **Other Active Files:**
+    *   `tool-creation-pattern.md` (CRUD tool pattern)
+    *   `session_management_and_executor_caching_plan.md` (Primary Plan)
+    *   `memory-bank/tasks.md` (Detailed Task List)
 
 ## Key Constraints & Considerations:
 
+*   **Service Layer Architecture:** Extract business logic while maintaining clean separation of concerns
+*   **Background Task Management:** Centralize scheduled task logic for better maintainability
 *   **Minimal Server Endpoints:** Client-side logic handles direct DB interactions with `chat_sessions` via RLS.
 *   **CRUD Tool Extensibility:** All CRUD tools are now DB-configured. No code changes required for new tools.
 *   **Idempotency & Race Conditions:** Addressed a key race condition in `initializeSessionAsync`.
@@ -70,27 +100,38 @@ This document outlines the current high-priority task, relevant files, and key c
     *   `chat_sessions.chat_id`: Foreign key (conceptually) to a persistent chat conversation/memory.
     *   `/api/chat` request body's `session_id` field will carry the `chat_sessions.chat_id` value.
 
-## Previous Context (To be phased out or archived as new implementation progresses):
+## Previous Context (Completed):
 
-*   Old `user_agent_active_sessions` table and associated logic.
-*   Previous `TTLCache` implementation in `chatServer/main.py` based on `(user_id, agent_name, session_id)`.
+*   **Phase 2 (COMPLETED):** Configuration, database, and dependencies extraction
+    *   Successfully removed 200+ lines from main.py
+    *   Created 18 new files (9 implementation + 9 test files)
+    *   Achieved 94 tests passing with 100% pass rate
+    *   Fixed import compatibility for both module and direct execution
+*   **Phase 1 (COMPLETED):** Models and protocols extraction
+    *   Clean separation of data models and interfaces
+    *   Comprehensive test coverage (31 tests)
+    *   Fixed Pydantic deprecation warnings
 
 **Last Task Archived:** Task 9: Architect and Implement `useEditableEntity` Hook & Refactor `TaskDetailView`
 **Archive Document:** `memory-bank/archive/archive-task9.md`
 
 **Immediate Focus / Next Steps:**
-1.  **[ACTIVE] CRUD Tool Migration to DB Configuration**
-    *   **Objective:** Complete migration and test adding new CRUD tools via DB only.
-    *   **Objective:** Review `crud_tool.py` for further simplification, particularly making `agent_name` filtering/payload injection fully configuration-driven via a DB flag (e.g., `apply_agent_name_context`).
-2.  **[ACTIVE] Refactor: Implement Robust Session Management & Agent Executor Caching**
-    *   **Objective:** Complete implementation and thoroughly test the new session management system.
+1.  **[ACTIVE] ChatServer Main.py Decomposition - Phase 3**
+    *   **Objective:** Extract services and background tasks to complete the decomposition
+    *   **Current Step:** Create services module structure and extract background tasks
+2.  **[ACTIVE] CRUD Tool Migration to DB Configuration**
+    *   **Objective:** Complete testing and documentation of the new DB-driven pattern
+3.  **[ACTIVE] Refactor: Implement Robust Session Management & Agent Executor Caching**
+    *   **Objective:** Complete integration testing of the new session management system
 
-**Mode Recommendation:** TESTING (CRUD Tool Migration & Session Management)
+**Mode Recommendation:** IMPLEMENT (ChatServer Services Extraction - Phase 3)
 
-**General Project Goal:** Deliver a stable, extensible, and performant chat and agent tool system.
+**General Project Goal:** Complete the chatServer main.py decomposition to achieve a clean, maintainable, and well-tested service architecture.
 
 **Pending Decisions/Questions:**
-*   None immediately critical; focus is on testing the current implementation.
+*   Service interface design for chat processing and session management
+*   Background task scheduling and lifecycle management approach
+*   Integration testing strategy for the new service layer
 
 **Previous Focus (Completed/Superseded in this context):**
 *   CLI/Core Backend MVP Testing (Task 3.1 from `memory-bank/tasks.md`):
@@ -103,22 +144,25 @@ This document outlines the current high-priority task, relevant files, and key c
 *   Update `useChatStore.ts` to use direct archival logic.
 *   UI integration of `agentId` for `ChatPanel` and `useChatStore` initialization.
 
-**Upcoming Focus (Post Agent Memory V2 - Phase 2 UI Integration & Testing):**
+**Upcoming Focus (Post ChatServer Decomposition):**
 *   Agent Memory System v2 - Phase 4: Refinements, Advanced LTM & Pruning
+*   Additional agent tool development and testing
 
-**Key Files Recently Modified/Reviewed (related to Gemini error resolution):**
-*   `src/core/agents/customizable_agent.py` (Formatter and Output parser updated)
+**Key Files Recently Modified/Reviewed (related to Phase 2 completion):**
+*   `chatServer/config/settings.py` (Configuration management)
+*   `chatServer/database/connection.py` (Database connection pooling)
+*   `chatServer/database/supabase_client.py` (Supabase client management)
+*   `chatServer/dependencies/auth.py` (Authentication dependencies)
+*   `chatServer/main.py` (Updated to use extracted modules)
+*   `pytest.ini` (Async test configuration)
 
 **Open Questions/Considerations:**
-*   How are `session_id`s currently generated and managed on the client and server?
-*   What is the expected lifecycle of a `session_id`?
-*   Where in the database schema is `session_id` meant to be linked to a user or a specific conversation thread for persistence?
+*   How should the service layer interfaces be designed for maximum testability?
+*   What's the best approach for dependency injection in the service layer?
+*   How should background tasks be managed and monitored?
 
-Last updated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+Last updated: 2025-01-25
 
-**Mode Recommendation:** IMPLEMENT (Robust STM - Debugging `session_id` persistence and latency)
+**Mode Recommendation:** IMPLEMENT (ChatServer Services Extraction - Phase 3)
 
-**General Project Goal:** Complete Agent Memory System v2 implementation. Enable robust, evolving agent memory and conversational capabilities. **Updated Goal: Achieve stable and persistent short-term memory, resolve `session_id` persistence, and address chat latency.**
-
-**Pending Decisions/Questions:**
-*   Strategy for ensuring `session_id` correctly links to `chat_message_history` and potentially a user/agent session table.
+**General Project Goal:** Complete chatServer main.py decomposition with service layer architecture. Enable clean separation of business logic and improved maintainability.

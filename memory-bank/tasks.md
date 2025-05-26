@@ -8,6 +8,64 @@ This file tracks the current tasks, steps, checklists, and component lists for t
 
 ## PENDING / ACTIVE TASKS
 
+**NEW TASK: ChatServer Main.py Decomposition - Phase 3: Extract Services and Background Tasks**
+*   **Status:** Complete - All Services Implemented
+*   **Complexity:** 3 (Intermediate Feature - involves service layer architecture, background task management)
+*   **Objective:** Extract business logic into service classes and background task management into dedicated modules, further reducing main.py complexity and improving maintainability.
+*   **Plan:**
+    *   Create `chatServer/services/` module for business logic services
+    *   Extract background task management into `chatServer/services/background_tasks.py`
+    *   Create service abstractions for chat processing, session management
+    *   Extract prompt customization logic into dedicated service
+    *   Update main.py to use service layer
+*   **Checklist:**
+    *   [X] Create services module structure (`chatServer/services/__init__.py`)
+    *   [X] Extract background tasks into `chatServer/services/background_tasks.py`
+    *   [X] Create `ChatService` for chat processing logic
+    *   [X] Create comprehensive unit tests for ChatService (17 tests passing)
+    *   [X] Update main.py to use ChatService
+    *   [X] Fix test failures related to ChatService integration
+    *   [X] Create `PromptCustomizationService` for prompt management
+    *   [X] Create comprehensive unit tests for PromptCustomizationService (13 tests)
+    *   [X] Update main.py to use PromptCustomizationService
+    *   [X] Verify no regressions in existing functionality
+    *   [ ] Update documentation
+
+**COMPLETED TASK: ChatServer Main.py Decomposition - Phase 2: Extract Configuration and Dependencies**
+*   **Status:** Complete
+*   **Complexity:** 2-3 (Simple to Moderate - Configuration management, dependency injection)
+*   **Objective:** Extract configuration management, database connections, and dependency injection from main.py into dedicated modules.
+*   **Plan:** Extract configuration, database, and dependencies modules with comprehensive testing.
+*   **Checklist:**
+    *   [X] Create configuration module (`chatServer/config/`)
+    *   [X] Create database module (`chatServer/database/`)
+    *   [X] Create dependencies module (`chatServer/dependencies/`)
+    *   [X] Extract settings management with environment validation
+    *   [X] Extract database connection pooling and Supabase client management
+    *   [X] Extract authentication and dependency injection logic
+    *   [X] Create comprehensive unit tests (58 tests total)
+    *   [X] Update main.py to use extracted modules
+    *   [X] Fix import compatibility issues for direct execution
+    *   [X] Verify server startup and all tests passing
+*   **Results:** Successfully removed 200+ lines from main.py, created 18 new files (9 implementation + 9 test files), achieved 100% test pass rate (94 tests total)
+
+**COMPLETED TASK: ChatServer Main.py Decomposition - Phase 1: Extract Models and Protocols**
+*   **Status:** Complete
+*   **Complexity:** 1-2 (Simple - Data models and interfaces)
+*   **Objective:** Extract Pydantic models and protocol definitions from main.py into separate modules for better organization and reusability.
+*   **Plan:** Extract models and protocols with comprehensive testing.
+*   **Checklist:**
+    *   [X] Create models module (`chatServer/models/`)
+    *   [X] Create protocols module (`chatServer/protocols/`)
+    *   [X] Extract chat models (ChatRequest, ChatResponse)
+    *   [X] Extract prompt customization models
+    *   [X] Extract webhook models
+    *   [X] Extract agent executor protocol
+    *   [X] Create comprehensive unit tests (31 tests)
+    *   [X] Update main.py imports
+    *   [X] Fix Pydantic deprecation warnings
+*   **Results:** Successfully extracted all data models and protocols, created clean separation of concerns, comprehensive test coverage
+
 **NEW TASK: CRUD Tool Migration to DB Configuration**
 *   **Status:** In Progress
 *   **Complexity:** 2-3 (Simple to Moderate - DB, Backend Loader, Minimal Code)
@@ -154,6 +212,10 @@ This file tracks the current tasks, steps, checklists, and component lists for t
 
 ---
 ## COMPLETED TASKS
+
+### ChatServer Main.py Decomposition (Phases 1-2)
+*   **Phase 1: Extract Models and Protocols (COMPLETED)** - Successfully extracted all Pydantic models and protocol definitions with comprehensive testing (31 tests)
+*   **Phase 2: Extract Configuration and Dependencies (COMPLETED)** - Successfully extracted configuration, database, and dependency modules with comprehensive testing (58 tests)
 
 ### STM Refactor (Phases 1-3)
 *   **Phase 1: Database Setup (COMPLETED)** (Details listed under active task)
