@@ -79,7 +79,7 @@ This file tracks the current tasks, steps, checklists, and component lists for t
     *   [X] Migrate all LTM CRUD tools to DB config (see pattern file for example inserts).
     *   [X] Remove explicit CRUD tool subclasses from code (except generic `CRUDTool`).
     *   [X] Update loader to instantiate tools from DB config and runtime values.
-    *   [ ] Test: Add a new CRUD tool by DB insert only—no code change.
+    *   [X] Test: Add a new CRUD tool by DB insert only—no code change.
     *   [ ] Document the new pattern in `tool-creation-pattern.md` and update onboarding docs.
 
 **NEW TASK: Refactor: Implement Robust Session Management & Agent Executor Caching**
@@ -387,3 +387,24 @@ This file tracks the current tasks, steps, checklists, and component lists for t
 2. Verify state synchronization works correctly
 3. Begin Phase 5 implementation based on priorities
 4. Consider enabling assistant-ui by default for testing
+
+**COMPLETED TASK: Assistant-UI Migration - Global ChatPanel Replacement**
+*   **Status:** Complete - Global Implementation with Resizable Panels
+*   **Complexity:** 3 (Intermediate Feature - UI migration, state management, global component replacement)
+*   **Objective:** Replace the internals of ChatPanel.tsx with assistant-ui components globally across all pages (/today, /coach, etc.), making it resizable with 50% default width and slower animation.
+*   **Plan:**
+    *   Enable assistant-ui by default via feature flags
+    *   Replace ChatPanel internals globally (not just CoachPageV2)
+    *   Implement resizable panels with react-resizable-panels
+    *   Default to 50% screen width when expanded
+    *   Slow down sliding animation for better visibility
+*   **Checklist:**
+    *   [X] Enable useAssistantUI feature flag by default in featureFlags.ts
+    *   [X] Install react-resizable-panels dependency
+    *   [X] Update TodayView.tsx to use PanelGroup with resizable chat panel
+    *   [X] Implement 50% default width for chat panel when expanded
+    *   [X] Add slower transition animation (duration-500 ease-in-out)
+    *   [X] Ensure chat toggle button always visible regardless of panel state
+    *   [X] Maintain existing ChatPanel functionality across all pages
+    *   [X] Verify TypeScript compilation and build success
+*   **Results:** Successfully replaced ChatPanel internals globally with assistant-ui components. All pages now use the new implementation with resizable panels, 50% default width, and improved animations.
