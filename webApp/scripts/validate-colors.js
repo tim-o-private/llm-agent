@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-const fs = require('fs');
-const path = require('path');
-const glob = require('glob');
+import fs from 'fs';
+import path from 'path';
+import { glob } from 'glob';
 
 // Forbidden color patterns
 const FORBIDDEN_PATTERNS = [
@@ -55,6 +55,12 @@ function scanDirectory(directory, extensions = ['tsx', 'ts', 'css', 'scss']) {
       '**/dist/**',
       '**/build/**',
       '**/*.d.ts',
+      // Exclude test files
+      '**/*.test.{ts,tsx,js,jsx}',
+      '**/*.spec.{ts,tsx,js,jsx}',
+      '**/__tests__/**',
+      '**/test/**',
+      '**/tests/**',
     ]
   });
   
@@ -110,7 +116,7 @@ function generateReport(results) {
 }
 
 function main() {
-  const srcDir = path.join(__dirname, '../src');
+  const srcDir = path.join(process.cwd(), 'src');
   
   console.log('🔍 Scanning for color violations...');
   const results = scanDirectory(srcDir);
@@ -122,8 +128,6 @@ function main() {
 }
 
 // Run if called directly
-if (require.main === module) {
-  main();
-}
+main();
 
-module.exports = { validateFile, scanDirectory, generateReport }; 
+export { validateFile, scanDirectory, generateReport }; 

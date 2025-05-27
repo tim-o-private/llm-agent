@@ -88,7 +88,7 @@ export const ChatPanelV1: React.FC<ChatPanelV1Props> = ({ agentId: agentIdProp }
   };
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-gray-800 shadow-lg border-l border-gray-200 dark:border-gray-700">
+    <div className="flex flex-col h-full bg-ui-element-bg shadow-lg border-l border-ui-border">
       <MessageHeader 
         chatTitle="AI Coach" 
         status={sendMessageMutation.isPending ? "Typing..." : "Online"}

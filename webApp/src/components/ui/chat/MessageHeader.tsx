@@ -24,7 +24,7 @@ export const MessageHeader: React.FC<MessageHeaderProps> = ({
     <div className="p-3 px-4 flex items-center justify-between bg-ui-element-bg border-b border-ui-border shadow-sm">
       <div className="flex items-center">
         {/* Avatar/Icon could go here if desired */}
-        {/* <div className="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-600 mr-3 flex-shrink-0"></div> */}
+        {/* <div className="w-8 h-8 rounded-full bg-ui-interactive-bg mr-3 flex-shrink-0"></div> */}
         <div>
           <h2 className="text-base font-semibold text-text-primary">{chatTitle}</h2>
           {status && (
@@ -39,7 +39,7 @@ export const MessageHeader: React.FC<MessageHeaderProps> = ({
         {onClearChat && (
           <button 
             onClick={onClearChat} 
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-1 rounded-md"
+            className="text-text-muted hover:text-text-secondary p-1 rounded-md"
             title="Clear chat"
             aria-label="Clear chat"
           >
