@@ -53,6 +53,9 @@ export interface FocusSession {
 export type NewTaskData = Omit<Task, 'id' | 'created_at' | 'updated_at' | 'completed' | 'subtasks'> & { user_id: string };
 export type UpdateTaskData = Partial<Omit<Task, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'subtasks'>>;
 
+export type TaskCreatePayload = NewTaskData;
+export type TaskUpdatePayload = UpdateTaskData;
+
 export type NewFocusSessionData = Pick<FocusSession, 'user_id' | 'task_id' | 'planned_duration_minutes'> & Partial<Omit<FocusSession, 'id' | 'created_at' | 'user_id' | 'task_id' | 'start_time' | 'planned_duration_minutes'>>;
 export type UpdateFocusSessionData = Partial<Omit<FocusSession, 'id' | 'user_id' | 'task_id' | 'created_at'>>;
 

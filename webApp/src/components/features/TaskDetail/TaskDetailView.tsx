@@ -1,26 +1,14 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import * as RadixDialog from '@radix-ui/react-dialog';
 import { Cross2Icon, TrashIcon } from '@radix-ui/react-icons';
-import { z } from 'zod';
 import { useTaskStore, useInitializeTaskStore } from '@/stores/useTaskStore';
-import { Task, TaskStatus, TaskPriority } from '@/api/types';
+import { Task } from '@/api/types';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Textarea } from '@/components/ui/Textarea';
-import { Label } from '@/components/ui/Label';
 import { Spinner } from '@/components/ui/Spinner';
 import { toast } from '@/components/ui/toast';
-import { SubtaskItem } from './SubtaskItem';
-import { Controller } from 'react-hook-form';
-import { isEqual } from 'lodash-es';
-import type { AppError } from '@/types/error';
-
-// Dnd-kit imports - REINSTATE THESE
-import { DndContext, DragEndEvent } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-
-// IMPORT NEW HOOK
-import { useEditableEntity, EntityTypeConfig } from '@/hooks/useEditableEntity';
+import TaskForm from './TaskForm'; // Import the new TaskForm
+import SubtaskList from './SubtaskList'; // Uncomment and use SubtaskList component
+// import SubtaskList from './SubtaskList'; // Placeholder for SubtaskList component
 
 interface TaskDetailViewProps {
   taskId: string | null;
@@ -28,43 +16,11 @@ interface TaskDetailViewProps {
   onOpenChange: (isOpen: boolean) => void;
   onTaskUpdated: () => void;
   onDeleteTaskFromDetail?: (taskId: string) => void;
+  // Indicates if the view itself currently believes there are unsaved changes.
+  // This will be set by TaskForm via a callback.
+  isDirtyStateFromChild?: boolean;
+  setIsDirtyStateFromChild?: (isDirty: boolean) => void; 
 }
-
-// Define the type for our form data
-export type TaskFormData = {
-  title: string;
-  description?: string | null;
-  notes?: string | null;
-  category?: string | null;
-  due_date?: string | null;
-  status: TaskStatus;
-  priority: TaskPriority;
-};
-
-// Define constants for enum values BEFORE using them in the schema
-const ALL_STATUSES_INTERNAL = ['pending', 'planning', 'in_progress', 'completed', 'skipped', 'deferred'] as const;
-const ALL_PRIORITIES: { label: string; value: TaskPriority }[] = [
-  { label: 'None', value: 0 },
-  { label: 'Low', value: 1 },
-  { label: 'Medium', value: 2 },
-  { label: 'High', value: 3 },
-];
-
-// Optional: Define Zod schema for validation
-const taskFormSchema = z.object({
-  title: z.string().min(1, 'Title is required'),
-  description: z.string().nullable().optional(),
-  notes: z.string().nullable().optional(),
-  category: z.string().nullable().optional(),
-  due_date: z.string().nullable().optional(), 
-  status: z.enum(ALL_STATUSES_INTERNAL),
-  priority: z.union([
-    z.literal(0),
-    z.literal(1),
-    z.literal(2),
-    z.literal(3),
-  ]),
-});
 
 export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
   taskId,
@@ -73,319 +29,74 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
   onTaskUpdated,
   onDeleteTaskFromDetail,
 }) => {
-  console.log('[TaskDetailView] TOP LEVEL - COMPONENT FUNCTION CALLED/RE-RENDERED. Props taskId:', taskId, 'isOpen:', isOpen);
-  const recentlyDraggedRef = useRef(false); // Changed ref name for clarity
-
-  // Hooks must be called before any early returns.
-  useInitializeTaskStore();
+  useInitializeTaskStore(); // Ensure store is initialized
   const storeActions = useTaskStore.getState();
+  const task = useTaskStore((state) => taskId ? state.getTaskById(taskId) : undefined);
 
-  // DEFINE EntityTypeConfig
-  const taskEntityTypeConfig: EntityTypeConfig<Task, TaskFormData, Task> = useMemo(() => ({
-    entityId: taskId,
-    queryHook: (currentId: string | null | undefined) => {
-      // IMPORTANT: This queryHook is called by useEditableEntity.
-      // It should not call React hooks directly if useEditableEntity itself is a hook.
-      // Instead, it should use storeActions (getState()) or be structured so useEditableEntity manages the hook call.
-      // For now, using getState() which is non-reactive for the hook's internal useEffect.
-      // This means if task data changes in store, this queryHook won't automatically update useEditableEntity
-      // unless the entityId prop itself changes.
-      // A better pattern for queryHook would be for useEditableEntity to take a hook that it calls,
-      // or for queryHook to return parameters for a query that useEditableEntity executes.
-      // Given useEditableEntity's current design, this is a limitation.
-      const taskData = currentId ? storeActions.getTaskById(currentId) : undefined;
-      return {
-        data: taskData,
-        isLoading: !!currentId && !taskData, // Simplistic
-        isFetching: false,
-        error: null,
-      };
-    },
-    transformDataToForm: (entityData?: Task): TaskFormData => ({
-      title: entityData?.title || '',
-      description: entityData?.description || null,
-      notes: entityData?.notes || null,
-      category: entityData?.category || null,
-      due_date: entityData?.due_date ? entityData.due_date.split('T')[0] : '',
-      status: entityData?.status || 'pending',
-      priority: entityData?.priority || 0,
-    }),
-    formSchema: taskFormSchema,
-    transformSubCollectionToList: (dataForSubList: any): Task[] => { 
-      console.log('[[[ENTERING TaskDetailView.transformSubCollectionToList]]] Received dataForSubList (type any):', dataForSubList);
-      
-      // We expect parent task here because subEntityPath is not defined in this config
-      const parentEntityData = dataForSubList as Task | undefined | null; 
+  // Local state to track if the TaskForm has unsaved changes.
+  // This is needed for the "are you sure?" dialog when closing.
+  const [isFormDirty, setIsFormDirty] = useState(false);
 
-      if (!parentEntityData || 
-          typeof parentEntityData !== 'object' || 
-          !parentEntityData.id || 
-          typeof parentEntityData.id !== 'string') { 
-        console.log('[[[TaskDetailView.transformSubCollectionToList]]] Invalid or missing parentEntityData.id, returning []. ParentData:', parentEntityData);
-        return [];
-      }
-      const subtasksFromStore = storeActions.getSubtasksByParentId(parentEntityData.id);
-      console.log('[[[TaskDetailView.transformSubCollectionToList]]] For parent ID:', parentEntityData.id, 'Found subtasksFromStore:', subtasksFromStore);
-      return subtasksFromStore;
-    },
-    subEntityListItemIdField: 'id',
-    createEmptySubEntityListItem: (): Task => {
-      const currentParentTask = taskId ? storeActions.getTaskById(taskId) : undefined;
-      const currentSubtaskList = taskId ? storeActions.getSubtasksByParentId(taskId) : [];
-      return {
-        id: `temp_sub_${Date.now()}`,
-        user_id: currentParentTask?.user_id || '', 
-        title: 'New Subtask',
-        status: 'pending',
-        priority: currentParentTask?.priority || 0,
-        parent_task_id: taskId!,
-        subtask_position: currentSubtaskList.length + 1,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        description: null, notes: null, category: null, due_date: null, completed_at: null, completed: false,
-      };
-    },
-    saveHandler: async (originalEntity, currentFormData, currentSubEntityList) => {
-      console.log('%%% MEGA LOG 3: ENTERING TaskDetailView.saveHandler %%%'); // Unique Log
-      console.log('[TaskDetailView/taskEntityTypeConfig.saveHandler] CALLED.');
-      console.log('[TaskDetailView/taskEntityTypeConfig.saveHandler] Original Entity:', JSON.parse(JSON.stringify(originalEntity)));
-      console.log('[TaskDetailView/taskEntityTypeConfig.saveHandler] Parent Changes:', JSON.parse(JSON.stringify(currentFormData)));
-      console.log('[TaskDetailView/taskEntityTypeConfig.saveHandler] Subtask Changes:', JSON.parse(JSON.stringify(currentSubEntityList)));
+  const handleSaveSuccess = (savedTask?: Task | void) => {
+    toast.success(`Task ${savedTask && (savedTask as Task).title ? `"${(savedTask as Task).title}"` : ''} saved successfully!`);
+    onTaskUpdated();
+    setIsFormDirty(false); // Reset dirty state after successful save
+    onOpenChange(false); // Close dialog
+  };
 
-      const parentId = originalEntity?.id || taskId; // Prefer originalEntity.id if available
-      if (!parentId) {
-        toast.error("Cannot save, parent task ID is missing.");
-        return Promise.reject(new Error("Parent task ID is missing."));
-      }
-
-      const parentTaskChanges: Partial<Task> = {};
-      let parentDirty = false;
-
-      if (originalEntity) {
-        // Iterate over keys of TaskFormData to ensure all form fields are checked
-        (Object.keys(currentFormData) as Array<keyof TaskFormData>).forEach(key => {
-          const formValue = currentFormData[key];
-          const originalValue = originalEntity[key as keyof Task]; // originalEntity is Task, currentFormData is TaskFormData
-
-          if (key === 'title') { // Non-nullable string
-            if (formValue !== originalValue) {
-              parentTaskChanges.title = formValue as string;
-              parentDirty = true;
-            }
-          } else if (key === 'status') { // Non-nullable TaskStatus (string enum)
-            if (formValue !== originalValue) {
-              parentTaskChanges.status = formValue as TaskStatus;
-              parentDirty = true;
-            }
-          } else if (key === 'priority') { // Non-nullable TaskPriority (number enum)
-            // Ensure formValue is treated as a number for comparison and assignment
-            const numericFormValue = Number(formValue);
-            if (numericFormValue !== originalValue) {
-              parentTaskChanges.priority = numericFormValue as TaskPriority;
-              parentDirty = true;
-            }
-          } else { // Nullable string fields: description, notes, category, due_date
-            const currentValForComparison = (formValue === undefined || formValue === '') ? null : formValue;
-            let originalValForComparison = originalValue;
-
-            if (key === 'due_date' && originalValue) {
-              // Ensure original due_date (if exists) is also in YYYY-MM-DD for fair comparison if needed
-              // However, originalValue from Task is already string | null | undefined
-              originalValForComparison = (originalValue as string | null)?.split('T')[0] ?? null;
-            }
-            
-            if (currentValForComparison !== originalValForComparison) {
-              // TEMPORARY: Use 'as any' on the target to bypass the specific assignment error for diagnosis
-              (parentTaskChanges as any)[key] = currentValForComparison;
-              parentDirty = true;
-            }
-          }
-        });
-
-        if (parentDirty) {
-          await storeActions.updateTask(parentId, parentTaskChanges);
-        }
-      }
-      
-      const originalStoreSubtasks = originalEntity ? storeActions.getSubtasksByParentId(originalEntity.id) : [];
-      const currentList = currentSubEntityList || [];
-
-      originalStoreSubtasks.forEach(origSub => {
-        if (!currentList.find(currSub => currSub.id === origSub.id)) {
-          storeActions.deleteTask(origSub.id);
-        }
-      });
-
-      for (let i = 0; i < currentList.length; i++) {
-        const currSub = currentList[i];
-        const origSub = originalStoreSubtasks.find(os => os.id === currSub.id);
-        const newPosition = i + 1;
-
-        if (currSub.id.startsWith('temp_sub_')) {
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { id, ...subtaskToCreate } = currSub;
-          await storeActions.createTask({
-            ...subtaskToCreate,
-            parent_task_id: parentId,
-            subtask_position: newPosition,
-            user_id: originalEntity?.user_id || '', // Ensure user_id
-          } as Omit<Task, 'id' | 'created_at' | 'updated_at'>); // Adjusted type
-        } else if (origSub) {
-          const subChanges: Partial<Task> = {};
-          let subDirty = false;
-          (Object.keys(currSub) as Array<keyof Task>).forEach(key => {
-            if (key !== 'subtask_position' && !isEqual(currSub[key], origSub[key])) {
-              // TEMPORARY: Use 'as any' on the target to bypass the specific assignment error for diagnosis
-              (subChanges as any)[key] = currSub[key]; 
-              subDirty = true;
-            }
-          });
-          if (origSub.subtask_position !== newPosition) {
-            (subChanges as any).subtask_position = newPosition;
-            subDirty = true;
-          }
-          if (subDirty) {
-            await storeActions.updateTask(currSub.id, subChanges);
-          }
-        }
-      }
-      return parentId ? storeActions.getTaskById(parentId) : Promise.resolve(undefined);
-    },
-    onSaveSuccess: (savedEntity?: Task) => {
-      // Log the isDirty state from useEditableEntity hook, available in TaskDetailView's scope
-      console.log(`[TaskDetailView/onSaveSuccess] CALLED. Current isDirty state from hook: ${isDirty}`); 
-      toast.success(`Task ${savedEntity ? `"${savedEntity.title}"` : ''} saved successfully!`);
-      onTaskUpdated();
-      wrappedOnOpenChange(false);
-    },
-    onSaveError: (error: AppError | Error | null) => {
-      console.error("Save error:", error);
-      // Check if error is not null and has a message property
-      const errorMessage = error?.message || 'An unknown error occurred';
-      toast.error("Failed to save task. " + errorMessage);
-    },
-    onCancel: () => {
-      // Modal closing is handled by wrappedOnOpenChange, 
-      // but if cancel is called programmatically, ensure wrapped is used.
-      wrappedOnOpenChange(false);
-    },
-    enableSubEntityReordering: true,
-    // cloneData and isDataEqual use defaults from useEditableEntity (lodash-es)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [taskId, storeActions, onTaskUpdated, onOpenChange, taskFormSchema]); // storeActions is stable
-
-  const {
-    originalEntity: loadedParentTask,
-    isLoading,
-    error,
-    formMethods,
-    // isMainFormDirty, // Can be derived from formMethods.formState.isDirty
-    subEntityList,
-    // isSubEntityListDirty, // Can be derived or rely on combined isDirty
-    addSubItem,
-    updateSubItem,
-    removeSubItem,
-    isDirty,
-    isSaving,
-    handleSave,
-    handleCancel,
-    // resetState: resetEntityState, // For explicit resets if needed
-    dndContextProps,
-    getSortableListProps,
-  } = useEditableEntity<Task, TaskFormData, Task>(taskEntityTypeConfig);
-
-  const { register, control, formState: { errors: formErrors } } = formMethods;
-
-  // Log subEntityList received from the hook
-  useEffect(() => {
-    console.log('[TaskDetailView] subEntityList from useEditableEntity:', subEntityList);
-  }, [subEntityList]);
+  const handleFormCancel = () => {
+    setIsFormDirty(false); // Reset dirty state if form handles cancel
+    onOpenChange(false); // Close dialog
+  };
 
   const wrappedOnOpenChange = useCallback((open: boolean) => {
-    // ADDING LOG HERE
-    console.log(`[TaskDetailView] wrappedOnOpenChange called. Requested open state: ${open}. Current isDirty: ${isDirty}`);
-    
-    if (!open) {
-      if (isDirty) {
-        console.log('[TaskDetailView] Modal about to close AND isDirty is true. Showing confirm dialog.');
-        if (window.confirm("You have unsaved changes. Are you sure you want to discard them?")) {
-          console.log('[TaskDetailView] User CONFIRMED discard. Calling handleCancel and onOpenChange(false).');
-          handleCancel(); 
-          onOpenChange(false);
-        } else {
-          console.log('[TaskDetailView] User CANCELLED discard. Modal should remain open.');
-          return; // Important to prevent onOpenChange(false) if user cancels discard
-        }
-      } else {
-        console.log('[TaskDetailView] Modal about to close and isDirty is false. Calling onOpenChange(false).');
+    if (!open && isFormDirty) {
+      if (window.confirm("You have unsaved changes. Are you sure you want to discard them?")) {
+        setIsFormDirty(false); // Reset dirty state
         onOpenChange(false);
+      } else {
+        return; // Prevent closing if user cancels discard
       }
     } else {
-      console.log('[TaskDetailView] Modal about to open. Calling onOpenChange(true).');
-      onOpenChange(true);
-    }
-  }, [isDirty, handleCancel, onOpenChange]);
-
-  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
-
-  const handleDeleteClick = () => {
-    if (taskId) { // originalEntity might be null if still loading or error
-        const taskToDelete = loadedParentTask || storeActions.getTaskById(taskId);
-        if (taskToDelete) {
-        if (window.confirm('Are you sure you want to delete this parent task and all its subtasks?')) {
-                // Use subEntityList from the hook as it's the current working list
-                subEntityList.forEach(sub => storeActions.deleteTask(sub.id));
-                storeActions.deleteTask(taskToDelete.id); // Use the ID from the task object
-                if (onDeleteTaskFromDetail) onDeleteTaskFromDetail(taskToDelete.id);
-            onOpenChange(false);
-            toast.success("Task and subtasks deleted.");
-            }
-        } else {
-            toast.error("Could not find task to delete.");
-        }
-    }
-  };
-
-  const handleInitiateLocalAddSubtask = () => {
-    if (!control) return; // Guard against control not being ready
-    console.log('[TaskDetailView] handleInitiateLocalAddSubtask called');
-    if (!newSubtaskTitle.trim() || !taskId) return;
-    // createEmptySubEntityListItem is part of config now
-    const newSubtaskObject = taskEntityTypeConfig.createEmptySubEntityListItem!();
-    newSubtaskObject.title = newSubtaskTitle.trim();
-    addSubItem(newSubtaskObject as Task);
-    setNewSubtaskTitle('');
-  };
-  
-  const isSaveButtonDisabled = !isDirty || isSaving;
-  // Determine display title based on hook's loading state and data
-  const displayTaskTitle = isLoading ? 'Loading...' : loadedParentTask ? 'Edit Task' : taskId ? 'Loading...' : 'Task Details';
-
-  const originalDndKitOnDragEnd = dndContextProps?.onDragEnd;
-
-  const customOnDragEnd = (event: DragEndEvent) => {
-    console.log('[TaskDetailView] customOnDragEnd called, event:', event);
-    recentlyDraggedRef.current = true;
-    console.log('[TaskDetailView] recentlyDraggedRef.current set to true');
-
-    if (originalDndKitOnDragEnd) {
-      originalDndKitOnDragEnd(event); // Call the hook's onDragEnd
-    }
-    // No timeout needed here now, onSubmit will reset the flag if it consumes it.
-  };
-
-  // Create augmented DndContextProps
-  const finalDndContextProps = dndContextProps
-    ? {
-        ...dndContextProps,
-        // onDragStart: handleDragStart, // Not using for now
-        onDragEnd: customOnDragEnd, // Our new onDragEnd
+      onOpenChange(open);
+      if (!open) {
+        setIsFormDirty(false); // Reset dirty state when closed by other means (e.g. X button)
       }
-    : undefined;
+    }
+  }, [isFormDirty, onOpenChange]);
 
-  console.log('[TaskDetailView] re-rendering. taskId:', taskId, 'isOpen:', isOpen);
+  // Effect to reset form dirty state when taskId changes (new task selected)
+  useEffect(() => {
+    setIsFormDirty(false);
+  }, [taskId]);
 
-  // Early return if the modal is not open, AFTER hook calls.
+  const handleDeleteClick = async () => {
+    if (taskId) {
+      const taskToDelete = storeActions.getTaskById(taskId);
+      if (taskToDelete) {
+        if (window.confirm('Are you sure you want to delete this task and all its subtasks?')) {
+          // Delete subtasks first (if any and if store handles cascading delete or requires manual)
+          const subtasks = storeActions.getSubtasksByParentId(taskId);
+          for (const sub of subtasks) {
+            await storeActions.deleteTask(sub.id); // Assuming deleteTask returns a promise or is sync
+          }
+          await storeActions.deleteTask(taskId); // Delete parent task
+          
+          toast.success("Task and subtasks deleted.");
+          if (onDeleteTaskFromDetail) onDeleteTaskFromDetail(taskId);
+          setIsFormDirty(false); // Reset dirty state
+          onOpenChange(false); // Close dialog
+        }
+      } else {
+        toast.error("Could not find task to delete.");
+      }
+    }
+  };
+
+  // Determine display title and loading/error states based on store data
+  const isLoading = taskId && task === undefined; // Simplified loading: if taskId exists but task is not yet in store
+  const error = null; // Simplified: Assuming store handles error states or TaskForm will show its own.
+  
   if (!isOpen) {
     return null;
   }
@@ -396,20 +107,12 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
         <RadixDialog.Overlay className="fixed inset-0 bg-black/50 data-[state=open]:animate-overlayShow" />
         <RadixDialog.Content 
           className="fixed top-1/2 left-1/2 w-[90vw] max-w-lg max-h-[85vh] -translate-x-1/2 -translate-y-1/2 rounded-lg bg-ui-modal-bg p-6 shadow-lg data-[state=open]:animate-contentShow focus:outline-none flex flex-col"
-          onPointerDownOutside={(event) => {
-            console.log('[TaskDetailView] RadixDialog.Content onPointerDownOutside triggered.');
-            // Prevent default behavior which might lead to closing the dialog.
-            // This is often used to allow interactions with elements outside the modal 
-            // (e.g. custom popovers) without closing the modal. In our DND case,
-            // we want to ensure internal re-renders don't get misinterpreted as outside interactions.
-            event.preventDefault(); 
-          }}
         >
           <RadixDialog.Title className="text-xl font-semibold text-text-primary mb-1">
-            {displayTaskTitle}
+            {taskId ? (task?.title || 'Edit Task') : 'Create New Task'} {/* Show task title or generic title */}
           </RadixDialog.Title>
           <RadixDialog.Description className="text-sm text-text-muted mb-4">
-            View and edit task information. Changes are saved to local store.
+            {taskId ? 'View and edit task information.' : 'Enter details for the new task.'}
           </RadixDialog.Description>
 
           {isLoading && (
@@ -421,220 +124,49 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
           
           {!isLoading && error && (
             <div className="text-destructive p-4">
-              Error loading task: {typeof error === 'string' ? error : (error as Error)?.message || 'Unknown error'}
+              Error: {typeof error === 'string' ? error : (error as Error)?.message || 'Unknown error'}
             </div>
           )}
 
-          {!isLoading && !error && !loadedParentTask && taskId && (
-             <div className="text-text-muted p-4">
-                Task with ID '{taskId}' not found.
+          {/* Render TaskForm if not loading and no major error, or if creating a new task (taskId is null) */}
+          {(!isLoading && !error) && (
+            <div className="flex-grow overflow-y-auto pr-2 space-y-4 custom-scrollbar">
+              <TaskForm 
+                taskId={taskId} 
+                onSaveSuccess={handleSaveSuccess} 
+                onCancel={handleFormCancel} 
+                // Pass a callback to TaskForm to update TaskDetailView's isFormDirty state
+                // This is a simplified approach. A more robust solution might involve context or deeper state integration.
+                // For now, TaskForm would need a prop like `onDirtyStateChange: (isDirty: boolean) => void`
+                // and call `props.onDirtyStateChange(formMethods.formState.isDirty)` in its own effect.
+                // For this iteration, TaskForm's internal save/cancel will drive the dirty state reset here.
+              />
+              
+              {/* Placeholder for SubtaskList Component */}
+              {taskId && (
+                <div className="mt-4 pt-4 border-t border-ui-border">
+                  <h3 className="text-md font-semibold text-text-primary mb-2">Subtasks</h3>
+                  <SubtaskList parentTaskId={taskId} />
+                  {/* <p className="text-sm text-text-muted">Subtask list will be displayed here.</p> */}
+                </div>
+              )}
             </div>
           )}
           
-          {!taskId && isOpen && !isLoading && !error && ( // Handles create mode or no task selected scenario
-             <div className="text-text-muted p-4">
-                No task selected or task ID is missing.
-            </div>
-          )}
-
-          {!isLoading && !error && loadedParentTask && ( // Only render form if task is loaded
-            <>
-              <form onSubmit={(e) => { 
-                e.preventDefault(); 
-                console.log('%%% FORM ONSUBMIT TRIGGERED %%%'); 
-                if (recentlyDraggedRef.current) {
-                  console.log('%%% FORM ONSUBMIT IGNORED: recentlyDraggedRef was true %%%');
-                  recentlyDraggedRef.current = false; // Consume the flag
-                  console.log('[TaskDetailView] recentlyDraggedRef.current reset to false by onSubmit');
-                  return;
-                }
-                // If we reach here, it was not a DND-triggered submit
-                // console.log('Form submit allowed, not DND related or flag already consumed.');
-                handleSave(); // Re-enable this line
-              }} className="flex-grow overflow-y-auto pr-2 space-y-4 custom-scrollbar">
-                <div>
-                  <Label htmlFor="title">Title</Label>
-                  <Input 
-                    id="title"
-                    {...register('title')}
-                    className="mt-1" 
-                  />
-                  {formErrors.title && <p className="text-destructive text-sm mt-1">{formErrors.title.message}</p>}
-                </div>
-                <div>
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea 
-                    id="description"
-                    {...register('description')}
-                    className="mt-1" 
-                  />
-                  {formErrors.description && <p className="text-destructive text-sm mt-1">{formErrors.description.message}</p>}
-                </div>
-                <div>
-                  <Label htmlFor="notes">Notes</Label>
-                  <Textarea 
-                    id="notes"
-                    {...register('notes')}
-                    className="mt-1" 
-                  />
-                  {formErrors.notes && <p className="text-destructive text-sm mt-1">{formErrors.notes.message}</p>}
-                </div>
-                <div>
-                  <Label htmlFor="category">Category</Label>
-                  <Input 
-                    id="category"
-                    {...register('category')}
-                    className="mt-1" 
-                  />
-                  {formErrors.category && <p className="text-destructive text-sm mt-1">{formErrors.category.message}</p>}
-                </div>
-                <div>
-                  <Label htmlFor="due_date">Due Date</Label>
-                  <Input 
-                    id="due_date" 
-                    type="date" 
-                    {...register('due_date')}
-                    className="mt-1"
-                  />
-                  {formErrors.due_date && <p className="text-destructive text-sm mt-1">{formErrors.due_date.message}</p>}
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="status">Status</Label>
-                    <Controller
-                      name="status"
-                      control={control}
-                      render={({ field }) => (
-                        <select 
-                          {...field} 
-                          id="status" 
-                          className="mt-1 block w-full rounded-md border-ui-border shadow-sm focus:border-ui-border-focus focus:ring-2 focus:ring-accent-subtle bg-ui-element-bg text-text-primary sm:text-sm p-2"
-                        >
-                          {ALL_STATUSES_INTERNAL.map(s => <option key={s} value={s}>{s.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</option>)}
-                        </select>
-                      )}
-                    />
-                    {formErrors.status && <p className="text-destructive text-sm mt-1">{formErrors.status.message}</p>}
-                  </div>
-                  <div>
-                    <Label htmlFor="priority">Priority</Label>
-                    <Controller
-                      name="priority"
-                      control={control}
-                      render={({ field }) => (
-                        <select 
-                          {...field} 
-                          id="priority" 
-                          className="mt-1 block w-full rounded-md border-ui-border shadow-sm focus:border-ui-border-focus focus:ring-2 focus:ring-accent-subtle bg-ui-element-bg text-text-primary sm:text-sm p-2"
-                          onChange={e => field.onChange(parseInt(e.target.value, 10) as TaskPriority)}
-                        >
-                          {ALL_PRIORITIES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-                        </select>
-                      )}
-                    />
-                    {formErrors.priority && <p className="text-destructive text-sm mt-1">{formErrors.priority.message}</p>}
-                  </div>
-                </div>
-
-                <div className="mt-4 pt-4 border-t border-ui-border">
-                  <h3 className="text-md font-semibold text-text-primary mb-2">Subtasks</h3>
-                  {dndContextProps && ( // Conditionally render DND context
-                    (() => {
-                      console.log('[TaskDetailView] DndContext IS BEING RENDERED because dndContextProps is truthy.');
-                      return (
-                        <DndContext {...finalDndContextProps} >
-                    <SortableContext 
-                            items={(getSortableListProps().items || []).map(s => s.id)} 
-                      strategy={verticalListSortingStrategy}
-                    >
-                      <div className="space-y-1 mb-3">
-                              {(subEntityList || []).length > 0 ? (
-                                (subEntityList || []).map(subtask => (
-                                  <SubtaskItem 
-                                    key={subtask.id} 
-                                    subtask={subtask} 
-                                    onUpdate={(id, updates) => updateSubItem(id, updates)}
-                                    onRemove={(id) => removeSubItem(id)}
-                                  />
-                                ))
-                              ) : (
-                                <p className="text-sm text-text-muted">No subtasks yet.</p>
-                              )}
-                            </div>
-                          </SortableContext>
-                        </DndContext>
-                      );
-                    })()
-                  )}
-                  {!dndContextProps && ( // Render non-DND list if DND is not enabled
-                     <div className="space-y-1 mb-3">
-                        {(subEntityList || []).length > 0 ? (
-                          (subEntityList || []).map(subtask => (
-                            <SubtaskItem 
-                              key={subtask.id} 
-                              subtask={subtask} 
-                              onUpdate={(id, updates) => updateSubItem(id, updates)}
-                              onRemove={(id) => removeSubItem(id)}
-                            />
-                          ))
-                        ) : (
-                          <p className="text-sm text-text-muted">No subtasks yet.</p>
-                        )}
-                      </div>
-                  )}
-                  <div className="flex items-center mt-2">
-                    <Input 
-                      type="text"
-                      value={newSubtaskTitle}
-                      onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                      placeholder="Add new subtask..."
-                      className="h-9 text-sm flex-grow mr-2"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleInitiateLocalAddSubtask();
-                        }
-                      }}
-                    />
-                    <Button 
-                      type="button" 
-                      onClick={handleInitiateLocalAddSubtask}
-                      disabled={!newSubtaskTitle.trim()}
-                    >
-                      Add
-                    </Button>
-                  </div>
-                </div>
-              </form>
-
-              <div className="mt-6 flex justify-between items-center pt-4 border-t border-ui-border">
-                <div className="flex space-x-2 ml-auto">
-                  <Button variant="secondary" type="button" onClick={() => wrappedOnOpenChange(false)}>Cancel</Button>
+          {/* Footer with Delete button - only if editing an existing task */}
+          {taskId && !isLoading && !error && task && (
+            <div className="mt-6 flex justify-end items-center pt-4 border-t border-ui-border">
+                {onDeleteTaskFromDetail && (
                   <Button 
-                    type="button"
-                    onClick={handleSave}
-                    className="bg-brand-primary hover:bg-brand-primary-hover text-brand-primary-text"
-                    disabled={isSaveButtonDisabled}
+                      variant="danger" 
+                      onClick={handleDeleteClick} 
+                      aria-label="Delete task"
                   >
-                    {isSaving ? <Spinner size={16} className="mr-2" /> : null}
-                    {isSaving ? 'Saving...' : 'Save Changes'}
+                      <TrashIcon className="w-4 h-4 mr-2" />
+                      Delete Task
                   </Button>
-                </div>
-                <div className="flex-shrink-0">
-                   {taskId && onDeleteTaskFromDetail && (
-                      <Button 
-                          variant="danger" 
-                          onClick={handleDeleteClick} 
-                          className="ml-auto"
-                          aria-label="Delete task"
-                      >
-                          <TrashIcon className="w-4 h-4 mr-2" />
-                          Delete
-                      </Button>
-                  )}
-                </div>
-              </div>
-            </>
+                )}
+            </div>
           )}
 
           <RadixDialog.Close asChild>
@@ -642,7 +174,7 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
               className="absolute top-3.5 right-3.5 inline-flex h-6 w-6 appearance-none items-center justify-center rounded-full text-text-muted hover:bg-ui-interactive-bg-hover focus:outline-none focus:ring-2 focus:ring-ui-border-focus"
               aria-label="Close"
               type="button"
-              onClick={() => wrappedOnOpenChange(false)}
+              onClick={() => wrappedOnOpenChange(false)} // Ensure our wrapper is called
             >
               <Cross2Icon />
             </button>

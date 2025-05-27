@@ -16,7 +16,7 @@ interface PendingChange {
 }
 
 // Define the task store interface
-interface TaskStore {
+export interface TaskStore {
   // Data
   tasks: Record<string, Task>;
   isLoading: boolean;

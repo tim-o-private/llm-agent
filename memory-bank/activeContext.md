@@ -4,11 +4,26 @@ import datetime
 
 This document outlines the current high-priority task, relevant files, and key considerations for the AI agent.
 
-**Last Updated:** 2025-01-25
+**Last Updated:** {datetime.date.today().isoformat()}
 
 ## Current High-Priority Task:
 
-**1. Assistant-UI Migration Implementation**
+**1. Refactor Task Editing UI and Logic**
+*   **Status:** Implementation of Core Components Complete - Ready for Testing
+*   **Objective:** Improve maintainability, type safety, and user experience of the task editing interface.
+*   **Key Achievements:**
+    *   Refactored `useEditableEntity.ts` hook, resolving typing and Zod schema issues.
+    *   Implemented `TaskForm.tsx` with robust Zod validation and Zustand integration (`getEntityDataFn`, `saveEntityFn`).
+    *   Resolved all identified linter errors related to these components.
+*   **Relevant Files:**
+    *   `webApp/src/hooks/useEditableEntity.ts`
+    *   `webApp/src/components/features/TaskDetail/TaskForm.tsx`
+    *   `webApp/src/types/editableEntityTypes.ts`
+    *   `webApp/src/stores/useTaskStore.ts`
+*   **Next Steps:** Comprehensive unit and integration testing for `TaskForm`, `useEditableEntity`, `TaskDetailView`, and `SubtaskList`.
+*   **Task Tracking:** `memory-bank/tasks.md` (Refactor Task Editing UI and Logic)
+
+**2. Assistant-UI Migration Implementation**
 
 *   **Status:** COMPLETED - Full Implementation with Professional Styling ✅
 *   **Objective:** Migrate existing custom ChatPanel implementation to assistant-ui library for enhanced functionality, better accessibility, and improved maintainability.
@@ -59,7 +74,12 @@ This document outlines the current high-priority task, relevant files, and key c
 
 ## Key Focus Areas for Implementation:
 
-1.  **Assistant-UI Migration (COMPLETED ✅):**
+1.  **Task Editing UI/Logic Refactor (Testing Next):**
+    *   Core components (`useEditableEntity`, `TaskForm`) implementation complete.
+    *   Zod schemas and TypeScript typings resolved.
+    *   Ready for unit and integration testing.
+
+2.  **Assistant-UI Migration (COMPLETED ✅):**
     *   ✅ Phase 1: Install dependencies and setup environment
     *   ✅ Phase 2: Implement custom runtime adapter for backend integration
     *   ✅ Phase 3: Replace ChatPanel with assistant-ui components (styling deferred)
@@ -68,28 +88,12 @@ This document outlines the current high-priority task, relevant files, and key c
     *   [ ] Phase 5: Add advanced features (styling customization, streaming, tool visualization)
     *   [ ] Phase 6: Comprehensive testing and optimization
     *   [ ] Phase 7: Documentation and deployment
-2.  **CRUD Tool System:**
-    *   All CRUD tool logic is now DB-driven. No code changes are needed to add new CRUD tools—just DB inserts.
-    *   Loader and registry are minimal and generic.
-    *   See `tool-creation-pattern.md` for details.
-3.  **Client-Side (`webApp`):**
-    *   `webApp/src/api/hooks/useChatApiHooks.ts`: Implemented `useSendMessageMutation`.
-    *   `webApp/src/stores/useChatStore.ts`: Refactored store state and logic for session initialization (including `isInitializingSession` fix), message handling (heartbeat), and session deactivation.
-    *   `webApp/src/components/ChatPanel.tsx`: Now uses assistant-ui components globally via feature flag router.
-4.  **Server-Side (`chatServer/main.py`):**
-    *   Adapted `AGENT_EXECUTOR_CACHE` to use `(user_id, agent_name)` as key and remove self-TTL.
-    *   Ensured `/api/chat` uses `chat_sessions.chat_id` (from request's `session_id` field) for `PostgresChatMessageHistory`.
-    *   Implemented background tasks (and fixed startup error) to deactivate stale `chat_session_instances` and evict corresponding inactive `AgentExecutors` from the cache.
-
-## Relevant Files (Under Active Development/Review):
-
-*   **Assistant-UI Migration (COMPLETED):**
-    *   `webApp/src/components/ChatPanel.tsx` (Now uses assistant-ui via feature flag router)
-    *   `webApp/src/components/ChatPanelV2.tsx` (Assistant-ui implementation)
-    *   `webApp/src/lib/featureFlags.ts` (Feature flags - useAssistantUI enabled by default)
-    *   `webApp/src/lib/assistantui/CustomRuntime.ts` (Runtime adapter with state sync)
-    *   `webApp/src/pages/TodayView.tsx` (Enhanced with resizable panels)
-    *   `memory-bank/implementation_plans/assistant-ui-migration-plan.md` (Implementation plan)
+*   **Task Editing Refactor (Active - Testing Next):**
+    *   `webApp/src/hooks/useEditableEntity.ts`
+    *   `webApp/src/components/features/TaskDetail/TaskForm.tsx`
+    *   `webApp/src/types/editableEntityTypes.ts`
+    *   `webApp/src/components/features/TaskDetail/TaskDetailView.tsx`
+    *   `webApp/src/components/features/TaskDetail/SubtaskList.tsx`
 *   **Completed ChatServer Decomposition:**
     *   `chatServer/services/` (All services implemented)
     *   `chatServer/models/` (Phase 1 - Models and Protocols)
@@ -97,60 +101,15 @@ This document outlines the current high-priority task, relevant files, and key c
     *   `chatServer/config/` (Phase 2 - Configuration)
     *   `chatServer/database/` (Phase 2 - Database)
     *   `chatServer/dependencies/` (Phase 2 - Dependencies)
-*   **Other Active Files:**
-    *   `tool-creation-pattern.md` (CRUD tool pattern)
-    *   `session_management_and_executor_caching_plan.md` (Primary Plan)
-    *   `memory-bank/tasks.md` (Detailed Task List)
-
-## Key Constraints & Considerations:
-
-*   **Service Layer Architecture:** Extract business logic while maintaining clean separation of concerns
-*   **Background Task Management:** Centralize scheduled task logic for better maintainability
-*   **Minimal Server Endpoints:** Client-side logic handles direct DB interactions with `chat_sessions` via RLS.
-*   **CRUD Tool Extensibility:** All CRUD tools are now DB-configured. No code changes required for new tools.
-*   **Idempotency & Race Conditions:** Addressed a key race condition in `initializeSessionAsync`.
-*   **TTL Management:** Client-side heartbeats and server-side scheduled tasks will manage session and executor liveness.
-*   **Clarity of IDs:**
-    *   `chat_sessions.id`: PK, unique identifier for a specific client engagement/session instance.
-    *   `chat_sessions.chat_id`: Foreign key (conceptually) to a persistent chat conversation/memory.
-    *   `/api/chat` request body's `session_id` field will carry the `chat_sessions.chat_id` value.
-
-## Previous Context (Completed):
-
-*   **Phase 2 (COMPLETED):** Configuration, database, and dependencies extraction
-    *   Successfully removed 200+ lines from main.py
-    *   Created 18 new files (9 implementation + 9 test files)
-    *   Achieved 94 tests passing with 100% pass rate
-    *   Fixed import compatibility for both module and direct execution
-*   **Phase 1 (COMPLETED):** Models and protocols extraction
-    *   Clean separation of data models and interfaces
-    *   Comprehensive test coverage (31 tests)
-    *   Fixed Pydantic deprecation warnings
-
-**Last Task Archived:** Task 9: Architect and Implement `useEditableEntity` Hook & Refactor `TaskDetailView`
-**Archive Document:** `memory-bank/archive/archive-task9.md`
-
-**Immediate Focus / Next Steps:**
-1.  **[COMPLETED ✅] Assistant-UI Migration Implementation**
-    *   **Objective:** Migrate ChatPanel to assistant-ui for enhanced functionality and maintainability
-    *   **Status:** Global implementation complete with resizable panels
-    *   **Next:** Phase 5 - Advanced features (styling customization, streaming, tool visualization)
-2.  **[COMPLETED ✅] ChatServer Main.py Decomposition - Phase 3**
-    *   **Objective:** Extract services and background tasks to complete the decomposition
-    *   **Status:** All services implemented with comprehensive testing
-3.  **[ACTIVE] CRUD Tool Migration to DB Configuration**
-    *   **Objective:** Complete testing and documentation of the new DB-driven pattern
 4.  **[ACTIVE] Refactor: Implement Robust Session Management & Agent Executor Caching**
     *   **Objective:** Complete integration testing of the new session management system
 
-**Mode Recommendation:** IMPLEMENT (Assistant-UI Phase 5 - Advanced Features)
+**Mode Recommendation:** PLAN (For testing strategy of Task Editing UI Refactor)
 
-**General Project Goal:** Continue enhancing the assistant-ui implementation with custom styling and advanced features while maintaining the robust backend architecture.
+**General Project Goal:** Complete chatServer main.py decomposition with service layer architecture. Enable clean separation of business logic and improved maintainability.
 
 **Pending Decisions/Questions:**
-*   Service interface design for chat processing and session management
-*   Background task scheduling and lifecycle management approach
-*   Integration testing strategy for the new service layer
+*   Strategy for unit and integration testing of the new task editing components.
 
 **Previous Focus (Completed/Superseded in this context):**
 *   CLI/Core Backend MVP Testing (Task 3.1 from `memory-bank/tasks.md`):
@@ -159,29 +118,29 @@ This document outlines the current high-priority task, relevant files, and key c
     *   Prompt customization persistence verified.
 *   Agent Memory System v1 Design & Implementation (Superseded by V2)
 *   Linter error fixes in `useTaskHooks.ts` and `types.ts`.
+*   **Linter error fixes and Zod/Typing refinements in `TaskForm.tsx` and `useEditableEntity.ts`.**
 *   Refactor `useChatApiHooks.ts` for direct Supabase writes.
 *   Update `useChatStore.ts` to use direct archival logic.
 *   UI integration of `agentId` for `ChatPanel` and `useChatStore` initialization.
 
 **Upcoming Focus (Post ChatServer Decomposition):**
+*   **Testing of Task Editing UI/Logic Refactor.**
 *   Agent Memory System v2 - Phase 4: Refinements, Advanced LTM & Pruning
 *   Additional agent tool development and testing
 
-**Key Files Recently Modified/Reviewed (related to Phase 2 completion):**
-*   `chatServer/config/settings.py` (Configuration management)
-*   `chatServer/database/connection.py` (Database connection pooling)
-*   `chatServer/database/supabase_client.py` (Supabase client management)
-*   `chatServer/dependencies/auth.py` (Authentication dependencies)
-*   `chatServer/main.py` (Updated to use extracted modules)
-*   `pytest.ini` (Async test configuration)
+**Key Files Recently Modified/Reviewed (related to Task Editing Refactor):**
+*   `webApp/src/components/features/TaskDetail/TaskForm.tsx`
+*   `webApp/src/hooks/useEditableEntity.ts`
+*   `webApp/src/types/editableEntityTypes.ts`
+*   `webApp/src/api/types.ts` (for TaskPriority, TaskStatus type usage)
 
 **Open Questions/Considerations:**
 *   How should the service layer interfaces be designed for maximum testability?
 *   What's the best approach for dependency injection in the service layer?
 *   How should background tasks be managed and monitored?
 
-Last updated: 2025-01-25
+Last updated: {datetime.date.today().isoformat()}
 
-**Mode Recommendation:** IMPLEMENT (ChatServer Services Extraction - Phase 3)
+**Mode Recommendation:** PLAN (For testing strategy of Task Editing UI Refactor)
 
 **General Project Goal:** Complete chatServer main.py decomposition with service layer architecture. Enable clean separation of business logic and improved maintainability.

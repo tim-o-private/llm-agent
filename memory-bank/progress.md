@@ -8,6 +8,9 @@ This document tracks the active development progress for the CLI, Core Agent, Ba
 
 **Status:** ACTIVE
 
+**Recently Added/Updated:**
+*   **Task Editing UI/Logic Refactor:** Resolved Zod schema and TypeScript typing issues in `TaskForm.tsx` and `useEditableEntity.ts`. Core implementation of these components is complete and ready for testing. Next step is comprehensive unit and integration testing.
+
 **Immediate Goals:**
 1.  **Assistant-UI Migration - Phase 2 & 3 Complete:**
     *   **Status:** Complete - Ready for Testing

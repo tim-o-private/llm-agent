@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { supabase } from '@/lib/supabaseClient';
 import { User, Session } from '@supabase/supabase-js';
 
-interface AuthState {
+export interface AuthState {
   user: User | null;
   session: Session | null;
   loading: boolean;

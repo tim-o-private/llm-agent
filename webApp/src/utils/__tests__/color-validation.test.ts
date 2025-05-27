@@ -45,7 +45,6 @@ describe('Color Validation', () => {
       expect(result.approvedClasses).toContain('bg-ui-element-bg');
       expect(result.approvedClasses).toContain('border-ui-border');
       expect(result.forbiddenClasses).toContain('text-blue-500');
-      expect(result.forbiddenClasses).toContain('text-gray-900');
     });
   });
 

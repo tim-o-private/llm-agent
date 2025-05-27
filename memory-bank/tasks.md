@@ -43,34 +43,32 @@ This file tracks the current tasks, steps, checklists, and component lists for t
         *   [X] Outline new/refactored hooks: `useEditableEntity` (refactored), `useTaskApi` (with specific React Query hooks for task CRUD).
         *   [X] Outline new/refactored components: `TaskDetailView` (refactored), `TaskForm` (new), `SubtaskList` (new).
         *   [X] Create implementation document.
-        *   [ ] User review and approval of the plan.
+        *   [X] User review and approval of the plan. v1.1 APPROVED
     *   **Phase 2: Implementation**
-        *   [ ] Implement/Refactor `useEditableEntity.ts`.
-        *   [ ] Implement `webApp/src/types/editableEntityTypes.ts`.
-        *   [ ] Implement/Update `useTaskApi.ts` with React Query hooks for tasks.
-        *   [ ] Implement `TaskForm.tsx` using `useEditableEntity` and Radix UI Form.
-        *   [ ] Refactor `TaskDetailView.tsx` to use `TaskForm` and `SubtaskList`.
-        *   [ ] Implement `SubtaskList.tsx` (initial version, focusing on display and add/edit hooks).
+        *   [X] Implement/Refactor `useEditableEntity.ts`.
+        *   [X] Implement `webApp/src/types/editableEntityTypes.ts`.
+        *   [X] Implement/Update `useTaskApi.ts` with React Query hooks for tasks.
+        *   [X] Implement `TaskForm.tsx` using `useEditableEntity` and Radix UI Form.
+        *   [X] Refactor `TaskDetailView.tsx` to use `TaskForm` and `SubtaskList`.
+        *   [X] Implement `SubtaskList.tsx` (initial version, focusing on display and add/edit hooks).
         *   [ ] Ensure comprehensive unit and integration tests for new/modified components and hooks.
-    *   **Phase 3: Subtask Enhancements & Testing**
-        *   [ ] Implement subtask reordering in `SubtaskList.tsx`.
-        *   [ ] Thorough end-to-end testing of task and subtask creation, editing, and reordering.
-        *   [ ] Address any styling and UX refinements.
+    *   **Phase 3: Store Integration & Testing**
+        *   [X] Integrate `useTaskStore` with `TaskForm.tsx` (implement `getEntityDataFn`, `saveEntityFn`, resolve typing/Zod issues).
+        *   [ ] Comprehensive unit and integration testing for `TaskForm`, `useEditableEntity`, `TaskDetailView`, and `SubtaskList`.
     *   **Phase 4: Documentation & Cleanup**
         *   [ ] Update relevant developer documentation.
-        *   [ ] Clean up any old/unused code from previous implementations.
-*   **Key Documents:**
-    *   Implementation Plan: `memory-bank/implementation_plans/refactor-task-editing-ui-ux.md`
-*   **Affected Files:**
-    *   `webApp/src/hooks/useEditableEntity.ts`
-    *   `webApp/src/components/features/TaskDetail/TaskDetailView.tsx`
-    *   `webApp/src/stores/useTaskStore.ts` (minor, for hook integration)
-    *   `webApp/src/api/types.ts`
-    *   `webApp/src/types/error.ts`
-    *   (New) `webApp/src/types/editableEntityTypes.ts`
-    *   (New) `webApp/src/api/hooks/useTaskApi.ts`
-    *   (New) `webApp/src/components/features/TaskDetail/TaskForm.tsx`
-    *   (New) `webApp/src/components/features/TaskDetail/SubtaskList.tsx`
+    *   **Key Documents:**
+        *   Implementation Plan: `memory-bank/implementation_plans/refactor-task-editing-ui-ux.md`
+    *   **Affected Files:**
+        *   `webApp/src/hooks/useEditableEntity.ts`
+        *   `webApp/src/components/features/TaskDetail/TaskDetailView.tsx`
+        *   `webApp/src/stores/useTaskStore.ts` (minor, for hook integration)
+        *   `webApp/src/api/types.ts`
+        *   `webApp/src/types/error.ts`
+        *   (New) `webApp/src/types/editableEntityTypes.ts`
+        *   (New) `webApp/src/api/hooks/useTaskApi.ts`
+        *   (New) `webApp/src/components/features/TaskDetail/TaskForm.tsx`
+        *   (New) `webApp/src/components/features/TaskDetail/SubtaskList.tsx`
 
 **COMPLETED TASK: ChatServer Main.py Decomposition - Phase 2: Extract Configuration and Dependencies**
 *   **Status:** Complete
