@@ -2,13 +2,14 @@ import React, { useCallback, useState, useEffect } from 'react';
 import * as RadixDialog from '@radix-ui/react-dialog';
 import { Cross2Icon, TrashIcon } from '@radix-ui/react-icons';
 import { useTaskStore, useInitializeTaskStore } from '@/stores/useTaskStore';
+import { useTaskViewStore } from '@/stores/useTaskViewStore';
 import { Task } from '@/api/types';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { toast } from '@/components/ui/toast';
 import TaskForm from './TaskForm'; // Import the new TaskForm
 import SubtaskList from './SubtaskList'; // Uncomment and use SubtaskList component
-// import SubtaskList from './SubtaskList'; // Placeholder for SubtaskList component
+// Debug components removed after fixing the infinite loop issue
 
 interface TaskDetailViewProps {
   taskId: string | null;
@@ -32,10 +33,21 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
   useInitializeTaskStore(); // Ensure store is initialized
   const storeActions = useTaskStore.getState();
   const task = useTaskStore((state) => taskId ? state.getTaskById(taskId) : undefined);
+  const setModalOpenState = useTaskViewStore((state) => state.setModalOpenState);
 
   // Local state to track if the TaskForm has unsaved changes.
   // This is needed for the "are you sure?" dialog when closing.
   const [isFormDirty, setIsFormDirty] = useState(false);
+  
+  // Form state from TaskForm
+  const [formState, setFormState] = useState<{
+    canSave: boolean;
+    isSaving: boolean;
+    isCreating: boolean;
+    saveError: any;
+    handleSave: () => void;
+    handleCancel: () => void;
+  } | null>(null);
 
   const handleSaveSuccess = (savedTask?: Task | void) => {
     toast.success(`Task ${savedTask && (savedTask as Task).title ? `"${(savedTask as Task).title}"` : ''} saved successfully!`);
@@ -69,6 +81,15 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
   useEffect(() => {
     setIsFormDirty(false);
   }, [taskId]);
+
+  // Register modal state with the task view store
+  useEffect(() => {
+    const modalId = taskId || 'new-task';
+    setModalOpenState(modalId, isOpen);
+    return () => {
+      setModalOpenState(modalId, false);
+    };
+  }, [isOpen, taskId, setModalOpenState]);
 
   const handleDeleteClick = async () => {
     if (taskId) {
@@ -135,20 +156,45 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
                 taskId={taskId} 
                 onSaveSuccess={handleSaveSuccess} 
                 onCancel={handleFormCancel} 
-                // Pass a callback to TaskForm to update TaskDetailView's isFormDirty state
-                // This is a simplified approach. A more robust solution might involve context or deeper state integration.
-                // For now, TaskForm would need a prop like `onDirtyStateChange: (isDirty: boolean) => void`
-                // and call `props.onDirtyStateChange(formMethods.formState.isDirty)` in its own effect.
-                // For this iteration, TaskForm's internal save/cancel will drive the dirty state reset here.
+                onDirtyStateChange={setIsFormDirty}
+                onFormStateChange={setFormState}
               />
               
-              {/* Placeholder for SubtaskList Component */}
+              {/* Subtasks Section */}
               {taskId && (
                 <div className="mt-4 pt-4 border-t border-ui-border">
                   <h3 className="text-md font-semibold text-text-primary mb-2">Subtasks</h3>
                   <SubtaskList parentTaskId={taskId} />
-                  {/* <p className="text-sm text-text-muted">Subtask list will be displayed here.</p> */}
                 </div>
+              )}
+              
+              {/* Form Action Buttons - moved below subtasks */}
+              {formState && (
+                <div className="flex justify-end space-x-3 pt-4 border-t border-ui-border">
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      formState.handleCancel();
+                      handleFormCancel();
+                    }}
+                    className="px-4 py-2 text-sm font-medium rounded-md shadow-sm border border-ui-border text-text-secondary hover:bg-ui-element-bg-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent-focus"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={formState.handleSave}
+                    disabled={!formState.canSave || formState.isSaving} 
+                    className="px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-brand-primary hover:bg-brand-primary-hover disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary-focus"
+                  >
+                    {formState.isSaving ? 'Saving...' : (formState.isCreating ? 'Create Task' : 'Save Changes')}
+                  </button>
+                </div>
+              )}
+              
+              {/* Save Error Display */}
+              {formState?.saveError && (
+                <p className="mt-2 text-sm text-destructive">Save error: {formState.saveError.message}</p>
               )}
             </div>
           )}

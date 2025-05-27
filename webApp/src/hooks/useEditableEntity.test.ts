@@ -455,10 +455,10 @@ describe('useEditableEntity', () => {
   });
   
   describe('canSave logic', () => {
-    test('should be true if form is dirty and valid', () => {
+    test('should be true if form is dirty and not saving', () => {
       const config = getDefaultHookConfig();
       const { result, rerender } = renderHook(() => useEditableEntity(config));
-      act(() => { if (mockFormStateObject) { mockFormStateObject.isDirty = true; mockFormStateObject.isValid = true; } });
+      act(() => { if (mockFormStateObject) { mockFormStateObject.isDirty = true; } });
       rerender(); 
       expect(result.current.canSave).toBe(true);
     });
@@ -466,17 +466,27 @@ describe('useEditableEntity', () => {
     test('should be false if form is not dirty', () => {
       const config = getDefaultHookConfig();
       const { result, rerender } = renderHook(() => useEditableEntity(config));
-      act(() => { if (mockFormStateObject) { mockFormStateObject.isDirty = false; mockFormStateObject.isValid = true; } });
+      act(() => { if (mockFormStateObject) { mockFormStateObject.isDirty = false; } });
       rerender();
       expect(result.current.canSave).toBe(false);
     });
 
-    test('should be false if form is not valid', () => {
+    test('should be false if form is saving', () => {
       const config = getDefaultHookConfig();
       const { result, rerender } = renderHook(() => useEditableEntity(config));
-      act(() => { if (mockFormStateObject) { mockFormStateObject.isDirty = true; mockFormStateObject.isValid = false; } });
+      
+      // Set form as dirty first
+      act(() => { if (mockFormStateObject) { mockFormStateObject.isDirty = true; } });
       rerender();
-      expect(result.current.canSave).toBe(false);
+      expect(result.current.canSave).toBe(true); // Should be true when dirty and not saving
+      
+      // Now simulate saving state
+      act(() => { 
+        // Trigger a save to set isSaving to true
+        result.current.handleSave();
+      });
+      
+      expect(result.current.canSave).toBe(false); // Should be false when saving
     });
   });
 });

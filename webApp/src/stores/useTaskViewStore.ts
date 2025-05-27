@@ -163,6 +163,7 @@ export const useTaskViewStore = create<TaskViewStore>()(
 
       _processKeyDown: (event: KeyboardEvent) => {
         const state = get();
+        // Debug: console.log('[TaskViewStore] Key pressed:', event.key, 'isSystemBusy:', state.isSystemBusy, 'inputFocusCount:', state.inputFocusCount, 'activeModals:', state.activeModalIdentifiers.size);
 
         // Always allow Escape for modals to handle themselves, or for global deselect/defocus
         if (event.key === 'Escape') {
@@ -185,20 +186,23 @@ export const useTaskViewStore = create<TaskViewStore>()(
             return; 
         }
         
-        // If system is busy (input focus or modal open), ignore other shortcuts
+        // Always allow typing in input fields regardless of system busy state
+        if (
+          event.target instanceof HTMLInputElement ||
+          event.target instanceof HTMLTextAreaElement ||
+          event.target instanceof HTMLSelectElement ||
+          (event.target instanceof HTMLElement && event.target.isContentEditable)
+        ) {
+          // Allow all keystrokes for typing in form elements
+          return;
+        }
+
+        // If system is busy (modal open), only handle escape for non-input elements
         if (state.isSystemBusy) {
-          // Check if the event target is an input/textarea. If so, allow typing.
-          // The onFocus/onBlur of these elements should correctly set inputFocusCount.
-          if (
-            event.target instanceof HTMLInputElement ||
-            event.target instanceof HTMLTextAreaElement ||
-            (event.target instanceof HTMLElement && event.target.isContentEditable)
-          ) {
-            // Typing is allowed. The inputFocusCount handles isSystemBusy.
+          if (event.key !== 'Escape') {
+            // Debug: console.log('[TaskViewStore] System busy, ignoring key:', event.key);
             return;
           }
-          console.log('[TaskViewStore] System busy, ignoring key:', event.key);
-          return;
         }
 
         const { currentNavigableTasks, focusedTaskId } = state;

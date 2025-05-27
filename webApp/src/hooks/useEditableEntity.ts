@@ -36,6 +36,7 @@ export function useEditableEntity<
 
   const formMethods = useForm<TFormData, undefined, TFormData>({
     resolver: zodResolver(formSchema),
+    mode: 'onChange',
     defaultValues: (isCreating
       ? (defaultFormValues || transformDataToForm(undefined))
       : transformDataToForm(getEntityDataFn(effectiveEntityId))) as DefaultValues<TFormData>,
@@ -49,10 +50,9 @@ export function useEditableEntity<
     formMethods.reset(newFormValues);
   }, [
     entityId,
-    getEntityDataFn,
-    transformDataToForm,
-    formMethods,
-    defaultFormValues,
+    // Removed unstable function dependencies that cause constant resets
+    // getEntityDataFn, transformDataToForm, and formMethods are now excluded
+    // to prevent infinite reset loops
     isCreating,
     effectiveEntityId,
   ]);
@@ -122,7 +122,7 @@ export function useEditableEntity<
     effectiveEntityId,
   ]);
 
-  const canSave = formMethods.formState.isDirty && formMethods.formState.isValid;
+  const canSave = formMethods.formState.isDirty && !isSaving;
   
   return {
     formMethods,

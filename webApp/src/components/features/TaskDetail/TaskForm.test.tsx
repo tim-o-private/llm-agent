@@ -153,8 +153,7 @@ describe('TaskForm', () => {
     expect(screen.getByLabelText(/status/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/priority/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/due date/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /create task/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument();
+    // Buttons are no longer in TaskForm - they're in TaskDetailView
   });
 
   test('renders correctly in edit mode', () => {
@@ -164,25 +163,96 @@ describe('TaskForm', () => {
       initialData: sampleTaskForForm,
     });
     renderTestForm({ taskId: sampleTaskForForm.id });
-    expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument();
+    // Form fields should be present, buttons are handled externally
+    expect(screen.getByLabelText(/title/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/description/i)).toBeInTheDocument();
   });
 
-  test('calls handleSave on form submission', async () => {
+  test('calls handleSave when form is submitted via external button', async () => {
     const user = userEvent.setup();
-    renderTestForm();
+    let capturedFormState: any = null;
+    
+    renderTestForm({
+      onFormStateChange: (state) => {
+        capturedFormState = state;
+      }
+    });
+    
     await user.type(screen.getByLabelText(/title/i), 'New Test Task Title');
-    await user.click(screen.getByRole('button', { name: /create task/i }));
+    
+    // Wait for form state to be captured
+    await waitFor(() => {
+      expect(capturedFormState).toBeTruthy();
+      expect(capturedFormState.canSave).toBe(true);
+    });
+    
+    // Simulate external button click
+    capturedFormState.handleSave();
+    
     await waitFor(() => {
         expect(mockUseEditableEntityReturnValue.handleSave).toHaveBeenCalledOnce();
     });
   });
 
-  test('calls onCancel and resetFormToInitial when cancel button is clicked', async () => {
-    const user = userEvent.setup();
-    renderTestForm();
-    await user.click(screen.getByRole('button', { name: /cancel/i }));
+  test('calls resetFormToInitial and onCancel when external cancel is triggered', async () => {
+    let capturedFormState: any = null;
+    
+    renderTestForm({
+      onFormStateChange: (state) => {
+        capturedFormState = state;
+      }
+    });
+    
+    // Wait for form state to be captured
+    await waitFor(() => {
+      expect(capturedFormState).toBeTruthy();
+    });
+    
+    // Simulate external cancel button click
+    capturedFormState.handleCancel();
+    
     expect(mockUseEditableEntityReturnValue.resetFormToInitial).toHaveBeenCalledOnce();
     expect(mockOnCancel).toHaveBeenCalledOnce();
+  });
+
+  test('exposes correct saving state via form state callback', async () => {
+    let capturedFormState: any = null;
+    
+    (useEditableEntity as Mock).mockReturnValue({
+      ...mockUseEditableEntityReturnValue,
+      isSaving: true,
+    });
+    
+    renderTestForm({
+      onFormStateChange: (state) => {
+        capturedFormState = state;
+      }
+    });
+    
+    await waitFor(() => {
+      expect(capturedFormState).toBeTruthy();
+      expect(capturedFormState.isSaving).toBe(true);
+    });
+  });
+
+  test('exposes correct canSave state via form state callback', async () => {
+    let capturedFormState: any = null;
+    
+    (useEditableEntity as Mock).mockReturnValue({
+      ...mockUseEditableEntityReturnValue,
+      canSave: false,
+    });
+    
+    renderTestForm({
+      onFormStateChange: (state) => {
+        capturedFormState = state;
+      }
+    });
+    
+    await waitFor(() => {
+      expect(capturedFormState).toBeTruthy();
+      expect(capturedFormState.canSave).toBe(false);
+    });
   });
 
   test('displays save error message when saveError is present', () => {
@@ -192,26 +262,6 @@ describe('TaskForm', () => {
     });
     renderTestForm();
     expect(screen.getByText(/save error: network connection error/i)).toBeInTheDocument();
-  });
-
-  test('disables save button when isSaving is true', () => {
-    (useEditableEntity as Mock).mockReturnValue({
-      ...mockUseEditableEntityReturnValue,
-      isSaving: true,
-    });
-    renderTestForm();
-    const saveButton = screen.getByRole('button', { name: /saving.../i });
-    expect(saveButton).toBeDisabled();
-  });
-
-  test('disables save button when canSave is false (e.g., form invalid or not dirty)', () => {
-    (useEditableEntity as Mock).mockReturnValue({
-      ...mockUseEditableEntityReturnValue,
-      canSave: false,
-    });
-    renderTestForm();
-    const saveButton = screen.getByRole('button', { name: /create task/i });
-    expect(saveButton).toBeDisabled();
   });
 
   test('calls onDirtyStateChange when RHF formState.isDirty changes', () => {

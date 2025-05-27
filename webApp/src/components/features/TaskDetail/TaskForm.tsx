@@ -6,6 +6,8 @@ import { Task, TaskPriority, TaskCreatePayload, TaskUpdatePayload } from '@/api/
 import { TaskFormData, UseEditableEntityConfig } from '@/types/editableEntityTypes';
 import { useTaskStore } from '@/stores/useTaskStore'; // Import the store
 import { useAuthStore } from '@/features/auth/useAuthStore'; // Import auth store for user ID
+import { Input } from '@/components/ui/Input'; // Import Input component that handles focus state
+import { Textarea } from '@/components/ui/Textarea'; // Import Textarea component that handles focus state
 // import * as Form from '@radix-ui/react-form'; // Placeholder for Radix Form
 // import { Button, TextField, TextArea, Select, Checkbox } from '@/components/ui'; // Assuming common UI components
 
@@ -29,7 +31,16 @@ interface TaskFormProps {
   onSaveSuccess?: (savedTaskOrVoid: Task | void) => void; // Adjusted to Task | void
   onCancel?: () => void;
   // Callback to inform parent about dirty state changes
-  onDirtyStateChange?: (isDirty: boolean) => void; 
+  onDirtyStateChange?: (isDirty: boolean) => void;
+  // Expose form state for external button rendering
+  onFormStateChange?: (state: {
+    canSave: boolean;
+    isSaving: boolean;
+    isCreating: boolean;
+    saveError: any;
+    handleSave: () => void;
+    handleCancel: () => void;
+  }) => void;
 }
 
 const TaskForm: React.FC<TaskFormProps> = ({ 
@@ -37,11 +48,12 @@ const TaskForm: React.FC<TaskFormProps> = ({
   parentTaskId, 
   onSaveSuccess,
   onCancel,
-  onDirtyStateChange 
+  onDirtyStateChange,
+  onFormStateChange,
 }) => {
   const store = useTaskStore.getState(); // Get store instance for actions/selectors
 
-  const transformDataToForm = (task?: Task): TaskFormData => {
+  const transformDataToForm = React.useCallback((task?: Task): TaskFormData => {
     return {
       title: task?.title || '',
       description: task?.description || null,
@@ -49,14 +61,14 @@ const TaskForm: React.FC<TaskFormProps> = ({
       priority: task?.priority || 0,
       due_date: task?.due_date ? task.due_date.split('T')[0] : null,
     };
-  };
+  }, []);
   
-  const getEntityDataFn = (id: string | undefined): Task | undefined => {
+  const getEntityDataFn = React.useCallback((id: string | undefined): Task | undefined => {
     if (!id) return undefined;
     return store.getTaskById(id);
-  };
+  }, [store]);
 
-  const saveEntityFn = async (
+  const saveEntityFn = React.useCallback(async (
     formData: TaskFormData, 
     originalEntityData?: Task,
     entityIdToSave?: string
@@ -94,7 +106,7 @@ const TaskForm: React.FC<TaskFormProps> = ({
       await store.createTask(createPayload);
       return;
     }
-  };
+  }, [store, parentTaskId]);
 
   const entityConfig: UseEditableEntityConfig<Task, TaskFormData> = {
     entityId: taskId,
@@ -128,14 +140,32 @@ const TaskForm: React.FC<TaskFormProps> = ({
     onDirtyStateChange?.(formMethods.formState.isDirty);
   }, [formMethods.formState.isDirty, onDirtyStateChange]);
 
+  // Debug form state (removed to prevent infinite re-render loop)
+
+  const effectiveOnCancel = React.useCallback(() => {
+    resetFormToInitial(); // Reset RHF state first
+    onCancel?.(); // Then call parent's onCancel
+  }, [resetFormToInitial, onCancel]);
+
+  const effectiveOnSubmit = React.useCallback(() => {
+    handleSave();
+  }, [handleSave]);
+
+  // Expose handlers to parent
+  React.useEffect(() => {
+    onFormStateChange?.({
+      canSave,
+      isSaving,
+      isCreating,
+      saveError,
+      handleSave: effectiveOnSubmit,
+      handleCancel: effectiveOnCancel,
+    });
+  }, [effectiveOnSubmit, effectiveOnCancel, onFormStateChange, canSave, isSaving, isCreating, saveError]);
+
   const onSubmit = formMethods.handleSubmit(() => {
     handleSave();
   });
-
-  const effectiveOnCancel = () => {
-    resetFormToInitial(); // Reset RHF state first
-    onCancel?.(); // Then call parent's onCancel
-  };
 
   return (
     <FormProvider {...formMethods}>
@@ -144,20 +174,21 @@ const TaskForm: React.FC<TaskFormProps> = ({
         
         <div>
           <label htmlFor="title" className="block text-sm font-medium text-text-secondary">Title</label>
-          <input 
+          <Input 
             id="title" 
             {...formMethods.register('title')} 
-            className="mt-1 block w-full border border-ui-border rounded-md shadow-sm p-2 focus:ring-accent-focus focus:border-accent-focus sm:text-sm bg-ui-input-bg text-text-primary"
+            className="mt-1"
+            autoComplete="off"
           />
           {formMethods.formState.errors.title && <p className="mt-1 text-sm text-destructive">{formMethods.formState.errors.title.message}</p>}
         </div>
 
         <div>
           <label htmlFor="description" className="block text-sm font-medium text-text-secondary">Description</label>
-          <textarea 
+          <Textarea 
             id="description" 
             {...formMethods.register('description')} 
-            className="mt-1 block w-full border border-ui-border rounded-md shadow-sm p-2 focus:ring-accent-focus focus:border-accent-focus sm:text-sm bg-ui-input-bg text-text-primary"
+            className="mt-1"
             rows={3}
           />
            {formMethods.formState.errors.description && <p className="mt-1 text-sm text-destructive">{formMethods.formState.errors.description.message}</p>}
@@ -209,23 +240,6 @@ const TaskForm: React.FC<TaskFormProps> = ({
         </div>
         
         {saveError && <p className="mt-2 text-sm text-destructive">Save error: {saveError.message}</p>}
-
-        <div className="flex justify-end space-x-3 pt-2">
-          <button 
-            type="button" 
-            onClick={effectiveOnCancel} 
-            className="px-4 py-2 text-sm font-medium rounded-md shadow-sm border border-ui-border text-text-secondary hover:bg-ui-element-bg-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent-focus"
-          >
-            Cancel
-          </button>
-          <button 
-            type="submit" 
-            disabled={!canSave || isSaving} 
-            className="px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-brand-primary hover:bg-brand-primary-hover disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary-focus"
-          >
-            {isSaving ? 'Saving...' : (isCreating ? 'Create Task' : 'Save Changes')}
-          </button>
-        </div>
       </form>
     </FormProvider>
   );
