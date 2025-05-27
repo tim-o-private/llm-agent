@@ -26,7 +26,7 @@ import { useTaskStore } from '@/stores/useTaskStore';
 import { useTaskStoreInitializer } from '@/hooks/useTaskStoreInitializer';
 
 import { useCreateFocusSession, useUpdateTaskOrder } from '@/api/hooks/useTaskHooks';
-import type { Task, FocusSession } from '@/api/types';
+import type { Task } from '@/api/types';
 import { Spinner } from '@/components/ui';
 
 import { toast } from '@/components/ui/toast';

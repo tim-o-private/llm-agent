@@ -1,15 +1,10 @@
-import React, { useCallback, useState, useEffect } from 'react';
-import * as RadixDialog from '@radix-ui/react-dialog';
-import { Cross2Icon, TrashIcon } from '@radix-ui/react-icons';
-import { useTaskStore, useInitializeTaskStore } from '@/stores/useTaskStore';
-import { useTaskViewStore } from '@/stores/useTaskViewStore';
+import React, { useState } from 'react';
 import { Task } from '@/api/types';
-import { Button } from '@/components/ui/Button';
-import { Spinner } from '@/components/ui/Spinner';
 import { toast } from '@/components/ui/toast';
-import TaskForm from './TaskForm'; // Import the new TaskForm
-import SubtaskList from './SubtaskList'; // Uncomment and use SubtaskList component
-// Debug components removed after fixing the infinite loop issue
+import TaskForm from './TaskForm';
+import SubtaskList from './SubtaskList';
+import TaskModalWrapper from './TaskModalWrapper';
+import TaskActionBar from './TaskActionBar';
 
 interface TaskDetailViewProps {
   taskId: string | null;
@@ -17,10 +12,6 @@ interface TaskDetailViewProps {
   onOpenChange: (isOpen: boolean) => void;
   onTaskUpdated: () => void;
   onDeleteTaskFromDetail?: (taskId: string) => void;
-  // Indicates if the view itself currently believes there are unsaved changes.
-  // This will be set by TaskForm via a callback.
-  isDirtyStateFromChild?: boolean;
-  setIsDirtyStateFromChild?: (isDirty: boolean) => void; 
 }
 
 export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
@@ -30,16 +21,6 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
   onTaskUpdated,
   onDeleteTaskFromDetail,
 }) => {
-  useInitializeTaskStore(); // Ensure store is initialized
-  const storeActions = useTaskStore.getState();
-  const task = useTaskStore((state) => taskId ? state.getTaskById(taskId) : undefined);
-  const setModalOpenState = useTaskViewStore((state) => state.setModalOpenState);
-
-  // Local state to track if the TaskForm has unsaved changes.
-  // This is needed for the "are you sure?" dialog when closing.
-  const [isFormDirty, setIsFormDirty] = useState(false);
-  
-  // Form state from TaskForm
   const [formState, setFormState] = useState<{
     canSave: boolean;
     isSaving: boolean;
@@ -48,186 +29,52 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
     handleSave: () => void;
     handleCancel: () => void;
   } | null>(null);
+  const [isFormDirty, setIsFormDirty] = useState(false);
 
-  const handleSaveSuccess = (savedTask?: Task | void) => {
-    toast.success(`Task ${savedTask && (savedTask as Task).title ? `"${(savedTask as Task).title}"` : ''} saved successfully!`);
+  const handleSaveSuccess = (_savedTask?: Task | void) => {
+    toast.success(`Task saved successfully!`);
     onTaskUpdated();
-    setIsFormDirty(false); // Reset dirty state after successful save
-    onOpenChange(false); // Close dialog
+    onOpenChange(false);
   };
 
-  const handleFormCancel = () => {
-    setIsFormDirty(false); // Reset dirty state if form handles cancel
-    onOpenChange(false); // Close dialog
+  const handleDeleteSuccess = () => {
+    onDeleteTaskFromDetail?.(taskId!);
+    onOpenChange(false);
   };
 
-  const wrappedOnOpenChange = useCallback((open: boolean) => {
-    if (!open && isFormDirty) {
-      if (window.confirm("You have unsaved changes. Are you sure you want to discard them?")) {
-        setIsFormDirty(false); // Reset dirty state
-        onOpenChange(false);
-      } else {
-        return; // Prevent closing if user cancels discard
-      }
-    } else {
-      onOpenChange(open);
-      if (!open) {
-        setIsFormDirty(false); // Reset dirty state when closed by other means (e.g. X button)
-      }
-    }
-  }, [isFormDirty, onOpenChange]);
-
-  // Effect to reset form dirty state when taskId changes (new task selected)
-  useEffect(() => {
-    setIsFormDirty(false);
-  }, [taskId]);
-
-  // Register modal state with the task view store
-  useEffect(() => {
-    const modalId = taskId || 'new-task';
-    setModalOpenState(modalId, isOpen);
-    return () => {
-      setModalOpenState(modalId, false);
-    };
-  }, [isOpen, taskId, setModalOpenState]);
-
-  const handleDeleteClick = async () => {
-    if (taskId) {
-      const taskToDelete = storeActions.getTaskById(taskId);
-      if (taskToDelete) {
-        if (window.confirm('Are you sure you want to delete this task and all its subtasks?')) {
-          // Delete subtasks first (if any and if store handles cascading delete or requires manual)
-          const subtasks = storeActions.getSubtasksByParentId(taskId);
-          for (const sub of subtasks) {
-            await storeActions.deleteTask(sub.id); // Assuming deleteTask returns a promise or is sync
-          }
-          await storeActions.deleteTask(taskId); // Delete parent task
-          
-          toast.success("Task and subtasks deleted.");
-          if (onDeleteTaskFromDetail) onDeleteTaskFromDetail(taskId);
-          setIsFormDirty(false); // Reset dirty state
-          onOpenChange(false); // Close dialog
-        }
-      } else {
-        toast.error("Could not find task to delete.");
-      }
-    }
+  const handleCancel = () => {
+    onOpenChange(false);
   };
-
-  // Determine display title and loading/error states based on store data
-  const isLoading = taskId && task === undefined; // Simplified loading: if taskId exists but task is not yet in store
-  const error = null; // Simplified: Assuming store handles error states or TaskForm will show its own.
-  
-  if (!isOpen) {
-    return null;
-  }
 
   return (
-    <RadixDialog.Root open={isOpen} onOpenChange={wrappedOnOpenChange}>
-      <RadixDialog.Portal>
-        <RadixDialog.Overlay className="fixed inset-0 bg-black/50 data-[state=open]:animate-overlayShow" />
-        <RadixDialog.Content 
-          className="fixed top-1/2 left-1/2 w-[90vw] max-w-lg max-h-[85vh] -translate-x-1/2 -translate-y-1/2 rounded-lg bg-ui-modal-bg p-6 shadow-lg data-[state=open]:animate-contentShow focus:outline-none flex flex-col"
-        >
-          <RadixDialog.Title className="text-xl font-semibold text-text-primary mb-1">
-            {taskId ? (task?.title || 'Edit Task') : 'Create New Task'} {/* Show task title or generic title */}
-          </RadixDialog.Title>
-          <RadixDialog.Description className="text-sm text-text-muted mb-4">
-            {taskId ? 'View and edit task information.' : 'Enter details for the new task.'}
-          </RadixDialog.Description>
-
-          {isLoading && (
-            <div className="flex items-center justify-center h-40">
-              <Spinner size={32} />
-              <p className="ml-2">Loading task details...</p>
-            </div>
-          )}
-          
-          {!isLoading && error && (
-            <div className="text-destructive p-4">
-              Error: {typeof error === 'string' ? error : (error as Error)?.message || 'Unknown error'}
-            </div>
-          )}
-
-          {/* Render TaskForm if not loading and no major error, or if creating a new task (taskId is null) */}
-          {(!isLoading && !error) && (
-            <div className="flex-grow overflow-y-auto pr-2 space-y-4 custom-scrollbar">
-              <TaskForm 
-                taskId={taskId} 
-                onSaveSuccess={handleSaveSuccess} 
-                onCancel={handleFormCancel} 
-                onDirtyStateChange={setIsFormDirty}
-                onFormStateChange={setFormState}
-              />
-              
-              {/* Subtasks Section */}
-              {taskId && (
-                <div className="mt-4 pt-4 border-t border-ui-border">
-                  <h3 className="text-md font-semibold text-text-primary mb-2">Subtasks</h3>
-                  <SubtaskList parentTaskId={taskId} />
-                </div>
-              )}
-              
-              {/* Form Action Buttons - moved below subtasks */}
-              {formState && (
-                <div className="flex justify-end space-x-3 pt-4 border-t border-ui-border">
-                  <button 
-                    type="button" 
-                    onClick={() => {
-                      formState.handleCancel();
-                      handleFormCancel();
-                    }}
-                    className="px-4 py-2 text-sm font-medium rounded-md shadow-sm border border-ui-border text-text-secondary hover:bg-ui-element-bg-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent-focus"
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={formState.handleSave}
-                    disabled={!formState.canSave || formState.isSaving} 
-                    className="px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-brand-primary hover:bg-brand-primary-hover disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary-focus"
-                  >
-                    {formState.isSaving ? 'Saving...' : (formState.isCreating ? 'Create Task' : 'Save Changes')}
-                  </button>
-                </div>
-              )}
-              
-              {/* Save Error Display */}
-              {formState?.saveError && (
-                <p className="mt-2 text-sm text-destructive">Save error: {formState.saveError.message}</p>
-              )}
-            </div>
-          )}
-          
-          {/* Footer with Delete button - only if editing an existing task */}
-          {taskId && !isLoading && !error && task && (
-            <div className="mt-6 flex justify-end items-center pt-4 border-t border-ui-border">
-                {onDeleteTaskFromDetail && (
-                  <Button 
-                      variant="danger" 
-                      onClick={handleDeleteClick} 
-                      aria-label="Delete task"
-                  >
-                      <TrashIcon className="w-4 h-4 mr-2" />
-                      Delete Task
-                  </Button>
-                )}
-            </div>
-          )}
-
-          <RadixDialog.Close asChild>
-            <button
-              className="absolute top-3.5 right-3.5 inline-flex h-6 w-6 appearance-none items-center justify-center rounded-full text-text-muted hover:bg-ui-interactive-bg-hover focus:outline-none focus:ring-2 focus:ring-ui-border-focus"
-              aria-label="Close"
-              type="button"
-              onClick={() => wrappedOnOpenChange(false)} // Ensure our wrapper is called
-            >
-              <Cross2Icon />
-            </button>
-          </RadixDialog.Close>
-        </RadixDialog.Content>
-      </RadixDialog.Portal>
-    </RadixDialog.Root>
+    <TaskModalWrapper
+      taskId={taskId}
+      isOpen={isOpen}
+      onOpenChange={onOpenChange}
+      isDirty={isFormDirty}
+    >
+      <div className="space-y-4">
+        <TaskForm
+          taskId={taskId}
+          onSaveSuccess={handleSaveSuccess}
+          onCancel={handleCancel}
+          onDirtyStateChange={setIsFormDirty}
+          onFormStateChange={setFormState}
+        />
+        
+        {taskId && (
+          <SubtaskList parentTaskId={taskId} />
+        )}
+        
+        <TaskActionBar
+          taskId={taskId}
+          formState={formState}
+          onSaveSuccess={handleSaveSuccess}
+          onCancel={handleCancel}
+          onDeleteSuccess={handleDeleteSuccess}
+        />
+      </div>
+    </TaskModalWrapper>
   );
 };
 

@@ -9,7 +9,8 @@ This document tracks the active development progress for the CLI, Core Agent, Ba
 **Status:** ACTIVE
 
 **Recently Added/Updated:**
-*   **Task Editing UI/Logic Refactor:** Resolved Zod schema and TypeScript typing issues in `TaskForm.tsx` and `useEditableEntity.ts`. Core implementation of these components is complete and ready for testing. Next step is comprehensive unit and integration testing.
+*   **Task Editing UI - Phase 2: Proper Separation of Concerns:** COMPLETED - Successfully refactored TaskDetailView to achieve proper separation of concerns. Created TaskModalWrapper (106 lines) for dialog logic, TaskActionBar (152 lines) for unified actions, and simplified TaskDetailView to 81 lines (65% reduction). All TypeScript compilation clean, development server running successfully.
+*   **Task Editing UI/Logic Refactor:** COMPLETED - Successfully resolved critical form input bug where typing, status changes, and priority changes were not working. Root cause was infinite form reset loop in `useEditableEntity.ts` caused by unstable function dependencies in useEffect. Fixed by removing unstable dependencies from dependency array. All form inputs now work correctly.
 
 **Immediate Goals:**
 1.  **Assistant-UI Migration - Phase 2 & 3 Complete:**
@@ -22,6 +23,7 @@ This document tracks the active development progress for the CLI, Core Agent, Ba
     *   **Current Step:** Documentation and reflection
 3.  **CRUD Tool Migration to DB Configuration:** Continue testing and documentation
 4.  **Session Management & Agent Executor Caching:** Integration testing and refinement
+5.  **Task Editing UI - Phase 2: Proper Separation of Concerns:** COMPLETED - Successfully achieved clean component architecture with 65% reduction in TaskDetailView complexity
 
 **Context:** Successfully completed Phase 2 of the chatServer main.py decomposition project. All configuration, database, and dependency modules have been extracted with comprehensive testing (94 tests passing). Server startup issues resolved and import compatibility achieved. Now proceeding to Phase 3 to extract services and background tasks.
 
