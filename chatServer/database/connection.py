@@ -76,6 +76,8 @@ def get_database_manager() -> DatabaseManager:
     return _db_manager
 
 
+# @docs memory-bank/patterns/api-patterns.md#pattern-1-single-database-use-prescribed-connections
+# @rules memory-bank/rules/api-rules.json#api-001
 async def get_db_connection() -> AsyncIterator[psycopg.AsyncConnection]:
     """FastAPI dependency to get a database connection."""
     db_manager = get_database_manager()

@@ -1,3 +1,6 @@
+# @docs memory-bank/patterns/agent-patterns.md#pattern-2-database-driven-tool-loading
+# @rules memory-bank/rules/agent-rules.json#agent-002
+# @examples memory-bank/patterns/agent-patterns.md#pattern-10-tool-registration-system
 import os
 import logging
 import json

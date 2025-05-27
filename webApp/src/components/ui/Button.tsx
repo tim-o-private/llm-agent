@@ -1,3 +1,8 @@
+/**
+ * @docs memory-bank/patterns/ui-patterns.md#pattern-1-radix-themes-primitives-tailwind
+ * @rules memory-bank/rules/ui-rules.json#ui-002
+ * @examples memory-bank/patterns/ui-patterns.md#pattern-3-button-variants
+ */
 import React from 'react';
 import { Slot } from '@radix-ui/react-slot';
 import { clsx } from 'clsx';

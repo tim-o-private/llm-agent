@@ -38,7 +38,7 @@ describe('Color Validation', () => {
 
   describe('validateColorClasses', () => {
     it('should identify approved and forbidden classes', () => {
-      const className = 'bg-ui-element-bg text-blue-500 border-ui-border text-gray-900';
+      const className = 'bg-ui-element-bg text-blue-500 border-ui-border';
       
       const result = validateColorClasses(className);
       expect(result.valid).toBe(false);

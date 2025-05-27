@@ -12,12 +12,12 @@ export type OverlayType =
 
 interface ActiveOverlay {
   type: OverlayType;
-  data?: any; // Optional data to pass to the overlay component
+  data?: Record<string, unknown>; // Optional data to pass to the overlay component
 }
 
 interface OverlayStore {
   activeOverlay: ActiveOverlay | null;
-  openOverlay: (type: OverlayType, data?: any) => void;
+  openOverlay: (type: OverlayType, data?: Record<string, unknown>) => void;
   closeOverlay: () => void;
 }
 

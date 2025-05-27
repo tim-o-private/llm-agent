@@ -1,0 +1,153 @@
+{
+  "version": "1.0.0",
+  "description": "Enforceable database and data access rules",
+  "rules": [
+    {
+      "id": "data-001",
+      "category": "database",
+      "title": "Single Database Principle",
+      "description": "Use only PostgreSQL on Supabase, no additional databases",
+      "enforcement": "error",
+      "pattern": "sqlite|mysql|mongodb|redis.*connect|create.*database",
+      "message": "Use only the PostgreSQL database on Supabase, no additional databases",
+      "examples": {
+        "correct": "db = Depends(get_supabase_client) # PostgreSQL on Supabase",
+        "incorrect": "sqlite_conn = sqlite3.connect('local.db')"
+      }
+    },
+    {
+      "id": "data-002",
+      "category": "security",
+      "title": "RLS Required on User Tables",
+      "description": "All user-scoped tables must have RLS enabled with proper policies",
+      "enforcement": "error",
+      "pattern": "CREATE TABLE.*user_id.*(?!.*ENABLE ROW LEVEL SECURITY)",
+      "message": "Enable RLS on all tables with user_id columns",
+      "examples": {
+        "correct": "ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;",
+        "incorrect": "CREATE TABLE tasks (user_id UUID) -- Missing RLS"
+      }
+    },
+    {
+      "id": "data-003",
+      "category": "schema",
+      "title": "Migration-Only Schema Changes",
+      "description": "All schema changes must be done through migration files",
+      "enforcement": "error",
+      "pattern": "ALTER TABLE.*(?!.*migration)|CREATE TABLE.*(?!.*migration)|DROP TABLE.*(?!.*migration)",
+      "message": "Make schema changes only through migration files in supabase/migrations/",
+      "examples": {
+        "correct": "-- In supabase/migrations/20250101_add_column.sql\nALTER TABLE tasks ADD COLUMN priority INTEGER;",
+        "incorrect": "ALTER TABLE tasks ADD COLUMN priority INTEGER; -- Direct in code"
+      }
+    },
+    {
+      "id": "data-004",
+      "category": "structure",
+      "title": "Consistent Table Structure",
+      "description": "Tables must follow standard structure: id, user_id, created_at, updated_at",
+      "enforcement": "warning",
+      "pattern": "CREATE TABLE.*(?!.*id UUID PRIMARY KEY).*(?!.*created_at TIMESTAMPTZ)",
+      "message": "Follow standard table structure with id, user_id, created_at, updated_at columns",
+      "examples": {
+        "correct": "CREATE TABLE tasks (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), user_id UUID NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW());",
+        "incorrect": "CREATE TABLE tasks (task_id SERIAL PRIMARY KEY, userId TEXT);"
+      }
+    },
+    {
+      "id": "data-005",
+      "category": "constraints",
+      "title": "Proper Foreign Key Constraints",
+      "description": "Use proper foreign key constraints with CASCADE for user references",
+      "enforcement": "error",
+      "pattern": "user_id UUID.*(?!REFERENCES auth\\.users\\(id\\) ON DELETE CASCADE)",
+      "message": "Add proper foreign key constraint: REFERENCES auth.users(id) ON DELETE CASCADE",
+      "examples": {
+        "correct": "user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE",
+        "incorrect": "user_id UUID -- Missing foreign key constraint"
+      }
+    },
+    {
+      "id": "data-006",
+      "category": "configuration",
+      "title": "Use JSONB for Configuration",
+      "description": "Use JSONB columns for flexible configuration instead of separate tables",
+      "enforcement": "info",
+      "pattern": "CREATE TABLE.*config.*TEXT|CREATE TABLE.*settings.*TEXT",
+      "message": "Consider using JSONB for configuration data instead of TEXT",
+      "examples": {
+        "correct": "config JSONB NOT NULL",
+        "incorrect": "config TEXT -- Use JSONB instead"
+      }
+    },
+    {
+      "id": "data-007",
+      "category": "indexing",
+      "title": "Index User-Scoped Queries",
+      "description": "Create indexes for common user-scoped query patterns",
+      "enforcement": "warning",
+      "pattern": "CREATE TABLE.*user_id.*(?!.*CREATE INDEX.*user_id)",
+      "message": "Add indexes for user-scoped queries: CREATE INDEX idx_table_user_id ON table(user_id);",
+      "examples": {
+        "correct": "CREATE INDEX idx_tasks_user_id ON tasks(user_id);",
+        "incorrect": "CREATE TABLE tasks (user_id UUID) -- Missing user_id index"
+      }
+    },
+    {
+      "id": "data-008",
+      "category": "documentation",
+      "title": "Document Schema Elements",
+      "description": "Add COMMENT statements for tables, columns, and constraints",
+      "enforcement": "warning",
+      "pattern": "CREATE TABLE.*(?!.*COMMENT ON TABLE)",
+      "message": "Add documentation with COMMENT ON TABLE and COMMENT ON COLUMN statements",
+      "examples": {
+        "correct": "COMMENT ON TABLE tasks IS 'User task management';",
+        "incorrect": "CREATE TABLE tasks (...) -- No documentation"
+      }
+    },
+    {
+      "id": "data-009",
+      "category": "access",
+      "title": "No Manual User Filtering with RLS",
+      "description": "Don't manually filter by user_id when RLS policies handle it",
+      "enforcement": "warning",
+      "pattern": "\\.eq\\('user_id',.*user_id\\)",
+      "message": "Remove manual user_id filtering when RLS policies handle data scoping",
+      "examples": {
+        "correct": "result = await db.table('tasks').select('*').execute() # RLS handles filtering",
+        "incorrect": "result = await db.table('tasks').select('*').eq('user_id', user_id).execute()"
+      }
+    },
+    {
+      "id": "data-010",
+      "category": "triggers",
+      "title": "Auto-Update Timestamps",
+      "description": "Use triggers to automatically update updated_at timestamps",
+      "enforcement": "info",
+      "pattern": "updated_at TIMESTAMPTZ.*(?!.*CREATE TRIGGER.*update.*updated_at)",
+      "message": "Add trigger to auto-update updated_at: CREATE TRIGGER update_table_updated_at BEFORE UPDATE",
+      "examples": {
+        "correct": "CREATE TRIGGER update_tasks_updated_at BEFORE UPDATE ON tasks FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();",
+        "incorrect": "updated_at TIMESTAMPTZ DEFAULT NOW() -- Missing auto-update trigger"
+      }
+    }
+  ],
+  "categories": {
+    "database": "Database selection and connection rules",
+    "security": "Row Level Security and access control",
+    "schema": "Schema change management",
+    "structure": "Table structure and naming conventions",
+    "constraints": "Foreign key and constraint patterns",
+    "configuration": "Configuration storage patterns",
+    "indexing": "Index strategy and performance",
+    "documentation": "Schema documentation requirements",
+    "access": "Data access patterns and RLS usage",
+    "triggers": "Trigger usage for automation"
+  },
+  "enforcement_levels": {
+    "error": "Build-breaking violations that must be fixed",
+    "warning": "Code review flags that should be addressed",
+    "info": "Suggestions for improvement"
+  }
+} 

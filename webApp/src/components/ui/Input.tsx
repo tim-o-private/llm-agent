@@ -2,7 +2,7 @@ import React from 'react';
 import { clsx } from 'clsx';
 import { useTaskViewStore } from '@/stores/useTaskViewStore';
 
-export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {}
+export type InputProps = React.InputHTMLAttributes<HTMLInputElement>;
 
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, onFocus:_onFocus, onBlur: _onBlur, ...props }, ref) => {

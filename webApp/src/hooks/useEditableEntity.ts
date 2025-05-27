@@ -2,11 +2,12 @@ import { UseFormReturn, FieldValues, Path, PathValue, useForm } from 'react-hook
 import { ZodSchema } from 'zod';
 import { DragEndEvent, DndContextProps as CoreDndContextProps, useSensors, useSensor, PointerSensor, KeyboardSensor } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates, arrayMove } from '@dnd-kit/sortable'; // Import arrayMove
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 // Placeholder for a robust deep clone and deep equal utility
 // You might use lodash, rfdc, fast-deep-equal, etc.
 import { cloneDeep, isEqual } from 'lodash-es';
 import { zodResolver } from '@hookform/resolvers/zod'; // Assuming zod resolver is installed
+import type { AppError } from '@/types/error'; // IMPORT AppError
 
 // --- Core Type Definitions (from creative-useEditableEntity-design.md) ---
 
@@ -28,7 +29,7 @@ import { zodResolver } from '@hookform/resolvers/zod'; // Assuming zod resolver 
 export interface EntityTypeConfig<
   TEntityData,
   TFormData extends FieldValues,
-  TSubEntityListItemData = Record<string, any>,
+  TSubEntityListItemData = Record<string, unknown>, // UPDATED default to unknown
   TSubEntityListItemFormInputData extends FieldValues = FieldValues,
 > {
   entityId: string | null | undefined;
@@ -36,7 +37,7 @@ export interface EntityTypeConfig<
     data: TEntityData | undefined;
     isLoading: boolean;
     isFetching: boolean;
-    error: any;
+    error: AppError | Error | null; // UPDATED error type
     // refetch?: () => void; // Consider if needed
   };
 
@@ -63,11 +64,11 @@ export interface EntityTypeConfig<
     currentSubEntityList: TSubEntityListItemData[] | undefined,
   ) => Promise<TEntityData | void>;
 
-  isDataEqual?: (a: any, b: any) => boolean;
+  isDataEqual?: <TData>(a: TData, b: TData) => boolean; // UPDATED with generic TData
   cloneData?: <T>(data: T) => T;
 
   onSaveSuccess?: (savedEntity: TEntityData) => void;
-  onSaveError?: (error: any) => void;
+  onSaveError?: (error: AppError | Error | null) => void; // UPDATED error type
   onCancel?: () => void;
   onDirtyStateChange?: (isDirty: boolean) => void;
 
@@ -86,13 +87,13 @@ export interface EntityTypeConfig<
 export interface UseEditableEntityResult<
   TEntityData,
   TFormData extends FieldValues,
-  TSubEntityListItemData = any,
+  TSubEntityListItemData = unknown, // UPDATED default to unknown
 > {
   originalEntity: TEntityData | null;
   currentEntityDataForForm: TFormData | undefined; // This might be redundant if formMethods.getValues() is always used
   isLoading: boolean;
   isFetching: boolean;
-  error: any | null;
+  error: AppError | Error | null; // UPDATED error type
 
   formMethods: UseFormReturn<TFormData>;
   isMainFormDirty: boolean;
@@ -143,7 +144,8 @@ export interface UseEditableEntityResult<
 export function useEditableEntity<
   TEntityData,
   TFormData extends FieldValues,
-  TSubEntityListItemData extends Record<string, any> = Record<string, any>,
+  TSubEntityListItemData = Record<string, unknown>, // Default remains, constraint might be too strict or removed
+  // TSubEntityListItemData extends {} = Record<string, unknown>, // Example of a less strict constraint
   TSubEntityListItemFormInputData extends FieldValues = FieldValues
 >(
   config: EntityTypeConfig<
@@ -181,7 +183,7 @@ export function useEditableEntity<
   const [originalEntitySnapshot, setOriginalEntitySnapshot] = useState<TEntityData | null>(null);
   const [isLoadingState, setIsLoadingState] = useState<boolean>(true); // Initial loading
   const [isFetchingState, setIsFetchingState] = useState<boolean>(false); // Subsequent fetching
-  const [errorState, setErrorState] = useState<any | null>(null);
+  const [errorState, setErrorState] = useState<AppError | Error | null>(null); // UPDATED error type
   const [isSavingState, setIsSavingState] = useState<boolean>(false);
 
   // State for the original snapshot of the sub-entity list
@@ -190,7 +192,7 @@ export function useEditableEntity<
   // Step 9.2.3: Integrate React Hook Form (RHF) for Main Entity
   const formMethods = useForm<TFormData>({
     resolver: formSchema ? zodResolver(formSchema) : undefined,
-    defaultValues: transformDataToForm(undefined) as any, // Initial empty state or default, will be reset
+    defaultValues: async () => transformDataToForm(undefined), // WRAP in async function
   });
 
   // Step 9.3.1: Initialize Sub-Entity State (Skeleton)
@@ -234,6 +236,9 @@ export function useEditableEntity<
             setOriginalSubEntityListSnapshot(cloneData(transformedSubList));
           } catch (e) {
             console.error('[useEditableEntity CHANGED_LOGIC] Error calling transformSubCollectionToList:', e);
+            // If error is an instance of Error or AppError, use it, otherwise wrap it.
+            const errToSet = (e instanceof Error) ? e : new Error(String(e));
+            setErrorState(errToSet);
             setInternalSubEntityList([]);
             setOriginalSubEntityListSnapshot([]);
           }
@@ -242,298 +247,249 @@ export function useEditableEntity<
           setInternalSubEntityList([]);
           setOriginalSubEntityListSnapshot([]);
         }
-        setErrorState(null);
+        // Only set errorState to null if it wasn't set by transformSubCollectionToList catcher
+        if (!(errorState && errorState instanceof Error)) { // basic check, might need refinement
+            setErrorState(null);
+        }
       } else {
         setOriginalEntitySnapshot(null);
         formMethods.reset(transformDataToForm(undefined));
         setInternalSubEntityList([]);
         setOriginalSubEntityListSnapshot([]);
-        if (entityId) {
-          setErrorState(new Error(`Entity with ID '${entityId}' not found.`));
-        } else {
-          setErrorState(null);
-        }
+        setErrorState(null); // Explicitly clear error if no data, not loading, and no query error
       }
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    entityId, 
-    queryHook, 
-    transformDataToForm, 
-    cloneData, 
-    formMethods,
-    subEntityPath, 
-    transformSubCollectionToList
-  ]);
+    } // else: still loading/fetching, state will update on next effect run
+  }, [entityId, queryHook, transformDataToForm, formSchema, cloneData, subEntityPath, transformSubCollectionToList, formMethods, errorState]);
 
-  // Step 9.3.3: Implement Sub-Entity Dirty Checking
-  useEffect(() => {
-    // Compare internalSubEntityList with originalSubEntityListSnapshot directly
-    if (!isDataEqual(internalSubEntityList, originalSubEntityListSnapshot)) {
-        setIsSubEntityListDirtyState(true);
-    } else {
-        setIsSubEntityListDirtyState(false);
-    }
-  }, [internalSubEntityList, originalSubEntityListSnapshot, isDataEqual]);
-
-
-  // Step 9.2.4: Combined Dirty Check
+  // --- Effect for isDirty calculation and onDirtyStateChange callback ---
   const isMainFormDirty = formMethods.formState.isDirty;
-  const combinedIsDirty = isMainFormDirty || isSubEntityListDirtyState;
 
-  // Notify on dirty state change
   useEffect(() => {
-    console.log('[useEditableEntity] useEffect for combinedIsDirty. New combinedIsDirty value:', combinedIsDirty, 'isMainFormDirty:', isMainFormDirty, 'isSubEntityListDirtyState:', isSubEntityListDirtyState);
+    // Calculate if the sub-entity list is dirty
+    const subListDirty = !isDataEqual(originalSubEntityListSnapshot, internalSubEntityList);
+    setIsSubEntityListDirtyState(subListDirty);
+
+    const overallDirty = isMainFormDirty || subListDirty;
     if (onDirtyStateChange) {
-      onDirtyStateChange(combinedIsDirty);
+      onDirtyStateChange(overallDirty);
     }
-  }, [combinedIsDirty, onDirtyStateChange]);
+  }, [isMainFormDirty, internalSubEntityList, originalSubEntityListSnapshot, isDataEqual, onDirtyStateChange]);
 
-  // Step 9.2.5: Implement handleSave
-  const handleSave = useCallback(async () => {
-    console.log('[TEST_DEBUG] handleSave CALLED. isSavingState:', isSavingState, 'combinedIsDirty:', combinedIsDirty, 'config.entityId:', config?.entityId);
-    console.log('%%% MEGA LOG 2: ENTERING useEditableEntity.handleSave %%% '); // Unique Log
-    console.log('[useEditableEntity] handleSave CALLED. isSaving:', isSavingState, 'isDirty:', combinedIsDirty);
-    if (isSavingState || !combinedIsDirty) {
-      console.log('[useEditableEntity] handleSave: Aborting save because isSaving or not isDirty.');
-      return;
-    }
-    setErrorState(null);
-    setIsSavingState(true);
-    try {
-      const currentFormData = formMethods.getValues();
-      // Ensure originalEntitySnapshot is correctly passed
-      const snapshotForSave = originalEntitySnapshot;
-      const savedEntityOrVoid = await saveHandler(
-        snapshotForSave, // Use the captured snapshot
-        currentFormData,
-        internalSubEntityList // Pass current sub-entity list
-      );
-
-      if (savedEntityOrVoid) { 
-        const newSnapshot = cloneData(savedEntityOrVoid as TEntityData);
-        setOriginalEntitySnapshot(newSnapshot);
-        formMethods.reset(transformDataToForm(savedEntityOrVoid as TEntityData));
-        // Re-initialize sub-entity list from newSnapshot (9.3.4)
-        if (subEntityPath && transformSubCollectionToList) {
-          const rawSubCollection = getPathValue(newSnapshot, subEntityPath);
-          const transformedSubList = transformSubCollectionToList(rawSubCollection) || [];
-          setInternalSubEntityList(transformedSubList);
-          setOriginalSubEntityListSnapshot(cloneData(transformedSubList)); // Set sub-list snapshot
-        } else {
-          setInternalSubEntityList([]);
-          setOriginalSubEntityListSnapshot([]); // Reset sub-list snapshot
-        }
-        if (onSaveSuccess) {
-          onSaveSuccess(savedEntityOrVoid as TEntityData);
-        }
-      } else { // If saveHandler returns void, assume data is refetched or managed by caller
-        // We should refetch or trust the external update. For now, just reset RHF dirty state.
-        // A more robust approach might involve a refetch from queryHook or new data from saveHandler
-        formMethods.reset(formMethods.getValues()); // Resets dirty state but keeps current values
-        // originalEntitySnapshot remains unchanged if saveHandler returns void.
-        if (onSaveSuccess) {
-          // Pass the snapshot that was used for the save operation if no new entity is returned.
-          onSaveSuccess(snapshotForSave as TEntityData); 
-        }
-      }
-    } catch (e) {
-      console.error('[useEditableEntity] handleSave: ERROR CAUGHT', e);
-      console.log('[useEditableEntity] handleSave: Current errorState BEFORE setErrorState:', errorState);
-      setErrorState(e);
-      // Log after a brief timeout to see if state update has a chance to propagate
-      // This is a debugging step, not for production
-      setTimeout(() => {
-        console.log('[useEditableEntity] handleSave: Current errorState AFTER setErrorState (async check):', errorState);
-      }, 0);
-      if (onSaveError) {
-        onSaveError(e);
-      }
-    } finally {
-      setIsSavingState(false);
-      console.log('[useEditableEntity] handleSave: Save attempt finished.');
-    }
-  }, [formMethods, saveHandler, originalEntitySnapshot, cloneData, transformDataToForm, onSaveSuccess, onSaveError, internalSubEntityList, subEntityPath, transformSubCollectionToList, isSavingState, combinedIsDirty]); // Added subEntityPath and transformSubCollectionToList to handleSave deps as they are used for re-initializing sub-list
-
-  // Step 9.2.6: Implement handleCancel & resetState
-  const internalResetState = useCallback((newEntityData?: TEntityData) => {
-    setErrorState(null);
-    let subListToReset: TSubEntityListItemData[] = [];
-    let formValuesToReset: TFormData;
-
-    if (newEntityData !== undefined) {
-        const newSnapshot = cloneData(newEntityData);
-        setOriginalEntitySnapshot(newSnapshot);
-        formValuesToReset = transformDataToForm(newSnapshot);
-        if (subEntityPath && transformSubCollectionToList) {
-            const rawSubCollection = getPathValue(newSnapshot, subEntityPath);
-            subListToReset = transformSubCollectionToList(rawSubCollection) || [];
-        }
-        setOriginalSubEntityListSnapshot(cloneData(subListToReset)); 
-    } else if (originalEntitySnapshot) { 
-        formValuesToReset = transformDataToForm(originalEntitySnapshot);
-        subListToReset = cloneData(originalSubEntityListSnapshot); // Use the dedicated sub-list snapshot
-    } else { 
-        formValuesToReset = transformDataToForm(undefined); 
-        setOriginalSubEntityListSnapshot([]); 
-    }
-    formMethods.reset(formValuesToReset);
-    setInternalSubEntityList(subListToReset);
-  }, [
-    cloneData, formMethods, originalEntitySnapshot, transformDataToForm,
-    subEntityPath, transformSubCollectionToList, originalSubEntityListSnapshot // Include originalSubEntityListSnapshot in deps
-  ]);
-
-  const handleCancel = useCallback(() => {
-    internalResetState(); // Reset to original snapshot or empty
-    if (onCancel) {
-      onCancel();
-    }
-  }, [internalResetState, onCancel]);
-
-  const resetState = useCallback((newEntityData?: TEntityData) => {
-    internalResetState(newEntityData);
-  }, [internalResetState]);
-
-  // Step 9.3.2: Implement Sub-Entity CRUD Operations
-  const addSubItem = useCallback((newItemData: TSubEntityListItemData | TSubEntityListItemFormInputData) => {
-    // If createEmptySubEntityListItem is more about transforming form input to list item data,
-    // the newItemData passed here should ideally be TSubEntityListItemData.
-    // Or, this function could take TSubEntityListItemFormInputData and use a transform function.
-    // For simplicity now, assume newItemData is of TSubEntityListItemData or compatible.
-    setInternalSubEntityList(prevList => [...prevList, newItemData as TSubEntityListItemData]);
+  // --- Sub-entity CRUD operations ---
+  const addSubItem = useCallback((newItemData: TSubEntityListItemData) => {
+    // When adding, we expect the full item, not TSubEntityListItemFormInputData, 
+    // as createEmptySubEntityListItem (if used for form) should produce TSubEntityListItemData
+    setInternalSubEntityList(prev => [...prev, newItemData]);
   }, []);
 
-  const updateSubItem = useCallback((itemId: string | number, updatedDataOrFn: Partial<TSubEntityListItemData> | ((prev: TSubEntityListItemData) => TSubEntityListItemData)) => {
-    if (!subEntityListItemIdField) {
-      console.error("updateSubItem: subEntityListItemIdField is not configured.");
-      return;
-    }
-    setInternalSubEntityList(prevList => 
-      prevList.map((item: TSubEntityListItemData) => { // Explicitly type item
-        if (String(item[subEntityListItemIdField]) === String(itemId)) {
-          if (typeof updatedDataOrFn === 'function') {
-            return updatedDataOrFn(item);
+  const updateSubItem = useCallback((
+    id: string | number, 
+    updatedItemDataOrUpdater: Partial<TSubEntityListItemData> | ((prev: TSubEntityListItemData) => TSubEntityListItemData)
+  ) => {
+    setInternalSubEntityList(prevList =>
+      prevList.map(item => {
+        if (String(item[subEntityListItemIdField] as string | number) === String(id)) {
+          if (typeof updatedItemDataOrUpdater === 'function') {
+            return updatedItemDataOrUpdater(item);
           }
-          return { ...item, ...updatedDataOrFn };
+          return { ...item, ...updatedItemDataOrUpdater };
         }
         return item;
       })
     );
   }, [subEntityListItemIdField]);
 
-  const removeSubItem = useCallback((itemId: string | number) => {
-    if (!subEntityListItemIdField) {
-      console.error("removeSubItem: subEntityListItemIdField is not configured.");
-      return;
-    }
-    setInternalSubEntityList(prevList => 
-      prevList.filter((item: TSubEntityListItemData) => String(item[subEntityListItemIdField]) !== String(itemId)) // Explicitly type item
+  const removeSubItem = useCallback((id: string | number) => {
+    setInternalSubEntityList(prevList =>
+      prevList.filter(item => String(item[subEntityListItemIdField] as string | number) !== String(id))
     );
   }, [subEntityListItemIdField]);
+  
+  // --- Save and Cancel Handlers ---
+  const handleSave = useCallback(async () => {
+    setIsSavingState(true);
+    setErrorState(null);
+    try {
+      // Ensure form validation runs if schema is provided
+      if (formSchema) {
+        await formMethods.trigger(); // Trigger validation for all fields
+        if (!formMethods.formState.isValid) {
+          throw new Error('Form validation failed.'); // Or a custom AppError
+        }
+      }
+      const currentFormData = formMethods.getValues();
+      const savedEntity = await saveHandler(
+        originalEntitySnapshot,
+        currentFormData,
+        internalSubEntityList
+      );
+      
+      // If saveHandler returns the updated entity, use it to reset the state
+      if (savedEntity) {
+        const newSnapshot = cloneData(savedEntity);
+        setOriginalEntitySnapshot(newSnapshot);
+        formMethods.reset(transformDataToForm(savedEntity)); // Reset form with new pristine state
+        
+        if (transformSubCollectionToList) {
+            const dataForSubList = subEntityPath 
+                ? getPathValue(savedEntity, subEntityPath as string) 
+                : savedEntity;
+            const transformedSubList = transformSubCollectionToList(dataForSubList) || [];
+            setInternalSubEntityList(transformedSubList);
+            setOriginalSubEntityListSnapshot(cloneData(transformedSubList));
+        } else {
+            setInternalSubEntityList([]);
+            setOriginalSubEntityListSnapshot([]);
+        }
+      } else {
+        // If saveHandler doesn't return data, we assume it updated in place or re-query will happen.
+        // Re-snapshot based on current form values if no entity returned. This is a common pattern.
+        // Or, we might need a re-fetch mechanism here if saveHandler doesn't return the entity.
+        // For now, optimistic update based on current form data. 
+        // THIS MIGHT NOT BE IDEAL - re-fetching or relying on queryHook invalidation is better.
+        const optimisticEntity = { 
+            ...(originalEntitySnapshot || {} as TEntityData), 
+            ...formMethods.getValues() 
+        } as TEntityData;
+        setOriginalEntitySnapshot(cloneData(optimisticEntity));
+        // Sub-items were already updated in internalSubEntityList, so snapshot them.
+        setOriginalSubEntityListSnapshot(cloneData(internalSubEntityList));
+        // Form is reset to current values, effectively making them the new "original" state
+        formMethods.reset(formMethods.getValues()); 
+      }
+      
+      setIsSavingState(false);
+      if (onSaveSuccess && savedEntity) {
+        onSaveSuccess(savedEntity as TEntityData);
+      }
+    } catch (err) {
+      const errorToSet = (err instanceof Error || (err as AppError)?.message) 
+        ? (err as AppError | Error) 
+        : new Error(String(err));
+      setErrorState(errorToSet);
+      setIsSavingState(false);
+      if (onSaveError) {
+        onSaveError(errorToSet);
+      }
+    }
+  }, [originalEntitySnapshot, internalSubEntityList, saveHandler, formMethods, onSaveSuccess, onSaveError, cloneData, transformDataToForm, transformSubCollectionToList, subEntityPath, formSchema]);
 
-  // Step 9.3.6: Implement dnd-kit Integration
-  const dndSensors = useSensors(
+  const handleCancel = useCallback(() => {
+    // Reset form to original entity data
+    formMethods.reset(transformDataToForm(originalEntitySnapshot || undefined));
+    // Reset sub-entity list to original snapshot
+    setInternalSubEntityList(cloneData(originalSubEntityListSnapshot));
+    setErrorState(null);
+    if (onCancel) {
+      onCancel();
+    }
+  }, [originalEntitySnapshot, originalSubEntityListSnapshot, transformDataToForm, cloneData, onCancel, formMethods.reset]);
+  
+  const resetState = useCallback((newEntityData?: TEntityData) => {
+    const entityToReset = newEntityData !== undefined ? newEntityData : originalEntitySnapshot;
+    const newSnapshot = entityToReset ? cloneData(entityToReset) : null;
+    setOriginalEntitySnapshot(newSnapshot);
+    formMethods.reset(transformDataToForm(entityToReset || undefined));
+
+    if (transformSubCollectionToList && entityToReset) {
+      const dataForSubList = subEntityPath 
+        ? getPathValue(entityToReset, subEntityPath as string) 
+        : entityToReset;
+      const transformedSubList = transformSubCollectionToList(dataForSubList) || [];
+      setInternalSubEntityList(transformedSubList);
+      setOriginalSubEntityListSnapshot(cloneData(transformedSubList));
+    } else {
+      setInternalSubEntityList([]);
+      setOriginalSubEntityListSnapshot([]);
+    }
+    setErrorState(null);
+    setIsSavingState(false);
+  }, [originalEntitySnapshot, cloneData, formMethods, transformDataToForm, transformSubCollectionToList, subEntityPath]);
+
+  // --- Derived State ---
+  const isDirty = formMethods.formState.isDirty || isSubEntityListDirtyState;
+  
+  // --- DND-kit Setup ---
+  const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
 
-  const combinedIsDirtyRef = useRef<boolean>(combinedIsDirty);
-  useEffect(() => {
-    combinedIsDirtyRef.current = combinedIsDirty;
-  }, [combinedIsDirty]);
-
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
-
     if (over && active.id !== over.id) {
-      setInternalSubEntityList((items: TSubEntityListItemData[]) => {
-        console.log('%%% MEGA LOG 1: ENTERING setInternalSubEntityList CALLBACK %%%'); // Unique Log
-        const oldIndex = items.findIndex((item: TSubEntityListItemData) => String(item[subEntityListItemIdField]) === String(active.id));
-        const newIndex = items.findIndex((item: TSubEntityListItemData) => String(item[subEntityListItemIdField]) === String(over.id));
-
-        console.log(`[useEditableEntity] handleDragEnd CALLED. Active ID: ${active.id}, Over ID: ${over.id}, Old Index: ${oldIndex}, New Index: ${newIndex}`);
-
-        if (oldIndex === -1 || newIndex === -1) {
-          console.warn('[useEditableEntity] DragEnd: Could not find item index for active or over.', { activeId: active.id, overId: over.id, oldIndex, newIndex });
-          return items; 
-        }
-        const newList = arrayMove(items, oldIndex, newIndex);
-        console.log('[useEditableEntity] setInternalSubEntityList: newList generated. Old length:', items.length, 'New length:', newList.length);
-        return newList;
+      setInternalSubEntityList((items) => {
+        const oldIndex = items.findIndex(item => String(item[subEntityListItemIdField] as string | number) === String(active.id));
+        const newIndex = items.findIndex(item => String(item[subEntityListItemIdField] as string | number) === String(over.id));
+        return arrayMove(items, oldIndex, newIndex);
       });
     }
   }, [subEntityListItemIdField]);
+  
+  const dndContextProps: UseEditableEntityResult<TEntityData, TFormData, TSubEntityListItemData>['dndContextProps'] = enableSubEntityReordering
+    ? {
+        sensors,
+        onDragEnd: handleDragEnd,
+        // modifiers: [], // Add modifiers if needed (e.g., restrictToVerticalAxis)
+        // collisionDetection: closestCenter, // Default or choose another strategy
+      }
+    : undefined;
 
-  // Log the value of enableSubEntityReordering just before useMemo for dndContextProps
-  console.log(`[useEditableEntity] Value of 'enableSubEntityReordering' before dndContextProps useMemo: ${enableSubEntityReordering}`);
-
-  const dndContextProps = useMemo(() => {
-    if (!enableSubEntityReordering) return undefined;
+  const getSortableListProps = useCallback((): ReturnType<UseEditableEntityResult<TEntityData, TFormData, TSubEntityListItemData>['getSortableListProps']> => {
+    const itemsWithDndId = internalSubEntityList.map(item => ({
+      ...item,
+      id: String(item[subEntityListItemIdField] as string | number)
+    }));
     return {
-      sensors: dndSensors,
-      onDragEnd: handleDragEnd,
-      // modifiers: ..., // Add if needed
-      // collisionDetection: closestCenter, // Add if needed
+      items: itemsWithDndId as Array<TSubEntityListItemData & { id: string | number }>,
     };
-  }, [enableSubEntityReordering, dndSensors, handleDragEnd]);
-
-  const getSortableListProps = useCallback(() => {
-    if (!enableSubEntityReordering || !subEntityListItemIdField) {
-        // Ensure it always returns items, even if empty, to prevent destructuring errors in consumer.
-        return { items: [] }; 
-    }
-    return {
-      items: internalSubEntityList.map((item: TSubEntityListItemData) => ({ // Explicitly type item
-        ...item,
-        id: String(item[subEntityListItemIdField]), // Ensure id is a string for dnd-kit consistency
-      })),
-    };
-  }, [internalSubEntityList, enableSubEntityReordering, subEntityListItemIdField]);
+  }, [internalSubEntityList, subEntityListItemIdField]);
 
 
-  // --- Placeholder return structure ---
+  // Final return statement
   return {
     originalEntity: originalEntitySnapshot,
-    currentEntityDataForForm: undefined, // placeholder
+    currentEntityDataForForm: formMethods.getValues(), // Provide current form values
     isLoading: isLoadingState,
     isFetching: isFetchingState,
     error: errorState,
-    formMethods: formMethods, // Use the actual formMethods instance
-    isMainFormDirty: isMainFormDirty,
+    formMethods,
+    isMainFormDirty: formMethods.formState.isDirty,
     subEntityList: internalSubEntityList,
     isSubEntityListDirty: isSubEntityListDirtyState,
-    addSubItem: addSubItem, // Expose CRUD
-    updateSubItem: updateSubItem,
-    removeSubItem: removeSubItem,
-    isDirty: combinedIsDirty,
+    addSubItem,
+    updateSubItem,
+    removeSubItem,
+    isDirty,
     isSaving: isSavingState,
-    handleSave: handleSave,
-    handleCancel: handleCancel,
-    resetState: resetState,
-    dndContextProps: dndContextProps, // Expose dndContextProps
-    getSortableListProps: getSortableListProps, // Expose getSortableListProps
-  } as UseEditableEntityResult<TEntityData, TFormData, TSubEntityListItemData>; // Type assertion needed for now
+    handleSave,
+    handleCancel,
+    resetState,
+    dndContextProps,
+    getSortableListProps,
+  };
 }
 
-// Helper function to safely get a value from a path
-function getPathValue(
+// --- Utility Functions (Potentially move to a utils file) ---
+
+// Helper to get a value from an object by path string (e.g., 'a.b.c')
+// This is a simplified version; a robust one would handle arrays, etc.
+// Consider using lodash.get or similar if complex paths are needed.
+function getPathValue<
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _TObj extends Record<string, unknown> = Record<string, unknown>, 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _TPath extends string = string
+>(
   obj: any, // Changed TObj to any for broader compatibility with RHF Path
   path: string // Changed TPath to string
 ): any | undefined { // Return type also any or undefined
-  if (!obj || !path) return undefined;
-  const keys = path.split(/[.\[\]]+/).filter(Boolean);
-  let current: any = obj;
-  for (const key of keys) {
-    if (current && typeof current === 'object' && key in current) {
-      current = current[key];
-    } else {
-      return undefined;
-    }
+  if (!obj || typeof path !== 'string') {
+    return undefined;
   }
-  return current;
+  return path.split('.').reduce((acc, part) => acc && acc[part], obj);
 }
 
 // TODO:

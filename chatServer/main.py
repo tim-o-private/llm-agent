@@ -1,3 +1,6 @@
+# @docs memory-bank/patterns/api-patterns.md#pattern-11-fastapi-project-structure
+# @rules memory-bank/rules/api-rules.json#api-001
+# @examples memory-bank/patterns/api-patterns.md#pattern-1-single-database-use-prescribed-connections
 import sys
 import os
 import logging # Added for log_level

@@ -88,7 +88,7 @@ export function useCreateTask() {
 
       const { data, error } = await supabase
         .from('tasks')
-        .insert([taskWithUser] as any)
+        .insert([taskWithUser])
         .select()
         .single();
 
@@ -112,7 +112,7 @@ export function useUpdateTask() {
     mutationFn: async ({ id, updates }: { id: string; updates: UpdateTaskData }) => {
       const { data, error } = await supabase
         .from('tasks')
-        .update(updates as any)
+        .update(updates)
         .eq('id', id)
         .select()
         .single();
@@ -174,7 +174,7 @@ export const useUpdateTaskOrder = () => {
       console.log('[useUpdateTaskOrder] All Supabase update results:', results);
       return results; 
     },
-    onSuccess: (_data, _variables, _context) => {
+    onSuccess: () => {
       toast.success('Task order updated successfully!');
       if (user) {
         queryClient.invalidateQueries({ queryKey: [TASKS_QUERY_KEY_PREFIX, user.id] });
@@ -182,7 +182,7 @@ export const useUpdateTaskOrder = () => {
         queryClient.invalidateQueries({ queryKey: [TASKS_QUERY_KEY_PREFIX] });
       }
     },
-    onError: (error: Error, _variables, _context) => {
+    onError: (error: Error) => {
       toast.error('Failed to update task order', error.message);
     },
   });
@@ -304,7 +304,7 @@ export const useCreateFocusSession = () => {
       };
       const { data, error } = await supabase
         .from('focus_sessions')
-        .insert(newSessionData as any)
+        .insert(newSessionData)
         .select()
         .single();
 
@@ -315,7 +315,7 @@ export const useCreateFocusSession = () => {
       console.log('[useCreateFocusSession] Success, data:', data);
       return data as FocusSession;
     },
-    onSuccess: (_data) => {
+    onSuccess: () => {
       toast.success('Focus session started!');
       queryClient.invalidateQueries({ queryKey: [FOCUS_SESSIONS_QUERY_KEY_PREFIX, user?.id] });
     },
@@ -347,7 +347,7 @@ export const useEndFocusSession = () => {
 
       const { data, error } = await supabase
         .from('focus_sessions')
-        .update(updates as any)
+        .update(updates)
         .eq('id', sessionId)
         .eq('user_id', user.id) 
         .select()
@@ -360,7 +360,7 @@ export const useEndFocusSession = () => {
       console.log('[useEndFocusSession] Success, data:', data);
       return data as FocusSession;
     },
-    onSuccess: (_data) => {
+    onSuccess: () => {
       toast.success('Focus session ended & reflection saved!');
       queryClient.invalidateQueries({ queryKey: [FOCUS_SESSIONS_QUERY_KEY_PREFIX, user?.id] });
     },

@@ -23,7 +23,8 @@ const ToggleField: React.FC<ToggleFieldProps> = ({
   description,
   className,
 }) => {
-  const internalId = id || React.useId(); // Generate id if not provided
+  const generatedId = React.useId(); // Always generate id
+  const internalId = id || generatedId; // Use provided id or generated one
 
   return (
     <div className={clsx("flex items-center justify-between", disabled && "opacity-50", className)}>

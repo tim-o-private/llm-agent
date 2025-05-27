@@ -13,9 +13,10 @@ import { toast } from '@/components/ui/toast';
 import { SubtaskItem } from './SubtaskItem';
 import { Controller } from 'react-hook-form';
 import { isEqual } from 'lodash-es';
+import type { AppError } from '@/types/error';
 
 // Dnd-kit imports - REINSTATE THESE
-import { DndContext } from '@dnd-kit/core';
+import { DndContext, DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 
 // IMPORT NEW HOOK
@@ -75,14 +76,8 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
   console.log('[TaskDetailView] TOP LEVEL - COMPONENT FUNCTION CALLED/RE-RENDERED. Props taskId:', taskId, 'isOpen:', isOpen);
   const recentlyDraggedRef = useRef(false); // Changed ref name for clarity
 
-  // Early return if the modal is not open, BEFORE any hook calls.
-  if (!isOpen) {
-    return null;
-  }
-
-  console.log('[TaskDetailView] re-rendering. taskId:', taskId, 'isOpen:', isOpen);
+  // Hooks must be called before any early returns.
   useInitializeTaskStore();
-
   const storeActions = useTaskStore.getState();
 
   // DEFINE EntityTypeConfig
@@ -116,10 +111,12 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
       priority: entityData?.priority || 0,
     }),
     formSchema: taskFormSchema,
-    transformSubCollectionToList: (dataForSubList: any): Task[] => {
-      console.log('[[[ENTERING TaskDetailView.transformSubCollectionToList]]] Received dataForSubList:', dataForSubList);
+    transformSubCollectionToList: (dataForSubList: any): Task[] => { 
+      console.log('[[[ENTERING TaskDetailView.transformSubCollectionToList]]] Received dataForSubList (type any):', dataForSubList);
       
-      const parentEntityData = dataForSubList as (Task | undefined);
+      // We expect parent task here because subEntityPath is not defined in this config
+      const parentEntityData = dataForSubList as Task | undefined | null; 
+
       if (!parentEntityData || 
           typeof parentEntityData !== 'object' || 
           !parentEntityData.id || 
@@ -198,7 +195,8 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
             }
             
             if (currentValForComparison !== originalValForComparison) {
-              parentTaskChanges[key as keyof Task] = currentValForComparison as any; // Cast to any for these flexible fields
+              // TEMPORARY: Use 'as any' on the target to bypass the specific assignment error for diagnosis
+              (parentTaskChanges as any)[key] = currentValForComparison;
               parentDirty = true;
             }
           }
@@ -237,12 +235,13 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
           let subDirty = false;
           (Object.keys(currSub) as Array<keyof Task>).forEach(key => {
             if (key !== 'subtask_position' && !isEqual(currSub[key], origSub[key])) {
-              subChanges[key] = currSub[key] as any;
+              // TEMPORARY: Use 'as any' on the target to bypass the specific assignment error for diagnosis
+              (subChanges as any)[key] = currSub[key]; 
               subDirty = true;
             }
           });
           if (origSub.subtask_position !== newPosition) {
-            subChanges.subtask_position = newPosition;
+            (subChanges as any).subtask_position = newPosition;
             subDirty = true;
           }
           if (subDirty) {
@@ -259,9 +258,11 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
       onTaskUpdated();
       wrappedOnOpenChange(false);
     },
-    onSaveError: (error: any) => {
+    onSaveError: (error: AppError | Error | null) => {
       console.error("Save error:", error);
-      toast.error("Failed to save task. " + (error.message || ''));
+      // Check if error is not null and has a message property
+      const errorMessage = error?.message || 'An unknown error occurred';
+      toast.error("Failed to save task. " + errorMessage);
     },
     onCancel: () => {
       // Modal closing is handled by wrappedOnOpenChange, 
@@ -346,6 +347,8 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
   };
 
   const handleInitiateLocalAddSubtask = () => {
+    if (!control) return; // Guard against control not being ready
+    console.log('[TaskDetailView] handleInitiateLocalAddSubtask called');
     if (!newSubtaskTitle.trim() || !taskId) return;
     // createEmptySubEntityListItem is part of config now
     const newSubtaskObject = taskEntityTypeConfig.createEmptySubEntityListItem!();
@@ -360,9 +363,9 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
 
   const originalDndKitOnDragEnd = dndContextProps?.onDragEnd;
 
-  const customOnDragEnd = (event: any) => {
-    console.log('[TaskDetailView] Custom DND Drag End triggered');
-    recentlyDraggedRef.current = true; // Flag that a drag just ended
+  const customOnDragEnd = (event: DragEndEvent) => {
+    console.log('[TaskDetailView] customOnDragEnd called, event:', event);
+    recentlyDraggedRef.current = true;
     console.log('[TaskDetailView] recentlyDraggedRef.current set to true');
 
     if (originalDndKitOnDragEnd) {
@@ -379,6 +382,13 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
         onDragEnd: customOnDragEnd, // Our new onDragEnd
       }
     : undefined;
+
+  console.log('[TaskDetailView] re-rendering. taskId:', taskId, 'isOpen:', isOpen);
+
+  // Early return if the modal is not open, AFTER hook calls.
+  if (!isOpen) {
+    return null;
+  }
 
   return (
     <RadixDialog.Root open={isOpen} onOpenChange={wrappedOnOpenChange}>

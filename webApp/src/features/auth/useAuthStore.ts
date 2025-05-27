@@ -1,13 +1,14 @@
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabaseClient';
+import { User, Session } from '@supabase/supabase-js';
 
 interface AuthState {
-  user: any;
-  session: any;
+  user: User | null;
+  session: Session | null;
   loading: boolean;
   error: string | null;
-  setUser: (user: any) => void;
-  setSession: (session: any) => void;
+  setUser: (user: User | null) => void;
+  setSession: (session: Session | null) => void;
   signInWithProvider: (provider: 'google' | 'apple') => Promise<void>;
   signOut: () => Promise<void>;
   getToken: () => string | null;

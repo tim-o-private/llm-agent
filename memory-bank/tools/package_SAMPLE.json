@@ -1,0 +1,58 @@
+{
+  "name": "memory-bank-tools",
+  "version": "1.0.0",
+  "description": "Documentation validation and link checking tools",
+  "scripts": {
+    "docs:validate": "node tools/link-checker.js",
+    "docs:lint": "node tools/doc-linter.js",
+    "docs:unused": "node tools/unused-file-detector.js",
+    "docs:check-all": "npm run docs:validate && npm run docs:lint && npm run docs:unused",
+    "docs:fix-links": "node tools/link-fixer.js",
+    "docs:coverage": "node tools/doc-coverage.js",
+    "pre-commit": "npm run docs:check-all",
+    "ci:docs": "npm run docs:check-all && npm run docs:coverage"
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "npm run pre-commit"
+    }
+  },
+  "devDependencies": {
+    "glob": "^8.0.0",
+    "husky": "^8.0.0",
+    "lint-staged": "^13.0.0"
+  },
+  "lint-staged": {
+    "memory-bank/**/*.md": [
+      "node tools/doc-linter.js",
+      "node tools/link-checker.js"
+    ],
+    "webApp/src/**/*.{ts,tsx}": [
+      "node tools/check-doc-headers.js"
+    ],
+    "chatServer/**/*.py": [
+      "node tools/check-doc-headers.js"
+    ]
+  },
+  "config": {
+    "documentation": {
+      "file_limits": {
+        "memory-bank/README.md": 200,
+        "memory-bank/patterns/*.md": 400,
+        "memory-bank/active-tasks.md": 200,
+        "memory-bank/project-context.md": 300
+      },
+      "required_headers": {
+        "webApp/src/**/*.tsx": ["@docs"],
+        "webApp/src/**/*.ts": ["@docs"],
+        "chatServer/**/*.py": ["@docs"],
+        "src/**/*.py": ["@docs"]
+      },
+      "coverage_targets": {
+        "documentation_coverage": 90,
+        "link_validation": 100,
+        "file_length_compliance": 100
+      }
+    }
+  }
+} 

@@ -12,7 +12,7 @@ import { Toaster } from '@/components/ui/toast';
 // Lazy load pages for better performance
 const Home = lazy(() => import('@/pages/Home'));
 const Login = lazy(() => import('@/pages/Login'));
-const Dashboard = lazy(() => import('@/pages/Dashboard'));
+
 const TodayView = lazy(() => import('@/pages/TodayView.tsx'));
 const CoachPage = lazy(() => import('@/pages/CoachPage'));
 const CoachPageV2 = lazy(() => import('@/pages/CoachPageV2'));
@@ -45,7 +45,6 @@ function App() {
                 {/* Wrap child routes with AppShell and render them via Outlet */}
                 <Route element={<AppShell><Outlet /></AppShell>}> 
                   <Route path="/today" element={<TodayView />} />
-                  <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/coach" element={<CoachPage />} />
                   {/* Default protected route */}
                   <Route index element={<TodayView />} /> 

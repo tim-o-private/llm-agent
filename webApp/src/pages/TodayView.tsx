@@ -143,10 +143,10 @@ const TodayView: React.FC = () => {
     createFocusSession(
       { task_id: taskId, planned_duration_minutes: 25 },
       {
-        onSuccess: (_focusSession: FocusSession | null) => {
+        onSuccess: () => {
           toast.success('Focus session started for task.');
         },
-        onError: (_err: Error) => {
+        onError: () => {
           toast.error('Error creating focus session.');
           updateTask(taskId, { status: 'planning' });
         },
@@ -200,6 +200,7 @@ const TodayView: React.FC = () => {
     });
   }, [
     initialized,
+    topLevelTasksFromStore,
     taskDataSignature, // Using the new signature
     getSubtasksByParentId,
     focusedTaskId, 

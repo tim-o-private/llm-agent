@@ -1,3 +1,8 @@
+/**
+ * @docs memory-bank/patterns/ui-patterns.md#pattern-1-radix-themes-primitives-tailwind
+ * @rules memory-bank/rules/ui-rules.json#ui-001
+ * @examples memory-bank/patterns/ui-patterns.md#pattern-4-modal-dialogs
+ */
 import * as Dialog from '@radix-ui/react-dialog';
 import React from 'react';
 import { clsx } from 'clsx';

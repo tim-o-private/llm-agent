@@ -53,7 +53,7 @@ export const ChatPanelV1: React.FC<ChatPanelV1Props> = ({ agentId: agentIdProp }
 
   // beforeunload listener to deactivate session instance
   useEffect(() => {
-    const handleBeforeUnload = (_event: BeforeUnloadEvent) => {
+    const handleBeforeUnload = () => {
       if (useChatStore.getState().currentSessionInstanceId) { 
         clearCurrentSessionAsync();
       }
