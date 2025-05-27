@@ -2,51 +2,66 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Styles moved from the former packages/ui library */
+/* Enhanced styles with modern effects */
 @layer components {
   .btn {
-    @apply px-4 py-2 rounded-md font-semibold text-sm transition-colors duration-150 ease-in-out;
+    @apply px-4 py-2 rounded-lg font-semibold text-sm;
+    @apply transition-all duration-200 ease-out;
     @apply focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2;
-    /* Base styling for disabled state */
     @apply disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply hover:scale-105 active:scale-95;
+    @apply backdrop-blur-sm;
+    /* Base styling for disabled state */
   }
 
   .btn-primary {
-    background-color: var(--accent-9);
+    background: linear-gradient(135deg, var(--accent-9), var(--violet-10));
     color: var(--accent-contrast);
-    /* box-shadow for focus, as outline might be complex with themes */
-    /* Instead of Tailwind rings, using a direct outline for Radix vars */
+    box-shadow: 0 4px 15px rgba(139, 92, 246, 0.2);
   }
   .btn-primary:hover:not(:disabled) {
-    background-color: var(--accent-10);
+    background: linear-gradient(135deg, var(--accent-10), var(--violet-11));
+    box-shadow: 0 8px 25px rgba(139, 92, 246, 0.3);
+    transform: translateY(-2px) scale(1.05);
   }
   .btn-primary:focus-visible:not(:disabled) {
     outline: 2px solid var(--accent-7);
     outline-offset: 2px;
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
   }
 
   .btn-secondary {
-    background-color: var(--slate-3);
+    background: linear-gradient(135deg, var(--slate-3), var(--slate-4));
     color: var(--slate-11);
+    border: 1px solid var(--slate-6);
+    backdrop-filter: blur(8px);
   }
   .btn-secondary:hover:not(:disabled) {
-    background-color: var(--slate-4);
+    background: linear-gradient(135deg, var(--slate-4), var(--slate-5));
+    border-color: var(--slate-7);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px) scale(1.02);
   }
   .btn-secondary:focus-visible:not(:disabled) {
     outline: 2px solid var(--slate-7);
     outline-offset: 2px;
+    box-shadow: 0 0 15px rgba(100, 116, 139, 0.3);
   }
 
   .btn-danger {
-    background-color: var(--red-9);
-    color: white; /* --red-1 is white */
+    background: linear-gradient(135deg, var(--red-9), var(--red-10));
+    color: white;
+    box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
   }
   .btn-danger:hover:not(:disabled) {
-    background-color: var(--red-10);
+    background: linear-gradient(135deg, var(--red-10), var(--red-11));
+    box-shadow: 0 8px 25px rgba(239, 68, 68, 0.4);
+    transform: translateY(-2px) scale(1.05);
   }
   .btn-danger:focus-visible:not(:disabled) {
     outline: 2px solid var(--red-7);
     outline-offset: 2px;
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
   }
 
   /* For icon buttons or other variants if needed */

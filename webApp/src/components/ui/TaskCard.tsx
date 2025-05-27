@@ -54,16 +54,27 @@ export interface TaskCardProps extends Omit<Task, 'subtasks'> {
 
 const priorityIcons: Record<TaskPriority, React.ReactNode | null> = {
   0: null,
-  1: <ChevronUpIcon className="h-4 w-4 text-text-muted" />,
-  2: <DoubleArrowUpIcon className="h-4 w-4 text-warning-strong" />,
-  3: <TriangleUpIcon className="h-4 w-4 text-destructive" />,
+  1: null,
+  2: null,
+  3: null,
 };
 
 const getStatusStyles = (status: TaskStatus, completed: boolean) => {
-  if (completed || status === 'completed') return 'opacity-60 line-through';
-  if (status === 'in_progress') return 'border-brand-primary shadow-md';
-  if (status === 'planning') return 'border-success-indicator';
-  return 'border-ui-border';
+  if (completed || status === 'completed') return 'opacity-70 border-ui-border bg-ui-element-bg/60';
+  if (status === 'in_progress') return 'border-brand-primary bg-ui-element-bg/80';
+  if (status === 'planning') return 'border-brand-primary bg-ui-element-bg/80';
+  return 'border-ui-border bg-ui-element-bg/80 hover:border-ui-border-hover';
+};
+
+const getPriorityGlow = (priority: TaskPriority, completed: boolean) => {
+  if (completed) return '';
+  
+  switch (priority) {
+    case 3: return 'shadow-lg shadow-danger/30';
+    case 2: return 'shadow-md shadow-warning/20';
+    case 1: return 'shadow-sm';
+    default: return '';
+  }
 };
 
 export const TaskCard: React.FC<TaskCardProps> = ({
@@ -94,6 +105,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
   const [isSubtasksExpanded, setIsSubtasksExpanded] = useState(false);
   const [displayedSubtasks, setDisplayedSubtasks] = useState<Task[] | undefined>(initialSubtasksProp);
+  const [isHovered, setIsHovered] = useState(false);
 
   useEffect(() => {
     setDisplayedSubtasks(initialSubtasksProp);
@@ -159,12 +171,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
+    transition: isDragging ? transition : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
     zIndex: isDragging ? 100 : 'auto',
-    boxShadow: isDragging ? '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)' : 'none',
+    boxShadow: isDragging ? '0 25px 50px -12px rgba(139, 92, 246, 0.25), 0 0 30px rgba(139, 92, 246, 0.3)' : 'none',
   };
 
   const statusCardStyles = getStatusStyles(status, completed);
+  const priorityGlow = getPriorityGlow(priority, completed);
 
   const handleCardClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
@@ -181,58 +194,133 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} className={clsx('task-card-wrapper', isDragging && 'dragging-shadow')} >
+    <div 
+      ref={setNodeRef} 
+      style={style} 
+      {...attributes} 
+      className={clsx('task-card-wrapper', isDragging && 'dragging-shadow')}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
       <div
         className={clsx(
-          'task-card bg-ui-bg p-3 rounded-lg shadow-sm flex items-center space-x-3 group relative',
-          'border',
+          'task-card relative overflow-hidden',
+          'backdrop-blur-sm',
+          'p-4 rounded-xl shadow-elevated',
+          'flex items-center space-x-3 group',
+          'border-2 transition-all duration-300 ease-out',
+          
+          // Interaction states - different for completed vs active tasks
+          !completed && !isDragging && 'hover:shadow-lg hover:scale-[1.02] hover:-translate-y-1',
+          completed && !isDragging && 'hover:shadow-md hover:scale-[1.01] hover:-translate-y-0.5',
+          
           statusCardStyles,
-          isFocused && 'ring-4 ring-brand-primary shadow-xl bg-accent-surface border-brand-primary',
+          priorityGlow,
+          
+          // Focus ring follows keyboard selection regardless of status
+          isFocused && 'ring-4 ring-blue-500/50 shadow-xl transform -translate-y-1 scale-[1.02]',
+          
+          // Selected state
+          isSelected && !completed && 'ring-2 ring-brand-primary/50',
+          isSelected && completed && 'ring-2 ring-ui-border/50',
+          
+          // In-progress glow (more subtle)
+          status === 'in_progress' && isFocused && 'shadow-brand-primary/20 animate-pulse',
+          
           className,
         )}
       >
+        {/* Glassy overlay for extra depth */}
+        <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-ui-surface/10 to-transparent pointer-events-none" />
+        
+        {/* Animated background gradient for active states - only for non-completed */}
+        {(status === 'in_progress' || isFocused) && !completed && (
+          <div className="absolute inset-0 bg-gradient-to-r from-brand-primary/5 via-brand-secondary/5 to-brand-primary/5 animate-gradient-shift opacity-50 rounded-xl" />
+        )}
+        
+        {/* Priority indicator - corner dot instead of bar, muted for completed */}
+        {priority > 0 && (
+          <div 
+            className={clsx(
+              'absolute top-2 right-2 w-2 h-2 rounded-full z-10',
+              !completed && priority === 3 && 'bg-red-500',
+              !completed && priority === 2 && 'bg-amber-500',
+              !completed && priority === 1 && 'bg-blue-500',
+              completed && 'bg-gray-400 opacity-50'
+            )}
+          />
+        )}
+
         <div
           {...listeners}
-          className="p-1 cursor-grab touch-none group-hover:bg-ui-interactive-bg-hover rounded"
+          className={clsx(
+            'p-2 cursor-grab touch-none rounded-lg transition-all duration-200 relative z-10',
+            !completed && 'hover:bg-ui-interactive-bg-hover backdrop-blur-sm hover:shadow-lg',
+            completed && 'hover:bg-ui-interactive-bg-hover/60 backdrop-blur-sm',
+            'active:scale-95'
+          )}
           aria-label="Drag to reorder task"
           role="button"
           tabIndex={0}
         >
-          <DragHandleDots2Icon className="h-5 w-5 text-text-muted" />
+          <DragHandleDots2Icon className={clsx(
+            "h-5 w-5 transition-colors duration-200",
+            !completed && "text-text-muted group-hover:text-text-secondary",
+            completed && "text-text-muted/60"
+          )} />
         </div>
 
-        <div className="flex items-center h-5">
+        <div className="flex items-center h-5 relative z-10">
           <Checkbox
             id={`task-checkbox-${id}`}
             checked={!!isSelected}
             onCheckedChange={(checked) => onSelectTask && onSelectTask(id, !!checked)}
             aria-label={`Select task ${title} for prioritization`}
+            className="transition-all duration-200 hover:scale-110"
           />
         </div>
 
-        <div className="flex-grow min-w-0" onClick={onEdit ? handleCardClick : undefined} style={onEdit ? {cursor: 'pointer'} : {}} >
-          <p className={clsx("text-sm font-medium text-text-primary truncate", (completed || status === 'completed') && "line-through")}>
+        <div 
+          className="flex-grow min-w-0 cursor-pointer relative z-10" 
+          onClick={onEdit ? handleCardClick : undefined}
+        >
+          <p className={clsx(
+            "text-sm font-medium transition-all duration-200 relative z-10",
+            !completed && "group-hover:text-brand-primary text-text-primary",
+            completed && "line-through text-text-muted"
+          )}>
             {title}
           </p>
+          
+          {/* Subtle shimmer effect on hover - only for non-completed */}
+          {isHovered && !completed && (
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-ui-surface/5 to-transparent animate-shimmer pointer-events-none" />
+          )}
         </div>
-
-        {priorityIcons[priority] && (
-          <div className="ml-auto pl-2" title={`Priority: ${priority === 1 ? 'Low' : priority === 2 ? 'Medium' : 'High'}`}>
-            {priorityIcons[priority]}
-          </div>
-        )}
 
         {displayedSubtasks && displayedSubtasks.length > 0 && (
           <button
             onClick={(e) => { e.stopPropagation(); setIsSubtasksExpanded(!isSubtasksExpanded); }}
-            className="p-1 ml-2 text-text-muted hover:text-text-secondary rounded focus:outline-none"
+            className={clsx(
+              "p-2 ml-2 rounded-lg transition-all duration-200 relative z-10",
+              !completed && "text-text-muted hover:text-text-secondary",
+              !completed && "hover:bg-ui-interactive-bg-hover backdrop-blur-sm",
+              completed && "text-text-muted/60 hover:text-text-muted",
+              completed && "hover:bg-ui-interactive-bg-hover/60 backdrop-blur-sm",
+              "focus:outline-none focus:ring-2 focus:ring-ui-border-focus",
+              isSubtasksExpanded && !completed && "bg-ui-interactive-bg-active text-text-secondary",
+              isSubtasksExpanded && completed && "bg-ui-interactive-bg-active/60 text-text-muted"
+            )}
             aria-label={isSubtasksExpanded ? "Collapse subtasks" : "Expand subtasks"}
           >
-            {isSubtasksExpanded ? <ChevronDownIcon className="h-4 w-4" /> : <ChevronRightIcon className="h-4 w-4" />}
+            {isSubtasksExpanded ? 
+              <ChevronDownIcon className="h-4 w-4 transition-transform duration-200" /> : 
+              <ChevronRightIcon className="h-4 w-4 transition-transform duration-200" />
+            }
           </button>
         )}
 
-        <div className="ml-auto flex items-center space-x-1 pl-2">
+        <div className="ml-auto flex items-center space-x-1 pl-2 relative z-10">
           {onStartFocus && !completed && status !== 'completed' && (
             <button
               onClick={(e) => {
@@ -241,7 +329,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               }}
               aria-label="Prepare and Focus on task"
               title="Prepare & Focus"
-              className="p-1.5 text-brand-primary hover:text-accent-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ui-border-focus rounded-full hover:bg-ui-interactive-bg-hover"
+              className={clsx(
+                "p-2 rounded-full transition-all duration-200",
+                "text-brand-primary hover:text-brand-secondary",
+                "hover:bg-ui-interactive-bg-hover backdrop-blur-sm",
+                "hover:shadow-lg hover:scale-110 active:scale-95",
+                "focus:outline-none focus:ring-2 focus:ring-ui-border-focus"
+              )}
             >
               <PlayIcon className="h-4 w-4" />
             </button>
@@ -254,7 +348,15 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 onEdit();
               }}
               aria-label="Edit task"
-              className="p-1.5 text-text-secondary hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ui-border-focus rounded-full hover:bg-ui-interactive-bg-hover"
+              className={clsx(
+                "p-2 rounded-full transition-all duration-200",
+                !completed && "text-text-secondary hover:text-text-primary",
+                !completed && "hover:bg-ui-interactive-bg-hover backdrop-blur-sm",
+                completed && "text-text-muted/60 hover:text-text-muted",
+                completed && "hover:bg-ui-interactive-bg-hover/60 backdrop-blur-sm",
+                "hover:scale-110 active:scale-95",
+                "focus:outline-none focus:ring-2 focus:ring-ui-border-focus"
+              )}
             >
               <Pencil2Icon className="h-4 w-4" />
             </button>
@@ -267,7 +369,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 onMarkComplete(id);
               }}
               aria-label="Mark task complete"
-              className="p-1.5 text-success-strong hover:text-success-strong focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ui-border-focus rounded-full hover:bg-ui-interactive-bg-hover"
+              className={clsx(
+                "p-2 rounded-full transition-all duration-200",
+                "text-success-strong hover:text-success-electric",
+                "hover:bg-ui-interactive-bg-hover backdrop-blur-sm",
+                "hover:shadow-lg hover:scale-110 active:scale-95",
+                "focus:outline-none focus:ring-2 focus:ring-ui-border-focus"
+              )}
             >
               <CheckCircledIcon className="h-4 w-4" />
             </button>
@@ -280,7 +388,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 onDeleteTask(id);
               }}
               aria-label="Delete task"
-              className="p-1.5 text-destructive hover:text-destructive-strong focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ui-border-focus rounded-full hover:bg-ui-interactive-bg-hover"
+              className={clsx(
+                "p-2 rounded-full transition-all duration-200",
+                "text-destructive hover:text-danger",
+                "hover:bg-ui-interactive-bg-hover backdrop-blur-sm",
+                "hover:shadow-lg hover:scale-110 active:scale-95",
+                "focus:outline-none focus:ring-2 focus:ring-ui-border-focus"
+              )}
             >
               <TrashIcon className="h-4 w-4" />
             </button>
@@ -294,13 +408,27 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               e.stopPropagation();
               onStartTask(id);
             }}
-            className="ml-auto flex-shrink-0 px-2 py-1 text-xs"
+            className={clsx(
+              "ml-auto flex-shrink-0 px-3 py-1.5 text-xs font-medium relative z-10",
+              "transition-all duration-200 hover:shadow-lg hover:scale-105",
+              "bg-ui-interactive-bg backdrop-blur-sm",
+              "hover:bg-ui-interactive-bg-hover",
+              "border border-ui-border"
+            )}
           >
             Start
           </Button>
         )}
-         {status === 'in_progress' && (
-          <span className="ml-auto text-xs text-accent-strong font-semibold flex-shrink-0">In Progress</span>
+        
+        {status === 'in_progress' && (
+          <span className={clsx(
+            "ml-auto text-xs font-semibold flex-shrink-0 px-2 py-1 rounded-full relative z-10",
+            "bg-brand-surface backdrop-blur-sm",
+            "text-brand-primary border border-brand-primary/30",
+            !completed && "animate-pulse"
+          )}>
+            In Progress
+          </span>
         )}
       </div>
 
@@ -317,7 +445,14 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             items={displayedSubtasks.map((s: Task) => s.id)}
             strategy={subtaskVerticalListSortingStrategy}
           >
-            <div className="subtask-item-container subtask-drag-context pl-8 pr-2 pb-2 pt-1 bg-ui-bg-alt rounded-b-lg border-t border-ui-border space-y-1">
+            <div className={clsx(
+              "subtask-item-container subtask-drag-context",
+              "pl-8 pr-4 pb-3 pt-2 mt-2",
+              "backdrop-blur-sm bg-ui-element-bg/60",
+              "rounded-b-xl border-t border-ui-border/50",
+              "space-y-2 animate-slide-down",
+              completed && "opacity-70"
+            )}>
               {displayedSubtasks.map((subtask: Task) => (
                 <SubtaskItem
                   key={subtask.id}

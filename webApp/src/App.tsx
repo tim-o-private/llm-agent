@@ -16,6 +16,7 @@ const Login = lazy(() => import('@/pages/Login'));
 const TodayView = lazy(() => import('@/pages/TodayView.tsx'));
 const CoachPage = lazy(() => import('@/pages/CoachPage'));
 const CoachPageV2 = lazy(() => import('@/pages/CoachPageV2'));
+const DesignDemo = lazy(() => import('@/components/ui/DesignDemo').then(module => ({ default: () => <module.DesignDemo /> })));
 
 // AppLayout component is no longer needed as AppShell is the primary layout.
 
@@ -39,6 +40,8 @@ function App() {
               <Route path="/login" element={<Login />} />
               {/* Temporary: CoachPageV2 as public route for testing */}
               <Route path="/coach-v2" element={<CoachPageV2 />} />
+              {/* Temporary: Design demo as public route */}
+              <Route path="/design-demo" element={<DesignDemo />} />
 
               {/* Protected routes wrapped by AppShell directly */}
               <Route element={<ProtectedRoute />}>
