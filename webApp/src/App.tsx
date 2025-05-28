@@ -14,9 +14,11 @@ const Home = lazy(() => import('@/pages/Home'));
 const Login = lazy(() => import('@/pages/Login'));
 
 const TodayView = lazy(() => import('@/pages/TodayView.tsx'));
+const TodayViewMockup = lazy(() => import('@/pages/TodayViewMockup'));
 const CoachPage = lazy(() => import('@/pages/CoachPage'));
 const CoachPageV2 = lazy(() => import('@/pages/CoachPageV2'));
 const DesignDemo = lazy(() => import('@/components/ui/DesignDemo').then(module => ({ default: () => <module.DesignDemo /> })));
+const LayoutMockups = lazy(() => import('@/components/ui/LayoutMockups').then(module => ({ default: () => <module.LayoutMockups /> })));
 
 // AppLayout component is no longer needed as AppShell is the primary layout.
 
@@ -42,6 +44,10 @@ function App() {
               <Route path="/coach-v2" element={<CoachPageV2 />} />
               {/* Temporary: Design demo as public route */}
               <Route path="/design-demo" element={<DesignDemo />} />
+              {/* Temporary: Layout mockups as public route */}
+              <Route path="/layout-mockups" element={<LayoutMockups />} />
+              {/* Temporary: TodayView mockup as public route for testing */}
+              <Route path="/today-mockup" element={<TodayViewMockup />} />
 
               {/* Protected routes wrapped by AppShell directly */}
               <Route element={<ProtectedRoute />}>

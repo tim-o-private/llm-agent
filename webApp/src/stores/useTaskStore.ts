@@ -103,6 +103,7 @@ export const useTaskStore = create<TaskStore>()(
             .from('tasks')
             .select('*')
             .eq('user_id', userId)
+            .eq('deleted', false)
             .order('position', { ascending: true, nullsFirst: true })
             .order('priority', { ascending: false })
             .order('created_at', { ascending: false });
@@ -168,6 +169,7 @@ export const useTaskStore = create<TaskStore>()(
           category: taskData.category || null,
           due_date: taskData.due_date || null,
           completed: taskData.status === 'completed',
+          deleted: false,
           parent_task_id: taskData.parent_task_id || null,
           position: taskData.position || null,
           subtask_position: taskData.subtask_position || null,
@@ -368,7 +370,7 @@ export const useTaskStore = create<TaskStore>()(
               
               const { error } = await supabase
                 .from('tasks')
-                .delete()
+                .update({ deleted: true })
                 .eq('id', id)
                 .eq('user_id', userId);
                 
@@ -420,7 +422,7 @@ export const useTaskStore = create<TaskStore>()(
        */
       getSubtasksByParentId: (parentId) => {
         return Object.values(get().tasks).filter(
-          task => task.parent_task_id === parentId
+          task => task.parent_task_id === parentId && !task.deleted
         ).sort((a, b) => {
           // Sort by subtask_position if available
           const posA = a.subtask_position !== undefined ? a.subtask_position : null;
@@ -439,7 +441,7 @@ export const useTaskStore = create<TaskStore>()(
        */
       getTopLevelTasks: () => {
         return Object.values(get().tasks).filter(
-          task => !task.parent_task_id
+          task => !task.parent_task_id && !task.deleted
         ).sort((a, b) => {
           // Sort by position if available
           const posA = a.position !== undefined ? a.position : null;

@@ -20,6 +20,7 @@ export interface Task {
   updated_at: string;
   completed: boolean; // Derived from status for easier filtering, ensure it's kept in sync
   completed_at?: string | null;
+  deleted: boolean; // Soft delete flag
   subtasks?: Task[]; // Added for client-side handling of subtasks
 }
 
@@ -50,7 +51,7 @@ export interface FocusSession {
   completion_note?: string | null; 
 }
 
-export type NewTaskData = Omit<Task, 'id' | 'created_at' | 'updated_at' | 'completed' | 'subtasks'> & { user_id: string };
+export type NewTaskData = Omit<Task, 'id' | 'created_at' | 'updated_at' | 'completed' | 'deleted' | 'subtasks'> & { user_id: string };
 export type UpdateTaskData = Partial<Omit<Task, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'subtasks'>>;
 
 export type TaskCreatePayload = NewTaskData;

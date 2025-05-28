@@ -6,6 +6,7 @@ import App from './App';
 import { useThemeStore, getEffectiveAppearance } from '@/stores/useThemeStore'; // Changed to @/ alias
 import '@/styles/index.css'; // Changed to @/ alias
 import '@/styles/ui-components.css'; // Changed to @/ alias
+import '@/styles/card-system.css'; // Card stacking system styles
 
 const queryClient = new QueryClient({
   defaultOptions: {

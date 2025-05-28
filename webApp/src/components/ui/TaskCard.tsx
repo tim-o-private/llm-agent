@@ -1,26 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import clsx from 'clsx';
 import { Checkbox } from './Checkbox';
 import { Button } from './Button';
-import clsx from 'clsx';
 import { Task, TaskPriority, TaskStatus } from '@/api/types';
+import { SubtaskItem } from '../features/TaskDetail/SubtaskItem';
+import { useUpdateSubtaskOrder } from '@/api/hooks/useTaskHooks';
 
 import {
-  ChevronUpIcon,
-  DoubleArrowUpIcon,
-  TriangleUpIcon,
   DragHandleDots2Icon,
   CheckCircledIcon,
   TrashIcon,
   PlayIcon,
   ChevronDownIcon,
   ChevronRightIcon,
-  Pencil2Icon
+  Pencil2Icon,
+  DotsHorizontalIcon
 } from '@radix-ui/react-icons';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 
-import { SubtaskItem } from '../features/TaskDetail/SubtaskItem';
-
+import { CSS } from '@dnd-kit/utilities';
 import {
   DndContext as SubtaskDndContext,
   closestCenter as subtaskClosestCenter,
@@ -31,13 +29,13 @@ import {
   DragEndEvent as SubtaskDragEndEvent,
 } from '@dnd-kit/core';
 import {
+  useSortable,
   arrayMove as subtaskArrayMove,
   SortableContext as SubtaskSortableContext,
   sortableKeyboardCoordinates as subtaskSortableKeyboardCoordinates,
   verticalListSortingStrategy as subtaskVerticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 
-import { useUpdateSubtaskOrder } from '@/api/hooks/useTaskHooks';
 
 export interface TaskCardProps extends Omit<Task, 'subtasks'> {
   onStartTask: (id: string) => void;
@@ -209,6 +207,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           'p-4 rounded-xl shadow-elevated',
           'flex items-center space-x-3 group',
           'border-2 transition-all duration-300 ease-out',
+          'min-h-[3.5rem]',
           
           // Interaction states - different for completed vs active tasks
           !completed && !isDragging && 'hover:shadow-lg hover:scale-[1.02] hover:-translate-y-1',
@@ -286,6 +285,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         >
           <p className={clsx(
             "text-sm font-medium transition-all duration-200 relative z-10",
+            "break-words leading-tight",
+            "overflow-hidden",
             !completed && "group-hover:text-brand-primary text-text-primary",
             completed && "line-through text-text-muted"
           )}>
@@ -320,116 +321,146 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           </button>
         )}
 
-        <div className="ml-auto flex items-center space-x-1 pl-2 relative z-10">
-          {onStartFocus && !completed && status !== 'completed' && (
-            <button
+        <div className="ml-auto flex items-center space-x-2 pl-2 relative z-10">
+          {/* Status indicator or Start button */}
+          {status === 'in_progress' && (
+            <span className={clsx(
+              "text-xs font-semibold flex-shrink-0 px-2 py-1 rounded-full",
+              "bg-brand-surface backdrop-blur-sm",
+              "text-brand-primary border border-brand-primary/30",
+              !completed && "animate-pulse"
+            )}>
+              In Progress
+            </span>
+          )}
+          
+          {status !== 'in_progress' && status !== 'completed' && !completed && (
+            <Button
+              variant="secondary"
               onClick={(e) => {
                 e.stopPropagation();
-                onStartFocus(id);
+                onStartTask(id);
               }}
-              aria-label="Prepare and Focus on task"
-              title="Prepare & Focus"
               className={clsx(
-                "p-2 rounded-full transition-all duration-200",
-                "text-brand-primary hover:text-brand-secondary",
-                "hover:bg-ui-interactive-bg-hover backdrop-blur-sm",
-                "hover:shadow-lg hover:scale-110 active:scale-95",
-                "focus:outline-none focus:ring-2 focus:ring-ui-border-focus"
+                "flex-shrink-0 px-3 py-1.5 text-xs font-medium",
+                "transition-all duration-200 hover:shadow-lg hover:scale-105",
+                "bg-ui-interactive-bg backdrop-blur-sm",
+                "hover:bg-ui-interactive-bg-hover",
+                "border border-ui-border"
               )}
             >
-              <PlayIcon className="h-4 w-4" />
-            </button>
+              Start
+            </Button>
           )}
 
-          {onEdit && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onEdit();
-              }}
-              aria-label="Edit task"
-              className={clsx(
-                "p-2 rounded-full transition-all duration-200",
-                !completed && "text-text-secondary hover:text-text-primary",
-                !completed && "hover:bg-ui-interactive-bg-hover backdrop-blur-sm",
-                completed && "text-text-muted/60 hover:text-text-muted",
-                completed && "hover:bg-ui-interactive-bg-hover/60 backdrop-blur-sm",
-                "hover:scale-110 active:scale-95",
-                "focus:outline-none focus:ring-2 focus:ring-ui-border-focus"
-              )}
-            >
-              <Pencil2Icon className="h-4 w-4" />
-            </button>
-          )}
+          {/* Actions Dropdown Menu */}
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger asChild>
+              <button
+                className={clsx(
+                  "p-2 rounded-full transition-all duration-200 relative z-10",
+                  !completed && "text-text-secondary hover:text-text-primary",
+                  !completed && "hover:bg-ui-interactive-bg-hover backdrop-blur-sm",
+                  completed && "text-text-muted/60 hover:text-text-muted",
+                  completed && "hover:bg-ui-interactive-bg-hover/60 backdrop-blur-sm",
+                  "hover:scale-110 active:scale-95",
+                  "focus:outline-none focus:ring-2 focus:ring-ui-border-focus"
+                )}
+                aria-label="Task actions"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <DotsHorizontalIcon className="h-4 w-4" />
+              </button>
+            </DropdownMenu.Trigger>
 
-          {onMarkComplete && !completed && status !== 'completed' && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onMarkComplete(id);
-              }}
-              aria-label="Mark task complete"
-              className={clsx(
-                "p-2 rounded-full transition-all duration-200",
-                "text-success-strong hover:text-success-electric",
-                "hover:bg-ui-interactive-bg-hover backdrop-blur-sm",
-                "hover:shadow-lg hover:scale-110 active:scale-95",
-                "focus:outline-none focus:ring-2 focus:ring-ui-border-focus"
-              )}
-            >
-              <CheckCircledIcon className="h-4 w-4" />
-            </button>
-          )}
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content
+                className={clsx(
+                  "min-w-[160px] bg-ui-element-bg backdrop-blur-md",
+                  "rounded-lg border border-ui-border shadow-lg",
+                  "p-1 z-50"
+                )}
+                sideOffset={5}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {onEdit && (
+                  <DropdownMenu.Item
+                    className={clsx(
+                      "flex items-center space-x-2 px-3 py-2 text-sm rounded-md",
+                      "text-text-primary hover:bg-ui-interactive-bg-hover",
+                      "cursor-pointer outline-none",
+                      "focus:bg-ui-interactive-bg-hover"
+                    )}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEdit();
+                    }}
+                  >
+                    <Pencil2Icon className="h-4 w-4" />
+                    <span>Edit Task</span>
+                  </DropdownMenu.Item>
+                )}
 
-          {onDeleteTask && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onDeleteTask(id);
-              }}
-              aria-label="Delete task"
-              className={clsx(
-                "p-2 rounded-full transition-all duration-200",
-                "text-destructive hover:text-danger",
-                "hover:bg-ui-interactive-bg-hover backdrop-blur-sm",
-                "hover:shadow-lg hover:scale-110 active:scale-95",
-                "focus:outline-none focus:ring-2 focus:ring-ui-border-focus"
-              )}
-            >
-              <TrashIcon className="h-4 w-4" />
-            </button>
-          )}
+                {onStartFocus && !completed && status !== 'completed' && (
+                  <DropdownMenu.Item
+                    className={clsx(
+                      "flex items-center space-x-2 px-3 py-2 text-sm rounded-md",
+                      "text-brand-primary hover:bg-ui-interactive-bg-hover",
+                      "cursor-pointer outline-none",
+                      "focus:bg-ui-interactive-bg-hover"
+                    )}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onStartFocus(id);
+                    }}
+                  >
+                    <PlayIcon className="h-4 w-4" />
+                    <span>Focus on Task</span>
+                  </DropdownMenu.Item>
+                )}
+
+                {onMarkComplete && !completed && status !== 'completed' && (
+                  <DropdownMenu.Item
+                    className={clsx(
+                      "flex items-center space-x-2 px-3 py-2 text-sm rounded-md",
+                      "text-success-strong hover:bg-ui-interactive-bg-hover",
+                      "cursor-pointer outline-none",
+                      "focus:bg-ui-interactive-bg-hover"
+                    )}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onMarkComplete(id);
+                    }}
+                  >
+                    <CheckCircledIcon className="h-4 w-4" />
+                    <span>Mark Complete</span>
+                  </DropdownMenu.Item>
+                )}
+
+                {onDeleteTask && (
+                  <>
+                    <DropdownMenu.Separator className="h-px bg-ui-border my-1" />
+                    <DropdownMenu.Item
+                      className={clsx(
+                        "flex items-center space-x-2 px-3 py-2 text-sm rounded-md",
+                        "text-destructive hover:bg-ui-interactive-bg-hover",
+                        "cursor-pointer outline-none",
+                        "focus:bg-ui-interactive-bg-hover"
+                      )}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteTask(id);
+                      }}
+                    >
+                      <TrashIcon className="h-4 w-4" />
+                      <span>Delete Task</span>
+                    </DropdownMenu.Item>
+                  </>
+                )}
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
         </div>
-
-        {status !== 'in_progress' && status !== 'completed' && !completed && (
-          <Button
-            variant="secondary"
-            onClick={(e) => {
-              e.stopPropagation();
-              onStartTask(id);
-            }}
-            className={clsx(
-              "ml-auto flex-shrink-0 px-3 py-1.5 text-xs font-medium relative z-10",
-              "transition-all duration-200 hover:shadow-lg hover:scale-105",
-              "bg-ui-interactive-bg backdrop-blur-sm",
-              "hover:bg-ui-interactive-bg-hover",
-              "border border-ui-border"
-            )}
-          >
-            Start
-          </Button>
-        )}
-        
-        {status === 'in_progress' && (
-          <span className={clsx(
-            "ml-auto text-xs font-semibold flex-shrink-0 px-2 py-1 rounded-full relative z-10",
-            "bg-brand-surface backdrop-blur-sm",
-            "text-brand-primary border border-brand-primary/30",
-            !completed && "animate-pulse"
-          )}>
-            In Progress
-          </span>
-        )}
       </div>
 
       {isSubtasksExpanded && displayedSubtasks && displayedSubtasks.length > 0 && (
