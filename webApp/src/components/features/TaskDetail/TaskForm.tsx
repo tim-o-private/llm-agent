@@ -8,6 +8,9 @@ import { useTaskStore } from '@/stores/useTaskStore'; // Import the store
 import { useAuthStore } from '@/features/auth/useAuthStore'; // Import auth store for user ID
 import { Input } from '@/components/ui/Input'; // Import Input component that handles focus state
 import { Textarea } from '@/components/ui/Textarea'; // Import Textarea component that handles focus state
+import { getFocusClasses } from '@/utils/focusStates'; // Import focus system for select elements
+import { clsx } from 'clsx';
+import { AppError } from '@/types/error';
 // import * as Form from '@radix-ui/react-form'; // Placeholder for Radix Form
 // import { Button, TextField, TextArea, Select, Checkbox } from '@/components/ui'; // Assuming common UI components
 
@@ -37,7 +40,7 @@ interface TaskFormProps {
     canSave: boolean;
     isSaving: boolean;
     isCreating: boolean;
-    saveError: any;
+    saveError: AppError | null;
     handleSave: () => void;
     handleCancel: () => void;
   }) => void;
@@ -200,7 +203,11 @@ const TaskForm: React.FC<TaskFormProps> = ({
             <select 
               id="status" 
               {...formMethods.register('status')} 
-              className="mt-1 block w-full border border-ui-border rounded-md shadow-sm p-2 focus:ring-accent-focus focus:border-accent-focus sm:text-sm bg-ui-input-bg text-text-primary"
+              className={clsx(
+                "mt-1 block w-full border rounded-md shadow-sm p-2 text-sm transition-colors",
+                "border-ui-border bg-ui-surface text-text-primary",
+                getFocusClasses()
+              )}
             >
               <option value="pending">Pending</option>
               <option value="planning">Planning</option>
@@ -217,7 +224,11 @@ const TaskForm: React.FC<TaskFormProps> = ({
             <select 
               id="priority" 
               {...formMethods.register('priority', { valueAsNumber: true })} 
-              className="mt-1 block w-full border border-ui-border rounded-md shadow-sm p-2 focus:ring-accent-focus focus:border-accent-focus sm:text-sm bg-ui-input-bg text-text-primary"
+              className={clsx(
+                "mt-1 block w-full border rounded-md shadow-sm p-2 text-sm transition-colors",
+                "border-ui-border bg-ui-surface text-text-primary",
+                getFocusClasses()
+              )}
             >
               <option value={0}>None</option>
               <option value={1}>Low</option>
@@ -230,11 +241,11 @@ const TaskForm: React.FC<TaskFormProps> = ({
 
         <div>
           <label htmlFor="due_date" className="block text-sm font-medium text-text-secondary">Due Date</label>
-          <input 
+          <Input 
             type="date" 
             id="due_date" 
             {...formMethods.register('due_date')} 
-            className="mt-1 block w-full border border-ui-border rounded-md shadow-sm p-2 focus:ring-accent-focus focus:border-accent-focus sm:text-sm bg-ui-input-bg text-text-primary"
+            className="mt-1"
           />
            {formMethods.formState.errors.due_date && <p className="mt-1 text-sm text-destructive">{formMethods.formState.errors.due_date.message}</p>}
         </div>

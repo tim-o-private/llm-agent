@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { enableMapSet } from 'immer';
+import '@/types/global'; // Import global type extensions
 // import type { Task } from '@/api/types'; // Task type no longer needed directly in store state
 
 enableMapSet(); // Initialize Immer's MapSet plugin
@@ -147,16 +148,16 @@ export const useTaskViewStore = create<TaskViewStore>()(
       clearFocusFastInputRequest: () => set((state) => { state.requestFocusFastInput = false; }),
 
       initializeListener: () => {
-        if (!(window as any).__taskViewStoreListenerAttached) {
+        if (!window.__taskViewStoreListenerAttached) {
           window.addEventListener('keydown', handleGlobalKeyDown);
-          (window as any).__taskViewStoreListenerAttached = true;
+          window.__taskViewStoreListenerAttached = true;
           console.log('[TaskViewStore] Global keyboard listener initialized.');
         }
       },
       destroyListener: () => {
-        if ((window as any).__taskViewStoreListenerAttached) {
+        if (window.__taskViewStoreListenerAttached) {
           window.removeEventListener('keydown', handleGlobalKeyDown);
-          (window as any).__taskViewStoreListenerAttached = false;
+          window.__taskViewStoreListenerAttached = false;
           console.log('[TaskViewStore] Global keyboard listener destroyed.');
         }
       },

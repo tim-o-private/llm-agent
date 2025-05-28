@@ -325,7 +325,7 @@ const TodayView: React.FC = () => {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-text-primary">Today</h1>
         <div className="flex items-center space-x-2">
-          <Button variant="secondary" onClick={() => {
+          <Button variant="outline" onClick={() => {
             setIsFastInputUiFocused(true);
             // FastTaskInput's onFocused will call setInputFocusState(true)
           }}>

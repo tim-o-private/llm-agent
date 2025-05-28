@@ -21,18 +21,28 @@ import { Task } from '@/api/types';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { TrashIcon, Pencil1Icon, DragHandleDots2Icon, PlusIcon } from '@radix-ui/react-icons'; // For delete/edit icons
+import { 
+  getStatusContainerStyles, 
+  getStatusTextStyles, 
+  getStatusButtonStyles 
+} from '@/utils/statusStyles';
+import clsx from 'clsx';
 
 interface SubtaskListProps {
   parentTaskId: string;
+  showAddSubtask?: boolean; // New prop to control add functionality
+  className?: string; // New prop for custom styling
+  compact?: boolean; // New prop for compact display in TaskCard
 }
 
 interface SubtaskListItemProps {
   subtask: Task;
   onUpdate: (id: string, updates: Partial<Task>) => void; // Placeholder for update functionality
   onRemove: (id: string) => void;
+  compact?: boolean; // New prop for compact display
 }
 
-const SubtaskListItem: React.FC<SubtaskListItemProps> = ({ subtask, onUpdate, onRemove }) => {
+const SubtaskListItem: React.FC<SubtaskListItemProps> = ({ subtask, onUpdate, onRemove, compact }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(subtask.title);
 
@@ -62,15 +72,27 @@ const SubtaskListItem: React.FC<SubtaskListItemProps> = ({ subtask, onUpdate, on
     <div 
       ref={setNodeRef} 
       style={style}
-      className="flex items-center justify-between p-3 border border-ui-border rounded-md hover:bg-ui-element-bg-hover bg-ui-element-bg"
+      className={clsx(
+        'flex items-center justify-between hover:bg-ui-element-bg-hover',
+        compact ? 'p-2' : 'p-3',
+        getStatusContainerStyles({
+          completed: subtask.status === 'completed',
+          status: subtask.status,
+          variant: compact ? 'compact' : 'item'
+        })
+      )}
     >
       <div className="flex items-center flex-grow">
         <button
-          className="mr-2 p-1 text-text-muted hover:text-text-primary cursor-grab active:cursor-grabbing"
+          className={clsx(
+            getStatusButtonStyles({ completed: subtask.status === 'completed' }),
+            "cursor-grab active:cursor-grabbing",
+            compact ? 'mr-1 p-0.5' : 'mr-2 p-1'
+          )}
           {...attributes}
           {...listeners}
         >
-          <DragHandleDots2Icon className="w-4 h-4" />
+          <DragHandleDots2Icon className={compact ? "w-3 h-3" : "w-4 h-4"} />
         </button>
         
         {isEditing ? (
@@ -87,11 +109,15 @@ const SubtaskListItem: React.FC<SubtaskListItemProps> = ({ subtask, onUpdate, on
               }
             }}
             autoFocus
-            className="flex-grow mr-2 h-8 text-sm"
+            className={`flex-grow mr-2 text-sm ${compact ? 'h-6' : 'h-8'}`}
           />
         ) : (
           <span 
-              className={`flex-grow cursor-pointer ${subtask.status === 'completed' ? 'line-through text-text-muted' : 'text-text-primary'}`}
+              className={clsx(
+                'flex-grow cursor-pointer',
+                compact ? 'text-sm' : '',
+                getStatusTextStyles({ completed: subtask.status === 'completed' })
+              )}
               onClick={() => setIsEditing(true)} // Click to edit title
           >
               {subtask.title}
@@ -99,29 +125,29 @@ const SubtaskListItem: React.FC<SubtaskListItemProps> = ({ subtask, onUpdate, on
         )}
       </div>
       
-      <div className="flex items-center space-x-1 ml-2">
+      <div className={`flex items-center ml-2 ${compact ? 'space-x-0.5' : 'space-x-1'}`}>
         <Button 
           onClick={() => setIsEditing(!isEditing)} 
           aria-label="Edit subtask" 
-          variant="secondary"
-          className="p-1 h-8 w-8"
+          variant="outline"
+          className={compact ? "p-0.5 h-6 w-6" : "p-1 h-8 w-8"}
         >
-            <Pencil1Icon className="w-4 h-4" />
+            <Pencil1Icon className={compact ? "w-3 h-3" : "w-4 h-4"} />
         </Button>
         <Button 
           onClick={() => onRemove(subtask.id)} 
           aria-label="Remove subtask" 
-          variant="secondary"
-          className="p-1 h-8 w-8 text-destructive hover:text-destructive"
+          variant="outline"
+          className={`text-destructive hover:text-destructive ${compact ? "p-0.5 h-6 w-6" : "p-1 h-8 w-8"}`}
         >
-            <TrashIcon className="w-4 h-4" />
+            <TrashIcon className={compact ? "w-3 h-3" : "w-4 h-4"} />
         </Button>
       </div>
     </div>
   );
 };
 
-const SubtaskList: React.FC<SubtaskListProps> = ({ parentTaskId }) => {
+const SubtaskList: React.FC<SubtaskListProps> = ({ parentTaskId, showAddSubtask = true, className, compact }) => {
   const subtasks = useTaskStore((state) => state.getSubtasksByParentId(parentTaskId));
   const { createTask, updateTask, deleteTask } = useTaskStore.getState(); // Get actions
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
@@ -198,19 +224,21 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ parentTaskId }) => {
   };
 
   return (
-    <div className="space-y-3">
+    <div className={`space-y-3 ${className || ''}`}>
       {/* Add Subtask Button/Input */}
-      {!isAddingSubtask ? (
+      {!isAddingSubtask && showAddSubtask && (
         <Button 
           type="button" 
           onClick={() => setIsAddingSubtask(true)}
-          variant="secondary"
+          variant="outline"
           className="w-full flex items-center justify-center py-2 border-2 border-dashed border-ui-border hover:border-ui-border-focus hover:bg-ui-element-bg-hover"
         >
           <PlusIcon className="w-4 h-4 mr-2" />
           Add Subtask
         </Button>
-      ) : (
+      )}
+
+      {isAddingSubtask && showAddSubtask && (
         <div className="flex items-center space-x-2 p-3 border-2 border-dashed border-ui-border-focus rounded-md bg-ui-element-bg">
           <Input 
             type="text"
@@ -234,7 +262,7 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ parentTaskId }) => {
             type="button" 
             onClick={handleAddSubtask}
             disabled={!newSubtaskTitle.trim()}
-            variant="primary"
+            variant="solid"
             className="px-3"
           >
             Add
@@ -245,7 +273,7 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ parentTaskId }) => {
               setNewSubtaskTitle('');
               setIsAddingSubtask(false);
             }}
-            variant="secondary"
+            variant="outline"
             className="px-3"
           >
             Cancel
@@ -257,20 +285,25 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ parentTaskId }) => {
       {subtasks.length > 0 ? (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={subtasks.map(s => s.id)} strategy={verticalListSortingStrategy}>
-            <div className="space-y-2">
+            <div className={compact ? "space-y-1" : "space-y-2"}>
               {subtasks.map(subtask => (
                 <SubtaskListItem 
                   key={subtask.id} 
                   subtask={subtask} 
                   onUpdate={handleUpdateSubtask}
                   onRemove={handleRemoveSubtask}
+                  compact={compact}
                 />
               ))}
             </div>
           </SortableContext>
         </DndContext>
       ) : (
-        <p className="text-sm text-text-muted text-center py-4 italic">No subtasks yet. Add one above to get started.</p>
+        !showAddSubtask && (
+          <p className={`text-text-muted text-center py-4 italic ${compact ? 'text-xs py-2' : 'text-sm'}`}>
+            No subtasks yet.
+          </p>
+        )
       )}
     </div>
   );

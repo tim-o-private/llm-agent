@@ -17,6 +17,8 @@ const TodayView = lazy(() => import('@/pages/TodayView.tsx'));
 const TodayViewMockup = lazy(() => import('@/pages/TodayViewMockup'));
 const CoachPage = lazy(() => import('@/pages/CoachPage'));
 const CoachPageV2 = lazy(() => import('@/pages/CoachPageV2'));
+const ColorSwatchPage = lazy(() => import('@/pages/ColorSwatchPage'));
+const DesignSystemPage = lazy(() => import('@/pages/DesignSystemPage'));
 const DesignDemo = lazy(() => import('@/components/ui/DesignDemo').then(module => ({ default: () => <module.DesignDemo /> })));
 const LayoutMockups = lazy(() => import('@/components/ui/LayoutMockups').then(module => ({ default: () => <module.LayoutMockups /> })));
 
@@ -48,6 +50,10 @@ function App() {
               <Route path="/layout-mockups" element={<LayoutMockups />} />
               {/* Temporary: TodayView mockup as public route for testing */}
               <Route path="/today-mockup" element={<TodayViewMockup />} />
+              {/* Color swatch page for design reference */}
+              <Route path="/colors" element={<ColorSwatchPage />} />
+              {/* Design system page for component patterns */}
+              <Route path="/design-system" element={<DesignSystemPage />} />
 
               {/* Protected routes wrapped by AppShell directly */}
               <Route element={<ProtectedRoute />}>

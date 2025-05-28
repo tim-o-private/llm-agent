@@ -318,9 +318,9 @@ export const LayoutMockups: React.FC = () => {
       <div className="h-16 bg-ui-element-bg border-b border-ui-border flex items-center px-6">
         <h2 className="text-lg font-semibold text-text-primary">Traditional Layout</h2>
         <div className="ml-auto flex space-x-2">
-          <Button variant="secondary">Tasks</Button>
-          <Button variant="secondary">Calendar</Button>
-          <Button variant="secondary">Settings</Button>
+          <Button variant="soft">Tasks</Button>
+          <Button variant="soft">Calendar</Button>
+          <Button variant="soft">Settings</Button>
         </div>
       </div>
       
@@ -328,15 +328,15 @@ export const LayoutMockups: React.FC = () => {
         {/* Sidebar */}
         <div className="w-64 bg-ui-element-bg border-r border-ui-border p-4">
           <div className="space-y-2">
-            <Button variant="secondary" className="w-full justify-start">
+            <Button variant="soft" className="w-full justify-start">
               <ListBulletIcon className="h-4 w-4 mr-2" />
               All Tasks
             </Button>
-            <Button variant="secondary" className="w-full justify-start">
+            <Button variant="soft" className="w-full justify-start">
               <CalendarIcon className="h-4 w-4 mr-2" />
               Calendar
             </Button>
-            <Button variant="secondary" className="w-full justify-start">
+            <Button variant="soft" className="w-full justify-start">
               <ChatBubbleIcon className="h-4 w-4 mr-2" />
               Chat
             </Button>
@@ -555,11 +555,11 @@ export const LayoutMockups: React.FC = () => {
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold text-text-primary">Widget Dashboard</h2>
         <div className="flex space-x-2">
-          <Button variant="secondary">
+          <Button variant="soft">
             <PlusIcon className="h-4 w-4 mr-1" />
             Add Widget
           </Button>
-          <Button variant="secondary">
+          <Button variant="soft">
             <GridIcon className="h-4 w-4" />
           </Button>
         </div>
@@ -584,7 +584,7 @@ export const LayoutMockups: React.FC = () => {
     <div className="h-full relative">
       {/* Command Palette Trigger */}
       <div className="absolute top-4 right-4 z-30">
-        <Button variant="secondary" className="bg-ui-element-bg/90 backdrop-blur-md">
+        <Button variant="soft" className="bg-ui-element-bg/90 backdrop-blur-md">
           <MagnifyingGlassIcon className="h-4 w-4 mr-1" />
           Quick Switch
         </Button>

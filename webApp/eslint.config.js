@@ -34,10 +34,12 @@ export default [
         HTMLDivElement: 'readonly',
         HTMLInputElement: 'readonly',
         HTMLTextAreaElement: 'readonly',
+        HTMLSelectElement: 'readonly',
         HTMLButtonElement: 'readonly',
         HTMLFormElement: 'readonly',
         HTMLLabelElement: 'readonly',
         HTMLAnchorElement: 'readonly',
+        HTMLSpanElement: 'readonly',
         SVGSVGElement: 'readonly',
         // Event types
         Event: 'readonly',

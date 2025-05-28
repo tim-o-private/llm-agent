@@ -6,10 +6,8 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
-  DragEndEvent,
 } from '@dnd-kit/core';
 import {
-  arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
@@ -18,18 +16,16 @@ import clsx from 'clsx';
 
 // Existing imports
 import TaskListGroup from '@/components/tasks/TaskListGroup';
-import { TaskCardProps } from '@/components/ui/TaskCard';
 import { FastTaskInput } from '@/components/features/TodayView/FastTaskInput';
 import { TaskDetailView } from '@/components/features/TaskDetail/TaskDetailView';
 import { PrioritizeViewModal } from '@/components/features/PrioritizeView/PrioritizeViewModal';
 import { ChatPanelV2 } from '@/components/ChatPanelV2';
-import { PlusIcon, ChatBubbleIcon, ListBulletIcon, CalendarIcon, TargetIcon } from '@radix-ui/react-icons';
+import { PlusIcon, ChatBubbleIcon, CalendarIcon, TargetIcon } from '@radix-ui/react-icons';
 import { Button } from '@/components/ui/Button';
 
 import { useTaskStore } from '@/stores/useTaskStore';
 import { useTaskStoreInitializer } from '@/hooks/useTaskStoreInitializer';
 import { useCreateFocusSession, useUpdateTaskOrder } from '@/api/hooks/useTaskHooks';
-import type { Task } from '@/api/types';
 import { Spinner } from '@/components/ui';
 import { toast } from '@/components/ui/toast';
 import { useTaskViewStore } from '@/stores/useTaskViewStore';
@@ -76,13 +72,16 @@ const calculateStackDepth = (pane: PaneType, activePane: PaneType, panes: PaneTy
   const paneIndex = panes.indexOf(pane);
   
   if (paneIndex === activePaneIndex) return 0;
-  if (paneIndex < activePaneIndex) return activePaneIndex - paneIndex;
-  return paneIndex - activePaneIndex;
+  
+  // Calculate the minimum distance considering wraparound
+  const forwardDistance = (paneIndex - activePaneIndex + panes.length) % panes.length;
+  const backwardDistance = (activePaneIndex - paneIndex + panes.length) % panes.length;
+  
+  return Math.min(forwardDistance, backwardDistance);
 };
 
 // Stacked Card Component
 const StackedCard: React.FC<StackedCardProps> = ({
-  pane,
   isActive,
   isExiting,
   isPrimary,
@@ -272,6 +271,71 @@ const useKeyboardNavigation = (
   }, [panes, primaryPane, secondaryPane, focusedPane, onPrimarySwitch, onSecondarySwitch, onFocusSwitch]);
 };
 
+// Task-related keyboard shortcuts hook
+const useTaskKeyboardShortcuts = (
+  displayTasks: any[],
+  focusedTaskId: string | null,
+  setFocusedTaskId: (id: string | null) => void,
+  setIsFastInputUiFocused: (focused: boolean) => void,
+  openDetailModalForTask: (taskId: string) => void,
+  currentDetailTaskId: string | null
+) => {
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeElement = document.activeElement;
+      const isModalOpen = document.querySelector('[role="dialog"][data-state="open"]');
+      const isInputActive = activeElement && (
+        activeElement.tagName === 'INPUT' || 
+        activeElement.tagName === 'TEXTAREA'
+      );
+
+      // If modal is open or input is active, don't process shortcuts
+      if (isModalOpen || isInputActive) return;
+
+      switch(e.key.toLowerCase()) {
+        case 't':
+          e.preventDefault();
+          setIsFastInputUiFocused(true);
+          break;
+        case 'e':
+          if (focusedTaskId && !currentDetailTaskId) { 
+            e.preventDefault();
+            openDetailModalForTask(focusedTaskId);
+          } else if (displayTasks.length > 0 && !currentDetailTaskId && !focusedTaskId) {
+            e.preventDefault();
+            openDetailModalForTask(displayTasks[0].id);
+          }
+          break;
+        case 'n':
+          e.preventDefault();
+          if (displayTasks.length > 0) {
+            const currentIndex = displayTasks.findIndex(task => task.id === focusedTaskId);
+            if (currentIndex === -1) {
+              setFocusedTaskId(displayTasks[0].id);
+            } else if (currentIndex < displayTasks.length - 1) {
+              setFocusedTaskId(displayTasks[currentIndex + 1].id);
+            }
+          }
+          break;
+        case 'p':
+          e.preventDefault();
+          if (displayTasks.length > 0) {
+            const currentIndex = displayTasks.findIndex(task => task.id === focusedTaskId);
+            if (currentIndex === -1) {
+              setFocusedTaskId(displayTasks[displayTasks.length - 1].id);
+            } else if (currentIndex > 0) {
+              setFocusedTaskId(displayTasks[currentIndex - 1].id);
+            }
+          }
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [displayTasks, focusedTaskId, setFocusedTaskId, setIsFastInputUiFocused, openDetailModalForTask, currentDetailTaskId]);
+};
+
 // Main TodayView Mockup Component
 const TodayViewMockup: React.FC = () => {
   // Existing TodayView logic (simplified for mockup)
@@ -405,6 +469,16 @@ const TodayViewMockup: React.FC = () => {
     openPrioritizeModalForTask
   ]);
 
+  // Task keyboard shortcuts (after displayTasksWithSubtasks is defined)
+  useTaskKeyboardShortcuts(
+    displayTasksWithSubtasks,
+    focusedTaskId,
+    setFocusedTaskId,
+    setIsFastInputUiFocused,
+    openDetailModalForTask,
+    currentDetailTaskId
+  );
+
   // DND sensors
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -422,7 +496,7 @@ const TodayViewMockup: React.FC = () => {
             {/* Header matching original TodayView */}
             <div className="flex justify-between items-center mb-6 px-6 pt-6">
               <div className="flex items-center space-x-2">
-                <Button variant="secondary" onClick={() => setIsFastInputUiFocused(true)}>
+                <Button variant="outline" onClick={() => setIsFastInputUiFocused(true)}>
                   <PlusIcon className="mr-2 h-4 w-4" /> New Task
                 </Button>
               </div>
@@ -571,7 +645,7 @@ const TodayViewMockup: React.FC = () => {
             {availablePanes.map((pane, index) => (
               <Button
                 key={pane}
-                variant="secondary"
+                variant="outline"
                 onClick={() => {
                   if (focusedPane === 'primary') {
                     handlePrimarySwitch(pane);
@@ -632,6 +706,7 @@ const TodayViewMockup: React.FC = () => {
       {/* Keyboard shortcuts help */}
       <div className="absolute bottom-4 left-4 text-xs text-text-muted bg-ui-element-bg/90 rounded-lg p-3 border border-ui-border shadow-sm">
         <div className="space-y-1">
+          <div><kbd className="px-1 py-0.5 bg-ui-bg-alt rounded text-xs">T</kbd> New task • <kbd className="px-1 py-0.5 bg-ui-bg-alt rounded text-xs">E</kbd> Edit • <kbd className="px-1 py-0.5 bg-ui-bg-alt rounded text-xs">N/P</kbd> Navigate tasks</div>
           <div><kbd className="px-1 py-0.5 bg-ui-bg-alt rounded text-xs">Tab</kbd> Switch focus • <kbd className="px-1 py-0.5 bg-ui-bg-alt rounded text-xs">⌘1-4</kbd> Quick switch • <kbd className="px-1 py-0.5 bg-ui-bg-alt rounded text-xs">←→</kbd> Cycle panes</div>
           <div><kbd className="px-1 py-0.5 bg-ui-bg-alt rounded text-xs">[</kbd> Rotate left panel • <kbd className="px-1 py-0.5 bg-ui-bg-alt rounded text-xs">]</kbd> Rotate right panel</div>
         </div>
@@ -663,7 +738,7 @@ const TodayViewMockup: React.FC = () => {
               setCurrentPrioritizeTaskId(null);
             }
           }}
-          onStartFocusSession={(task, config) => {
+          onStartFocusSession={(task) => {
             toast.success(`Task "${task.title}" ready for focus session.`);
             setModalOpenState(task.id, false);
             setCurrentPrioritizeTaskId(null);

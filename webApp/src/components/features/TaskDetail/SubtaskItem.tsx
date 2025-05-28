@@ -1,8 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { Card } from '@radix-ui/themes';
 import { DragHandleDots2Icon, Cross2Icon, Pencil1Icon, CheckIcon } from '@radix-ui/react-icons';
 import { Task } from '@/api/types';
+import { getFocusClasses } from '@/utils/focusStates';
+import { 
+  getStatusContainerStyles, 
+  getStatusTextStyles, 
+  getStatusButtonStyles 
+} from '@/utils/statusStyles';
+import clsx from 'clsx';
 // import { useTaskStore } from '@/stores/useTaskStore'; // Remove direct store usage
 
 interface SubtaskItemProps {
@@ -97,74 +105,110 @@ export const SubtaskItem: React.FC<SubtaskItemProps> = ({ subtask, onUpdate, onR
     }
   };
 
+  // Determine card variant based on status
+  const getCardVariant = () => {
+    if (subtask.status === 'completed') return 'ghost';
+    return 'surface';
+  };
+
   return (
     <div 
       ref={setNodeRef}
       style={style}
-      className={`flex items-center p-2 border rounded-md mb-2 bg-ui-element-bg shadow-sm
-                ${subtask.status === 'completed' ? 'border-success-indicator' : 'border-ui-border'}`}
+      className="subtask-item-container"
     >
-      <button
-        {...listeners}
-        {...attributes}
-        className="mr-2 cursor-grab active:cursor-grabbing p-1 rounded-md hover:bg-ui-interactive-bg-hover text-text-muted"
-        aria-label="Drag to reorder"
-      >
-        <DragHandleDots2Icon />
-      </button>
-      
-      <input
-        type="checkbox"
-        checked={subtask.status === 'completed'}
-        onChange={handleToggleComplete}
-        className="mr-3 h-4 w-4 rounded border-ui-border text-brand-primary focus:ring-brand-primary cursor-pointer"
-      />
-      
-      {isEditing ? (
-        <input
-          ref={inputRef}
-          type="text"
-          value={editValue}
-          onChange={(e) => setEditValue(e.target.value)}
-          onBlur={saveEdit}
-          onKeyDown={handleKeyDown}
-          className="flex-grow p-1 rounded border border-ui-border focus:outline-none focus:ring-2 focus:ring-brand-primary bg-ui-element-bg text-text-primary"
-        />
-      ) : (
-        <span 
-          className={`flex-grow ${subtask.status === 'completed' ? 'line-through text-text-muted' : 'text-text-primary'}`}
-        >
-          {subtask.title}
-        </span>
-      )}
-      
-      <div className="flex space-x-1 ml-2">
-        {isEditing ? (
-          <button
-            onClick={saveEdit}
-            className="p-1 rounded-md hover:bg-success-subtle text-success-strong"
-            aria-label="Save changes"
-          >
-            <CheckIcon />
-          </button>
-        ) : (
-          <button
-            onClick={startEditing}
-            className="p-1 rounded-md hover:bg-accent-subtle text-brand-primary"
-            aria-label="Edit subtask"
-          >
-            <Pencil1Icon />
-          </button>
+      <Card
+        variant={getCardVariant()}
+        size="1"
+        className={clsx(
+          'mb-2',
+          // Override Radix focus styles with our global focus system
+          '[&]:focus-within:outline-none [&]:focus:outline-none [&]:focus-visible:outline-none',
+          getFocusClasses(),
+          // Apply our status-based styling on top of Radix base
+          getStatusContainerStyles({
+            completed: subtask.status === 'completed',
+            status: subtask.status,
+            variant: 'item'
+          })
         )}
-        
-        <button
-          onClick={handleDelete}
-          className="p-1 rounded-md hover:bg-destructive-subtle text-destructive"
-          aria-label="Delete subtask"
-        >
-          <Cross2Icon />
-        </button>
-      </div>
+      >
+        <div className="flex items-center p-2">
+          <button
+            {...listeners}
+            {...attributes}
+            className={clsx(
+              getStatusButtonStyles({ completed: subtask.status === 'completed' }),
+              "mr-2 cursor-grab active:cursor-grabbing"
+            )}
+            aria-label="Drag to reorder"
+          >
+            <DragHandleDots2Icon />
+          </button>
+          
+          <input
+            type="checkbox"
+            checked={subtask.status === 'completed'}
+            onChange={handleToggleComplete}
+            className={clsx(
+              "mr-3 h-4 w-4 rounded border-ui-border text-brand-primary cursor-pointer",
+              getFocusClasses()
+            )}
+          />
+          
+          {isEditing ? (
+            <input
+              ref={inputRef}
+              type="text"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={saveEdit}
+              onKeyDown={handleKeyDown}
+              className={clsx(
+                "flex-grow p-1 rounded border border-ui-border bg-ui-element-bg text-text-primary transition-colors",
+                getFocusClasses()
+              )}
+            />
+          ) : (
+            <span 
+              className={clsx(
+                'flex-grow',
+                getStatusTextStyles({ completed: subtask.status === 'completed' })
+              )}
+            >
+              {subtask.title}
+            </span>
+          )}
+          
+          <div className="flex space-x-1 ml-2">
+            {isEditing ? (
+              <button
+                onClick={saveEdit}
+                className="p-1 rounded-md hover:bg-success-subtle text-success-strong"
+                aria-label="Save changes"
+              >
+                <CheckIcon />
+              </button>
+            ) : (
+              <button
+                onClick={startEditing}
+                className="p-1 rounded-md hover:bg-accent-subtle text-brand-primary"
+                aria-label="Edit subtask"
+              >
+                <Pencil1Icon />
+              </button>
+            )}
+            
+            <button
+              onClick={handleDelete}
+              className="p-1 rounded-md hover:bg-destructive-subtle text-destructive"
+              aria-label="Delete subtask"
+            >
+              <Cross2Icon />
+            </button>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 }; 

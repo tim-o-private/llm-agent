@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef, ChangeEvent, forwardRef, KeyboardEvent } from 'react';
 import { Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/Button';
 import { parseTaskString } from '@/utils/taskParser';
 import { toast } from '@/components/ui/toast';
 import { NewTaskData } from '@/api/types';
 import { useTaskStore } from '@/stores/useTaskStore';
+import { PlusIcon } from '@radix-ui/react-icons';
 
 interface FastTaskInputProps {
   isFocused: boolean;
@@ -95,8 +97,10 @@ export const FastTaskInput = forwardRef<HTMLInputElement, FastTaskInputProps>((
     }
   };
 
+  const hasContent = inputValue.trim().length > 0;
+
   return (
-    <form onSubmit={handleSubmit} className="w-full">
+    <form onSubmit={handleSubmit} className="flex gap-2 w-full">
       <Input
         ref={element => {
             if (typeof ref === 'function') {
@@ -111,8 +115,19 @@ export const FastTaskInput = forwardRef<HTMLInputElement, FastTaskInputProps>((
         onFocus={handleFocus}
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
-        className="w-full text-base py-3 px-4"
+        className="flex-1"
+        size="3"
       />
+      <Button
+        type="submit"
+        variant={hasContent ? "solid" : "soft"}
+        size="3"
+        disabled={!hasContent}
+        className="flex-shrink-0"
+      >
+        <PlusIcon className="h-4 w-4" />
+        Add Task
+      </Button>
     </form>
   );
 });

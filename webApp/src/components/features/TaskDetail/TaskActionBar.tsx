@@ -3,12 +3,15 @@ import { Button } from '@/components/ui/Button';
 import { TrashIcon } from '@radix-ui/react-icons';
 import { useTaskStore } from '@/stores/useTaskStore';
 import { toast } from '@/components/ui/toast';
+import { getFocusClasses } from '@/utils/focusStates';
+import { clsx } from 'clsx';
+import { AppError } from '@/types/error';
 
 interface FormState {
   canSave: boolean;
   isSaving: boolean;
   isCreating: boolean;
-  saveError: any;
+  saveError: AppError | null;
   handleSave: () => void;
   handleCancel: () => void;
 }
@@ -24,7 +27,6 @@ interface TaskActionBarProps {
 export const TaskActionBar: React.FC<TaskActionBarProps> = ({
   taskId,
   formState,
-  onSaveSuccess: _onSaveSuccess,
   onCancel,
   onDeleteSuccess,
 }) => {
@@ -87,10 +89,10 @@ export const TaskActionBar: React.FC<TaskActionBarProps> = ({
       {taskId ? (
         <Button
           type="button"
-          variant="danger"
+          variant="outline"
           onClick={handleDelete}
           disabled={isSaving || isDeleting}
-          className="min-w-[80px] flex items-center space-x-1"
+          className="min-w-[80px] flex items-center space-x-1 text-destructive border-destructive hover:bg-destructive hover:text-white"
         >
           {isDeleting ? (
             <span className="flex items-center">
@@ -118,7 +120,7 @@ export const TaskActionBar: React.FC<TaskActionBarProps> = ({
         
         <Button
           type="button"
-          variant="secondary"
+          variant="soft"
           onClick={handleCancel}
           disabled={isSaving || isDeleting}
           className="min-w-[80px]"
@@ -128,10 +130,13 @@ export const TaskActionBar: React.FC<TaskActionBarProps> = ({
 
         <Button
           type="button"
-          variant="primary"
+          variant="solid"
           onClick={handleSave}
           disabled={!canSave || isSaving || isDeleting}
-          className="min-w-[80px] bg-bg-success-indicator hover:bg-success-strong focus:ring-success-indicator"
+          className={clsx(
+            "min-w-[80px] bg-bg-success-indicator hover:bg-success-strong",
+            getFocusClasses()
+          )}
         >
           {isSaving ? (
             <span className="flex items-center">

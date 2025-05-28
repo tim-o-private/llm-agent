@@ -12,7 +12,8 @@
     "lint:css": "stylelint \"src/**/*.{css,scss}\"",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "validate:colors": "node scripts/validate-colors.js",
-    "validate:all": "npm run lint && npm run lint:css && npm run validate:colors"
+    "validate:focus": "node scripts/validate-focus-consistency.cjs",
+    "validate:all": "npm run lint && npm run lint:css && npm run validate:colors && npm run validate:focus"
   },
   "dependencies": {
     "@assistant-ui/react": "^0.10.12",

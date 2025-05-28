@@ -2,6 +2,7 @@ import React from 'react';
 import * as RadixCheckbox from '@radix-ui/react-checkbox'; // Import Radix Checkbox
 import { CheckIcon } from '@heroicons/react/16/solid'; // Keep Heroicons for the check mark
 import clsx from 'clsx';
+import { getFocusClasses } from '@/utils/focusStates';
 
 export interface CheckboxProps {
   checked: RadixCheckbox.CheckboxProps['checked']; // Use Radix's checked type
@@ -42,7 +43,8 @@ export const Checkbox: React.FC<CheckboxProps> = (
         // Apply styles based on Radix's data-state attribute and semantic tokens
         'data-[state=checked]:bg-brand-primary data-[state=checked]:border-transparent',
         'bg-ui-element-bg border-ui-border', // Unchecked state
-        'focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 focus-visible:ring-offset-ui-bg', // Using ui-bg for ring offset
+        // Use our consistent focus system
+        !disabled && getFocusClasses(),
         className
       )}
     >

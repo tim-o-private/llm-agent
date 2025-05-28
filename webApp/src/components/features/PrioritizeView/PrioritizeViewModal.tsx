@@ -1,15 +1,17 @@
 import React, { useState, useEffect, ChangeEvent } from 'react';
 import * as RadixDialog from '@radix-ui/react-dialog';
 import { Cross2Icon } from '@radix-ui/react-icons';
+import { useQueryClient } from '@tanstack/react-query';
 import { useFetchTaskById, useUpdateTask } from '@/api/hooks/useTaskHooks';
 import { Task } from '@/api/types';
 import { Button } from '@/components/ui/Button';
-import { Textarea } from '@/components/ui/Textarea';
 import { Label } from '@/components/ui/Label';
+import { Textarea } from '@/components/ui/Textarea';
 import { Spinner } from '@/components/ui/Spinner';
 import { toast } from '@/components/ui/toast';
-import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/features/auth/useAuthStore';
+import { getFocusClasses } from '@/utils/focusStates';
+import { clsx } from 'clsx';
 
 interface PrioritizeViewModalProps {
   taskId: string | null;
@@ -196,7 +198,7 @@ export const PrioritizeViewModal: React.FC<PrioritizeViewModalProps> = ({
 
               <div className="mt-6 flex justify-end items-center pt-4 border-t border-ui-border space-x-2">
                 <RadixDialog.Close asChild>
-                  <Button variant="secondary" type="button">Cancel</Button>
+                  <Button variant="soft" type="button">Cancel</Button>
                 </RadixDialog.Close>
                 <Button 
                   type="button"
@@ -211,7 +213,10 @@ export const PrioritizeViewModal: React.FC<PrioritizeViewModalProps> = ({
           )}
           <RadixDialog.Close asChild>
             <button
-              className="absolute top-3.5 right-3.5 inline-flex h-6 w-6 appearance-none items-center justify-center rounded-full text-text-muted hover:bg-ui-interactive-bg-hover focus:outline-none focus:ring-2 focus:ring-ui-border-focus"
+              className={clsx(
+                "absolute top-3.5 right-3.5 inline-flex h-6 w-6 appearance-none items-center justify-center rounded-full text-text-muted hover:bg-ui-interactive-bg-hover",
+                getFocusClasses()
+              )}
               aria-label="Close"
               type="button"
             >

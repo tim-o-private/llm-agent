@@ -1,9 +1,15 @@
 import React, { useRef, useState, useEffect, KeyboardEvent } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { navItems } from '@/navigation/navConfig';
+import { clsx } from 'clsx';
+import { getFocusClasses } from '@/utils/focusStates';
+
+const baseStyle = clsx(
+  "group flex items-center px-3 py-3 text-sm font-medium rounded-md transition-colors",
+  getFocusClasses()
+);
 
 const SideNav: React.FC = () => {
-  const baseStyle = "group flex items-center px-3 py-3 text-sm font-medium rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-accent-subtle focus-visible:ring-offset-ui-bg";
   const inactiveStyle = "text-text-secondary hover:bg-ui-interactive-bg-hover hover:text-text-primary";
   const activeStyle = "bg-accent-surface text-text-accent border-l-2 border-brand-primary";
 

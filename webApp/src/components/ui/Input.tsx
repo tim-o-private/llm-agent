@@ -1,15 +1,22 @@
 import React from 'react';
+import { TextField } from '@radix-ui/themes';
 import { clsx } from 'clsx';
+import { getFocusClasses } from '@/utils/focusStates';
 
-export type InputProps = React.InputHTMLAttributes<HTMLInputElement>;
+export interface InputProps extends React.ComponentProps<typeof TextField.Root> {
+  error?: boolean;
+}
 
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, ...props }, ref) => {
+  ({ className, error, color, ...props }, ref) => {
     return (
-      <input
+      <TextField.Root
         ref={ref}
+        color={error ? 'red' : color}
         className={clsx(
-          'block w-full rounded-md border border-ui-border px-3 py-2 text-text-primary shadow-sm focus:border-brand-primary focus:ring-brand-primary focus:outline-none',
+          // Override Radix focus styles with our global focus system
+          '[&]:focus-within:outline-none [&_input]:focus:outline-none [&_input]:focus-visible:outline-none',
+          getFocusClasses(),
           className
         )}
         {...props}
@@ -17,4 +24,5 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     );
   }
 );
+
 Input.displayName = 'Input'; 

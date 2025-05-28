@@ -5,6 +5,7 @@ import TaskForm from './TaskForm';
 import SubtaskList from './SubtaskList';
 import TaskModalWrapper from './TaskModalWrapper';
 import TaskActionBar from './TaskActionBar';
+import { AppError } from '@/types/error';
 
 interface TaskDetailViewProps {
   taskId: string | null;
@@ -25,7 +26,7 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
     canSave: boolean;
     isSaving: boolean;
     isCreating: boolean;
-    saveError: any;
+    saveError: AppError | null;
     handleSave: () => void;
     handleCancel: () => void;
   } | null>(null);

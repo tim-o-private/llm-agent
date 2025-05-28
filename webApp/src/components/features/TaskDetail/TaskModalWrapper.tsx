@@ -4,6 +4,8 @@ import { Cross2Icon } from '@radix-ui/react-icons';
 import { useTaskStore, useInitializeTaskStore } from '@/stores/useTaskStore';
 import { useTaskViewStore } from '@/stores/useTaskViewStore';
 import { Spinner } from '@/components/ui/Spinner';
+import { getFocusClasses } from '@/utils/focusStates';
+import { clsx } from 'clsx';
 
 interface TaskModalWrapperProps {
   taskId: string | null;
@@ -89,7 +91,10 @@ export const TaskModalWrapper: React.FC<TaskModalWrapperProps> = ({
 
           <RadixDialog.Close asChild>
             <button
-              className="absolute top-3.5 right-3.5 inline-flex h-6 w-6 appearance-none items-center justify-center rounded-full text-text-muted hover:bg-ui-interactive-bg-hover focus:outline-none focus:ring-2 focus:ring-ui-border-focus"
+              className={clsx(
+                "absolute top-3.5 right-3.5 inline-flex h-6 w-6 appearance-none items-center justify-center rounded-full text-text-muted hover:bg-ui-interactive-bg-hover",
+                getFocusClasses()
+              )}
               aria-label="Close"
               type="button"
               onClick={() => wrappedOnOpenChange(false)}

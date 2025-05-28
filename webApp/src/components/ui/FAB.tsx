@@ -1,5 +1,6 @@
 import React from 'react';
 import clsx from 'clsx';
+import { getFocusClasses } from '@/utils/focusStates';
 
 interface FABProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   icon: React.ReactNode;
@@ -15,6 +16,7 @@ export const FAB: React.FC<FABProps> = ({
   position = 'bottom-right',
   size = 'md',
   className,
+  disabled,
   ...props
 }) => {
   const positionClasses = {
@@ -39,11 +41,14 @@ export const FAB: React.FC<FABProps> = ({
   return (
     <button
       type="button"
+      disabled={disabled}
       className={clsx(
-        'fixed inline-flex items-center justify-center rounded-full shadow-lg text-brand-primary-text transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-ui-bg',
-        'bg-brand-primary hover:bg-brand-primary-hover focus:ring-brand-primary', 
+        'fixed inline-flex items-center justify-center rounded-full shadow-lg text-brand-primary-text transition-colors',
+        'bg-brand-primary hover:bg-brand-primary-hover', 
         positionClasses[position],
         sizeClasses[size],
+        !disabled && getFocusClasses(),
+        disabled && 'opacity-50 cursor-not-allowed',
         className
       )}
       title={tooltip}
