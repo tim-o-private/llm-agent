@@ -35,16 +35,12 @@ export const CoachCard: React.FC<CoachCardProps> = ({
         </div>
         {(onAccept || onDismiss) && (
           <div className="flex justify-end space-x-2 pt-2 border-t border-ui-border mt-auto">
-            {onDismiss && (
-              <Button variant="secondary" onClick={onDismiss}>
-                {dismissLabel}
-              </Button>
-            )}
-            {onAccept && (
-              <Button variant="primary" onClick={onAccept}>
-                {acceptLabel}
-              </Button>
-            )}
+            <Button variant="soft" onClick={onDismiss}>
+              {dismissLabel}
+            </Button>
+            <Button variant="solid" onClick={onAccept}>
+              {acceptLabel}
+            </Button>
           </div>
         )}
       </div>

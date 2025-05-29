@@ -57,6 +57,7 @@ const sampleTaskForForm: Task = {
   updated_at: new Date().toISOString(),
   due_date: '2024-12-31T00:00:00.000Z',
   completed_at: null,
+  deleted: false,
   parent_task_id: null,
   completed: false,
 };

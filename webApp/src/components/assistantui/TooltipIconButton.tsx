@@ -25,7 +25,6 @@ export const TooltipIconButton = forwardRef<
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            variant="secondary"
             {...rest}
             className={cn("p-2 h-auto w-auto", className)}
             ref={ref}

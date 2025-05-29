@@ -77,12 +77,12 @@ export const ExecuteView: React.FC<ExecuteViewProps> = ({
             </div>
         )}
 
-        <div className="space-x-4">
-          <Button variant="secondary" onClick={() => {/* TODO: Pause timer */}}>
+        <div className="flex space-x-4">
+          <Button variant="soft" onClick={() => {/* TODO: Pause timer */}}>
             Pause
           </Button>
-          <Button variant="danger" onClick={onEndSession}>
-            End Session Early
+          <Button variant="solid" color="red" onClick={onEndSession}>
+            End Session
           </Button>
         </div>
       </div>

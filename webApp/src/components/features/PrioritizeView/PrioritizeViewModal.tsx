@@ -5,13 +5,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useFetchTaskById, useUpdateTask } from '@/api/hooks/useTaskHooks';
 import { Task } from '@/api/types';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
 import { Textarea } from '@/components/ui/Textarea';
 import { Spinner } from '@/components/ui/Spinner';
 import { toast } from '@/components/ui/toast';
 import { useAuthStore } from '@/features/auth/useAuthStore';
-import { getFocusClasses } from '@/utils/focusStates';
-import { clsx } from 'clsx';
 
 interface PrioritizeViewModalProps {
   taskId: string | null;
@@ -181,13 +180,13 @@ export const PrioritizeViewModal: React.FC<PrioritizeViewModalProps> = ({
                 <div>
                   <Label htmlFor="timer_duration">Focus Session Duration:</Label>
                   <div className="mt-1 flex items-center space-x-2">
-                    <input 
+                    <Input 
                         type="number" 
                         id="timer_duration_minutes"
                         name="timer_duration_minutes"
                         value={timerDuration / 60}
                         onChange={(e) => setTimerDuration(parseInt(e.target.value) * 60)}
-                        className="w-20 p-2 border border-ui-border rounded-md bg-ui-element-bg text-text-primary"
+                        className="w-20"
                         min="5"
                         step="5"
                     />
@@ -213,10 +212,7 @@ export const PrioritizeViewModal: React.FC<PrioritizeViewModalProps> = ({
           )}
           <RadixDialog.Close asChild>
             <button
-              className={clsx(
-                "absolute top-3.5 right-3.5 inline-flex h-6 w-6 appearance-none items-center justify-center rounded-full text-text-muted hover:bg-ui-interactive-bg-hover",
-                getFocusClasses()
-              )}
+              className="absolute top-3.5 right-3.5 inline-flex h-6 w-6 appearance-none items-center justify-center rounded-full text-text-muted hover:bg-ui-interactive-bg-hover"
               aria-label="Close"
               type="button"
             >

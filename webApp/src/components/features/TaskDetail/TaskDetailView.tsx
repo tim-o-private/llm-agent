@@ -1,11 +1,16 @@
-import React, { useState } from 'react';
-import { Task } from '@/api/types';
+import React, { useEffect, useRef } from 'react';
+import { Dialog, Flex } from '@radix-ui/themes';
+import { useTaskStore } from '@/stores/useTaskStore';
+import { useTaskViewStore } from '@/stores/useTaskViewStore';
 import { toast } from '@/components/ui/toast';
-import TaskForm from './TaskForm';
+import TaskForm, { TaskFormRef } from './TaskForm';
 import SubtaskList from './SubtaskList';
-import TaskModalWrapper from './TaskModalWrapper';
-import TaskActionBar from './TaskActionBar';
-import { AppError } from '@/types/error';
+import DialogActionBar, { DialogAction } from '@/components/ui/DialogActionBar';
+import { createComponentLogger } from '@/utils/logger';
+import { useDialogState } from '@/hooks/useDialogState';
+import { useSubtaskManagement } from '@/hooks/useSubtaskManagement';
+
+const log = createComponentLogger('TaskDetailView');
 
 interface TaskDetailViewProps {
   taskId: string | null;
@@ -22,60 +27,145 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
   onTaskUpdated,
   onDeleteTaskFromDetail,
 }) => {
-  const [formState, setFormState] = useState<{
-    canSave: boolean;
-    isSaving: boolean;
-    isCreating: boolean;
-    saveError: AppError | null;
-    handleSave: () => void;
-    handleCancel: () => void;
-  } | null>(null);
-  const [isFormDirty, setIsFormDirty] = useState(false);
+  log.debug('Render', { taskId, isOpen });
 
-  const handleSaveSuccess = (_savedTask?: Task | void) => {
-    toast.success(`Task saved successfully!`);
-    onTaskUpdated();
-    onOpenChange(false);
+  const task = useTaskStore((state) => taskId ? state.getTaskById(taskId) : undefined);
+  const setModalOpenState = useTaskViewStore((state) => state.setModalOpenState);
+  const taskFormRef = useRef<TaskFormRef>(null);
+
+  // Use subtask management hook
+  const subtaskManagement = useSubtaskManagement(taskId);
+
+  // Use dialog state hook
+  const dialogState = useDialogState({
+    onOpenChange,
+    onTaskUpdated,
+    setModalOpenState,
+    additionalDirtyState: subtaskManagement.isSubtasksDirty,
+    onResetState: subtaskManagement.resetSubtaskState,
+  });
+
+  // Register modal state for keyboard shortcut management
+  useEffect(() => {
+    const modalId = taskId ?? 'new-task';
+    dialogState.registerModalState(modalId, isOpen);
+    return () => {
+      if (setModalOpenState) {
+        setModalOpenState(modalId, false);
+      }
+    };
+  }, [isOpen, taskId, dialogState.registerModalState, setModalOpenState]);
+
+  // Combined save function
+  const handleSave = async () => {
+    if (!taskFormRef.current) {
+      log.error('TaskForm ref not available');
+      return;
+    }
+
+    await dialogState.handleSave(async () => {
+      // Save the main task form first
+      await taskFormRef.current!.save();
+
+      // Apply pending subtask changes if any
+      if (subtaskManagement.isSubtasksDirty && taskId) {
+        await subtaskManagement.applyPendingSubtaskChanges(taskId);
+      }
+    });
   };
 
-  const handleDeleteSuccess = () => {
-    onDeleteTaskFromDetail?.(taskId!);
-    onOpenChange(false);
+  const handleSaveSuccess = () => {
+    log.debug('handleSaveSuccess called');
+    dialogState.handleSaveSuccess();
   };
 
-  const handleCancel = () => {
-    onOpenChange(false);
+  const handleDelete = async () => {
+    if (!taskId) return;
+    
+    if (window.confirm('Are you sure you want to delete this task? This action cannot be undone.')) {
+      try {
+        const { deleteTask } = useTaskStore.getState();
+        await deleteTask(taskId);
+        log.debug('handleDelete called');
+        toast.success('Task deleted successfully');
+        onDeleteTaskFromDetail?.(taskId);
+        onOpenChange(false); // Direct close after successful delete
+      } catch (error) {
+        log.error('Delete failed', error);
+        toast.error('Failed to delete task');
+      }
+    }
   };
+
+  // Dynamic title and description
+  const title = taskId ? (task?.title || 'Edit Task') : 'Create New Task';
+  const description = taskId ? 'View and edit task information.' : 'Enter details for the new task.';
+
+  // Define dialog actions
+  const actions: DialogAction[] = [
+    {
+      label: 'Cancel',
+      onClick: dialogState.handleCancel,
+      variant: 'soft',
+      color: 'gray',
+    },
+    ...(taskId ? [{
+      label: 'Delete',
+      onClick: handleDelete,
+      variant: 'soft' as const,
+      color: 'red' as const,
+    }] : []),
+    {
+      label: taskId ? 'Save Changes' : 'Create Task',
+      onClick: handleSave,
+      variant: 'solid' as const,
+      disabled: !dialogState.isDirty,
+      loading: dialogState.isSaving,
+      type: 'submit' as const,
+    },
+  ];
 
   return (
-    <TaskModalWrapper
-      taskId={taskId}
-      isOpen={isOpen}
-      onOpenChange={onOpenChange}
-      isDirty={isFormDirty}
-    >
-      <div className="space-y-4">
-        <TaskForm
-          taskId={taskId}
-          onSaveSuccess={handleSaveSuccess}
-          onCancel={handleCancel}
-          onDirtyStateChange={setIsFormDirty}
-          onFormStateChange={setFormState}
-        />
-        
-        {taskId && (
-          <SubtaskList parentTaskId={taskId} />
-        )}
-        
-        <TaskActionBar
-          taskId={taskId}
-          formState={formState}
-          onSaveSuccess={handleSaveSuccess}
-          onCancel={handleCancel}
-          onDeleteSuccess={handleDeleteSuccess}
-        />
-      </div>
-    </TaskModalWrapper>
+    <Dialog.Root open={isOpen} onOpenChange={dialogState.wrappedOnOpenChange}>
+      <Dialog.Content size="4" maxWidth="700px">
+        <Dialog.Title>{title}</Dialog.Title>
+        <Dialog.Description size="2" mb="4">
+          {description}
+        </Dialog.Description>
+
+        <Flex direction="column" gap="5">
+          {/* Main Task Form */}
+          <TaskForm
+            ref={taskFormRef}
+            taskId={taskId}
+            onSaveSuccess={handleSaveSuccess}
+            onCancel={dialogState.handleCancel}
+            onDirtyStateChange={dialogState.setIsFormDirty}
+          />
+
+          {/* Subtasks Section - Only show for existing tasks */}
+          {taskId && (
+            <div>
+              <h3 className="text-lg font-semibold text-text-primary mb-3">Subtasks</h3>
+              <SubtaskList 
+                parentTaskId={taskId}
+                showAddSubtask={true}
+                className="border border-ui-border rounded-lg p-4 bg-ui-element-bg"
+                onSubtaskChange={subtaskManagement.handleSubtaskChange}
+                onSubtaskReorder={subtaskManagement.handleSubtaskReorder}
+                onSubtaskCreate={subtaskManagement.handleSubtaskCreate}
+                onSubtaskUpdate={subtaskManagement.handleSubtaskUpdate}
+                onSubtaskDelete={subtaskManagement.handleSubtaskDelete}
+                optimisticSubtasks={subtaskManagement.optimisticSubtasks}
+              />
+            </div>
+          )}
+
+          {/* Generic Action Bar */}
+          <DialogActionBar actions={actions} />
+        </Flex>
+      </Dialog.Content>
+    </Dialog.Root>
   );
 };
 

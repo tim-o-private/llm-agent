@@ -5,9 +5,6 @@ import { TaskCard } from './TaskCard';
 import { Task } from '@/api/types';
 
 import {
-  DragHandleDots2Icon,
-  CaretLeftIcon,
-  CaretRightIcon,
   GridIcon,
   StackIcon,
   LayersIcon,
@@ -16,7 +13,6 @@ import {
   CalendarIcon,
   ListBulletIcon,
   MagnifyingGlassIcon,
-  Cross2Icon,
   PlusIcon,
   ArrowTopRightIcon
 } from '@radix-ui/react-icons';
@@ -63,8 +59,7 @@ type PaneType = 'tasks' | 'chat' | 'calendar' | 'focus';
 
 export const LayoutMockups: React.FC = () => {
   const [layoutMode, setLayoutMode] = useState<LayoutMode>('traditional');
-  const [activePanes, setActivePanes] = useState<PaneType[]>(['tasks']);
-  const [paneOrder, setPaneOrder] = useState<PaneType[]>(['tasks', 'chat', 'calendar', 'focus']);
+  const [paneOrder] = useState<PaneType[]>(['tasks', 'chat', 'calendar', 'focus']);
   
   // New state for primary/secondary pane system
   const [primaryPane, setPrimaryPane] = useState<PaneType>('tasks');
@@ -95,12 +90,6 @@ export const LayoutMockups: React.FC = () => {
     // Clear exit state after animation
     setTimeout(() => setExitingSecondaryPane(null), 500);
   };
-  
-  const [widgetLayout, setWidgetLayout] = useState({
-    tasks: { x: 0, y: 0, w: 2, h: 3 },
-    chat: { x: 2, y: 0, w: 1, h: 2 },
-    calendar: { x: 2, y: 2, w: 1, h: 1 },
-  });
 
   // Keyboard shortcuts for pane switching
   React.useEffect(() => {
@@ -153,7 +142,7 @@ export const LayoutMockups: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [layoutMode, focusedPane, primaryPane, secondaryPane, paneOrder]);
 
-  const renderPane = (paneType: PaneType, isActive: boolean = true, isPrimary?: boolean, isFocused?: boolean, stackDepth: number = 0, isExiting: boolean = false) => {
+  const renderPane = (paneType: PaneType, _isActive: boolean = true, isPrimary?: boolean, isFocused?: boolean, stackDepth: number = 0, isExiting: boolean = false) => {
     const baseClasses = clsx(
       'rounded-xl border transition-all duration-500 ease-out h-full relative',
       'shadow-elevated',

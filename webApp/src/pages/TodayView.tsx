@@ -15,7 +15,6 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import TaskListGroup from '@/components/tasks/TaskListGroup';
-import { TaskCardProps } from '@/components/ui/TaskCard';
 import { FastTaskInput } from '@/components/features/TodayView/FastTaskInput';
 import { TaskDetailView } from '@/components/features/TaskDetail/TaskDetailView';
 import { PrioritizeViewModal } from '@/components/features/PrioritizeView/PrioritizeViewModal';
@@ -24,6 +23,8 @@ import { Button } from '@/components/ui/Button';
 
 import { useTaskStore } from '@/stores/useTaskStore';
 import { useTaskStoreInitializer } from '@/hooks/useTaskStoreInitializer';
+import { useTaskKeyboardNavigation } from '@/hooks/useTaskKeyboardNavigation';
+import { useTaskModalManagement } from '@/hooks/useTaskModalManagement';
 
 import { useCreateFocusSession, useUpdateTaskOrder } from '@/api/hooks/useTaskHooks';
 import type { Task } from '@/api/types';
@@ -31,30 +32,6 @@ import { Spinner } from '@/components/ui';
 
 import { toast } from '@/components/ui/toast';
 import { useTaskViewStore } from '@/stores/useTaskViewStore';
-
-const mapTaskToTaskCardViewModel = (
-  task: Task, 
-  onStartTask: (id: string) => void,
-  onEdit: (taskId: string) => void,
-  isFocused: boolean,
-  isSelected: boolean,
-  onSelectTask: (taskId: string) => void,
-  onMarkComplete: (taskId: string) => void,
-  onDeleteTask: (taskId: string) => void,
-  onStartFocus: (taskId: string) => void,
-  processedSubtasks?: Task[]
-): TaskCardProps => ({
-  ...task,
-  onStartTask: () => onStartTask(task.id),
-  onEdit: () => onEdit(task.id),
-  isFocused,
-  isSelected,
-  onSelectTask: () => onSelectTask(task.id),
-  onMarkComplete: () => onMarkComplete(task.id),
-  onDeleteTask: () => onDeleteTask(task.id),
-  onStartFocus: () => onStartFocus(task.id),
-  subtasks: processedSubtasks,
-});
 
 const TodayView: React.FC = () => {
   
@@ -80,45 +57,90 @@ const TodayView: React.FC = () => {
   const { mutate: createFocusSession } = useCreateFocusSession();
   const { mutate: updateTaskOrderMutation } = useUpdateTaskOrder();
 
-  // Create a simplified signature of relevant task data
-  const taskDataSignature = useMemo(() => {
-    if (!initialized || !topLevelTasksFromStore) return '';
-    const signature = topLevelTasksFromStore.map(t => t.id + '-' + t.title + '-' + t.completed + '-' + t.status).join('|');
-    console.log('[TodayView] taskDataSignature calculated:', signature);
-    return signature;
-  }, [initialized, topLevelTasksFromStore]);
-
   // --- Component Local State for Modal Visibility ---
-  const [currentDetailTaskId, setCurrentDetailTaskId] = useState<string | null>(null);
-  const [currentPrioritizeTaskId, setCurrentPrioritizeTaskId] = useState<string | null>(null);
   const [isFastInputUiFocused, setIsFastInputUiFocused] = useState(false); // Local UI focus state
 
-  // --- Zustand Store Selectors ---
-  const focusedTaskId = useTaskViewStore(state => state.focusedTaskId);
-  const setFocusedTaskId = useTaskViewStore(state => state.setFocusedTaskId);
+  // --- Zustand Store Selectors (Non-keyboard navigation) ---
   const selectedTaskIds = useTaskViewStore(state => state.selectedTaskIds);
   const toggleSelectedTask = useTaskViewStore(state => state.toggleSelectedTask);
   const removeSelectedTask = useTaskViewStore(state => state.removeSelectedTask);
-
-  // New store interactions for keyboard shortcuts and centralized state management
-  const setCurrentNavigableTasks = useTaskViewStore(state => state.setCurrentNavigableTasks);
-  const requestOpenDetailForTaskId = useTaskViewStore(state => state.requestOpenDetailForTaskId);
-  const clearDetailOpenRequest = useTaskViewStore(state => state.clearDetailOpenRequest);
-  const requestFocusFastInput = useTaskViewStore(state => state.requestFocusFastInput);
-  const clearFocusFastInputRequest = useTaskViewStore(state => state.clearFocusFastInputRequest);
-  const setModalOpenState = useTaskViewStore(state => state.setModalOpenState);
   const setInputFocusState = useTaskViewStore(state => state.setInputFocusState);
 
   const fastInputRef = useRef<HTMLInputElement>(null);
+  const isClosingModalRef = useRef(false); // Track when we're closing a modal to prevent auto-focus
+
+  // --- Modal Management Hook ---
+  const modalManagement = useTaskModalManagement({
+    syncWithStore: true
+  });
+
+  // Memoize navigable tasks to prevent unnecessary re-creation
+  const navigableTasks = useMemo(() => 
+    topLevelTasksFromStore.map(task => ({ id: task.id })), 
+    [topLevelTasksFromStore]
+  );
+
+  // --- Keyboard Navigation Hook (needs to be early to provide setFocusedTaskId) ---
+  const keyboardNavigation = useTaskKeyboardNavigation({
+    tasks: navigableTasks,
+    isInputFocused: isFastInputUiFocused,
+    config: {
+      enabled: true,
+      autoFocusFirst: true, // Keep this stable to avoid dependency issues
+      clearFocusOnEmpty: true,
+    }
+  });
+
+  // Destructure functions to avoid dependency issues
+  const {
+    focusedTaskId,
+    setFocusedTaskId,
+    initializeKeyboardListeners,
+    destroyKeyboardListeners,
+    requestOpenDetailForTaskId,
+    clearDetailOpenRequest,
+    requestFocusFastInput,
+    clearFocusFastInputRequest,
+  } = keyboardNavigation;
+
+  // Custom modal close handler that preserves focus (after setFocusedTaskId is available)
+  const handleModalCloseWithFocusRestore = useCallback((isOpen: boolean) => {
+    if (!isOpen) {
+      // Set flag to prevent auto-focus during modal close
+      isClosingModalRef.current = true;
+      
+      // Get the task ID before closing the modal
+      const taskIdToFocus = modalManagement.currentTaskId;
+      
+      // Close the modal
+      modalManagement.closeModal();
+      
+      // Restore focus to the task that was being edited, but only if it still exists
+      if (taskIdToFocus && topLevelTasksFromStore.some(task => task.id === taskIdToFocus)) {
+        // Use a longer delay to ensure this runs after any competing auto-focus effects
+        setTimeout(() => {
+          // Double-check the task still exists before setting focus
+          if (topLevelTasksFromStore.some(task => task.id === taskIdToFocus)) {
+            setFocusedTaskId(taskIdToFocus);
+          }
+        }, 20); // Increased delay to ensure it runs after the keyboard navigation auto-focus
+      }
+      
+      // Clear the flag after a brief delay to allow focus restoration to complete
+      setTimeout(() => {
+        isClosingModalRef.current = false;
+      }, 100); // Increased delay to match the focus restoration timing
+    }
+  }, [modalManagement, setFocusedTaskId, topLevelTasksFromStore]);
 
   // --- Component-level Handlers ---
   const handleTaskCreatedByFastInput = useCallback((taskId: string) => {
     setIsFastInputUiFocused(false); // Update local UI state
     setInputFocusState(false); // Notify store
     if (taskId) {
-      setFocusedTaskId(taskId);
+      // Will be handled by keyboard navigation hook
     }
-  }, [setInputFocusState, setFocusedTaskId]);
+  }, [setInputFocusState]);
 
   const handleMarkComplete = useCallback((taskId: string) => {
     updateTask(taskId, { completed: true, status: 'completed' });
@@ -127,15 +149,12 @@ const TodayView: React.FC = () => {
 
   const handleDeleteTask = useCallback((taskId: string) => {
     deleteTask(taskId);
-    if (currentDetailTaskId === taskId) {
-      setCurrentDetailTaskId(null);
-      setModalOpenState(taskId, false); 
+    if (modalManagement.isModalOpenForTask(taskId)) {
+      modalManagement.closeModal();
     }
-    if (focusedTaskId === taskId) {
-      setFocusedTaskId(null);
-    }
+    // Focus clearing will be handled by keyboard navigation hook
     removeSelectedTask(taskId);
-  }, [deleteTask, currentDetailTaskId, focusedTaskId, setFocusedTaskId, removeSelectedTask, setModalOpenState]);
+  }, [deleteTask, modalManagement, removeSelectedTask]);
 
   const handleStartTaskLegacy = useCallback((taskId: string) => {
     console.log(`[TodayView] Attempting to start task (legacy): ${taskId}`);
@@ -163,19 +182,16 @@ const TodayView: React.FC = () => {
         completion_note: sessionConfig.completionNote 
       });
     }
-    setModalOpenState(task.id, false); 
-    setCurrentPrioritizeTaskId(null); // Close local view of this modal
-  }, [updateTask, setModalOpenState]);
+    modalManagement.closeModal();
+  }, [updateTask, modalManagement]);
   
   const openDetailModalForTask = useCallback((taskId: string) => {
-      setCurrentDetailTaskId(taskId);
-      setModalOpenState(taskId, true);
-  }, [setModalOpenState]);
+    modalManagement.detailModal.open(taskId);
+  }, [modalManagement]);
 
   const openPrioritizeModalForTask = useCallback((taskId: string) => {
-      setCurrentPrioritizeTaskId(taskId);
-      setModalOpenState(taskId, true);
-  }, [setModalOpenState]);
+    modalManagement.prioritizeModal.open(taskId);
+  }, [modalManagement]);
 
   // --- Derived Data (View Models for TaskCards) ---
   const displayTasksWithSubtasks = useMemo(() => {
@@ -185,68 +201,73 @@ const TodayView: React.FC = () => {
 
     return topLevelTasksFromStore.map(task => {
       const subtasks = getSubtasksByParentId(task.id);
-      return mapTaskToTaskCardViewModel(
-        task, 
-        handleStartTaskLegacy,
-        openDetailModalForTask, // Use new handler
-        task.id === focusedTaskId,
-        selectedTaskIds.has(task.id),
-        toggleSelectedTask,
-        handleMarkComplete,
-        handleDeleteTask,
-        openPrioritizeModalForTask, // Use new handler
-        subtasks
-      );
+      return {
+        ...task,
+        onStartTask: () => handleStartTaskLegacy(task.id),
+        onEdit: () => openDetailModalForTask(task.id),
+        onFocus: (taskId: string) => setFocusedTaskId(taskId), // Now setFocusedTaskId is available
+        isFocused: task.id === focusedTaskId, // Set focus state directly here
+        isSelected: selectedTaskIds.has(task.id),
+        onSelectTask: () => toggleSelectedTask(task.id),
+        onMarkComplete: () => handleMarkComplete(task.id),
+        onDeleteTask: () => handleDeleteTask(task.id),
+        onStartFocus: () => openPrioritizeModalForTask(task.id),
+        subtasks,
+      };
     });
   }, [
     initialized,
     topLevelTasksFromStore,
-    taskDataSignature, // Using the new signature
     getSubtasksByParentId,
-    focusedTaskId, 
+    focusedTaskId, // Now we can include focusedTaskId
     selectedTaskIds, 
     handleStartTaskLegacy,
     openDetailModalForTask,
+    setFocusedTaskId,
     toggleSelectedTask,
     handleMarkComplete,
     handleDeleteTask,
     openPrioritizeModalForTask
   ]);
 
-  // Handle focusing the first task if needed
-  useEffect(() => {
-    if (!focusedTaskId && displayTasksWithSubtasks.length > 0 && !isFastInputUiFocused) {
-      setFocusedTaskId(displayTasksWithSubtasks[0].id);
-    }
-  }, [displayTasksWithSubtasks, focusedTaskId, isFastInputUiFocused, setFocusedTaskId]);
+  // Use displayTasksWithSubtasks directly since focus is now included
+  const displayTasksWithFocus = displayTasksWithSubtasks;
 
-  // Provide current navigable tasks to the store
+  // Initialize keyboard listeners on mount
   useEffect(() => {
-    const taskIdsForStore = displayTasksWithSubtasks.map(task => ({ id: task.id }));
-    setCurrentNavigableTasks(taskIdsForStore);
-  }, [displayTasksWithSubtasks, setCurrentNavigableTasks]);
+    initializeKeyboardListeners();
+    return () => {
+      destroyKeyboardListeners();
+    };
+  }, [initializeKeyboardListeners, destroyKeyboardListeners]);
 
-  // Handle request to open detail view from store shortcut
+  // Handle keyboard shortcut requests
   useEffect(() => {
     if (requestOpenDetailForTaskId) {
       openDetailModalForTask(requestOpenDetailForTaskId);
       clearDetailOpenRequest();
     }
-  }, [requestOpenDetailForTaskId, openDetailModalForTask, clearDetailOpenRequest]);
+  }, [requestOpenDetailForTaskId, clearDetailOpenRequest, openDetailModalForTask]);
 
-  // Handle request to focus fast input from store shortcut
   useEffect(() => {
     if (requestFocusFastInput) {
-      setIsFastInputUiFocused(true); // Set local UI state
+      setIsFastInputUiFocused(true);
       if (fastInputRef.current) {
         fastInputRef.current.focus();
       }
-      // No need to call setInputFocusState(true) here, as FastTaskInput's onFocused will do it.
       clearFocusFastInputRequest();
     }
   }, [requestFocusFastInput, clearFocusFastInputRequest]);
 
-  // DND functionality sensors
+  // Handle task creation - focus the newly created task
+  const handleTaskCreatedByFastInputWithFocus = useCallback((taskId: string) => {
+    handleTaskCreatedByFastInput(taskId);
+    if (taskId) {
+      setFocusedTaskId(taskId);
+    }
+  }, [handleTaskCreatedByFastInput, setFocusedTaskId]);
+
+  // DND functionality sensors (removed redundant focus management effect)
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -337,7 +358,7 @@ const TodayView: React.FC = () => {
         <FastTaskInput 
             ref={fastInputRef}
             isFocused={isFastInputUiFocused} 
-            onTaskCreated={handleTaskCreatedByFastInput} 
+            onTaskCreated={handleTaskCreatedByFastInputWithFocus} 
             onBlurred={() => {
               setIsFastInputUiFocused(false);
               setInputFocusState(false);
@@ -348,50 +369,37 @@ const TodayView: React.FC = () => {
             }}
         />
       </div>
-      {displayTasksWithSubtasks.length === 0 ? (
+      {displayTasksWithFocus.length === 0 ? (
         <div className="flex-grow flex flex-col items-center justify-center text-text-muted">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 0 002-2V8m-9 4h4" />
           </svg>
           <p className="text-lg">Your day is clear!</p>
           <p>Add some tasks to get started.</p>
         </div>
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={displayTasksWithSubtasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
-            <TaskListGroup tasks={displayTasksWithSubtasks} title="Today's Tasks" />
+          <SortableContext items={displayTasksWithFocus.map(t => t.id)} strategy={verticalListSortingStrategy}>
+            <TaskListGroup tasks={displayTasksWithFocus} title="Today's Tasks" />
           </SortableContext>
         </DndContext>
       )}
 
-      {currentDetailTaskId && (
+      {modalManagement.detailModal.isOpen && (
         <TaskDetailView
-          taskId={currentDetailTaskId}
-          isOpen={currentDetailTaskId !== null}
-          onOpenChange={(isOpenFromDialog) => { 
-            setModalOpenState(currentDetailTaskId, isOpenFromDialog);
-            if (!isOpenFromDialog) {
-              setCurrentDetailTaskId(null); 
-              if (currentDetailTaskId === requestOpenDetailForTaskId) {
-                  clearDetailOpenRequest();
-              }
-            }
-          }}
+          taskId={modalManagement.detailModal.taskId!}
+          isOpen={modalManagement.detailModal.isOpen}
+          onOpenChange={handleModalCloseWithFocusRestore}
           onTaskUpdated={() => {}} 
           onDeleteTaskFromDetail={handleDeleteTask}
         />
       )}
 
-      {currentPrioritizeTaskId && (
+      {modalManagement.prioritizeModal.isOpen && (
         <PrioritizeViewModal
-          taskId={currentPrioritizeTaskId}
-          isOpen={currentPrioritizeTaskId !== null}
-          onOpenChange={(isOpenFromDialog) => { 
-            setModalOpenState(currentPrioritizeTaskId, isOpenFromDialog);
-            if (!isOpenFromDialog) {
-              setCurrentPrioritizeTaskId(null);
-            }
-          }}
+          taskId={modalManagement.prioritizeModal.taskId!}
+          isOpen={modalManagement.prioritizeModal.isOpen}
+          onOpenChange={handleModalCloseWithFocusRestore}
           onStartFocusSession={handleStartFocusSessionConfirmed}
         />
       )}

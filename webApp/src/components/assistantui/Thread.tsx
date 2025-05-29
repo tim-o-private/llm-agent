@@ -59,7 +59,7 @@ const ThreadScrollToBottom: FC = () => {
     <ThreadPrimitive.ScrollToBottom asChild>
       <TooltipIconButton
         tooltip="Scroll to bottom"
-        variant="secondary"
+        variant="soft"
         className="aui-thread-scroll-to-bottom"
       >
         <ArrowDownIcon />
@@ -131,7 +131,7 @@ const ComposerAction: FC = () => {
         <ComposerPrimitive.Send asChild>
           <TooltipIconButton
             tooltip="Send"
-            variant="primary"
+            variant="solid"
             className="aui-composer-send"
           >
             <SendHorizontalIcon />
@@ -142,7 +142,7 @@ const ComposerAction: FC = () => {
         <ComposerPrimitive.Cancel asChild>
           <TooltipIconButton
             tooltip="Cancel"
-            variant="secondary"
+            variant="soft"
             className="aui-composer-cancel"
           >
             <CircleStopIcon />
@@ -190,10 +190,10 @@ const EditComposer: FC = () => {
 
       <div className="aui-edit-composer-footer">
         <ComposerPrimitive.Cancel asChild>
-          <Button variant="secondary">Cancel</Button>
+          <Button variant="soft">Cancel</Button>
         </ComposerPrimitive.Cancel>
         <ComposerPrimitive.Send asChild>
-          <Button>Send</Button>
+          <Button variant="solid">Save</Button>
         </ComposerPrimitive.Send>
       </div>
     </ComposerPrimitive.Root>

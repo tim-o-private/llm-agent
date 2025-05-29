@@ -33,6 +33,14 @@ interface SubtaskListProps {
   showAddSubtask?: boolean; // New prop to control add functionality
   className?: string; // New prop for custom styling
   compact?: boolean; // New prop for compact display in TaskCard
+  // New callback props for change tracking
+  onSubtaskChange?: () => void; // Called when any subtask change occurs
+  onSubtaskReorder?: (subtasks: Task[]) => void; // Called when subtasks are reordered
+  onSubtaskCreate?: (subtaskData: Partial<Task>) => void; // Called when a new subtask is created
+  onSubtaskUpdate?: (id: string, updates: Partial<Task>) => void; // Called when a subtask is updated
+  onSubtaskDelete?: (id: string) => void; // Called when a subtask is deleted
+  // Optimistic state for immediate UI feedback
+  optimisticSubtasks?: Task[] | null; // When provided, use this instead of store data
 }
 
 interface SubtaskListItemProps {
@@ -147,11 +155,25 @@ const SubtaskListItem: React.FC<SubtaskListItemProps> = ({ subtask, onUpdate, on
   );
 };
 
-const SubtaskList: React.FC<SubtaskListProps> = ({ parentTaskId, showAddSubtask = true, className, compact }) => {
+const SubtaskList: React.FC<SubtaskListProps> = ({ 
+  parentTaskId, 
+  showAddSubtask = true, 
+  className, 
+  compact,
+  onSubtaskChange,
+  onSubtaskReorder,
+  onSubtaskCreate,
+  onSubtaskUpdate,
+  onSubtaskDelete,
+  optimisticSubtasks
+}) => {
   const subtasks = useTaskStore((state) => state.getSubtasksByParentId(parentTaskId));
   const { createTask, updateTask, deleteTask } = useTaskStore.getState(); // Get actions
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
+
+  // Use optimistic subtasks if provided, otherwise use store data
+  const displaySubtasks = optimisticSubtasks || subtasks;
 
   // DND functionality sensors
   const sensors = useSensors(
@@ -165,23 +187,29 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ parentTaskId, showAddSubtask 
     const { active, over } = event;
 
     if (active.id !== over?.id && over) {
-      const oldIndex = subtasks.findIndex(subtask => subtask.id === active.id);
-      const newIndex = subtasks.findIndex(subtask => subtask.id === over.id);
+      const oldIndex = displaySubtasks.findIndex(subtask => subtask.id === active.id);
+      const newIndex = displaySubtasks.findIndex(subtask => subtask.id === over.id);
 
       if (oldIndex === -1 || newIndex === -1) {
         console.warn('[SubtaskList] handleDragEnd: Subtask not found in current list. Aborting.');
         return;
       }
 
-      // Optimistically reorder subtasks
-      const reorderedSubtasks = arrayMove(subtasks, oldIndex, newIndex);
+      // Create the reordered array
+      const reorderedSubtasks = arrayMove(displaySubtasks, oldIndex, newIndex);
       
-      // Update positions in the store
-      reorderedSubtasks.forEach((subtask, index) => {
-        if (subtask.subtask_position !== index) {
-          updateTask(subtask.id, { subtask_position: index });
-        }
-      });
+      // If callbacks are provided, use them instead of directly updating store
+      if (onSubtaskReorder) {
+        onSubtaskReorder(reorderedSubtasks);
+        onSubtaskChange?.();
+      } else {
+        // Fallback to direct store update for backward compatibility
+        reorderedSubtasks.forEach((subtask, index) => {
+          if (subtask.subtask_position !== index) {
+            updateTask(subtask.id, { subtask_position: index });
+          }
+        });
+      }
     }
   };
 
@@ -202,11 +230,17 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ parentTaskId, showAddSubtask 
       user_id: parentTask.user_id, // Important: Ensure user_id is set
       status: 'pending', // Default status
       priority: parentTask.priority, // Inherit priority from parent, or set a default
-      subtask_position: subtasks.length, // Add at the end
+      subtask_position: displaySubtasks.length, // Add at the end
     } as Omit<Task, 'id' | 'created_at' | 'updated_at' | 'completed' | 'subtasks'>;
 
     try {
-      await createTask(newSubtaskData);
+      if (onSubtaskCreate) {
+        onSubtaskCreate(newSubtaskData);
+        onSubtaskChange?.();
+      } else {
+        // Fallback to direct store update for backward compatibility
+        await createTask(newSubtaskData);
+      }
       setNewSubtaskTitle('');
       setIsAddingSubtask(false);
     } catch (error) {
@@ -216,11 +250,23 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ parentTaskId, showAddSubtask 
   };
 
   const handleUpdateSubtask = (id: string, updates: Partial<Task>) => {
-    updateTask(id, updates); // Assuming updateTask handles partial updates
+    if (onSubtaskUpdate) {
+      onSubtaskUpdate(id, updates);
+      onSubtaskChange?.();
+    } else {
+      // Fallback to direct store update for backward compatibility
+      updateTask(id, updates);
+    }
   };
 
   const handleRemoveSubtask = (id: string) => {
-    deleteTask(id);
+    if (onSubtaskDelete) {
+      onSubtaskDelete(id);
+      onSubtaskChange?.();
+    } else {
+      // Fallback to direct store update for backward compatibility
+      deleteTask(id);
+    }
   };
 
   return (
@@ -282,11 +328,11 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ parentTaskId, showAddSubtask 
       )}
 
       {/* Subtasks List */}
-      {subtasks.length > 0 ? (
+      {displaySubtasks.length > 0 ? (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={subtasks.map(s => s.id)} strategy={verticalListSortingStrategy}>
+          <SortableContext items={displaySubtasks.map(s => s.id)} strategy={verticalListSortingStrategy}>
             <div className={compact ? "space-y-1" : "space-y-2"}>
-              {subtasks.map(subtask => (
+              {displaySubtasks.map(subtask => (
                 <SubtaskListItem 
                   key={subtask.id} 
                   subtask={subtask} 
@@ -309,4 +355,4 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ parentTaskId, showAddSubtask 
   );
 };
 
-export default SubtaskList; 
+export default SubtaskList;

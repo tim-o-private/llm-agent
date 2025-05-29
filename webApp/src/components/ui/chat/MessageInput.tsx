@@ -54,7 +54,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       />
       <Button 
         type="submit" 
-        variant="primary" 
+        variant="solid" 
         className="px-3 py-2 rounded-lg"
         disabled={disabled || inputValue.trim() === ''}
         aria-label="Send message"

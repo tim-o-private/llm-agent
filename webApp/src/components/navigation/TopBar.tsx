@@ -1,6 +1,8 @@
 import React from 'react';
 import { UserMenu } from '@/components/UserMenu';
-import { ThemeToggle } from '@/components/ui';
+import ThemeToggle from '@/components/ui/ThemeToggle';
+import { Button } from '@/components/ui/Button';
+
 const TopBar: React.FC = () => {
   const currentDate = new Date().toLocaleDateString(undefined, {
     weekday: 'long',
@@ -8,6 +10,8 @@ const TopBar: React.FC = () => {
     month: 'long',
     day: 'numeric'
   });
+
+  const [isChatPanelOpen, setIsChatPanelOpen] = React.useState(false);
 
   return (
     <div className="flex-1 px-4 flex justify-between items-center h-full">
@@ -48,16 +52,13 @@ const TopBar: React.FC = () => {
         <ThemeToggle /> {/* Added ThemeToggle */}
 
         {/* REMOVING CHAT TOGGLE BUTTON FROM TOPBAR - Now handled in TodayView */}
-        {/* 
         <Button 
-          variant="secondary" 
-          onClick={toggleChatPanel} 
-          aria-label={isChatPanelOpen ? 'Close chat panel' : 'Open chat panel'}
-          className="p-2"
+          variant="soft" 
+          onClick={() => setIsChatPanelOpen(!isChatPanelOpen)}
+          className="lg:hidden"
         >
-          <MessageSquare size={20} />
+          ��
         </Button>
-        */}
 
         {/* User Menu Integration */}
         <UserMenu />

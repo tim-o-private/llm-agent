@@ -1,0 +1,69 @@
+import React, { useState, useCallback } from 'react';
+import { toast } from '@/components/ui/toast';
+import TaskForm from './TaskForm';
+import TaskModalWrapper from './TaskModalWrapper';
+import { createComponentLogger } from '@/utils/logger';
+
+const log = createComponentLogger('TaskDetailView');
+
+interface TaskDetailViewProps {
+  taskId: string | null;
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
+  onTaskUpdated: () => void;
+  onDeleteTaskFromDetail?: (taskId: string) => void;
+}
+
+export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
+  taskId,
+  isOpen,
+  onOpenChange,
+  onTaskUpdated,
+  onDeleteTaskFromDetail,
+}) => {
+  log.debug('Render', { taskId, isOpen });
+
+  const [isFormDirty, setIsFormDirty] = useState(false);
+
+  const handleSaveSuccess = useCallback(() => {
+    log.debug('handleSaveSuccess called');
+    toast.success(`Task saved successfully!`);
+    onTaskUpdated();
+    onOpenChange(false);
+  }, [onTaskUpdated, onOpenChange]);
+
+  const handleDeleteSuccess = useCallback(() => {
+    log.debug('handleDeleteSuccess called');
+    onDeleteTaskFromDetail?.(taskId!);
+    onOpenChange(false);
+  }, [onDeleteTaskFromDetail, taskId, onOpenChange]);
+
+  const handleCancel = useCallback(() => {
+    log.debug('handleCancel called');
+    onOpenChange(false);
+  }, [onOpenChange]);
+
+  const handleDirtyStateChange = useCallback((isDirty: boolean) => {
+    log.debug('handleDirtyStateChange called', { isDirty });
+    setIsFormDirty(isDirty);
+  }, []);
+
+  return (
+    <TaskModalWrapper
+      taskId={taskId}
+      isOpen={isOpen}
+      onOpenChange={onOpenChange}
+      isDirty={isFormDirty}
+    >
+      <TaskForm
+        taskId={taskId}
+        onSaveSuccess={handleSaveSuccess}
+        onCancel={handleCancel}
+        onDirtyStateChange={handleDirtyStateChange}
+        onDeleteSuccess={handleDeleteSuccess}
+      />
+    </TaskModalWrapper>
+  );
+};
+
+export default TaskDetailView; 

@@ -4,7 +4,8 @@ import { CSS } from '@dnd-kit/utilities';
 import { Card } from '@radix-ui/themes';
 import { DragHandleDots2Icon, Cross2Icon, Pencil1Icon, CheckIcon } from '@radix-ui/react-icons';
 import { Task } from '@/api/types';
-import { getFocusClasses } from '@/utils/focusStates';
+import { Input } from '@/components/ui/Input';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { 
   getStatusContainerStyles, 
   getStatusTextStyles, 
@@ -124,7 +125,6 @@ export const SubtaskItem: React.FC<SubtaskItemProps> = ({ subtask, onUpdate, onR
           'mb-2',
           // Override Radix focus styles with our global focus system
           '[&]:focus-within:outline-none [&]:focus:outline-none [&]:focus-visible:outline-none',
-          getFocusClasses(),
           // Apply our status-based styling on top of Radix base
           getStatusContainerStyles({
             completed: subtask.status === 'completed',
@@ -146,28 +146,21 @@ export const SubtaskItem: React.FC<SubtaskItemProps> = ({ subtask, onUpdate, onR
             <DragHandleDots2Icon />
           </button>
           
-          <input
-            type="checkbox"
+          <Checkbox
             checked={subtask.status === 'completed'}
-            onChange={handleToggleComplete}
-            className={clsx(
-              "mr-3 h-4 w-4 rounded border-ui-border text-brand-primary cursor-pointer",
-              getFocusClasses()
-            )}
+            onCheckedChange={handleToggleComplete}
+            className="mr-3"
           />
           
           {isEditing ? (
-            <input
+            <Input
               ref={inputRef}
               type="text"
               value={editValue}
               onChange={(e) => setEditValue(e.target.value)}
               onBlur={saveEdit}
               onKeyDown={handleKeyDown}
-              className={clsx(
-                "flex-grow p-1 rounded border border-ui-border bg-ui-element-bg text-text-primary transition-colors",
-                getFocusClasses()
-              )}
+              className="flex-grow"
             />
           ) : (
             <span 

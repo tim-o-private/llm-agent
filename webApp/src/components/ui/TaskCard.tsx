@@ -32,6 +32,7 @@ export interface TaskCardProps extends Omit<Task, 'subtasks'> {
   onSelectTask?: (id: string, selected: boolean) => void;
   onMarkComplete?: (id: string) => void;
   onDeleteTask?: (id: string) => void;
+  onFocus?: (id: string) => void;
   subtasks?: Task[];
   className?: string;
   isFocused?: boolean;
@@ -50,6 +51,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   onSelectTask,
   onMarkComplete,
   onDeleteTask,
+  onFocus,
   isFocused,
   className,
   subtasks: initialSubtasksProp,
@@ -75,9 +77,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   }, [isFocused, cardElement]);
 
   const handleFocus = () => {
-    // When DOM focus happens, we could notify the keyboard navigation system
-    // This would require a callback prop or store integration
-    // For now, we'll just ensure the visual state is consistent
+    // When DOM focus happens, notify the keyboard navigation system
+    if (onFocus) {
+      onFocus(id);
+    }
   };
 
   const handleBlur = () => {
@@ -106,6 +109,12 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         target.closest('.subtask-drag-context')) {
       return;
     }
+    
+    // Focus this task when clicked
+    if (onFocus) {
+      onFocus(id);
+    }
+    
     if (onEdit) {
       onEdit();
     }

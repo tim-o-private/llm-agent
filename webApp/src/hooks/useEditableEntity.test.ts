@@ -99,6 +99,7 @@ const sampleTaskEntity: Task = {
   due_date: null,
   parent_task_id: null,
   completed: false,
+  deleted: false,
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
   completed_at: null,
