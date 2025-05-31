@@ -85,6 +85,22 @@ export interface ScratchPadEntry {
     updated_at: string;
 }
 
+export interface Note {
+    id: string;
+    user_id: string;
+    title?: string | null;
+    content: string;
+    created_at: string;
+    updated_at: string;
+    deleted: boolean; // Soft delete flag
+}
+
+export type NewNoteData = Omit<Note, 'id' | 'created_at' | 'updated_at' | 'deleted'> & { user_id: string };
+export type UpdateNoteData = Partial<Omit<Note, 'id' | 'user_id' | 'created_at' | 'updated_at'>>;
+
+export type NoteCreatePayload = NewNoteData;
+export type NoteUpdatePayload = UpdateNoteData;
+
 // Generic type for API responses with pagination (if needed)
 export interface PaginatedResponse<T> {
   items: T[];

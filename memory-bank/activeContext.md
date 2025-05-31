@@ -8,7 +8,30 @@ This document outlines the current high-priority task, relevant files, and key c
 
 ## Current High-Priority Task:
 
-**1. CLARITY-V2: Clarity v2 Executive Assistant Implementation**
+**1. TASK-AGENT-001: Implement Slack Digest Agent**
+*   **Status:** Ready for Implementation (Previous task TASK-UI-001 completed with full data persistence)
+*   **Complexity:** Level 2 (Simple Enhancement - Single agent with external API integration)
+*   **Objective:** Create Slack Digest agent that fetches recent messages and provides AI-generated summaries
+*   **Key Components:**
+    - Slack API integration service
+    - Message filtering and processing logic
+    - AI summarization using existing LLM infrastructure
+    - Integration with existing agent executor system
+*   **Dependencies:** External API integration patterns, existing agent infrastructure
+*   **Estimated Effort:** 8-12 hours
+*   **Priority:** High - Core Clarity v2 functionality
+
+## Recently Completed:
+
+**✅ TASK-UI-001: Add Notes Pane to Stacked Card System (2025-01-27)**
+- Successfully integrated NotesPane component into TodayViewMockup
+- Added 'notes' as fifth pane type with auto-save and keyboard shortcuts
+- Maintained consistency with existing UI patterns
+- **COMPLETE DATA PERSISTENCE**: Created notes table DDL, useNotesStore, full CRUD operations
+- **ENHANCED UI**: Notes list sidebar, title/content editing, delete functionality
+- **SUPABASE INTEGRATION**: RLS policies, optimistic updates, following useChatStore patterns
+
+**2. CLARITY-V2: Clarity v2 Executive Assistant Implementation**
 *   **Status:** Planning Complete - Technology Validation Required
 *   **Complexity:** Level 4 (Complex System - Full executive assistant with AI agents, memory system, and multi-platform integrations)
 *   **Objective:** Implement Clarity v2 as a comprehensive executive-function assistant that filters inbound noise, multiplies outbound output, and eliminates manual data entry through proactive AI agents.

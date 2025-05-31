@@ -20,6 +20,7 @@ import { FastTaskInput } from '@/components/features/TodayView/FastTaskInput';
 import { TaskDetailView } from '@/components/features/TaskDetail/TaskDetailView';
 import { PrioritizeViewModal } from '@/components/features/PrioritizeView/PrioritizeViewModal';
 import { ChatPanelV2 } from '@/components/ChatPanelV2';
+import { NotesPane } from '@/components/features/NotesPane/NotesPane';
 import { PlusIcon, ChatBubbleIcon, CalendarIcon, TargetIcon } from '@radix-ui/react-icons';
 import { Button } from '@/components/ui/Button';
 
@@ -31,7 +32,7 @@ import { toast } from '@/components/ui/toast';
 import { useTaskViewStore } from '@/stores/useTaskViewStore';
 
 // New types for the card system
-type PaneType = 'tasks' | 'chat' | 'calendar' | 'focus';
+type PaneType = 'tasks' | 'chat' | 'calendar' | 'focus' | 'notes';
 
 interface StackedCardProps {
   pane: PaneType;
@@ -355,7 +356,7 @@ const TodayViewMockup: React.FC = () => {
   const { mutate: updateTaskOrderMutation } = useUpdateTaskOrder();
 
   // Card system state
-  const availablePanes: PaneType[] = ['tasks', 'chat', 'calendar', 'focus'];
+  const availablePanes: PaneType[] = ['tasks', 'chat', 'calendar', 'focus', 'notes'];
   const [primaryPane, setPrimaryPane] = useState<PaneType>('tasks');
   const [secondaryPane, setSecondaryPane] = useState<PaneType>('chat');
   const [focusedPane, setFocusedPane] = useState<'primary' | 'secondary'>('primary');
@@ -589,6 +590,9 @@ const TodayViewMockup: React.FC = () => {
             </div>
           </div>
         );
+        
+      case 'notes':
+        return <NotesPane />;
         
       default:
         return <div className="p-6">Unknown pane: {pane}</div>;
