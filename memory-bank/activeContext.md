@@ -8,7 +8,36 @@ This document outlines the current high-priority task, relevant files, and key c
 
 ## Current High-Priority Task:
 
-**1. Task Editing UI - Phase 2: Proper Separation of Concerns**
+**1. CLARITY-V2: Clarity v2 Executive Assistant Implementation**
+*   **Status:** Planning Complete - Technology Validation Required
+*   **Complexity:** Level 4 (Complex System - Full executive assistant with AI agents, memory system, and multi-platform integrations)
+*   **Objective:** Implement Clarity v2 as a comprehensive executive-function assistant that filters inbound noise, multiplies outbound output, and eliminates manual data entry through proactive AI agents.
+*   **Key Architecture Components:**
+    *   **Memory System:** Multi-layered memory (working, short-term, long-term) with vector search
+    *   **Agent Orchestrator:** Handles agent lifecycle, job queuing, status reporting
+    *   **Prompt Engine:** Builds structured prompt chains and tool calls
+    *   **UI Bridge:** Real-time state synchronization between backend and frontend
+    *   **AI Agents:** Specialized agents for digest, reply drafting, scheduling
+    *   **User Interface:** Chat window, planner view, digest feed, brain dump interface
+*   **Technology Stack:**
+    *   Frontend: React 18+, TailwindCSS, Radix UI Primitives, Zustand, React Query, Vite
+    *   Backend: FastAPI (chatServer/), Supabase (Auth, DB, Storage)
+    *   AI/LLM: LangChain, Google Gemini Pro, OpenAI API
+    *   Integrations: Google Calendar API, Gmail API, Slack API
+    *   Database: PostgreSQL (Supabase), Vector DB (Pinecone/Weaviate)
+*   **Implementation Phases:**
+    *   Phase 1: Foundation – Ingest + Tasking (Target: 2025-02-15)
+    *   Phase 2: Output Automation – Agents & Digest (Target: 2025-03-15)
+    *   Phase 3: Assistant as Multiplier (Target: 2025-04-30)
+*   **Next Required Step:** Technology Validation (VAN QA mode)
+*   **Relevant Files:**
+    *   `webApp/src/components/ui/Clarity v2: PRD.md` (Product Requirements)
+    *   `webApp/src/components/ui/Clarity v2: Design & Implementation Plan.md` (Design Plan)
+    *   `memory-bank/archive/clarity-legacy/root-files/agent-ui-dev-instructions.md` (UI Development Guidelines)
+    *   `memory-bank/tasks.md` (Detailed implementation plan)
+*   **Task Tracking:** `memory-bank/tasks.md` (CLARITY-V2 - Planning Complete)
+
+**COMPLETED: Task Editing UI - Phase 2: Proper Separation of Concerns**
 *   **Status:** COMPLETED ✅
 *   **Objective:** Achieve proper separation of concerns in TaskDetailView by extracting dialog logic, delete logic, and form actions into dedicated components.
 *   **Key Achievements:**
@@ -24,20 +53,9 @@ This document outlines the current high-priority task, relevant files, and key c
     *   Improved maintainability and testability
     *   Better UX patterns with unified action bar design
     *   Proper visual hierarchy: secondary actions (left), primary actions (center-left), destructive actions (right)
-*   **Relevant Files:**
-    *   `webApp/src/components/features/TaskDetail/TaskModalWrapper.tsx` (NEW)
-    *   `webApp/src/components/features/TaskDetail/TaskActionBar.tsx` (NEW)
-    *   `webApp/src/components/features/TaskDetail/TaskDetailView.tsx` (REFACTORED)
-    *   `webApp/src/components/features/TaskDetail/TaskForm.tsx` (UNCHANGED)
 *   **Completion Date:** 2025-01-26
-*   **Task Tracking:** `memory-bank/tasks.md` (Task Editing UI - Phase 2 - COMPLETED)
 
-**Previous Phase 1: Task Editing UI/Logic Refactor**
-*   **Status:** COMPLETED ✅
-*   **Key Achievement:** Fixed critical infinite form reset loop in `useEditableEntity.ts`
-*   **Result:** All form inputs now work correctly (typing, status changes, priority changes, due date changes)
-
-**2. Assistant-UI Migration Implementation**
+**COMPLETED: Assistant-UI Migration Implementation**
 
 *   **Status:** COMPLETED - Full Implementation with Professional Styling ✅
 *   **Objective:** Migrate existing custom ChatPanel implementation to assistant-ui library for enhanced functionality, better accessibility, and improved maintainability.
@@ -53,78 +71,44 @@ This document outlines the current high-priority task, relevant files, and key c
     *   Zero backend changes required
 *   **Implementation Results:** All phases 1-5 complete - fully production ready
 *   **Next Steps:** Optional enhancements (streaming, tool visualization, message actions)
-*   **Implementation Plan:** `memory-bank/implementation_plans/assistant-ui-migration-plan.md`
 
-**2. ChatServer Main.py Decomposition - Phase 3: Extract Services and Background Tasks**
+**COMPLETED: ChatServer Main.py Decomposition - Phase 3: Extract Services and Background Tasks**
 
 *   **Status:** Completed
 *   **Objective:** Extract business logic into service classes and background task management into dedicated modules, further reducing main.py complexity and improving maintainability.
 *   **Results:** Successfully completed all services extraction - ChatService, PromptCustomizationService, and BackgroundTaskService implemented with comprehensive testing (40 tests total)
 
-**2. CRUD Tool Migration to DB Configuration**
-
-*   **Status:** Completed
-*   **Objective:** Move all CRUD tool logic (table, method, field_map, etc.) to the `agent_tools` table as config. Only the generic `CRUDTool` class remains in code. Loader instantiates tools from DB config and runtime values. No code changes are needed to add new CRUD tools.
-*   **Key Points:**
-    *   All CRUD tool definitions (table, method, field_map) are now stored in the `config` column of `agent_tools`.
-    *   The loader reads these configs and instantiates the generic `CRUDTool` with runtime values (`user_id`, `agent_id`, `supabase_url`, `supabase_key`).
-    *   The registry only needs to include `CRUDTool` (and any custom tools).
-    *   To add a new CRUD tool, insert a row in `agent_tools` with the correct config—no code changes required.
-    *   Refactored `src/core/tools/crud_tool.py`: Removed redundant `None` checks in the `_run` method for `data_for_processing` and `final_data_payload`, relying on earlier Pydantic/loader validations and the robustness of internal helper methods like `_prepare_data_payload`.
-    *   See `tool-creation-pattern.md` for the new pattern and example inserts.
-
-**3. Refactor: Implement Robust Session Management & Agent Executor Caching**
-
-*   **Status:** Implementation, Documentation, and Reflection Complete. See `memory-bank/clarity/references/guides/memory_system_v2.md` and `memory-bank/reflection/reflection-session-mgmt-v2.md`.
-*   **Objective:** Implement a stable and persistent chat session management system using the `chat_sessions` table, and optimize server performance by caching AgentExecutors based on active client sessions.
-*   **Core Logic:** See new guide for details.
-*   **Next Steps:** Integration testing and future enhancements.
-*   **Recent Fixes:**
-    *   Resolved `NameError` on server startup by reordering scheduled task definitions.
-    *   Refactored client-side API call for sending messages into a `useSendMessageMutation` hook.
-    *   Prevented multiple session instance creation on chat open with an `isInitializingSession` flag in `useChatStore`.
-*   **Design Document:** `session_management_and_executor_caching_plan.md`
-*   **Task Breakdown:** See `memory-bank/tasks.md` for detailed phases and sub-tasks.
-
 ## Key Focus Areas for Implementation:
 
-1.  **Task Editing UI/Logic Refactor (COMPLETED ✅):**
-    *   Core components (`useEditableEntity`, `TaskForm`) implementation complete.
-    *   Zod schemas and TypeScript typings resolved.
-    *   **CRITICAL BUG FIX:** Fixed infinite form reset loop causing form inputs to not work.
-    *   All form functionality now working correctly.
+1.  **Clarity v2 Technology Validation (IMMEDIATE NEXT STEP):**
+    *   Validate technology stack components work together
+    *   Test external API integrations (Google Calendar, Gmail, Slack)
+    *   Verify vector database integration for memory system
+    *   Create hello world proof of concept for AI chat interface
+    *   Validate build configuration and deployment pipeline
 
-2.  **Assistant-UI Migration (COMPLETED ✅):**
-    *   ✅ Phase 1: Install dependencies and setup environment
-    *   ✅ Phase 2: Implement custom runtime adapter for backend integration
-    *   ✅ Phase 3: Replace ChatPanel with assistant-ui components (styling deferred)
-    *   ✅ Phase 4: Integrate with existing Zustand state management
-    *   ✅ Global Implementation: Resizable panels with enhanced UX
-    *   [ ] Phase 5: Add advanced features (styling customization, streaming, tool visualization)
-    *   [ ] Phase 6: Comprehensive testing and optimization
-    *   [ ] Phase 7: Documentation and deployment
-*   **Task Editing Refactor (COMPLETED ✅):**
-    *   `webApp/src/hooks/useEditableEntity.ts` (Fixed infinite reset loop)
-    *   `webApp/src/components/features/TaskDetail/TaskForm.tsx`
-    *   `webApp/src/types/editableEntityTypes.ts`
-    *   `webApp/src/components/features/TaskDetail/TaskDetailView.tsx`
-    *   `webApp/src/components/features/TaskDetail/SubtaskList.tsx`
-*   **Completed ChatServer Decomposition:**
-    *   `chatServer/services/` (All services implemented)
-    *   `chatServer/models/` (Phase 1 - Models and Protocols)
-    *   `chatServer/protocols/` (Phase 1 - Models and Protocols)
-    *   `chatServer/config/` (Phase 2 - Configuration)
-    *   `chatServer/database/` (Phase 2 - Database)
-    *   `chatServer/dependencies/` (Phase 2 - Dependencies)
-4.  **[ACTIVE] Refactor: Implement Robust Session Management & Agent Executor Caching**
-    *   **Objective:** Complete integration testing of the new session management system
+2.  **Creative Phase Requirements Identified:**
+    *   Memory System Architecture Design - Complex vector search and multi-layer memory
+    *   Agent Orchestration Design - Concurrent agent management and communication
+    *   Real-time Sync Architecture - WebSocket-based state synchronization
+    *   UI/UX Design for Executive Assistant - Proactive interface design
+    *   External API Integration Strategy - Rate limiting and data synchronization
 
-**Mode Recommendation:** BUILD (For next development priorities)
+3.  **Risk Management Focus:**
+    *   External API rate limits and integration complexity
+    *   Vector database performance at scale
+    *   Real-time state synchronization challenges
+    *   AI agent coordination complexity
+    *   User privacy and data security requirements
 
-**General Project Goal:** Complete chatServer main.py decomposition with service layer architecture. Enable clean separation of business logic and improved maintainability.
+**Mode Recommendation:** VAN QA (For technology validation before proceeding to CREATIVE mode)
+
+**General Project Goal:** Complete Clarity v2 executive assistant implementation with comprehensive AI agent orchestration, memory system, and multi-platform integrations.
 
 **Pending Decisions/Questions:**
-*   Next development priorities after completing task editing refactor.
+*   Vector database selection: Pinecone vs Weaviate
+*   External API access approval and rate limit planning
+*   Real-time infrastructure implementation approach (WebSocket vs Server-Sent Events)
 
 **Previous Focus (Completed/Superseded in this context):**
 *   **Task Editing UI/Logic Refactor (COMPLETED):** Fixed critical infinite form reset loop in `useEditableEntity.ts`
@@ -138,24 +122,27 @@ This document outlines the current high-priority task, relevant files, and key c
 *   Update `useChatStore.ts` to use direct archival logic.
 *   UI integration of `agentId` for `ChatPanel` and `useChatStore` initialization.
 
-**Upcoming Focus (Post ChatServer Decomposition):**
-*   Agent Memory System v2 - Phase 4: Refinements, Advanced LTM & Pruning
-*   Additional agent tool development and testing
-*   Next UI/UX improvements and features
+**Upcoming Focus (Post Technology Validation):**
+*   Creative Phase: Memory System Architecture Design
+*   Creative Phase: Agent Orchestration Design
+*   Creative Phase: Real-time Sync Architecture
+*   Creative Phase: UI/UX Design for Executive Assistant
+*   Implementation Phase 1: Foundation – Ingest + Tasking
 
-**Key Files Recently Modified/Reviewed (Task Editing Refactor - COMPLETED):**
-*   `webApp/src/components/features/TaskDetail/TaskForm.tsx`
-*   `webApp/src/hooks/useEditableEntity.ts` (Fixed infinite reset loop)
-*   `webApp/src/types/editableEntityTypes.ts`
-*   `webApp/src/api/types.ts` (for TaskPriority, TaskStatus type usage)
+**Key Files Recently Modified/Reviewed (Clarity v2 Planning):**
+*   `memory-bank/tasks.md` (Added comprehensive CLARITY-V2 implementation plan)
+*   `webApp/src/components/ui/Clarity v2: PRD.md` (Product requirements analysis)
+*   `webApp/src/components/ui/Clarity v2: Design & Implementation Plan.md` (Design analysis)
+*   `memory-bank/archive/clarity-legacy/root-files/agent-ui-dev-instructions.md` (UI development guidelines)
 
 **Open Questions/Considerations:**
-*   How should the service layer interfaces be designed for maximum testability?
-*   What's the best approach for dependency injection in the service layer?
-*   How should background tasks be managed and monitored?
+*   How should the vector database be integrated with the existing Supabase infrastructure?
+*   What's the best approach for managing external API rate limits across multiple services?
+*   How should real-time state synchronization be implemented to minimize latency?
+*   What security measures are needed for external API integrations?
 
 Last updated: {datetime.date.today().isoformat()}
 
-**Mode Recommendation:** PLAN (For testing strategy of Task Editing UI Refactor)
+**Mode Recommendation:** VAN QA (For technology validation of Clarity v2 architecture)
 
-**General Project Goal:** Complete chatServer main.py decomposition with service layer architecture. Enable clean separation of business logic and improved maintainability.
+**General Project Goal:** Complete Clarity v2 executive assistant implementation with comprehensive AI agent orchestration, memory system, and multi-platform integrations.

@@ -104,9 +104,9 @@ export const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
             )}
             position="popper"
             sideOffset={4}
-          >
+        >
             <SelectPrimitive.Viewport className="p-1">
-              {children}
+          {children}
             </SelectPrimitive.Viewport>
           </SelectPrimitive.Content>
         </SelectPrimitive.Portal>

@@ -18,7 +18,6 @@ const TodayViewMockup = lazy(() => import('@/pages/TodayViewMockup'));
 const CoachPage = lazy(() => import('@/pages/CoachPage'));
 const CoachPageV2 = lazy(() => import('@/pages/CoachPageV2'));
 const ColorSwatchPage = lazy(() => import('@/pages/ColorSwatchPage'));
-const ModalComparisonPage = lazy(() => import('@/pages/ModalComparisonPage'));
 const DesignSystemPage = lazy(() => import('@/pages/DesignSystemPage'));
 const SelectTestPage = lazy(() => import('@/pages/SelectTestPage'));
 const DesignDemo = lazy(() => import('@/components/ui/DesignDemo').then(module => ({ default: () => <module.DesignDemo /> })));
@@ -59,7 +58,6 @@ function App() {
               {/* Temporary: SelectTestPage as public route for testing the Select component */}
               <Route path="/select-test" element={<SelectTestPage />} />
               {/* Protected routes wrapped by AppShell directly */}
-              <Route path="/modal-comparison" element={<ModalComparisonPage />} />
               <Route element={<ProtectedRoute />}>
                 {/* Wrap child routes with AppShell and render them via Outlet */}
                 <Route element={<AppShell><Outlet /></AppShell>}> 
