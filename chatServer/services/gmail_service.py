@@ -28,13 +28,19 @@ logger = logging.getLogger(__name__)
 class GmailService(BaseAPIService):
     """Gmail API service for email operations."""
     
-    def __init__(self, db_client: AsyncClient):
+    def __init__(self, db_client: AsyncClient = None):
         """Initialize Gmail service.
         
         Args:
-            db_client: Supabase client for database operations
+            db_client: Supabase client for database operations (optional for direct token usage)
         """
-        super().__init__(db_client, ServiceName.GMAIL)
+        if db_client:
+            super().__init__(db_client, ServiceName.GMAIL)
+        else:
+            # Initialize without database client for direct token usage
+            self.db_client = None
+            self.service_name = ServiceName.GMAIL
+            self._user_tokens = {}  # Store tokens directly
         
         # Gmail API rate limits (per user)
         # https://developers.google.com/gmail/api/reference/quota
@@ -45,6 +51,41 @@ class GmailService(BaseAPIService):
         )
         
         self.base_url = "https://gmail.googleapis.com/gmail/v1"
+    
+    def set_user_tokens(self, user_id: str, access_token: str, refresh_token: str = None):
+        """Set OAuth tokens directly for a user (bypasses database).
+        
+        Args:
+            user_id: User ID
+            access_token: OAuth access token
+            refresh_token: OAuth refresh token (optional)
+        """
+        self._user_tokens[user_id] = {
+            'access_token': access_token,
+            'refresh_token': refresh_token
+        }
+        logger.debug(f"Set tokens for user {user_id}")
+    
+    async def _get_auth_headers_direct(self, user_id: str) -> Dict[str, str]:
+        """Get authentication headers using directly set tokens.
+        
+        Args:
+            user_id: User ID
+            
+        Returns:
+            Dictionary of authentication headers
+            
+        Raises:
+            ValueError: If no tokens are set for the user
+        """
+        if user_id not in self._user_tokens:
+            raise ValueError(f"No tokens set for user {user_id}")
+        
+        access_token = self._user_tokens[user_id]['access_token']
+        return {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
     
     async def _get_auth_headers(self, connection: ExternalAPIConnectionResponse) -> Dict[str, str]:
         """Get authentication headers for Gmail API requests.
@@ -59,6 +100,41 @@ class GmailService(BaseAPIService):
             "Authorization": f"Bearer {connection.access_token}",
             "Content-Type": "application/json"
         }
+    
+    async def get_message(self, user_id: str, message_id: str) -> Optional[Dict]:
+        """Get detailed information about a specific message (direct token version).
+        
+        Args:
+            user_id: User ID
+            message_id: Gmail message ID
+            
+        Returns:
+            Message details or None if failed
+        """
+        try:
+            url = f"{self.base_url}/users/me/messages/{message_id}"
+            params = {"format": "full"}
+            
+            # Use direct tokens if available, otherwise fall back to database
+            if hasattr(self, '_user_tokens') and user_id in self._user_tokens:
+                headers = await self._get_auth_headers_direct(user_id)
+                
+                # Make direct HTTP request (simplified version)
+                import httpx
+                async with httpx.AsyncClient() as client:
+                    response = await client.get(url, params=params, headers=headers)
+                    if response.status_code == 200:
+                        return response.json()
+                    else:
+                        logger.error(f"Gmail API error: {response.status_code} - {response.text}")
+                        return None
+            else:
+                # Fall back to original method with database
+                return await self.get_message_details(user_id, message_id)
+                
+        except Exception as e:
+            logger.error(f"Failed to get message {message_id} for user {user_id}: {e}")
+            return None
     
     async def refresh_token(self, user_id: str, connection: ExternalAPIConnectionResponse) -> bool:
         """Refresh OAuth token for Gmail connection.
@@ -131,7 +207,7 @@ class GmailService(BaseAPIService):
     
     async def get_messages(self, user_id: str, query: str = "", 
                           max_results: int = 20, page_token: Optional[str] = None) -> Optional[Dict]:
-        """Get messages from Gmail using search query.
+        """Get messages from Gmail using search query (direct token version).
         
         Args:
             user_id: User ID
@@ -142,15 +218,43 @@ class GmailService(BaseAPIService):
         Returns:
             Gmail messages response or None if failed
         """
-        url = f"{self.base_url}/users/me/messages"
-        params = {
-            "q": query,
-            "maxResults": min(max_results, 500)  # Gmail API limit
-        }
-        if page_token:
-            params["pageToken"] = page_token
-        
-        return await self.make_request(user_id, "GET", url, params=params, cache_ttl=300)
+        try:
+            url = f"{self.base_url}/users/me/messages"
+            params = {
+                "q": query,
+                "maxResults": min(max_results, 500)  # Gmail API limit
+            }
+            if page_token:
+                params["pageToken"] = page_token
+            
+            # Use direct tokens if available, otherwise fall back to database
+            if hasattr(self, '_user_tokens') and user_id in self._user_tokens:
+                headers = await self._get_auth_headers_direct(user_id)
+                
+                # Make direct HTTP request (simplified version)
+                import httpx
+                async with httpx.AsyncClient() as client:
+                    response = await client.get(url, params=params, headers=headers)
+                    if response.status_code == 200:
+                        return response.json()
+                    else:
+                        logger.error(f"Gmail API error: {response.status_code} - {response.text}")
+                        return None
+            else:
+                # Fall back to original method with database
+                url = f"{self.base_url}/users/me/messages"
+                params = {
+                    "q": query,
+                    "maxResults": min(max_results, 500)  # Gmail API limit
+                }
+                if page_token:
+                    params["pageToken"] = page_token
+                
+                return await self.make_request(user_id, "GET", url, params=params, cache_ttl=300)
+                
+        except Exception as e:
+            logger.error(f"Failed to get messages for user {user_id}: {e}")
+            return None
     
     async def get_message_details(self, user_id: str, message_id: str) -> Optional[Dict]:
         """Get detailed information about a specific message.

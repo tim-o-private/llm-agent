@@ -28,6 +28,7 @@ This document outlines the current high-priority task, relevant files, and key c
 - [X] Create `user_api_tokens` view with RLS policies
 - [X] Update `external_api_connections` table to reference vault secrets
 - [X] Comprehensive unit tests for vault token operations (25 test cases)
+- [X] Integration testing with RLS verification and live database connections
 - [X] Migration script for existing tokens (if any)
 
 **🔄 Phase 2 Current Focus (Week 2: Feb 4 - Feb 10):**
@@ -49,13 +50,23 @@ This document outlines the current high-priority task, relevant files, and key c
 - `supabase/migrations/20250128000001_vault_oauth_tokens.sql` - Vault integration migration
 - `chatServer/services/vault_token_service.py` - Secure token management service
 - `tests/chatServer/services/test_vault_token_service.py` - Comprehensive vault service tests (25 test cases)
+- `tests/chatServer/services/test_vault_token_service_integration.py` - RLS integration tests
 
 **Files to Create in Phase 2:**
-- `chatServer/tools/gmail_tools.py` - LangChain Gmail toolkit integration
+- `chatServer/tools/gmail_tool.py` - LangChain Gmail toolkit integration
 - Database records in `agent_configurations` and `agent_tools` tables
-- Updates to `src/core/agents/agent_loader_db.py` - Add Gmail tools to registry
+- Updates to `src/core/agent_loader_db.py` - Add Gmail tools to registry
 
 ## Recently Completed:
+
+**✅ TASK-INFRA-001: Database Connection Patterns Analysis (2025-01-28) - FULLY COMPLETE**
+- Successfully documented current state of database connection usage across chatServer and core components
+- Identified dual pattern problem: PostgreSQL Connection Pool (recommended) vs Supabase AsyncClient (legacy)
+- Created comprehensive analysis with technical debt assessment and migration recommendations
+- **KEY FINDINGS**: Modern pattern usage (VaultTokenService, External API Router), Legacy pattern usage (Prompt customization, Tasks API), Mixed core components
+- **MIGRATION STRATEGY**: Phase 1 (✅ Complete), Phase 2 (🔄 In Progress), Phase 3 (⏳ Pending)
+- **FILES CREATED**: `memory-bank/database-connection-patterns.md` - Comprehensive analysis document
+- **IMPACT**: Provides clear roadmap for standardizing database connections and reducing technical debt
 
 **✅ TASK-UI-001: Add Notes Pane to Stacked Card System (2025-01-27) - FULLY COMPLETE**
 - Successfully integrated NotesPane component into TodayViewMockup
@@ -80,7 +91,7 @@ This document outlines the current high-priority task, relevant files, and key c
 - **USER CREDENTIALS**: OAuth tokens stored in Supabase with RLS policies
 
 **2. CLARITY-V2: Clarity v2 Executive Assistant Implementation**
-*   **Status:** Planning Complete - Phase 1 Foundation In Progress
+*   **Status:** Phase 1 Foundation In Progress - TASK-AGENT-001 Phase 2 Active
 *   **Complexity:** Level 4 (Complex System - Full executive assistant with AI agents, memory system, and multi-platform integrations)
 *   **Objective:** Implement Clarity v2 as a comprehensive executive-function assistant that filters inbound noise, multiplies outbound output, and eliminates manual data entry through proactive AI agents.
 *   **Key Architecture Components:**
@@ -100,50 +111,54 @@ This document outlines the current high-priority task, relevant files, and key c
     *   Phase 1: Foundation – Ingest + Tasking (Target: 2025-02-15) - **IN PROGRESS**
     *   Phase 2: Output Automation – Agents & Digest (Target: 2025-03-15)
     *   Phase 3: Assistant as Multiplier (Target: 2025-04-30)
-*   **Current Milestone:** Technology Validation Complete - Implementing Gmail Tools Integration
+*   **Current Milestone:** TASK-AGENT-001 Phase 2 - Database-driven Gmail tools implementation
 *   **Relevant Files:**
     *   `memory-bank/Clarity v2: PRD.md` (Product Requirements)
     *   `memory-bank/tasks.md` (Detailed implementation plan)
+    *   `memory-bank/database-connection-patterns.md` (Infrastructure analysis)
 *   **Task Tracking:** `memory-bank/tasks.md` (CLARITY-V2 - Phase 1 In Progress)
 
 ## Key Focus Areas for Implementation:
 
-1.  **Supabase Vault Token Storage (CURRENT FOCUS - Phase 1):**
-    *   Create database migration for vault integration with OAuth tokens
-    *   Implement VaultTokenService for secure token management
-    *   Create user_api_tokens view with proper RLS policies
-    *   Update external_api_connections table to reference vault secrets
-    *   Comprehensive unit testing for all vault operations
-
-2.  **Upcoming Phase 2 (Week 2: Feb 4 - Feb 10):**
-    *   Database-driven Gmail tools using LangChain toolkit
-    *   Agent configuration in agent_configurations and agent_tools tables
-    *   GmailTool implementation with search, get_message, generate_digest operations
+1.  **Database-Driven Gmail Tools (CURRENT FOCUS - Phase 2):**
+    *   Insert agent configuration in `agent_configurations` table
+    *   Configure Gmail tools in `agent_tools` table with `runtime_args_schema`
+    *   Implement `GmailTool` class using LangChain Gmail toolkit
+    *   Add Gmail tools to `TOOL_REGISTRY` in `agent_loader_db.py`
+    *   Support operations: search, get_message, generate_digest
     *   Integration with vault token service for secure credential access
+
+2.  **Upcoming Phase 3 (Week 3: Feb 11 - Feb 17):**
+    *   Email Digest Agent implementation using existing `CustomizableAgentExecutor`
+    *   Scheduled digest service for digest generation and storage
+    *   Daily digest scheduler with APScheduler integration
+    *   User digests table for storing generated digests
+    *   Integration with main assistant agent for digest presentation
 
 3.  **Quality Assurance Focus:**
     *   Maintain TypeScript quality standards (no `any` types)
     *   100% test coverage for all new components
-    *   Security audit for vault token storage implementation
+    *   Security audit for vault token storage implementation (✅ Complete)
     *   Follow established patterns from existing codebase
     *   Proper error handling and logging
 
-**Mode Recommendation:** IMPLEMENT (For TASK-AGENT-001 Phase 1 - Supabase Vault Token Storage)
+**Mode Recommendation:** IMPLEMENT (For TASK-AGENT-001 Phase 2 - Database-driven Gmail tools)
 
 **General Project Goal:** Complete Clarity v2 executive assistant implementation with comprehensive AI agent orchestration, memory system, and multi-platform integrations.
 
 **Current Implementation Focus:**
-*   **Week 1 (Jan 28 - Feb 3)**: Supabase Vault token storage foundation
-*   **Week 2 (Feb 4 - Feb 10)**: Database-driven Gmail tools with LangChain toolkit
+*   **Week 1 (Jan 28 - Feb 3)**: ✅ Supabase Vault token storage foundation - **COMPLETE**
+*   **Week 2 (Feb 4 - Feb 10)**: 🔄 Database-driven Gmail tools with LangChain toolkit - **IN PROGRESS**
 *   **Week 3 (Feb 11 - Feb 17)**: Email Digest Agent implementation and scheduling
 *   **Week 4 (Feb 18 - Feb 24)**: API integration, testing, and assistant integration
 
 **Key Technical Decisions Made:**
-*   ✅ **OAuth Security**: Supabase Vault for enterprise-grade token encryption
+*   ✅ **OAuth Security**: Supabase Vault for enterprise-grade token encryption - **COMPLETE**
 *   ✅ **Gmail Integration**: LangChain Gmail toolkit for reliability and maintenance
 *   ✅ **Agent Framework**: Database-driven configuration using existing CRUDTool patterns
 *   ✅ **Scheduling**: Daily digest at 7:30 AM per user timezone as per PRD
 *   ✅ **Control Flow**: Scheduler → Agent → Tools → LLM → Assistant integration
+*   ✅ **Database Patterns**: PostgreSQL connection pool for all new development
 
 **Pending Decisions/Questions:**
 *   Gmail API OAuth setup and client credentials configuration
@@ -152,6 +167,7 @@ This document outlines the current high-priority task, relevant files, and key c
 *   Error handling strategy for failed Gmail API calls
 
 **Previous Focus (Completed/Superseded in this context):**
+*   **Database Connection Patterns Analysis (COMPLETED):** Comprehensive analysis of dual patterns with migration strategy
 *   **Task Editing UI/Logic Refactor (COMPLETED):** Fixed critical infinite form reset loop in `useEditableEntity.ts`
 *   CLI/Core Backend MVP Testing (Task 3.1 from `memory-bank/tasks.md`):
     *   Core agent memory persistence via Supabase (original V1 approach) was working.
@@ -170,25 +186,26 @@ This document outlines the current high-priority task, relevant files, and key c
 *   TASK-MOBILE-001: Mobile Responsive Stacked Cards
 
 **Key Files Recently Modified/Reviewed:**
-*   `memory-bank/tasks.md` (Updated with complete Gmail tools integration plan)
+*   `memory-bank/tasks.md` (Updated with Phase 1 completion and Phase 2 focus)
 *   `memory-bank/activeContext.md` (Updated with current focus)
-*   `chatServer/services/gmail_service.py` (Existing service layer foundation)
-*   `chatServer/models/external_api.py` (OAuth token models)
-*   `supabase/migrations/20250128000000_create_external_api_connections.sql` (Foundation migration)
+*   `memory-bank/database-connection-patterns.md` (NEW - Infrastructure analysis)
+*   `chatServer/services/vault_token_service.py` (NEW - Secure token management)
+*   `tests/chatServer/services/test_vault_token_service_integration.py` (NEW - RLS testing)
 
-**Key Files to Create (Phase 1):**
-*   `supabase/migrations/20250128000001_vault_oauth_tokens.sql` (Vault integration migration)
-*   `chatServer/services/vault_token_service.py` (Secure token management)
-*   `tests/chatServer/services/test_vault_token_service.py` (Comprehensive testing)
+**Key Files to Create (Phase 2):**
+*   `chatServer/tools/gmail_tool.py` (LangChain Gmail toolkit integration)
+*   Database records in `agent_configurations` and `agent_tools` tables
+*   Updates to `src/core/agent_loader_db.py` (Add Gmail tools to registry)
 
 **Open Questions/Considerations:**
 *   Should we implement Gmail OAuth flow in the frontend or backend?
 *   What's the optimal caching strategy for Gmail API responses?
 *   How should we handle Gmail API rate limits in the scheduled digest?
 *   What level of email content should be stored vs. fetched on-demand?
+*   How to handle database connection patterns migration for core components?
 
 Last updated: 2025-01-28
 
-**Mode Recommendation:** IMPLEMENT (For TASK-AGENT-001 Phase 1 - Supabase Vault Token Storage)
+**Mode Recommendation:** IMPLEMENT (For TASK-AGENT-001 Phase 2 - Database-driven Gmail tools)
 
 **General Project Goal:** Complete Clarity v2 executive assistant implementation with comprehensive AI agent orchestration, memory system, and multi-platform integrations.

@@ -5,11 +5,11 @@
 import logging
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
-from supabase import AsyncClient
+import psycopg
 
 try:
     from ..dependencies.auth import get_current_user
-    from ..database.supabase_client import get_supabase_client
+    from ..database.connection import get_db_connection
     from ..models.external_api import (
         ExternalAPIConnectionCreate, ExternalAPIConnectionUpdate, 
         ExternalAPIConnectionResponse, EmailDigestRequest, EmailDigestResponse
@@ -17,7 +17,7 @@ try:
     from ..services.email_digest_service import EmailDigestService
 except ImportError:
     from chatServer.dependencies.auth import get_current_user
-    from chatServer.database.supabase_client import get_supabase_client
+    from chatServer.database.connection import get_db_connection
     from chatServer.models.external_api import (
         ExternalAPIConnectionCreate, ExternalAPIConnectionUpdate,
         ExternalAPIConnectionResponse, EmailDigestRequest, EmailDigestResponse
@@ -29,30 +29,30 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/external", tags=["external-api"])
 
 
-def get_email_digest_service(db: AsyncClient = Depends(get_supabase_client)) -> EmailDigestService:
+async def get_email_digest_service(db_conn: psycopg.AsyncConnection = Depends(get_db_connection)) -> EmailDigestService:
     """Get email digest service instance.
     
     Args:
-        db: Supabase client
+        db_conn: Database connection
         
     Returns:
         EmailDigestService instance
     """
-    return EmailDigestService(db)
+    return EmailDigestService()
 
 
 @router.post("/connections", response_model=ExternalAPIConnectionResponse)
 async def create_api_connection(
     connection_data: ExternalAPIConnectionCreate,
     user_id: str = Depends(get_current_user),
-    db: AsyncClient = Depends(get_supabase_client)
+    db_conn: psycopg.AsyncConnection = Depends(get_db_connection)
 ):
     """Create a new external API connection.
     
     Args:
         connection_data: Connection data
         user_id: Current user ID
-        db: Supabase client
+        db_conn: Database connection
         
     Returns:
         Created connection response
@@ -61,24 +61,47 @@ async def create_api_connection(
         HTTPException: If connection creation fails
     """
     try:
-        # Prepare connection data
-        insert_data = connection_data.model_dump()
-        insert_data['user_id'] = user_id
-        
-        # Insert connection (will update if exists due to unique constraint)
-        result = await db.table('external_api_connections').upsert(
-            insert_data,
-            on_conflict='user_id,service_name'
-        ).execute()
-        
-        if not result.data:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to create API connection"
+        async with db_conn.cursor() as cur:
+            # Insert connection (will update if exists due to unique constraint)
+            await cur.execute(
+                """
+                INSERT INTO external_api_connections 
+                (user_id, service_name, service_user_email, access_token, refresh_token, 
+                 token_expires_at, scopes, is_active)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (user_id, service_name) DO UPDATE SET
+                    service_user_email = EXCLUDED.service_user_email,
+                    access_token = EXCLUDED.access_token,
+                    refresh_token = EXCLUDED.refresh_token,
+                    token_expires_at = EXCLUDED.token_expires_at,
+                    scopes = EXCLUDED.scopes,
+                    is_active = EXCLUDED.is_active,
+                    updated_at = NOW()
+                RETURNING *
+                """,
+                (
+                    user_id,
+                    connection_data.service_name,
+                    connection_data.service_user_email,
+                    connection_data.access_token,
+                    connection_data.refresh_token,
+                    connection_data.token_expires_at,
+                    connection_data.scopes,
+                    True
+                )
             )
-        
-        connection_response = result.data[0]
-        return ExternalAPIConnectionResponse(**connection_response)
+            
+            result = await cur.fetchone()
+            if not result:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to create API connection"
+                )
+            
+            # Convert row to dict
+            columns = [desc[0] for desc in cur.description]
+            connection_dict = dict(zip(columns, result))
+            return ExternalAPIConnectionResponse(**connection_dict)
         
     except Exception as e:
         logger.error(f"Error creating API connection for user {user_id}: {e}")
@@ -91,27 +114,36 @@ async def create_api_connection(
 @router.get("/connections", response_model=List[ExternalAPIConnectionResponse])
 async def get_api_connections(
     user_id: str = Depends(get_current_user),
-    db: AsyncClient = Depends(get_supabase_client)
+    db_conn: psycopg.AsyncConnection = Depends(get_db_connection)
 ):
     """Get all API connections for the current user.
     
     Args:
         user_id: Current user ID
-        db: Supabase client
+        db_conn: Database connection
         
     Returns:
         List of user's API connections
     """
     try:
-        result = await db.table('external_api_connections').select('*').eq(
-            'user_id', user_id
-        ).eq('is_active', True).execute()
-        
-        connections = []
-        for connection_data in result.data:
-            connections.append(ExternalAPIConnectionResponse(**connection_data))
-        
-        return connections
+        async with db_conn.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT * FROM external_api_connections
+                WHERE user_id = %s AND is_active = %s
+                """,
+                (user_id, True)
+            )
+            
+            results = await cur.fetchall()
+            columns = [desc[0] for desc in cur.description]
+            
+            connections = []
+            for row in results:
+                connection_dict = dict(zip(columns, row))
+                connections.append(ExternalAPIConnectionResponse(**connection_dict))
+            
+            return connections
         
     except Exception as e:
         logger.error(f"Error getting API connections for user {user_id}: {e}")
@@ -125,14 +157,14 @@ async def get_api_connections(
 async def get_api_connection(
     service_name: str,
     user_id: str = Depends(get_current_user),
-    db: AsyncClient = Depends(get_supabase_client)
+    db_conn: psycopg.AsyncConnection = Depends(get_db_connection)
 ):
     """Get a specific API connection for the current user.
     
     Args:
         service_name: Name of the service
         user_id: Current user ID
-        db: Supabase client
+        db_conn: Database connection
         
     Returns:
         API connection response
@@ -141,18 +173,25 @@ async def get_api_connection(
         HTTPException: If connection not found
     """
     try:
-        result = await db.table('external_api_connections').select('*').eq(
-            'user_id', user_id
-        ).eq('service_name', service_name).eq('is_active', True).execute()
-        
-        if not result.data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No active connection found for service {service_name}"
+        async with db_conn.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT * FROM external_api_connections
+                WHERE user_id = %s AND service_name = %s AND is_active = %s
+                """,
+                (user_id, service_name, True)
             )
-        
-        connection_data = result.data[0]
-        return ExternalAPIConnectionResponse(**connection_data)
+            
+            result = await cur.fetchone()
+            if not result:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"No active connection found for service {service_name}"
+                )
+            
+            columns = [desc[0] for desc in cur.description]
+            connection_dict = dict(zip(columns, result))
+            return ExternalAPIConnectionResponse(**connection_dict)
         
     except HTTPException:
         raise
@@ -169,7 +208,7 @@ async def update_api_connection(
     service_name: str,
     connection_update: ExternalAPIConnectionUpdate,
     user_id: str = Depends(get_current_user),
-    db: AsyncClient = Depends(get_supabase_client)
+    db_conn: psycopg.AsyncConnection = Depends(get_db_connection)
 ):
     """Update an existing API connection.
     
@@ -177,7 +216,7 @@ async def update_api_connection(
         service_name: Name of the service
         connection_update: Connection update data
         user_id: Current user ID
-        db: Supabase client
+        db_conn: Database connection
         
     Returns:
         Updated connection response
@@ -195,18 +234,38 @@ async def update_api_connection(
                 detail="No update data provided"
             )
         
-        result = await db.table('external_api_connections').update(
-            update_data
-        ).eq('user_id', user_id).eq('service_name', service_name).execute()
-        
-        if not result.data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No connection found for service {service_name}"
+        async with db_conn.cursor() as cur:
+            # Build dynamic update query
+            set_clauses = []
+            values = []
+            for field, value in update_data.items():
+                set_clauses.append(f"{field} = %s")
+                values.append(value)
+            
+            # Add updated_at
+            set_clauses.append("updated_at = NOW()")
+            values.extend([user_id, service_name])
+            
+            await cur.execute(
+                f"""
+                UPDATE external_api_connections
+                SET {', '.join(set_clauses)}
+                WHERE user_id = %s AND service_name = %s
+                RETURNING *
+                """,
+                values
             )
-        
-        connection_data = result.data[0]
-        return ExternalAPIConnectionResponse(**connection_data)
+            
+            result = await cur.fetchone()
+            if not result:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"No connection found for service {service_name}"
+                )
+            
+            columns = [desc[0] for desc in cur.description]
+            connection_dict = dict(zip(columns, result))
+            return ExternalAPIConnectionResponse(**connection_dict)
         
     except HTTPException:
         raise
@@ -222,14 +281,14 @@ async def update_api_connection(
 async def delete_api_connection(
     service_name: str,
     user_id: str = Depends(get_current_user),
-    db: AsyncClient = Depends(get_supabase_client)
+    db_conn: psycopg.AsyncConnection = Depends(get_db_connection)
 ):
     """Delete (deactivate) an API connection.
     
     Args:
         service_name: Name of the service
         user_id: Current user ID
-        db: Supabase client
+        db_conn: Database connection
         
     Returns:
         Success message
@@ -238,18 +297,26 @@ async def delete_api_connection(
         HTTPException: If connection not found or deletion fails
     """
     try:
-        # Soft delete by setting is_active to False
-        result = await db.table('external_api_connections').update(
-            {'is_active': False}
-        ).eq('user_id', user_id).eq('service_name', service_name).execute()
-        
-        if not result.data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No connection found for service {service_name}"
+        async with db_conn.cursor() as cur:
+            # Soft delete by setting is_active to False
+            await cur.execute(
+                """
+                UPDATE external_api_connections
+                SET is_active = %s, updated_at = NOW()
+                WHERE user_id = %s AND service_name = %s
+                RETURNING *
+                """,
+                (False, user_id, service_name)
             )
-        
-        return {"message": f"API connection for {service_name} deleted successfully"}
+            
+            result = await cur.fetchone()
+            if not result:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"No connection found for service {service_name}"
+                )
+            
+            return {"message": f"API connection for {service_name} deleted successfully"}
         
     except HTTPException:
         raise

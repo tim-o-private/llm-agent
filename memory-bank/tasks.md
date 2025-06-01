@@ -8,7 +8,7 @@ This file tracks the current tasks, steps, checklists, and component lists for t
 ## PENDING / ACTIVE TASKS
 
 **NEW TASK: CLARITY-V2: Clarity v2 Executive Assistant Implementation**
-*   **Status:** Planning Complete - Ready for TASK-AGENT-001 Implementation
+*   **Status:** Phase 1 Foundation - TASK-AGENT-001 Phase 2 In Progress
 *   **Complexity:** 4 (Complex System - Full executive assistant with AI agents, memory system, and multi-platform integrations)
 *   **Objective:** Implement Clarity v2 as a comprehensive executive-function assistant that filters inbound noise, multiplies outbound output, and eliminates manual data entry through proactive AI agents.
 *   **Context:** Complete system redesign based on Clarity v2 PRD and Design & Implementation Plan. Requires architectural planning, multiple subsystems, and phased implementation.
@@ -16,11 +16,11 @@ This file tracks the current tasks, steps, checklists, and component lists for t
 ### System Overview
 - **Purpose**: Executive-function assistant for knowledge workers, independent professionals, and overwhelmed parents
 - **Architectural Alignment**: Follows established patterns in techContext.md and systemPatterns.md
-- **Status**: Planning Complete - Ready for Implementation
+- **Status**: Phase 1 Foundation - TASK-AGENT-001 Phase 2 In Progress
 - **Milestones**: 
   - Architecture Planning: [Target: 2025-01-27] - ✅ Complete
   - Technology Validation: [Target: 2025-01-28] - ✅ Complete
-  - Phase 1 Foundation: [Target: 2025-02-15] - In Progress
+  - Phase 1 Foundation: [Target: 2025-02-15] - In Progress (TASK-AGENT-001 Phase 2)
   - Phase 2 Output Automation: [Target: 2025-03-15] - Not Started
   - Phase 3 Assistant Multiplier: [Target: 2025-04-30] - Not Started
 
@@ -106,9 +106,37 @@ This file tracks the current tasks, steps, checklists, and component lists for t
 - **Quality Metrics**: ✅ Comprehensive test coverage, ✅ TypeScript compilation clean, ✅ Production ready
 - **Next Steps**: ✅ **COMPLETE** - Ready for TASK-AGENT-001 (Email Digest Agent implementation)
 
+##### TASK-INFRA-001: Database Connection Patterns Analysis
+- **Description**: Document current state of database connection usage across chatServer and core components
+- **Status**: ✅ **COMPLETED** (2025-01-28)
+- **Priority**: High
+- **Dependencies**: Existing codebase analysis
+- **Estimated Effort**: 8 hours
+- **Implementation**: ✅ Comprehensive analysis of dual database connection patterns
+- **Quality Gates**: ✅ Complete inventory, migration recommendations, technical debt assessment
+- **Implementation Details**:
+  - ✅ **Pattern Analysis**: Documented PostgreSQL Connection Pool vs Supabase AsyncClient patterns
+  - ✅ **Usage Inventory**: Complete audit of connection usage across chatServer and core components
+  - ✅ **Technical Debt Assessment**: Identified inconsistencies and maintenance overhead
+  - ✅ **Migration Strategy**: Phased approach for standardizing on PostgreSQL connection pool
+  - ✅ **Testing Patterns**: Documented testing approaches for both connection types
+  - ✅ **Performance Analysis**: Connection pool benefits vs Supabase client features
+- **Files Created**:
+  - `memory-bank/database-connection-patterns.md` - Comprehensive analysis document
+- **Key Findings**:
+  - **Dual Pattern Problem**: PostgreSQL pool (recommended) vs Supabase client (legacy)
+  - **Modern Pattern Usage**: VaultTokenService, External API Router, Email Digest system
+  - **Legacy Pattern Usage**: Prompt customization, Tasks API, Base API service
+  - **Core Components**: Mixed patterns creating additional complexity
+- **Recommendations**:
+  - **Phase 1**: ✅ Standardize new development (Complete)
+  - **Phase 2**: 🔄 Migrate legacy endpoints (In Progress)
+  - **Phase 3**: ⏳ Align core components (Pending)
+- **Next Steps**: Use as reference for future database connection decisions and legacy migration planning
+
 ##### TASK-AGENT-001: Implement Email Digest Agent with Gmail Tools Integration
 - **Description**: Create Email Digest Agent using LangChain Gmail toolkit with Supabase Vault token storage and scheduled daily digest functionality
-- **Status**: **PHASE 1 COMPLETE - PHASE 2 IN PROGRESS** (Next Priority)
+- **Status**: **PHASE 1 COMPLETE - PHASE 2 IN PROGRESS** (Current Priority)
 - **Priority**: High
 - **Dependencies**: ✅ External API integration (Complete), ✅ Existing agent orchestrator (Complete)
 - **Estimated Effort**: 32 hours (4 weeks)
@@ -130,48 +158,136 @@ This file tracks the current tasks, steps, checklists, and component lists for t
 - [X] Create `user_api_tokens` view with RLS policies
 - [X] Update `external_api_connections` table to reference vault secrets
 - [X] Comprehensive unit tests for vault token operations
+- [X] Integration testing with RLS verification
 - [X] Migration script for existing tokens (if any)
 
 **🔄 Phase 2: Database-Driven Gmail Tools (Week 2: Feb 4 - Feb 10) - IN PROGRESS**
-- [ ] Insert agent configuration in `agent_configurations` table
-- [ ] Configure Gmail tools in `agent_tools` table with `runtime_args_schema`
-- [ ] Implement `GmailTool` class using LangChain Gmail toolkit
-- [ ] Add Gmail tools to `TOOL_REGISTRY` in `agent_loader_db.py`
-- [ ] Support operations: search, get_message, generate_digest
-- [ ] Integration with vault token service for credentials
+
+**Implementation Pattern References:**
+- **📋 Database Tool Configuration**: Follow `src/core/agent_loader_db.py` patterns for tool registration
+- **🔧 Tool Implementation**: Follow `src/core/tools/crud_tool.py` patterns for LangChain BaseTool integration
+- **🔒 Security Integration**: Use `chatServer/services/vault_token_service.py` for OAuth token retrieval
+- **🗄️ Database Patterns**: Use PostgreSQL connection pool pattern from `chatServer/database/connection.py`
+
+**Phase 2 Tasks:**
+- [ ] **Insert agent configuration in `agent_configurations` table**
+  - **Pattern**: Follow existing agent records in database
+  - **Reference**: See `test_db_agent_loader.py` for agent configuration examples
+  - **Fields**: `agent_name`, `llm_config`, `system_prompt`, `is_active`
+- [ ] **Configure Gmail tools in `agent_tools` table with `runtime_args_schema`**
+  - **Pattern**: Follow CRUDTool configuration patterns from `agent_loader_db.py`
+  - **Reference**: See `memory-bank/patterns/agent-patterns.md#pattern-1-generic-crudtool-configuration`
+  - **Schema**: Define `runtime_args_schema` for search, get_message, generate_digest operations
+  - **Fields**: `agent_id`, `name`, `description`, `type`, `config`, `runtime_args_schema`, `order`
+- [ ] **Implement `GmailTool` class using LangChain Gmail toolkit**
+  - **Pattern**: Extend `langchain.tools.BaseTool` like `CRUDTool`
+  - **Reference**: `src/core/tools/crud_tool.py` for tool structure and patterns
+  - **Integration**: Use `VaultTokenService.get_tokens()` for OAuth credentials
+  - **Operations**: Implement `search`, `get_message`, `generate_digest` methods
+  - **Error Handling**: Follow existing error patterns with proper logging
+- [ ] **Add Gmail tools to `TOOL_REGISTRY` in `agent_loader_db.py`**
+  - **Pattern**: Add `"GmailTool": GmailTool` to `TOOL_REGISTRY` dict
+  - **Reference**: Line 18-22 in `src/core/agent_loader_db.py`
+  - **Import**: Add `from chatServer.tools.gmail_tool import GmailTool`
+- [ ] **Support operations: search, get_message, generate_digest**
+  - **Pattern**: Each operation as separate tool instance with different configs
+  - **Reference**: See how CRUDTool handles different methods via config
+  - **Database Config**: Use `config.method` to differentiate operations
+- [ ] **Integration with vault token service for credentials**
+  - **Pattern**: Use dependency injection with `get_db_connection()`
+  - **Reference**: `chatServer/services/vault_token_service.py` methods
+  - **Security**: Always use `VaultTokenService.get_tokens()` for OAuth access
 
 **Phase 3: Email Digest Agent Implementation (Week 3: Feb 11 - Feb 17)**
-- [ ] Implement `EmailDigestAgent` using existing `CustomizableAgentExecutor`
-- [ ] Create `ScheduledDigestService` for digest generation and storage
-- [ ] Implement `DailyDigestScheduler` with APScheduler
-- [ ] Add `user_digests` table for storing generated digests
-- [ ] Integration with main assistant agent for digest presentation
 
-**Phase 4: API Integration & Testing (Week 4: Feb 18 - Feb 24)**
-- [ ] Create `email_digest_router.py` with FastAPI endpoints
-- [ ] Implement on-demand digest generation endpoint
-- [ ] Add recent digests retrieval endpoint
-- [ ] Comprehensive testing with mocked Gmail API responses
-- [ ] Security testing for vault token storage
-- [ ] Performance testing for scheduled digest generation
+**Implementation Pattern References:**
+- **🤖 Agent Framework**: Use `src/core/agents/customizable_agent.py` patterns
+- **📅 Scheduling**: Follow `chatServer/services/background_tasks.py` patterns for scheduled tasks
+- **🗄️ Database Schema**: Follow RLS patterns from existing migrations
+- **🔗 Service Integration**: Use service layer patterns from `chatServer/services/`
+
+**Phase 3 Tasks:**
+- [ ] **Implement `EmailDigestAgent` using existing `CustomizableAgentExecutor`**
+  - **Pattern**: Use `load_agent_executor_db()` from `src/core/agent_loader_db.py`
+  - **Reference**: See `chatServer/agents/email_digest_agent.py` (refactored approach)
+  - **Integration**: Agent loads Gmail tools automatically via database configuration
+  - **Memory**: Use existing PostgreSQL chat history for conversation context
+- [ ] **Create `ScheduledDigestService` for digest generation and storage**
+  - **Pattern**: Follow service layer patterns from `chatServer/services/chat.py`
+  - **Reference**: Use `chatServer/services/email_digest_service.py` as foundation
+  - **Database**: Use PostgreSQL connection pool pattern for digest storage
+  - **Integration**: Call agent executor with user context and Gmail tools
+- [ ] **Implement `DailyDigestScheduler` with APScheduler**
+  - **Pattern**: Follow `chatServer/services/background_tasks.py` scheduling patterns
+  - **Reference**: Use existing background task infrastructure
+  - **Timing**: 7:30 AM per user timezone as per Clarity v2 PRD
+  - **Concurrency**: Use existing agent executor cache for performance
+- [ ] **Add `user_digests` table for storing generated digests**
+  - **Pattern**: Follow RLS patterns from `supabase/migrations/20250128000001_vault_oauth_tokens.sql`
+  - **Reference**: Use existing migration patterns with proper RLS policies
+  - **Schema**: `user_id`, `digest_date`, `summary`, `thread_count`, `created_at`
+  - **Security**: Ensure RLS policies prevent cross-user access
+- [ ] **Integration with main assistant agent for digest presentation**
+  - **Pattern**: Use existing chat system integration points
+  - **Reference**: Follow `chatServer/main.py` chat endpoint patterns
+  - **UI Integration**: Digests available through existing chat interface
+  - **Context**: Digests become part of assistant's available information
+
+**Key Integration Points for Future Agents:**
+- **🔧 Tool Development**: Always extend `langchain.tools.BaseTool` and register in `TOOL_REGISTRY`
+- **🗄️ Database Configuration**: Use `agent_tools` table with `runtime_args_schema` for dynamic configuration
+- **🔒 Security**: Always use `VaultTokenService` for OAuth tokens, never store credentials directly
+- **📊 Connection Patterns**: Use PostgreSQL connection pool (`get_db_connection()`) for all new development
+- **🧪 Testing**: Follow comprehensive testing patterns with unit tests + integration tests
+- **📝 Documentation**: Update `memory-bank/patterns/agent-patterns.md` with new patterns
 
 **✅ Files Created/Modified (Phase 1 Complete):**
 - [X] `supabase/migrations/20250128000001_vault_oauth_tokens.sql` - Vault integration migration
 - [X] `chatServer/services/vault_token_service.py` - Secure token management
 - [X] `tests/chatServer/services/test_vault_token_service.py` - Comprehensive vault service tests
+- [X] `tests/chatServer/services/test_vault_token_service_integration.py` - RLS integration testing
 
 **Files to Create/Modify (Phase 2):**
-- [ ] `chatServer/tools/gmail_tools.py` - LangChain Gmail toolkit integration
-- [ ] Database records in `agent_configurations` and `agent_tools` tables
-- [ ] Updates to `src/core/agents/agent_loader_db.py` - Add Gmail tools to registry
+- [ ] **`chatServer/tools/gmail_tool.py`** - LangChain Gmail toolkit integration
+  - **Pattern**: Extend `langchain.tools.BaseTool` like `src/core/tools/crud_tool.py`
+  - **Dependencies**: `VaultTokenService`, LangChain Gmail toolkit
+  - **Methods**: `search()`, `get_message()`, `generate_digest()`
+  - **Testing**: Follow patterns from `tests/chatServer/services/test_gmail_service.py`
+- [ ] **Database records in `agent_configurations` and `agent_tools` tables**
+  - **Pattern**: Follow existing agent configuration examples
+  - **Reference**: See `test_db_agent_loader.py` for schema examples
+  - **Tools**: Configure 3 Gmail tools (search, get_message, generate_digest)
+- [ ] **Updates to `src/core/agent_loader_db.py`** - Add Gmail tools to registry
+  - **Pattern**: Add `"GmailTool": GmailTool` to `TOOL_REGISTRY` dict (line 18-22)
+  - **Import**: Add `from chatServer.tools.gmail_tool import GmailTool`
 
-**Files to Create/Modify (Phase 3-4):**
-- [ ] `chatServer/agents/email_digest_agent.py` - Agent implementation
-- [ ] `chatServer/services/scheduled_digest_service.py` - Digest generation service
-- [ ] `chatServer/schedulers/daily_digest_scheduler.py` - Scheduled task management
-- [ ] `chatServer/routers/email_digest_router.py` - API endpoints
-- [ ] `tests/chatServer/tools/test_gmail_tools.py` - Gmail tools unit tests
-- [ ] `tests/chatServer/agents/test_email_digest_agent.py` - Agent unit tests
+**Files to Create/Modify (Phase 3):**
+- [ ] **`supabase/migrations/20250128000002_create_email_digest_tables.sql`** - Database schema
+  - **Pattern**: Follow RLS patterns from `20250128000001_vault_oauth_tokens.sql`
+  - **Tables**: `user_digests`, `email_digest_batches`, `agent_logs`
+  - **Security**: Ensure proper RLS policies for user data isolation
+- [ ] **`chatServer/services/scheduled_digest_service.py`** - Digest generation service
+  - **Pattern**: Follow service layer patterns from `chatServer/services/chat.py`
+  - **Dependencies**: `load_agent_executor_db()`, `VaultTokenService`
+  - **Methods**: `generate_digest()`, `store_digest()`, `get_recent_digests()`
+- [ ] **`chatServer/schedulers/daily_digest_scheduler.py`** - Scheduled task management
+  - **Pattern**: Follow `chatServer/services/background_tasks.py` scheduling patterns
+  - **Dependencies**: APScheduler, `ScheduledDigestService`
+  - **Timing**: 7:30 AM per user timezone as per Clarity v2 PRD
+
+**Files to Create/Modify (Phase 4):**
+- [ ] **`chatServer/routers/email_digest_router.py`** - API endpoints
+  - **Pattern**: Follow router patterns from `chatServer/routers/external_api_router.py`
+  - **Dependencies**: `get_db_connection()`, `ScheduledDigestService`
+  - **Endpoints**: `/digest/generate`, `/digest/recent`, `/digest/history`
+- [ ] **`tests/chatServer/tools/test_gmail_tool.py`** - Gmail tools unit tests
+  - **Pattern**: Follow testing patterns from `tests/chatServer/services/test_gmail_service.py`
+  - **Coverage**: Test all Gmail operations, error scenarios, OAuth integration
+  - **Mocking**: Use `unittest.mock` for Gmail API responses
+- [ ] **`tests/chatServer/services/test_scheduled_digest_service.py`** - Service unit tests
+  - **Pattern**: Follow comprehensive testing from `tests/chatServer/services/test_chat.py`
+  - **Coverage**: Test digest generation, storage, agent integration
+  - **Mocking**: Mock agent executor and Gmail API calls
 
 **✅ Security Features (Phase 1 Complete):**
 - [X] **Authenticated Encryption**: Supabase Vault uses libsodium AEAD
@@ -179,6 +295,7 @@ This file tracks the current tasks, steps, checklists, and component lists for t
 - [X] **Row-Level Security**: RLS policies for user data scoping
 - [X] **Backup Security**: Encrypted data in backups, keys managed by Supabase
 - [X] **No Key Rotation Issues**: Supabase handles key management infrastructure
+- [X] **Integration Testing**: Verified RLS prevents cross-user data access
 
 **Integration Points:**
 - ✅ **Existing Agent Framework**: Uses `CustomizableAgentExecutor` and `load_agent_executor_db`
@@ -193,6 +310,7 @@ This file tracks the current tasks, steps, checklists, and component lists for t
 - [X] Security audit for token storage (Supabase Vault enterprise-grade)
 - [X] Comprehensive error handling and logging
 - [X] Integration testing with mocked Supabase client
+- [X] RLS verification with live database connections
 
 **Implementation Notes**: 
 - ✅ Phase 1 Complete: Supabase Vault integration provides enterprise-grade OAuth token security
@@ -201,14 +319,38 @@ This file tracks the current tasks, steps, checklists, and component lists for t
 - Implements scheduled daily digest as per Clarity v2 PRD requirements
 - Ready for integration with existing agent executor caching system
 
-##### TASK-AGENT-002: Implement Reply Drafter Agent
-- **Description**: Create agent that drafts email/Slack responses using existing framework
-- **Status**: TODO
-- **Priority**: High
-- **Dependencies**: Email/Slack API integration, existing memory system
-- **Estimated Effort**: 32 hours
-- **Implementation**: Leverage existing LTM for tone/context, STM for conversation history
-- **Quality Gates**: Appropriate tone, contextual relevance, user approval workflow
+**Phase 4: API Integration & Testing (Week 4: Feb 18 - Feb 24)**
+
+**Implementation Pattern References:**
+- **🌐 API Endpoints**: Follow FastAPI router patterns from `chatServer/routers/external_api_router.py`
+- **🧪 Testing**: Follow comprehensive testing patterns from `tests/chatServer/services/`
+- **🔒 Security Testing**: Use integration test patterns from `test_vault_token_service_integration.py`
+
+**Phase 4 Tasks:**
+- [ ] **Create `email_digest_router.py` with FastAPI endpoints**
+  - **Pattern**: Follow router patterns from `chatServer/routers/external_api_router.py`
+  - **Reference**: Use existing dependency injection with `get_db_connection()`
+  - **Endpoints**: `/digest/generate`, `/digest/recent`, `/digest/history`
+- [ ] **Implement on-demand digest generation endpoint**
+  - **Pattern**: Use service layer integration like `chatServer/services/chat.py`
+  - **Reference**: Call `ScheduledDigestService` with user context
+  - **Security**: Ensure proper user authentication and authorization
+- [ ] **Add recent digests retrieval endpoint**
+  - **Pattern**: Follow database query patterns with RLS
+  - **Reference**: Use PostgreSQL connection pool for data retrieval
+  - **Pagination**: Implement proper pagination for digest history
+- [ ] **Comprehensive testing with mocked Gmail API responses**
+  - **Pattern**: Follow testing patterns from `tests/chatServer/services/test_gmail_service.py`
+  - **Reference**: Use `unittest.mock` for Gmail API mocking
+  - **Coverage**: Test all Gmail operations and error scenarios
+- [ ] **Security testing for vault token storage**
+  - **Pattern**: Follow integration testing from `test_vault_token_service_integration.py`
+  - **Reference**: Test RLS policies and cross-user access prevention
+  - **Verification**: Ensure OAuth tokens remain secure throughout process
+- [ ] **Performance testing for scheduled digest generation**
+  - **Pattern**: Test concurrent agent execution and caching
+  - **Reference**: Use existing agent executor cache performance patterns
+  - **Metrics**: Measure digest generation time and resource usage
 
 #### MEDIUM PRIORITY: Enhanced Features
 
@@ -223,7 +365,7 @@ This file tracks the current tasks, steps, checklists, and component lists for t
 
 ##### TASK-VOICE-001: Voice Input for Notes
 - **Description**: Add voice-to-text capabilities for notes input
-- **Status**: TODO
+- **Status**: DEFERRED
 - **Priority**: Medium
 - **Dependencies**: Notes pane implementation (✅ Complete)
 - **Estimated Effort**: 24 hours

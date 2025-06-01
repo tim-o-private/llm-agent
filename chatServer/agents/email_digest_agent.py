@@ -6,13 +6,6 @@ import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
-try:
-    from ..tools.gmail_tools import GmailDigestTool, GmailSearchTool
-    from ..config.constants import DEFAULT_LOG_LEVEL
-except ImportError:
-    from chatServer.tools.gmail_tools import GmailDigestTool, GmailSearchTool
-    from chatServer.config.constants import DEFAULT_LOG_LEVEL
-
 # Import existing agent framework
 import sys
 import os
@@ -29,6 +22,13 @@ except ImportError:
     from src.core.llm_interface import LLMInterface
     from src.utils.config_loader import ConfigLoader
     from src.utils.logging_utils import get_logger
+
+try:
+    from ..database.connection import get_db_connection
+    from ..config.constants import DEFAULT_LOG_LEVEL
+except ImportError:
+    from chatServer.database.connection import get_db_connection
+    from chatServer.config.constants import DEFAULT_LOG_LEVEL
 
 logger = get_logger(__name__)
 
@@ -51,91 +51,20 @@ class EmailDigestAgent:
         # Initialize configuration
         self.config = config_loader or ConfigLoader()
         
-        # Initialize tools
-        self.tools = self._create_tools()
-        
-        # Agent configuration for email digest tasks
-        self.agent_config = {
-            "name": self.agent_name,
-            "description": "Specialized agent for email digest generation and email management tasks",
-            "model": "gemini-pro",  # Use existing model configuration
-            "system_prompt": self._get_system_prompt(),
-            "tools": self.tools,
-            "memory_config": {
-                "type": "postgresql",
-                "table_name": "chat_history"
-            }
-        }
-        
-        # Create agent executor
+        # Agent executor will be created on demand
         self.executor = None
-    
-    def _create_tools(self) -> List:
-        """Create Gmail tools for the agent."""
-        tools = []
-        
-        try:
-            # Gmail digest tool
-            gmail_digest_tool = GmailDigestTool(
-                user_id=self.user_id,
-                gmail_credentials_path=None,  # Will use default paths
-                gmail_token_path=None
-            )
-            tools.append(gmail_digest_tool)
-            
-            # Gmail search tool
-            gmail_search_tool = GmailSearchTool(
-                user_id=self.user_id,
-                gmail_credentials_path=None,
-                gmail_token_path=None
-            )
-            tools.append(gmail_search_tool)
-            
-            logger.info(f"Created {len(tools)} Gmail tools for user {self.user_id}")
-            
-        except Exception as e:
-            logger.error(f"Failed to create Gmail tools: {e}")
-            # Continue without Gmail tools - agent can still provide general assistance
-        
-        return tools
-    
-    def _get_system_prompt(self) -> str:
-        """Get system prompt for email digest agent."""
-        return """You are an Email Digest Agent, specialized in helping users manage and understand their email communications.
-
-Your primary capabilities include:
-1. **Email Digest Generation**: Create summaries of recent emails, highlighting important messages and key information
-2. **Email Search**: Help users find specific emails using Gmail search syntax
-3. **Email Analysis**: Analyze email patterns, identify important senders, and categorize messages
-4. **Email Management Advice**: Provide suggestions for email organization and productivity
-
-When generating email digests:
-- Focus on actionable items and important information
-- Highlight urgent or time-sensitive emails
-- Group related emails by thread or topic
-- Provide clear, concise summaries
-- Identify emails that require responses
-
-When searching emails:
-- Use appropriate Gmail search syntax (e.g., 'is:unread', 'from:sender@example.com', 'newer_than:2d')
-- Explain search results clearly
-- Suggest follow-up actions when relevant
-
-Always prioritize user privacy and security. Only access emails when explicitly requested and for legitimate purposes.
-
-If Gmail tools are not available, explain the limitation and offer alternative assistance."""
     
     async def get_agent_executor(self) -> CustomizableAgentExecutor:
         """Get or create agent executor using existing framework."""
         if self.executor is None:
             try:
-                # Use existing agent framework
-                self.executor = CustomizableAgentExecutor.from_agent_config(
-                    agent_config_dict=self.agent_config,
-                    tools=self.tools,
+                # Use the existing database-driven agent loading system
+                from src.core.agent_loader_db import load_agent_executor_db
+                
+                self.executor = load_agent_executor_db(
+                    agent_name=self.agent_name,
                     user_id=self.user_id,
-                    session_id=self.session_id,
-                    logger_instance=logger
+                    session_id=self.session_id
                 )
                 logger.info(f"Created email digest agent executor for user {self.user_id}")
                 
@@ -158,7 +87,7 @@ If Gmail tools are not available, explain the limitation and offer alternative a
         """
         try:
             executor = await self.get_agent_executor()
-            
+        
             # Create input for the agent
             user_input = (
                 f"Generate an email digest for the last {hours_back} hours. "
@@ -240,13 +169,30 @@ If Gmail tools are not available, explain the limitation and offer alternative a
             "agent_name": self.agent_name,
             "user_id": self.user_id,
             "session_id": self.session_id,
-            "tools_count": len(self.tools),
-            "tools": [tool.name for tool in self.tools],
             "capabilities": [
                 "Email digest generation",
                 "Email search",
                 "Email analysis",
                 "Email management advice"
             ],
-            "status": "ready" if self.tools else "limited (no Gmail access)"
-        } 
+            "status": "ready"
+        }
+
+
+async def create_email_digest_agent(user_id: str, session_id: str = None) -> EmailDigestAgent:
+    """Factory function to create and initialize an email digest agent.
+    
+    Args:
+        user_id: User ID for context
+        session_id: Session ID for memory (optional, will generate if not provided)
+        
+    Returns:
+        Initialized email digest agent
+    """
+    if not session_id:
+        session_id = f"email_digest_{user_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    
+    agent = EmailDigestAgent(user_id, session_id)
+    
+    # Agent executor will be created on first use
+    return agent 

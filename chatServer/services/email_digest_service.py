@@ -5,7 +5,6 @@
 import logging
 from datetime import datetime
 from typing import List, Optional
-from supabase import AsyncClient
 
 try:
     from .gmail_service import GmailService
@@ -35,14 +34,13 @@ logger = logging.getLogger(__name__)
 class EmailDigestService:
     """Service for generating AI-powered email digests."""
     
-    def __init__(self, db_client: AsyncClient):
+    def __init__(self):
         """Initialize email digest service.
         
-        Args:
-            db_client: Supabase client for database operations
+        Note: This service now uses the psycopg connection pool pattern
+        instead of requiring a database client parameter.
         """
-        self.db_client = db_client
-        self.gmail_service = GmailService(db_client)
+        self.gmail_service = GmailService()
         
         # Initialize LLM interface using existing infrastructure
         try:
@@ -230,12 +228,6 @@ Keep the summary concise but informative. Focus on what the user needs to know a
             Email digest response or None if failed
         """
         try:
-            # Check if user has Gmail connection
-            connection = await self.gmail_service.get_connection(user_id)
-            if not connection:
-                logger.error(f"No Gmail connection found for user {user_id}")
-                return None
-            
             # Get email threads
             threads = await self.gmail_service.get_email_threads(user_id, request)
             

@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, ConfigDict, create_model
 from supabase import create_client, Client as SupabaseClient
 from core.agents.customizable_agent import CustomizableAgentExecutor
 from core.tools.crud_tool import CRUDTool, CRUDToolInput
+from chatServer.tools.gmail_tool import GmailTool
 # Example imports for specific tool subclasses (USER ACTION: Add actual tool class imports here)
 # from core.tools.agent_memory_tools import CreateAgentLongTermMemoryTool, FetchAgentLongTermMemoryTool # etc.
 from utils.logging_utils import get_logger
@@ -18,7 +19,8 @@ logger = get_logger(__name__)
 # Tool registry: maps tool_type string from DB to Python class
 # Option 2: Registering generic CRUDTool to be configured by DB.
 TOOL_REGISTRY: Dict[str, Type] = {
-    "CRUDTool": CRUDTool, 
+    "CRUDTool": CRUDTool,
+    "GmailTool": GmailTool,
     # Add other distinct, non-CRUDTool Python classes here if any.
     # The string key (e.g., "CRUDTool") must match the 'type' column 
     # (or ENUM value as string) in your agent_tools table for these tools.
