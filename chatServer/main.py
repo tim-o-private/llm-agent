@@ -35,6 +35,8 @@ try:
     from .dependencies.agent_loader import get_agent_loader
     from .services.chat import get_chat_service
     from .services.prompt_customization import get_prompt_customization_service
+    from .routers.external_api_router import router as external_api_router
+    from .routers.email_agent_router import router as email_agent_router
 except ImportError:
     # Fall back to absolute imports (when run directly)
     from models.chat import ChatRequest, ChatResponse
@@ -50,6 +52,8 @@ except ImportError:
     from dependencies.agent_loader import get_agent_loader
     from services.chat import get_chat_service
     from services.prompt_customization import get_prompt_customization_service
+    from routers.external_api_router import router as external_api_router
+    from routers.email_agent_router import router as email_agent_router
 
 # Correctly import ConfigLoader
 from utils.config_loader import ConfigLoader
@@ -114,16 +118,6 @@ except Exception as e:
 # AgentExecutor type hint needs to be imported, e.g., from langchain.agents import AgentExecutor
 # ACTIVE_AGENTS: Dict[Tuple[str, str], AgentExecutor] = {} # REMOVED - Per documentation, this is not used.
 
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")  # Set this in your .env or Fly secrets
 
 @asynccontextmanager
@@ -166,8 +160,21 @@ async def lifespan(app: FastAPI):
     # Close database manager
     await db_manager.close()
 
-# Re-assign app with the new lifespan
+# Create app with lifespan
 app = FastAPI(lifespan=lifespan)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include routers
+app.include_router(external_api_router)
+app.include_router(email_agent_router)
 
 # --- Logger setup ---
 # Ensure logger is available if not already globally configured
