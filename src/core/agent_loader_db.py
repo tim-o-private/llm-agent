@@ -9,9 +9,11 @@ from pydantic import BaseModel, Field, ConfigDict, create_model
 from supabase import create_client, Client as SupabaseClient
 from core.agents.customizable_agent import CustomizableAgentExecutor
 from core.tools.crud_tool import CRUDTool, CRUDToolInput
-from chatServer.tools.gmail_tool import GmailTool
+from chatServer.tools.gmail_tools import GmailDigestTool, GmailSearchTool
+from chatServer.services.vault_token_service import VaultTokenService
+from chatServer.database.connection import get_db_connection
 # Example imports for specific tool subclasses (USER ACTION: Add actual tool class imports here)
-# from core.tools.agent_memory_tools import CreateAgentLongTermMemoryTool, FetchAgentLongTermMemoryTool # etc.
+# from core.tools.agent_memory_tools import CreateMemoryTool, FetchMemoryTool, UpdateMemoryTool, DeleteMemoryTool
 from utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
@@ -20,10 +22,18 @@ logger = get_logger(__name__)
 # Option 2: Registering generic CRUDTool to be configured by DB.
 TOOL_REGISTRY: Dict[str, Type] = {
     "CRUDTool": CRUDTool,
-    "GmailTool": GmailTool,
+    "GmailDigestTool": GmailDigestTool,
+    "GmailSearchTool": GmailSearchTool,
+    "GmailTool": None,  # Special handling - uses tool_class config to determine specific class
     # Add other distinct, non-CRUDTool Python classes here if any.
     # The string key (e.g., "CRUDTool") must match the 'type' column 
     # (or ENUM value as string) in your agent_tools table for these tools.
+}
+
+# Gmail tool class registry for GmailTool type
+GMAIL_TOOL_CLASSES: Dict[str, Type] = {
+    "GmailDigestTool": GmailDigestTool,
+    "GmailSearchTool": GmailSearchTool,
 }
 
 def _create_dynamic_crud_tool_class(
@@ -225,6 +235,21 @@ def load_tools_from_db(
             logger.warning(f"Tool type '{db_tool_type_str}' (for tool name '{db_tool_name}') not found in TOOL_REGISTRY. Skipping tool.")
             continue
         
+        # Special handling for GmailTool type - use tool_class config to determine specific class
+        if db_tool_type_str == "GmailTool":
+            tool_class_name = db_tool_config_json.get("tool_class")
+            if not tool_class_name:
+                logger.error(f"GmailTool instance '{db_tool_name}' is missing 'tool_class' in its DB config. Skipping.")
+                continue
+            
+            specific_gmail_tool_class = GMAIL_TOOL_CLASSES.get(tool_class_name)
+            if not specific_gmail_tool_class:
+                logger.error(f"GmailTool instance '{db_tool_name}' has unknown tool_class '{tool_class_name}'. Available: {list(GMAIL_TOOL_CLASSES.keys())}. Skipping.")
+                continue
+            
+            original_python_tool_class = specific_gmail_tool_class
+            logger.info(f"GmailTool '{db_tool_name}' resolved to specific class '{tool_class_name}'")
+        
         # This will be the class to instantiate, potentially a dynamic subclass of original_python_tool_class
         effective_tool_class_to_instantiate = original_python_tool_class
 
@@ -288,6 +313,20 @@ def load_tools_from_db(
             if db_tool_config_json:
                 logger.info(f"For non-CRUD tool '{db_tool_name}' (type '{db_tool_type_str}'), merging its DB config keys ({list(db_tool_config_json.keys())}) into constructor arguments.")
                 tool_constructor_kwargs.update(db_tool_config_json)
+            
+            # Special handling for Gmail tools that require VaultTokenService
+            if original_python_tool_class in [GmailDigestTool, GmailSearchTool] or db_tool_type_str == "GmailTool":
+                try:
+                    # Create VaultTokenService instance for Gmail tools
+                    # Note: This creates a synchronous connection for the vault service
+                    # The Gmail tools will handle async operations internally
+                    db_conn = get_db_connection()
+                    vault_service = VaultTokenService(db_conn)
+                    tool_constructor_kwargs["vault_service"] = vault_service
+                    logger.info(f"Added VaultTokenService to Gmail tool '{db_tool_name}' constructor arguments.")
+                except Exception as e:
+                    logger.error(f"Failed to create VaultTokenService for Gmail tool '{db_tool_name}': {e}")
+                    continue  # Skip this tool if we can't create the vault service
 
         logger.debug(f"Attempting to instantiate tool '{db_tool_name}' (effective class '{effective_tool_class_to_instantiate.__name__}') with kwargs: {list(tool_constructor_kwargs.keys())}")
 

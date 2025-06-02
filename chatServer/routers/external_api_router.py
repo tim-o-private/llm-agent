@@ -12,33 +12,21 @@ try:
     from ..database.connection import get_db_connection
     from ..models.external_api import (
         ExternalAPIConnectionCreate, ExternalAPIConnectionUpdate, 
-        ExternalAPIConnectionResponse, EmailDigestRequest, EmailDigestResponse
+        ExternalAPIConnectionResponse
     )
-    from ..services.email_digest_service import EmailDigestService
 except ImportError:
     from chatServer.dependencies.auth import get_current_user
     from chatServer.database.connection import get_db_connection
     from chatServer.models.external_api import (
         ExternalAPIConnectionCreate, ExternalAPIConnectionUpdate,
-        ExternalAPIConnectionResponse, EmailDigestRequest, EmailDigestResponse
+        ExternalAPIConnectionResponse
     )
-    from chatServer.services.email_digest_service import EmailDigestService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/external", tags=["external-api"])
 
 
-async def get_email_digest_service(db_conn: psycopg.AsyncConnection = Depends(get_db_connection)) -> EmailDigestService:
-    """Get email digest service instance.
-    
-    Args:
-        db_conn: Database connection
-        
-    Returns:
-        EmailDigestService instance
-    """
-    return EmailDigestService()
 
 
 @router.post("/connections", response_model=ExternalAPIConnectionResponse)
@@ -203,6 +191,42 @@ async def get_api_connection(
         )
 
 
+@router.get("/connections/{service_name}/status")
+async def get_connection_status(
+    service_name: str,
+    user_id: str = Depends(get_current_user),
+    db_conn: psycopg.AsyncConnection = Depends(get_db_connection)
+):
+    """Get connection status for a specific service.
+    
+    Args:
+        service_name: Name of the service (e.g., 'gmail')
+        user_id: Current user ID
+        db_conn: Database connection
+        
+    Returns:
+        Simple connection status
+    """
+    try:
+        async with db_conn.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT COUNT(*) FROM external_api_connections
+                WHERE user_id = %s AND service_name = %s AND is_active = %s
+                """,
+                (user_id, service_name, True)
+            )
+            
+            result = await cur.fetchone()
+            is_connected = result[0] > 0 if result else False
+            
+            return {"connected": is_connected, "service": service_name}
+        
+    except Exception as e:
+        logger.error(f"Error checking connection status for user {user_id}, service {service_name}: {e}")
+        return {"connected": False, "service": service_name, "error": "Failed to check status"}
+
+
 @router.put("/connections/{service_name}", response_model=ExternalAPIConnectionResponse)
 async def update_api_connection(
     service_name: str,
@@ -328,87 +352,3 @@ async def delete_api_connection(
         )
 
 
-@router.get("/connections/{service_name}/test")
-async def test_api_connection(
-    service_name: str,
-    user_id: str = Depends(get_current_user),
-    email_digest_service: EmailDigestService = Depends(get_email_digest_service)
-):
-    """Test an API connection.
-    
-    Args:
-        service_name: Name of the service
-        user_id: Current user ID
-        email_digest_service: Email digest service
-        
-    Returns:
-        Test result
-        
-    Raises:
-        HTTPException: If service not supported or test fails
-    """
-    try:
-        if service_name == "gmail":
-            async with email_digest_service:
-                is_working = await email_digest_service.test_gmail_connection(user_id)
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Testing not supported for service {service_name}"
-            )
-        
-        return {
-            "service_name": service_name,
-            "is_working": is_working,
-            "message": "Connection is working" if is_working else "Connection failed"
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error testing API connection for user {user_id}, service {service_name}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to test API connection"
-        )
-
-
-@router.post("/email/digest", response_model=EmailDigestResponse)
-async def generate_email_digest(
-    digest_request: EmailDigestRequest,
-    user_id: str = Depends(get_current_user),
-    email_digest_service: EmailDigestService = Depends(get_email_digest_service)
-):
-    """Generate an email digest for the current user.
-    
-    Args:
-        digest_request: Email digest request parameters
-        user_id: Current user ID
-        email_digest_service: Email digest service
-        
-    Returns:
-        Generated email digest
-        
-    Raises:
-        HTTPException: If digest generation fails
-    """
-    try:
-        async with email_digest_service:
-            digest = await email_digest_service.generate_digest(user_id, digest_request)
-        
-        if not digest:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to generate email digest"
-            )
-        
-        return digest
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error generating email digest for user {user_id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to generate email digest"
-        ) 

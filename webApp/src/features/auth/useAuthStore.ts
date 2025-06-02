@@ -9,7 +9,7 @@ export interface AuthState {
   error: string | null;
   setUser: (user: User | null) => void;
   setSession: (session: Session | null) => void;
-  signInWithProvider: (provider: 'google' | 'apple') => Promise<void>;
+  signInWithProvider: (provider: 'google' | 'apple', includeGmail?: boolean) => Promise<void>;
   signOut: () => Promise<void>;
   getToken: () => string | null;
 }
@@ -30,9 +30,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       localStorage.removeItem('sb_session');
     }
   },
-  signInWithProvider: async (provider) => {
+  signInWithProvider: async (provider, includeGmail = false) => {
     set({ loading: true, error: null });
-    const { error } = await supabase.auth.signInWithOAuth({ provider, options: { redirectTo } });
+    
+    const options: any = { redirectTo };
+    
+    // If including Gmail, add Gmail scopes and redirect to Gmail callback
+    if (includeGmail && provider === 'google') {
+      options.scopes = 'https://www.googleapis.com/auth/gmail.readonly';
+      options.queryParams = {
+        access_type: 'offline',
+        prompt: 'consent',
+      };
+      options.redirectTo = `${window.location.origin}/auth/callback?service=gmail`;
+    }
+    
+    const { error } = await supabase.auth.signInWithOAuth({ provider, options });
     if (error) set({ error: error.message });
     set({ loading: false });
   },

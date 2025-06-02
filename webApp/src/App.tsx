@@ -12,6 +12,7 @@ import { Toaster } from '@/components/ui/toast';
 // Lazy load pages for better performance
 const Home = lazy(() => import('@/pages/Home'));
 const Login = lazy(() => import('@/pages/Login'));
+const AuthCallback = lazy(() => import('@/pages/AuthCallback').then(module => ({ default: module.AuthCallback })));
 
 const TodayView = lazy(() => import('@/pages/TodayView.tsx'));
 const TodayViewMockup = lazy(() => import('@/pages/TodayViewMockup'));
@@ -20,6 +21,7 @@ const CoachPageV2 = lazy(() => import('@/pages/CoachPageV2'));
 const ColorSwatchPage = lazy(() => import('@/pages/ColorSwatchPage'));
 const DesignSystemPage = lazy(() => import('@/pages/DesignSystemPage'));
 const SelectTestPage = lazy(() => import('@/pages/SelectTestPage'));
+const IntegrationsPage = lazy(() => import('@/pages/Settings/Integrations').then(module => ({ default: module.IntegrationsPage })));
 const DesignDemo = lazy(() => import('@/components/ui/DesignDemo').then(module => ({ default: () => <module.DesignDemo /> })));
 const LayoutMockups = lazy(() => import('@/components/ui/LayoutMockups').then(module => ({ default: () => <module.LayoutMockups /> })));
 
@@ -43,6 +45,7 @@ function App() {
               {/* Public routes */}
               <Route path="/" element={<Home />} />
               <Route path="/login" element={<Login />} />
+              <Route path="/auth/callback" element={<AuthCallback />} />
               {/* Temporary: CoachPageV2 as public route for testing */}
               <Route path="/coach-v2" element={<CoachPageV2 />} />
               {/* Temporary: Design demo as public route */}
@@ -63,6 +66,7 @@ function App() {
                 <Route element={<AppShell><Outlet /></AppShell>}> 
                   <Route path="/today" element={<TodayView />} />
                   <Route path="/coach" element={<CoachPage />} />
+                  <Route path="/settings" element={<IntegrationsPage />} />
                   {/* Default protected route */}
                   <Route index element={<TodayView />} /> 
                 </Route>
