@@ -64,7 +64,7 @@ export function useStoreTokens() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (data, variables) => {
+    onSuccess: (_data, variables) => {
       toast.success(`${variables.serviceName} connected successfully`);
       // Invalidate connections list to refresh UI
       queryClient.invalidateQueries({ queryKey: [EXTERNAL_CONNECTIONS_QUERY_KEY, user?.id] });
@@ -165,7 +165,7 @@ export function useRevokeTokens() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (data, serviceName) => {
+    onSuccess: (_data, serviceName) => {
       toast.success(`${serviceName} disconnected successfully`);
       // Invalidate connections list to refresh UI
       queryClient.invalidateQueries({ queryKey: [EXTERNAL_CONNECTIONS_QUERY_KEY, user?.id] });

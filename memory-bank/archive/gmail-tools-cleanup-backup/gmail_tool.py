@@ -91,7 +91,7 @@ class GmailTool(BaseTool):
             # Get database connection for vault token service
             async for db_conn in get_db_connection():
                 # Get vault token service
-                vault_service = VaultTokenService(db_conn)
+                vault_service = VaultTokenService(db_conn, context="user")
                 
                 # Get user's Gmail tokens
                 access_token, refresh_token = await vault_service.get_tokens(

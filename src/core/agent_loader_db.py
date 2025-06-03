@@ -10,7 +10,6 @@ from supabase import create_client, Client as SupabaseClient
 from core.agents.customizable_agent import CustomizableAgentExecutor
 from core.tools.crud_tool import CRUDTool, CRUDToolInput
 from chatServer.tools.gmail_tools import GmailDigestTool, GmailSearchTool
-from chatServer.services.vault_token_service import VaultTokenService
 from chatServer.database.connection import get_db_connection
 # Example imports for specific tool subclasses (USER ACTION: Add actual tool class imports here)
 # from core.tools.agent_memory_tools import CreateMemoryTool, FetchMemoryTool, UpdateMemoryTool, DeleteMemoryTool
@@ -35,6 +34,44 @@ GMAIL_TOOL_CLASSES: Dict[str, Type] = {
     "GmailDigestTool": GmailDigestTool,
     "GmailSearchTool": GmailSearchTool,
 }
+
+# Agent registry: maps agent_name to specialized agent classes
+# This allows routing specific agents to their specialized implementations
+AGENT_REGISTRY: Dict[str, Type] = {}
+
+def register_specialized_agent(agent_name: str, agent_class: Type):
+    """Register a specialized agent class for a specific agent name.
+    
+    Args:
+        agent_name: Name of the agent (e.g., 'email_digest_agent')
+        agent_class: Specialized agent class to use
+    """
+    AGENT_REGISTRY[agent_name] = agent_class
+    logger.info(f"Registered specialized agent '{agent_name}' -> {agent_class.__name__}")
+
+# Register specialized agents
+try:
+    from chatServer.agents.email_digest_agent import EmailDigestAgent
+    register_specialized_agent('email_digest_agent', EmailDigestAgent)
+except ImportError as e:
+    logger.warning(f"Could not import EmailDigestAgent: {e}")
+
+def create_specialized_agent(agent_name: str, user_id: str, session_id: str) -> Any:
+    """Create a specialized agent instance if one is registered.
+    
+    Args:
+        agent_name: Name of the agent
+        user_id: User ID
+        session_id: Session ID
+        
+    Returns:
+        Specialized agent instance or None if not registered
+    """
+    if agent_name in AGENT_REGISTRY:
+        agent_class = AGENT_REGISTRY[agent_name]
+        logger.info(f"Creating specialized agent '{agent_name}' using {agent_class.__name__}")
+        return agent_class(user_id=user_id, session_id=session_id)
+    return None
 
 def _create_dynamic_crud_tool_class(
     tool_name_from_db: str, 
@@ -231,7 +268,7 @@ def load_tools_from_db(
         db_tool_description = str(db_tool_description)
             
         original_python_tool_class = TOOL_REGISTRY.get(db_tool_type_str)
-        if not original_python_tool_class:
+        if db_tool_type_str not in TOOL_REGISTRY:
             logger.warning(f"Tool type '{db_tool_type_str}' (for tool name '{db_tool_name}') not found in TOOL_REGISTRY. Skipping tool.")
             continue
         
@@ -313,20 +350,6 @@ def load_tools_from_db(
             if db_tool_config_json:
                 logger.info(f"For non-CRUD tool '{db_tool_name}' (type '{db_tool_type_str}'), merging its DB config keys ({list(db_tool_config_json.keys())}) into constructor arguments.")
                 tool_constructor_kwargs.update(db_tool_config_json)
-            
-            # Special handling for Gmail tools that require VaultTokenService
-            if original_python_tool_class in [GmailDigestTool, GmailSearchTool] or db_tool_type_str == "GmailTool":
-                try:
-                    # Create VaultTokenService instance for Gmail tools
-                    # Note: This creates a synchronous connection for the vault service
-                    # The Gmail tools will handle async operations internally
-                    db_conn = get_db_connection()
-                    vault_service = VaultTokenService(db_conn)
-                    tool_constructor_kwargs["vault_service"] = vault_service
-                    logger.info(f"Added VaultTokenService to Gmail tool '{db_tool_name}' constructor arguments.")
-                except Exception as e:
-                    logger.error(f"Failed to create VaultTokenService for Gmail tool '{db_tool_name}': {e}")
-                    continue  # Skip this tool if we can't create the vault service
 
         logger.debug(f"Attempting to instantiate tool '{db_tool_name}' (effective class '{effective_tool_class_to_instantiate.__name__}') with kwargs: {list(tool_constructor_kwargs.keys())}")
 
@@ -365,12 +388,13 @@ def load_agent_executor_db(
     if specified), and returns an initialized `CustomizableAgentExecutor`.
 
     Workflow:
-    1. Fetches the agent's core configuration (LLM settings, system prompt) from 'agent_configurations'.
-    2. Fetches the list of active tools assigned to this agent from 'agent_tools',
+    1. Checks for specialized agent implementations first (e.g., EmailDigestAgent)
+    2. Fetches the agent's core configuration (LLM settings, system prompt) from 'agent_configurations'.
+    3. Fetches the list of active tools assigned to this agent from 'agent_tools' joined with 'tools',
        including their type, name, description, and JSONB configuration.
-    3. Calls `load_tools_from_db` to instantiate these tools, which handles dynamic
+    4. Calls `load_tools_from_db` to instantiate these tools, which handles dynamic
        `args_schema` creation for CRUDTools based on `runtime_args_schema` in their config.
-    4. Initializes and returns a `CustomizableAgentExecutor` with the loaded agent config and tools.
+    5. Initializes and returns a `CustomizableAgentExecutor` with the loaded agent config and tools.
 
     Args:
         agent_name: The name of the agent to load (must match 'agent_name' in DB).
@@ -390,6 +414,27 @@ def load_agent_executor_db(
         Various exceptions from tool instantiation or executor creation if errors occur.
     """
     logger.setLevel(log_level)
+    
+    # 1. Check for specialized agent implementations first
+    specialized_agent = create_specialized_agent(agent_name, user_id, session_id)
+    if specialized_agent:
+        logger.info(f"Using specialized agent implementation for '{agent_name}'")
+        # For specialized agents, we need to return their executor
+        # This assumes specialized agents have a get_agent_executor() method
+        if hasattr(specialized_agent, 'get_agent_executor'):
+            import asyncio
+            try:
+                # Run the async method to get the executor
+                executor = asyncio.run(specialized_agent.get_agent_executor())
+                logger.info(f"Successfully loaded specialized agent executor for '{agent_name}'")
+                return executor
+            except Exception as e:
+                logger.error(f"Failed to get executor from specialized agent '{agent_name}': {e}")
+                logger.info(f"Falling back to generic agent loading for '{agent_name}'")
+        else:
+            logger.warning(f"Specialized agent '{agent_name}' does not have get_agent_executor method, falling back to generic loading")
+    
+    # 2. Continue with generic agent loading if no specialized agent or if specialized agent failed
     effective_supabase_url = supabase_url or os.getenv("VITE_SUPABASE_URL")
     effective_supabase_key = supabase_key or os.getenv("SUPABASE_SERVICE_KEY")
     if not effective_supabase_url or not effective_supabase_key:
@@ -397,8 +442,8 @@ def load_agent_executor_db(
     
     db: SupabaseClient = create_client(effective_supabase_url, effective_supabase_key)
 
-    logger.info(f"Loading agent executor for agent_name='{agent_name}', user_id='{user_id}'.")
-    # 1. Fetch agent config
+    logger.info(f"Loading agent executor for agent_name='{agent_name}', user_id='{user_id}' using generic agent loading.")
+    # 3. Fetch agent config
     agent_resp = db.table("agent_configurations").select("*, id").eq("agent_name", agent_name).single().execute()
     if not agent_resp.data:
         raise ValueError(f"Agent configuration for '{agent_name}' not found in 'agent_configurations' table.")
@@ -409,22 +454,108 @@ def load_agent_executor_db(
         raise ValueError(f"Agent '{agent_name}' found, but its ID (UUID from agent_configurations table) is missing. This is unexpected.")
     logger.info(f"Loaded agent config for '{agent_name}' (ID: {agent_id}) from DB.")
 
-    # 2. Fetch tools for this agent using its agent_id (UUID)
-    tools_resp = db.table("agent_tools").select("*").eq("agent_id", str(agent_id)).eq("is_active", True).order("order").execute()
-    tools_data_from_db = tools_resp.data or [] # Ensure it's a list, even if empty
-    logger.info(f"Found {len(tools_data_from_db)} active tools linked to agent '{agent_name}' (agent_id: {agent_id}) in 'agent_tools' table.")
+    # 4. Fetch tools for this agent using normalized schema (agent_tools -> tools join)
+    # Use PostgreSQL connection pool for proper JOIN support
+    async def get_agent_tools():
+        async for conn in get_db_connection():
+            async with conn.cursor() as cursor:
+                await cursor.execute("""
+                    SELECT 
+                        at.id as assignment_id,
+                        at.config_override,
+                        at.is_active as assignment_active,
+                        t.id as tool_id,
+                        t.name,
+                        t.type,
+                        t.description,
+                        t.config,
+                        t.is_active as tool_active
+                    FROM agent_tools at
+                    JOIN tools t ON at.tool_id = t.id
+                    WHERE at.agent_id = %s 
+                    AND at.is_active = true 
+                    AND at.is_deleted = false
+                    AND t.is_active = true 
+                    AND t.is_deleted = false
+                """, (str(agent_id),))
+                
+                rows = await cursor.fetchall()
+                columns = [desc[0] for desc in cursor.description]
+                return [dict(zip(columns, row)) for row in rows]
+    
+    # Since this is a sync function, we need to run the async query
+    import asyncio
+    try:
+        tools_data_from_db = asyncio.run(get_agent_tools())
+    except Exception as e:
+        logger.error(f"Failed to fetch tools using connection pool: {e}")
+        # Fallback to Supabase client with separate queries
+        logger.info("Falling back to Supabase client with separate queries")
+        
+        # First get agent tool assignments
+        assignments_resp = db.table("agent_tools").select("*").eq("agent_id", str(agent_id)).eq("is_active", True).eq("is_deleted", False).execute()
+        assignments = assignments_resp.data or []
+        
+        # Then get tool details for each assignment
+        tools_data_from_db = []
+        for assignment in assignments:
+            tool_resp = db.table("tools").select("*").eq("id", assignment["tool_id"]).eq("is_active", True).eq("is_deleted", False).single().execute()
+            if tool_resp.data:
+                tool_data = tool_resp.data
+                # Merge assignment and tool data
+                merged_data = {
+                    "assignment_id": assignment["id"],
+                    "config_override": assignment.get("config_override", {}),
+                    "assignment_active": assignment["is_active"],
+                    "tool_id": tool_data["id"],
+                    "name": tool_data["name"],
+                    "type": tool_data["type"],
+                    "description": tool_data.get("description", ""),
+                    "config": tool_data.get("config", {}),
+                    "tool_active": tool_data["is_active"]
+                }
+                tools_data_from_db.append(merged_data)
+    
+    logger.info(f"Found {len(tools_data_from_db)} active tools linked to agent '{agent_name}' (agent_id: {agent_id}) via normalized schema.")
 
-    # 3. Instantiate tools using the helper function
+    # 5. Transform the joined data to match the expected format for load_tools_from_db
+    # Merge tool config with config_override from agent_tools
+    transformed_tools_data = []
+    for tool_data in tools_data_from_db:
+        # Start with the base tool config
+        merged_config = tool_data.get("config", {})
+        
+        # Apply agent-specific config overrides
+        config_override = tool_data.get("config_override", {})
+        if config_override:
+            if isinstance(merged_config, dict) and isinstance(config_override, dict):
+                merged_config.update(config_override)
+            else:
+                # If either is not a dict, use override as the config
+                merged_config = config_override
+        
+        # Create the expected tool data structure
+        transformed_tool = {
+            "id": tool_data["assignment_id"],  # Use assignment ID for uniqueness
+            "name": tool_data["name"],
+            "type": tool_data["type"],
+            "description": tool_data.get("description", ""),
+            "config": merged_config,
+            "is_active": tool_data["assignment_active"]
+        }
+        transformed_tools_data.append(transformed_tool)
+
+    # 6. Instantiate tools using the helper function
     # Pass the agent_name from the agent_configurations table, as it's the canonical one.
     instantiated_tools = load_tools_from_db(
-        tools_data=tools_data_from_db,
+        tools_data=transformed_tools_data,
         user_id=user_id,
         agent_name=agent_db_config["agent_name"], # Use agent_name from agent_configurations
         supabase_url=effective_supabase_url,
         supabase_key=effective_supabase_key,
     )
 
-    # 4. Prepare LLM config and system prompt from the agent's DB configuration
+    # 7. Prepare LLM config and system prompt from the agent's DB configuration
     llm_config_from_db = agent_db_config.get("llm_config")
     system_prompt_from_db = agent_db_config.get("system_prompt")
 
@@ -440,7 +571,7 @@ def load_agent_executor_db(
         "system_prompt": system_prompt_from_db or "", # Default to empty string if missing
     }
 
-    # 5. Create and return the executor
+    # 8. Create and return the executor
     try:
         agent_executor = CustomizableAgentExecutor.from_agent_config(
             agent_config_dict=agent_config_for_executor,
@@ -451,7 +582,7 @@ def load_agent_executor_db(
             explicit_custom_instructions_dict=explicit_custom_instructions,
             logger_instance=logger # Pass the configured logger instance
         )
-        logger.info(f"Successfully created CustomizableAgentExecutor for agent '{agent_db_config['agent_name']}' using DB configuration.")
+        logger.info(f"Successfully created CustomizableAgentExecutor for agent '{agent_db_config['agent_name']}' using normalized DB schema.")
         return agent_executor
     except Exception as e:
         logger.error(f"Failed to create CustomizableAgentExecutor for agent '{agent_db_config['agent_name']}': {e}", exc_info=True)

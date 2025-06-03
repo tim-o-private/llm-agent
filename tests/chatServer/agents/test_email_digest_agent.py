@@ -104,22 +104,26 @@ class TestEmailDigestAgent:
     @pytest.mark.asyncio
     async def test_get_agent_executor(self, email_agent, mock_agent_executor):
         """Test agent executor creation."""
-        with patch('chatServer.agents.email_digest_agent.CustomizableAgentExecutor') as mock_executor_class:
-            mock_executor_class.from_agent_config.return_value = mock_agent_executor
-            
-            executor = await email_agent.get_agent_executor()
-            
-            assert executor == mock_agent_executor
-            mock_executor_class.from_agent_config.assert_called_once()
+        # Mock the database loader to fail, forcing fallback to from_agent_config
+        with patch('src.core.agent_loader_db.load_agent_executor_db', side_effect=Exception("DB load failed")):
+            with patch('chatServer.agents.email_digest_agent.CustomizableAgentExecutor') as mock_executor_class:
+                mock_executor_class.from_agent_config.return_value = mock_agent_executor
+                
+                executor = await email_agent.get_agent_executor()
+                
+                assert executor == mock_agent_executor
+                mock_executor_class.from_agent_config.assert_called_once()
     
     @pytest.mark.asyncio
     async def test_get_agent_executor_failure(self, email_agent):
         """Test agent executor creation failure."""
-        with patch('chatServer.agents.email_digest_agent.CustomizableAgentExecutor') as mock_executor_class:
-            mock_executor_class.from_agent_config.side_effect = Exception("Executor creation failed")
-            
-            with pytest.raises(RuntimeError, match="Failed to initialize email digest agent"):
-                await email_agent.get_agent_executor()
+        # Mock both database loader and fallback to fail
+        with patch('src.core.agent_loader_db.load_agent_executor_db', side_effect=Exception("DB load failed")):
+            with patch('chatServer.agents.email_digest_agent.CustomizableAgentExecutor') as mock_executor_class:
+                mock_executor_class.from_agent_config.side_effect = Exception("Executor creation failed")
+                
+                with pytest.raises(RuntimeError, match="Failed to initialize email digest agent"):
+                    await email_agent.get_agent_executor()
     
     @pytest.mark.asyncio
     async def test_generate_digest_success(self, email_agent, mock_agent_executor):
@@ -242,18 +246,20 @@ class TestEmailDigestAgent:
     @pytest.mark.asyncio
     async def test_agent_executor_caching(self, email_agent, mock_agent_executor):
         """Test that agent executor is cached."""
-        with patch('chatServer.agents.email_digest_agent.CustomizableAgentExecutor') as mock_executor_class:
-            mock_executor_class.from_agent_config.return_value = mock_agent_executor
-            
-            # First call should create executor
-            executor1 = await email_agent.get_agent_executor()
-            
-            # Second call should return cached executor
-            executor2 = await email_agent.get_agent_executor()
-            
-            assert executor1 == executor2
-            # Should only be called once due to caching
-            mock_executor_class.from_agent_config.assert_called_once()
+        # Mock the database loader to fail, forcing fallback to from_agent_config
+        with patch('src.core.agent_loader_db.load_agent_executor_db', side_effect=Exception("DB load failed")):
+            with patch('chatServer.agents.email_digest_agent.CustomizableAgentExecutor') as mock_executor_class:
+                mock_executor_class.from_agent_config.return_value = mock_agent_executor
+                
+                # First call should create executor
+                executor1 = await email_agent.get_agent_executor()
+                
+                # Second call should return cached executor
+                executor2 = await email_agent.get_agent_executor()
+                
+                assert executor1 == executor2
+                # Should only be called once due to caching
+                mock_executor_class.from_agent_config.assert_called_once()
 
 
 class TestGmailTools:
@@ -291,13 +297,18 @@ class TestGmailTools:
             assert tool.name == "gmail_search"
             assert "Search Gmail messages" in tool.description
     
-    def test_gmail_toolkit_creation_failure(self):
+    @pytest.mark.asyncio
+    async def test_gmail_toolkit_creation_failure(self):
         """Test Gmail toolkit creation failure."""
-        with patch('chatServer.tools.gmail_tools.get_gmail_credentials', side_effect=Exception("Auth failed")):
+        with patch('chatServer.tools.gmail_tools.VaultToLangChainCredentialAdapter') as mock_bridge_class:
+            mock_bridge = AsyncMock()
+            mock_bridge.fetch_or_refresh_gmail_credentials.side_effect = ValueError("No gmail connection found")
+            mock_bridge_class.return_value = mock_bridge
+            
             tool = GmailDigestTool(user_id="test_user")
             
-            with pytest.raises(RuntimeError, match="Gmail authentication failed"):
-                tool._get_gmail_toolkit()
+            with pytest.raises(RuntimeError, match="Gmail not connected"):
+                await tool._get_gmail_toolkit()
 
 
 if __name__ == "__main__":

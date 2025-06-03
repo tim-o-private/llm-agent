@@ -19,7 +19,6 @@ except ImportError:
         "Install with: pip install langchain-google-community[gmail]"
     )
 
-from chatServer.services.vault_token_service import VaultTokenService
 from chatServer.services.langchain_auth_bridge import VaultToLangChainCredentialAdapter
 
 logger = logging.getLogger(__name__)
@@ -51,20 +50,24 @@ class GmailDigestTool(BaseTool):
     
     # Configuration
     user_id: str
-    vault_service: VaultTokenService
     
-    def __init__(self, user_id: str, vault_service: VaultTokenService, **kwargs):
+    def __init__(self, user_id: str, **kwargs):
         """Initialize Gmail digest tool with Vault authentication.
         
         Args:
             user_id: User ID for scoping
-            vault_service: VaultTokenService for token retrieval
             **kwargs: Additional configuration
         """
-        super().__init__(user_id=user_id, vault_service=vault_service, **kwargs)
+        super().__init__(user_id=user_id, **kwargs)
         self._gmail_toolkit = None
         self._gmail_tools = None
-        self._auth_bridge = VaultToLangChainCredentialAdapter(vault_service)
+        self._auth_bridge = None
+    
+    async def _get_auth_bridge(self) -> VaultToLangChainCredentialAdapter:
+        """Get or create auth bridge instance."""
+        if self._auth_bridge is None:
+            self._auth_bridge = VaultToLangChainCredentialAdapter()
+        return self._auth_bridge
     
     async def _get_gmail_toolkit(self) -> GmailToolkit:
         """Get or create Gmail toolkit instance with Vault authentication."""
@@ -73,14 +76,34 @@ class GmailDigestTool(BaseTool):
                 logger.info(f"Initializing Gmail toolkit for user {self.user_id}")
                 
                 # Get credentials from Vault via bridge
-                credentials = await self._auth_bridge.create_gmail_credentials(self.user_id)
+                auth_bridge = await self._get_auth_bridge()
+                credentials = await auth_bridge.fetch_or_refresh_gmail_credentials(self.user_id)
                 api_resource = build_resource_service(credentials=credentials)
                 self._gmail_toolkit = GmailToolkit(api_resource=api_resource)
                 
                 logger.info(f"Successfully initialized Gmail toolkit for user {self.user_id}")
+            except ValueError as e:
+                # User hasn't completed OAuth flow
+                logger.warning(f"Gmail OAuth not configured for user {self.user_id}: {e}")
+                raise RuntimeError(
+                    "Gmail not connected. Please connect your Gmail account in Settings > Integrations. "
+                    "You'll need to complete the OAuth flow to allow access to your Gmail."
+                )
+            except RuntimeError as e:
+                # Token refresh or other auth issues
+                error_msg = str(e)
+                if "refresh" in error_msg.lower():
+                    logger.error(f"Gmail token refresh failed for user {self.user_id}: {e}")
+                    raise RuntimeError(
+                        "Gmail connection expired. Please reconnect your Gmail account in Settings > Integrations. "
+                        "Your authentication tokens need to be refreshed."
+                    )
+                else:
+                    logger.error(f"Gmail authentication error for user {self.user_id}: {e}")
+                    raise RuntimeError(f"Gmail authentication failed: {error_msg}")
             except Exception as e:
                 logger.error(f"Failed to initialize Gmail toolkit for user {self.user_id}: {e}")
-                raise RuntimeError(f"Gmail authentication failed: {e}")
+                raise RuntimeError(f"Gmail service unavailable: {e}")
         
         return self._gmail_toolkit
     
@@ -149,7 +172,8 @@ class GmailDigestTool(BaseTool):
         # In a real implementation, you might use an LLM to generate a better summary
         
         lines = email_data.split('\n')
-        email_count = len([line for line in lines if 'Message ID:' in line or 'Subject:' in line])
+        # Count only Subject lines since each email has one subject
+        email_count = len([line for line in lines if 'Subject:' in line])
         
         summary = f"Email Digest - Last {hours_back} hours:\n\n"
         summary += f"Found {email_count} recent emails.\n\n"
@@ -223,19 +247,23 @@ class GmailSearchTool(BaseTool):
     args_schema: ClassVar[Type[BaseModel]] = GmailSearchInput
     
     user_id: str
-    vault_service: VaultTokenService
     
-    def __init__(self, user_id: str, vault_service: VaultTokenService, **kwargs):
+    def __init__(self, user_id: str, **kwargs):
         """Initialize Gmail search tool with Vault authentication.
         
         Args:
             user_id: User ID for scoping
-            vault_service: VaultTokenService for token retrieval
             **kwargs: Additional configuration
         """
-        super().__init__(user_id=user_id, vault_service=vault_service, **kwargs)
+        super().__init__(user_id=user_id, **kwargs)
         self._gmail_toolkit = None
-        self._auth_bridge = VaultToLangChainCredentialAdapter(vault_service)
+        self._auth_bridge = None
+    
+    async def _get_auth_bridge(self) -> VaultToLangChainCredentialAdapter:
+        """Get or create auth bridge instance."""
+        if self._auth_bridge is None:
+            self._auth_bridge = VaultToLangChainCredentialAdapter()
+        return self._auth_bridge
     
     async def _get_gmail_toolkit(self) -> GmailToolkit:
         """Get or create Gmail toolkit instance with Vault authentication."""
@@ -244,14 +272,34 @@ class GmailSearchTool(BaseTool):
                 logger.info(f"Initializing Gmail toolkit for user {self.user_id}")
                 
                 # Get credentials from Vault via bridge
-                credentials = await self._auth_bridge.create_gmail_credentials(self.user_id)
+                auth_bridge = await self._get_auth_bridge()
+                credentials = await auth_bridge.fetch_or_refresh_gmail_credentials(self.user_id)
                 api_resource = build_resource_service(credentials=credentials)
                 self._gmail_toolkit = GmailToolkit(api_resource=api_resource)
                 
                 logger.info(f"Successfully initialized Gmail toolkit for user {self.user_id}")
+            except ValueError as e:
+                # User hasn't completed OAuth flow
+                logger.warning(f"Gmail OAuth not configured for user {self.user_id}: {e}")
+                raise RuntimeError(
+                    "Gmail not connected. Please connect your Gmail account in Settings > Integrations. "
+                    "You'll need to complete the OAuth flow to allow access to your Gmail."
+                )
+            except RuntimeError as e:
+                # Token refresh or other auth issues
+                error_msg = str(e)
+                if "refresh" in error_msg.lower():
+                    logger.error(f"Gmail token refresh failed for user {self.user_id}: {e}")
+                    raise RuntimeError(
+                        "Gmail connection expired. Please reconnect your Gmail account in Settings > Integrations. "
+                        "Your authentication tokens need to be refreshed."
+                    )
+                else:
+                    logger.error(f"Gmail authentication error for user {self.user_id}: {e}")
+                    raise RuntimeError(f"Gmail authentication failed: {error_msg}")
             except Exception as e:
                 logger.error(f"Failed to initialize Gmail toolkit for user {self.user_id}: {e}")
-                raise RuntimeError(f"Gmail authentication failed: {e}")
+                raise RuntimeError(f"Gmail service unavailable: {e}")
         
         return self._gmail_toolkit
     
@@ -263,9 +311,11 @@ class GmailSearchTool(BaseTool):
             max_results: Maximum number of results
             
         Returns:
-            Search results
+            Search results as formatted string
         """
         try:
+            logger.info(f"Searching Gmail for user {self.user_id}: query='{query}', max_results={max_results}")
+            
             # Note: _run is synchronous but we need async for Vault operations
             # This is a limitation that will be addressed in the agent execution context
             return (
@@ -275,22 +325,56 @@ class GmailSearchTool(BaseTool):
             )
             
         except Exception as e:
-            logger.error(f"Gmail search failed: {e}")
+            logger.error(f"Error searching Gmail: {e}")
             return f"Failed to search Gmail: {e}"
     
     async def _arun(self, query: str, max_results: int = 20) -> str:
         """Async version of Gmail search."""
         try:
+            logger.info(f"Searching Gmail for user {self.user_id}: query='{query}', max_results={max_results}")
+            
+            # Get Gmail toolkit
             toolkit = await self._get_gmail_toolkit()
             gmail_tools = toolkit.get_tools()
+            
+            # Find search tool
             search_tool = next((tool for tool in gmail_tools if "search" in tool.name.lower()), None)
             
             if not search_tool:
-                return "Gmail search tool not available"
+                return "Gmail search tool not available in toolkit"
             
-            result = search_tool.run({"query": query, "max_results": max_results})
-            return result
+            # Execute search
+            search_result = search_tool.run({"query": query, "max_results": max_results})
+            
+            return search_result
             
         except Exception as e:
-            logger.error(f"Gmail search failed: {e}")
-            return f"Failed to search Gmail: {e}" 
+            logger.error(f"Error searching Gmail: {e}")
+            return f"Failed to search Gmail: {e}"
+
+
+# Factory functions for creating tool instances
+def create_gmail_digest_tool(user_id: str, **kwargs) -> GmailDigestTool:
+    """Create a GmailDigestTool instance.
+    
+    Args:
+        user_id: User ID for scoping
+        **kwargs: Additional configuration
+        
+    Returns:
+        GmailDigestTool instance
+    """
+    return GmailDigestTool(user_id=user_id, **kwargs)
+
+
+def create_gmail_search_tool(user_id: str, **kwargs) -> GmailSearchTool:
+    """Create a GmailSearchTool instance.
+    
+    Args:
+        user_id: User ID for scoping
+        **kwargs: Additional configuration
+        
+    Returns:
+        GmailSearchTool instance
+    """
+    return GmailSearchTool(user_id=user_id, **kwargs) 

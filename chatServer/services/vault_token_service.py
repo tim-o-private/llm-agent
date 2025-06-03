@@ -20,15 +20,21 @@ class VaultTokenService:
     
     Provides secure storage and retrieval of OAuth access and refresh tokens
     using Supabase Vault's authenticated encryption with associated data (AEAD).
+    Supports both user context (UI) and scheduler context (background tasks).
     """
     
-    def __init__(self, db_connection: psycopg.AsyncConnection):
+    def __init__(self, db_connection: psycopg.AsyncConnection, context: str = "user"):
         """Initialize the vault token service.
         
         Args:
             db_connection: PostgreSQL async connection from the connection pool
+            context: Execution context - "user" for UI operations, "scheduler" for background tasks
         """
         self.db = db_connection
+        self.context = context
+        
+        if context not in ["user", "scheduler"]:
+            raise ValueError(f"Invalid context: {context}. Must be 'user' or 'scheduler'")
     
     async def store_tokens(
         self, 
@@ -41,20 +47,23 @@ class VaultTokenService:
         service_user_id: Optional[str] = None,
         service_user_email: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Store OAuth tokens in Vault and save references in connections table.
+        """Store OAuth tokens securely using Supabase Vault.
+        
+        Note: Token storage always uses the user context RPC function regardless of service context,
+        as storage operations are typically initiated by user authentication flows.
         
         Args:
             user_id: User ID from auth.users
             service_name: Name of the external service (gmail, google_calendar, slack)
-            access_token: OAuth access token to encrypt and store
-            refresh_token: OAuth refresh token to encrypt and store (optional)
+            access_token: OAuth access token
+            refresh_token: OAuth refresh token (optional)
             expires_at: When the access token expires (optional)
             scopes: List of OAuth scopes granted (optional)
-            service_user_id: User ID from the external service (optional)
-            service_user_email: User email from the external service (optional)
+            service_user_id: User ID on the external service (optional)
+            service_user_email: User email on the external service (optional)
             
         Returns:
-            Dictionary containing the created/updated connection record
+            Dictionary containing the stored connection record
             
         Raises:
             Exception: If token storage fails
@@ -63,117 +72,102 @@ class VaultTokenService:
             logger.info(f"Storing tokens for user {user_id} service {service_name}")
             
             async with self.db.cursor() as cur:
-                # Store access token in vault
-                await cur.execute(
-                    "SELECT vault.create_secret(%s, %s, %s)",
-                    (
-                        access_token,
-                        f'{user_id}_{service_name}_access',
-                        f'Access token for {service_name} - User {user_id}'
-                    )
-                )
-                access_secret_result = await cur.fetchone()
-                if not access_secret_result or not access_secret_result[0]:
-                    raise Exception("Failed to create access token secret in vault")
-                
-                access_secret_id = access_secret_result[0]
-                logger.debug(f"Created access token secret: {access_secret_id}")
-                
-                # Store refresh token in vault if provided
-                refresh_secret_id = None
-                if refresh_token:
-                    await cur.execute(
-                        "SELECT vault.create_secret(%s, %s, %s)",
-                        (
-                            refresh_token,
-                            f'{user_id}_{service_name}_refresh',
-                            f'Refresh token for {service_name} - User {user_id}'
-                        )
-                    )
-                    refresh_secret_result = await cur.fetchone()
-                    if not refresh_secret_result or not refresh_secret_result[0]:
-                        raise Exception("Failed to create refresh token secret in vault")
-                    
-                    refresh_secret_id = refresh_secret_result[0]
-                    logger.debug(f"Created refresh token secret: {refresh_secret_id}")
-                
-                # Upsert connection record (update if exists, insert if new)
+                # Use the RPC function to store tokens securely
                 await cur.execute("""
-                    INSERT INTO external_api_connections (
-                        user_id, service_name, access_token_secret_id, refresh_token_secret_id,
-                        token_expires_at, scopes, service_user_id, service_user_email, 
-                        is_active, updated_at
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (user_id, service_name) 
-                    DO UPDATE SET
-                        access_token_secret_id = EXCLUDED.access_token_secret_id,
-                        refresh_token_secret_id = EXCLUDED.refresh_token_secret_id,
-                        token_expires_at = EXCLUDED.token_expires_at,
-                        scopes = EXCLUDED.scopes,
-                        service_user_id = EXCLUDED.service_user_id,
-                        service_user_email = EXCLUDED.service_user_email,
-                        is_active = EXCLUDED.is_active,
-                        updated_at = EXCLUDED.updated_at
-                    RETURNING *
+                    SELECT store_oauth_tokens(
+                        %s::UUID, %s, %s, %s, %s, %s, %s, %s
+                    )
                 """, (
-                    user_id, service_name, access_secret_id, refresh_secret_id,
-                    expires_at, scopes or [], service_user_id, service_user_email,
-                    True, datetime.now()
+                    user_id, service_name, access_token, refresh_token,
+                    expires_at, scopes or [], service_user_id, service_user_email
                 ))
+                
+                rpc_result = await cur.fetchone()
+                if not rpc_result or not rpc_result[0]:
+                    raise Exception("RPC function returned no result")
+                
+                result_json = rpc_result[0]
+                if not result_json.get('success'):
+                    raise Exception(f"RPC function failed: {result_json}")
+                
+                # Get the full connection record
+                connection_id = result_json.get('connection_id')
+                if not connection_id:
+                    raise Exception("No connection ID returned from RPC function")
+                
+                # Fetch the complete connection record
+                await cur.execute("""
+                    SELECT * FROM external_api_connections 
+                    WHERE id = %s AND user_id = %s
+                """, (connection_id, user_id))
                 
                 connection_result = await cur.fetchone()
                 if not connection_result:
-                    raise Exception("Failed to store connection record")
+                    raise Exception("Failed to retrieve stored connection record")
                 
                 # Convert row to dictionary
                 columns = [desc[0] for desc in cur.description]
                 connection_data = dict(zip(columns, connection_result))
                 
+                # Commit the transaction so changes are visible to other connections
+                await self.db.commit()
+                
                 logger.info(f"Successfully stored tokens for user {user_id} service {service_name}")
                 return connection_data
             
         except Exception as e:
+            # Rollback on error
+            await self.db.rollback()
             logger.error(f"Error storing tokens for user {user_id} service {service_name}: {e}")
             raise Exception(f"Failed to store OAuth tokens: {e}")
     
     async def get_tokens(self, user_id: str, service_name: str) -> Tuple[str, Optional[str]]:
-        """Retrieve and decrypt OAuth tokens for a user's service connection.
+        """Retrieve OAuth tokens for a service connection.
+        
+        Uses the appropriate RPC function based on the service context:
+        - User context: get_oauth_tokens (requires auth.uid())
+        - Scheduler context: get_oauth_tokens_for_scheduler (requires postgres user)
         
         Args:
             user_id: User ID from auth.users
-            service_name: Name of the external service
+            service_name: Name of the external service (e.g., 'gmail', 'slack')
             
         Returns:
             Tuple of (access_token, refresh_token). refresh_token may be None.
             
         Raises:
-            ValueError: If no connection found for the user/service
-            Exception: If token retrieval fails
+            ValueError: If no connection found or tokens invalid
+            Exception: For other errors
         """
         try:
-            logger.debug(f"Retrieving tokens for user {user_id} service {service_name}")
+            logger.debug(f"Retrieving tokens for user {user_id} service {service_name} (context: {self.context})")
             
             async with self.db.cursor() as cur:
-                # Get decrypted tokens using the secure view
-                await cur.execute("""
-                    SELECT access_token, refresh_token, is_active
-                    FROM user_api_tokens 
-                    WHERE user_id = %s AND service_name = %s
-                """, (user_id, service_name))
+                # Use appropriate RPC function based on context
+                if self.context == "scheduler":
+                    # Scheduler context - use scheduler-specific function
+                    await cur.execute("""
+                        SELECT get_oauth_tokens_for_scheduler(%s, %s)
+                    """, (user_id, service_name))
+                else:
+                    # User context - use standard function with auth.uid()
+                    await cur.execute("""
+                        SELECT get_oauth_tokens(%s, %s)
+                    """, (user_id, service_name))
                 
                 result = await cur.fetchone()
-                if not result:
-                    raise ValueError(f"No {service_name} connection found for user {user_id}")
+                if not result or not result[0]:
+                    raise ValueError(f"No OAuth connection found for user {user_id} service {service_name}")
                 
-                access_token, refresh_token, is_active = result
+                token_data = result[0]  # This is the JSON result from the RPC function
                 
-                if not is_active:
-                    raise ValueError(f"{service_name} connection is inactive for user {user_id}")
+                access_token = token_data.get('access_token')
+                refresh_token = token_data.get('refresh_token')
                 
                 if not access_token:
-                    raise Exception(f"Access token not found for user {user_id} service {service_name}")
+                    raise ValueError(f"No valid access token found for user {user_id} service {service_name}")
                 
-                logger.debug(f"Successfully retrieved tokens for user {user_id} service {service_name}")
+                logger.debug(f"Successfully retrieved tokens for user {user_id} service {service_name} (context: {self.context})")
                 return access_token, refresh_token
             
         except ValueError:
@@ -236,10 +230,15 @@ class VaultTokenService:
                         WHERE user_id = %s AND service_name = %s
                     """, (expires_at, datetime.now(), user_id, service_name))
                 
+                # Commit the transaction so changes are visible to other connections
+                await self.db.commit()
+                
                 logger.info(f"Successfully updated access token for user {user_id} service {service_name}")
                 return True
             
         except Exception as e:
+            # Rollback on error
+            await self.db.rollback()
             logger.error(f"Error updating access token for user {user_id} service {service_name}: {e}")
             return False
     
@@ -257,43 +256,25 @@ class VaultTokenService:
             logger.info(f"Revoking tokens for user {user_id} service {service_name}")
             
             async with self.db.cursor() as cur:
-                # Get connection with secret IDs
+                # Use RPC function to revoke tokens with proper security context
                 await cur.execute("""
-                    SELECT access_token_secret_id, refresh_token_secret_id
-                    FROM external_api_connections 
-                    WHERE user_id = %s AND service_name = %s
+                    SELECT revoke_oauth_tokens(%s, %s)
                 """, (user_id, service_name))
                 
-                connection_result = await cur.fetchone()
-                if not connection_result:
-                    logger.warning(f"No connection found for user {user_id} service {service_name}")
-                    return True  # Already revoked/doesn't exist
+                result = await cur.fetchone()
+                if not result or not result[0]:
+                    logger.error(f"Failed to revoke tokens for user {user_id} service {service_name}")
+                    return False
                 
-                access_token_secret_id, refresh_token_secret_id = connection_result
-                
-                # Delete vault secrets
-                if access_token_secret_id:
-                    await cur.execute(
-                        "DELETE FROM vault.secrets WHERE id = %s",
-                        (access_token_secret_id,)
-                    )
-                
-                if refresh_token_secret_id:
-                    await cur.execute(
-                        "DELETE FROM vault.secrets WHERE id = %s",
-                        (refresh_token_secret_id,)
-                    )
-                
-                # Delete the connection record
-                await cur.execute("""
-                    DELETE FROM external_api_connections 
-                    WHERE user_id = %s AND service_name = %s
-                """, (user_id, service_name))
+                # Commit the transaction so changes are visible to other connections
+                await self.db.commit()
                 
                 logger.info(f"Successfully revoked tokens for user {user_id} service {service_name}")
                 return True
             
         except Exception as e:
+            # Rollback on error
+            await self.db.rollback()
             logger.error(f"Error revoking tokens for user {user_id} service {service_name}: {e}")
             return False
     
@@ -389,12 +370,28 @@ class VaultTokenService:
 
 # FastAPI dependency function
 async def get_vault_token_service(db_conn: psycopg.AsyncConnection = get_db_connection()) -> VaultTokenService:
-    """FastAPI dependency to get a VaultTokenService instance.
+    """FastAPI dependency to get a VaultTokenService instance for user context.
     
     Args:
         db_conn: Database connection from the connection pool
         
     Returns:
-        VaultTokenService instance
+        VaultTokenService instance configured for user context
     """
-    return VaultTokenService(db_conn) 
+    return VaultTokenService(db_conn, context="user")
+
+
+# Scheduler dependency function
+async def get_vault_token_service_for_scheduler(db_conn: psycopg.AsyncConnection) -> VaultTokenService:
+    """Get a VaultTokenService instance for scheduler context.
+    
+    This should be used by background services that run as the postgres user
+    and need to access OAuth tokens for scheduled operations.
+    
+    Args:
+        db_conn: Database connection from the connection pool (should be postgres user)
+        
+    Returns:
+        VaultTokenService instance configured for scheduler context
+    """
+    return VaultTokenService(db_conn, context="scheduler") 

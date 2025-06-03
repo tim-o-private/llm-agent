@@ -30,6 +30,17 @@ except ImportError:
     from chatServer.database.connection import get_db_connection
     from chatServer.config.constants import DEFAULT_LOG_LEVEL
 
+# Import Gmail tools
+try:
+    from ..tools.gmail_tools import GmailDigestTool, GmailSearchTool
+except ImportError:
+    try:
+        from chatServer.tools.gmail_tools import GmailDigestTool, GmailSearchTool
+    except ImportError:
+        # Handle case where Gmail tools are not available
+        GmailDigestTool = None
+        GmailSearchTool = None
+
 logger = get_logger(__name__)
 
 
@@ -51,8 +62,81 @@ class EmailDigestAgent:
         # Initialize configuration
         self.config = config_loader or ConfigLoader()
         
+        # Agent configuration that tests expect
+        self.agent_config = {
+            "name": self.agent_name,
+            "system_prompt": self._get_system_prompt(),
+            "llm": {
+                "model": "gemini-pro",
+                "temperature": 0.1
+            },
+            "capabilities": [
+                "Email digest generation",
+                "Email search",
+                "Email analysis",
+                "Email management advice"
+            ]
+        }
+        
+        # Initialize tools
+        self.tools = self._create_tools()
+        
         # Agent executor will be created on demand
         self.executor = None
+    
+    def _get_system_prompt(self) -> str:
+        """Get the system prompt for the email digest agent."""
+        return """You are an Email Digest Agent specialized in email management and digest generation. Your primary role is to help users understand and manage their email communications effectively.
+
+Key responsibilities:
+1. Email Digest Generation - Create comprehensive summaries of recent messages
+2. Email Search - Find specific emails using Gmail search syntax
+3. Email Analysis - Identify patterns and important communications
+4. Email Management - Provide actionable advice for email organization
+
+When generating email digests:
+- Focus on actionable items and important communications
+- Group related emails together when possible
+- Highlight urgent or time-sensitive messages
+- Provide clear subject lines and sender information
+- Summarize key points without losing important details
+
+When searching emails:
+- Use appropriate Gmail search syntax (is:unread, from:, subject:, etc.)
+- Respect user-specified time ranges and filters
+- Return relevant results with clear context
+
+Always maintain a professional, helpful tone and respect user privacy and security.
+"""
+    
+    def _create_tools(self) -> List[Any]:
+        """Create Gmail tools for the agent."""
+        tools = []
+        
+        try:
+            if GmailDigestTool is not None:
+                # Create Gmail digest tool
+                digest_tool = GmailDigestTool(
+                    user_id=self.user_id,
+                    name="gmail_digest",
+                    description="Generate a digest of recent emails from Gmail"
+                )
+                tools.append(digest_tool)
+                
+            if GmailSearchTool is not None:
+                # Create Gmail search tool
+                search_tool = GmailSearchTool(
+                    user_id=self.user_id,
+                    name="gmail_search", 
+                    description="Search Gmail messages using Gmail search syntax"
+                )
+                tools.append(search_tool)
+                
+        except Exception as e:
+            logger.warning(f"Failed to create Gmail tools: {e}")
+            # Continue with empty tools list
+            
+        return tools
     
     async def get_agent_executor(self) -> CustomizableAgentExecutor:
         """Get or create agent executor using existing framework."""
@@ -69,8 +153,19 @@ class EmailDigestAgent:
                 logger.info(f"Created email digest agent executor for user {self.user_id}")
                 
             except Exception as e:
-                logger.error(f"Failed to create agent executor: {e}")
-                raise RuntimeError(f"Failed to initialize email digest agent: {e}")
+                logger.error(f"Failed to create agent executor via database: {e}")
+                # Fallback to direct creation using agent config
+                try:
+                    self.executor = CustomizableAgentExecutor.from_agent_config(
+                        agent_config_dict=self.agent_config,
+                        tools=self.tools,
+                        user_id=self.user_id,
+                        session_id=self.session_id
+                    )
+                    logger.info(f"Created email digest agent executor via fallback for user {self.user_id}")
+                except Exception as fallback_error:
+                    logger.error(f"Fallback agent creation also failed: {fallback_error}")
+                    raise RuntimeError(f"Failed to initialize email digest agent: {e}")
         
         return self.executor
     
@@ -169,12 +264,9 @@ class EmailDigestAgent:
             "agent_name": self.agent_name,
             "user_id": self.user_id,
             "session_id": self.session_id,
-            "capabilities": [
-                "Email digest generation",
-                "Email search",
-                "Email analysis",
-                "Email management advice"
-            ],
+            "tools_count": len(self.tools),
+            "tools": [tool.name if hasattr(tool, 'name') else str(tool) for tool in self.tools],
+            "capabilities": self.agent_config["capabilities"],
             "status": "ready"
         }
 

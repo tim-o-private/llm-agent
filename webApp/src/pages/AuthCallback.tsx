@@ -14,31 +14,6 @@ interface CallbackStatus {
   service?: string;
 }
 
-// Simple Alert component using existing styles
-const Alert: React.FC<{ 
-  variant?: 'default' | 'destructive'; 
-  className?: string; 
-  children: React.ReactNode 
-}> = ({ variant = 'default', className = '', children }) => {
-  const baseClasses = 'p-4 rounded-lg border flex items-start gap-3';
-  const variantClasses = variant === 'destructive' 
-    ? 'border-red-200 bg-red-50 text-red-800' 
-    : 'border-green-200 bg-green-50 text-green-800';
-  
-  return (
-    <div className={`${baseClasses} ${variantClasses} ${className}`}>
-      {children}
-    </div>
-  );
-};
-
-const AlertDescription: React.FC<{ children: React.ReactNode; className?: string }> = ({ 
-  children, 
-  className = '' 
-}) => (
-  <div className={`text-sm ${className}`}>{children}</div>
-);
-
 export const AuthCallback: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();

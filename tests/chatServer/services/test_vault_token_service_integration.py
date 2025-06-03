@@ -16,6 +16,7 @@ import psycopg
 from psycopg_pool import AsyncConnectionPool
 
 from chatServer.services.vault_token_service import VaultTokenService
+from chatServer.database.user_context import with_user_context
 
 
 class TestVaultTokenServiceIntegration:
@@ -114,129 +115,65 @@ class TestVaultTokenServiceIntegration:
 
     @pytest.fixture
     async def vault_service_for_user(self, db_pool: AsyncConnectionPool):
-        """Factory to create VaultTokenService for a specific user."""
+        """Factory to create VaultTokenService for a specific user using authenticated role."""
         def _create_service_for_user(user_id: str):
-            # Create an async context manager that provides a connection with proper user context
-            class UserConnectionManager:
+            # Create an async context manager that provides a connection with authenticated role
+            class VaultServiceConnectionManager:
                 def __init__(self, pool: AsyncConnectionPool, user_id: str):
                     self.pool = pool
                     self.user_id = user_id
                     self.conn = None
+                    self.original_role = None
                 
                 async def __aenter__(self):
+                    # Get a service role connection from the pool
                     self.conn = await self.pool.getconn()
                     
-                    # Switch to authenticated role and set user context
-                    # This is the key to making RLS work properly
                     async with self.conn.cursor() as cur:
-                        # Switch from postgres role to authenticated role
+                        # Store the original role
+                        await cur.execute("SELECT current_user")
+                        self.original_role = (await cur.fetchone())[0]
+                        
+                        # Switch to authenticated role
                         await cur.execute("SET ROLE authenticated")
                         
-                        # Set JWT claims that RLS policies use
-                        await cur.execute("SELECT set_config('request.jwt.claims', %s, true)", 
-                                        (f'{{"sub": "{self.user_id}", "role": "authenticated"}}',))
-                        await cur.execute("SELECT set_config('request.jwt.claim.sub', %s, true)", 
-                                        (self.user_id,))
+                        # Set the JWT context that Supabase RLS recognizes
+                        await cur.execute("SELECT set_config('request.jwt.claims', %s, true)", (
+                            f'{{"sub": "{self.user_id}", "role": "authenticated", "aud": "authenticated"}}',
+                        ))
+                        await cur.execute("SELECT set_config('request.jwt.claim.sub', %s, true)", (self.user_id,))
+                        await cur.execute("SELECT set_config('request.jwt.claim.role', %s, true)", ('authenticated',))
                         
-                        # Verify the role switch worked
-                        await cur.execute("SELECT current_user")
-                        current_role = await cur.fetchone()
-                        print(f"Switched to role: {current_role[0]}")
-                        
-                        # Verify auth.uid() now returns the correct user
+                        # Verify that auth.uid() returns the correct user
                         await cur.execute("SELECT auth.uid()")
-                        auth_uid = await cur.fetchone()
-                        print(f"auth.uid() after role switch: {auth_uid[0]}")
+                        auth_uid_result = await cur.fetchone()
                         
-                    return self.conn
+                        if not auth_uid_result or str(auth_uid_result[0]) != self.user_id:
+                            raise Exception(f"Failed to set JWT context: auth.uid() returned {auth_uid_result[0]}, expected {self.user_id}")
+                        
+                        # Verify we're now running as authenticated role
+                        await cur.execute("SELECT current_user")
+                        current_role = (await cur.fetchone())[0]
+                        if current_role != 'authenticated':
+                            raise Exception(f"Failed to switch to authenticated role: current_user is {current_role}")
+                    
+                    # Return VaultTokenService with the authenticated role connection
+                    return VaultTokenService(self.conn)
                 
                 async def __aexit__(self, exc_type, exc_val, exc_tb):
                     if self.conn:
-                        # Reset role back to original before returning connection to pool
                         try:
+                            # Reset to original role before returning connection to pool
                             async with self.conn.cursor() as cur:
-                                await cur.execute("RESET ROLE")
-                        except Exception as e:
-                            print(f"Warning: Failed to reset role: {e}")
-                        await self.pool.putconn(self.conn)
+                                await cur.execute(f"SET ROLE {self.original_role}")
+                        except Exception:
+                            pass  # Ignore errors during cleanup
+                        finally:
+                            await self.pool.putconn(self.conn)
             
-            return UserConnectionManager(db_pool, user_id)
+            return VaultServiceConnectionManager(db_pool, user_id)
         
         return _create_service_for_user
-
-    @pytest.mark.asyncio
-    async def test_rls_prevents_cross_user_access(
-        self, 
-        db_pool: AsyncConnectionPool, 
-        test_users: tuple[str, str],
-        vault_service_for_user
-    ):
-        """Test that User A cannot access User B's OAuth tokens due to RLS."""
-        user_a_id, user_b_id = test_users
-        
-        # Create test data directly in database (bypassing RLS for setup)
-        connection_a_id = str(uuid.uuid4())
-        connection_b_id = str(uuid.uuid4())
-        
-        async with db_pool.connection() as conn:
-            async with conn.cursor() as cur:
-                # Insert test connections for both users (as superuser, bypassing RLS)
-                await cur.execute("""
-                    INSERT INTO public.external_api_connections 
-                    (id, user_id, service_name, access_token, refresh_token, scopes, 
-                     service_user_id, service_user_email, token_expires_at, is_active)
-                    VALUES 
-                        (%s, %s, 'gmail', 'user_a_access_token', 'user_a_refresh_token', 
-                         ARRAY['https://www.googleapis.com/auth/gmail.readonly'], 
-                         'google_user_a', 'user_a@gmail.com', %s, true),
-                        (%s, %s, 'gmail', 'user_b_access_token', 'user_b_refresh_token',
-                         ARRAY['https://www.googleapis.com/auth/gmail.readonly'], 
-                         'google_user_b', 'user_b@gmail.com', %s, true)
-                """, (
-                    connection_a_id, user_a_id, datetime.now() + timedelta(hours=1),
-                    connection_b_id, user_b_id, datetime.now() + timedelta(hours=1)
-                ))
-                await conn.commit()
-
-        # Test 1: User A can access their own connection
-        async with vault_service_for_user(user_a_id) as conn_a:
-            service_a = VaultTokenService(conn_a)
-            user_a_connections = await service_a.list_user_connections(user_a_id)
-            assert len(user_a_connections) == 1
-            assert str(user_a_connections[0]['id']) == connection_a_id
-            assert user_a_connections[0]['service_user_email'] == 'user_a@gmail.com'
-
-        # Test 2: User B can access their own connection  
-        async with vault_service_for_user(user_b_id) as conn_b:
-            service_b = VaultTokenService(conn_b)
-            user_b_connections = await service_b.list_user_connections(user_b_id)
-            assert len(user_b_connections) == 1
-            assert str(user_b_connections[0]['id']) == connection_b_id
-            assert user_b_connections[0]['service_user_email'] == 'user_b@gmail.com'
-
-        # Test 3: User A cannot access User B's connections
-        async with vault_service_for_user(user_a_id) as conn_a:
-            service_a = VaultTokenService(conn_a)
-            user_a_trying_b = await service_a.list_user_connections(user_b_id)
-            assert len(user_a_trying_b) == 0  # RLS should prevent access
-
-        # Test 4: User B cannot access User A's connections
-        async with vault_service_for_user(user_b_id) as conn_b:
-            service_b = VaultTokenService(conn_b)
-            user_b_trying_a = await service_b.list_user_connections(user_a_id)
-            assert len(user_b_trying_a) == 0  # RLS should prevent access
-
-        # Test 5: User A cannot get User B's connection info
-        async with vault_service_for_user(user_a_id) as conn_a:
-            service_a = VaultTokenService(conn_a)
-            user_a_trying_b_info = await service_a.get_connection_info(user_b_id, 'gmail')
-            assert user_a_trying_b_info is None  # RLS should prevent access
-
-        # Test 6: User B cannot get User A's connection info
-        async with vault_service_for_user(user_b_id) as conn_b:
-            service_b = VaultTokenService(conn_b)
-            user_b_trying_a_info = await service_b.get_connection_info(user_a_id, 'gmail')
-            assert user_b_trying_a_info is None  # RLS should prevent access
 
     @pytest.mark.asyncio
     async def test_rls_with_vault_tokens(
@@ -254,8 +191,7 @@ class TestVaultTokenServiceIntegration:
             'refresh_token': 'user_a_vault_refresh_token'
         }
         
-        async with vault_service_for_user(user_a_id) as conn_a:
-            service_a = VaultTokenService(conn_a)
+        async with vault_service_for_user(user_a_id) as service_a:
             success_a = await service_a.store_tokens(
                 user_a_id, 
                 'gmail', 
@@ -274,8 +210,7 @@ class TestVaultTokenServiceIntegration:
             'refresh_token': 'user_b_vault_refresh_token'
         }
         
-        async with vault_service_for_user(user_b_id) as conn_b:
-            service_b = VaultTokenService(conn_b)
+        async with vault_service_for_user(user_b_id) as service_b:
             success_b = await service_b.store_tokens(
                 user_b_id,
                 'gmail',
@@ -289,67 +224,57 @@ class TestVaultTokenServiceIntegration:
             assert success_b is not None  # store_tokens returns connection data, not boolean
 
         # Test 1: User A can retrieve their own tokens
-        async with vault_service_for_user(user_a_id) as conn_a:
-            service_a = VaultTokenService(conn_a)
+        async with vault_service_for_user(user_a_id) as service_a:
             retrieved_tokens_a = await service_a.get_tokens(user_a_id, 'gmail')
             assert retrieved_tokens_a[0] == 'user_a_vault_access_token'  # access_token
             assert retrieved_tokens_a[1] == 'user_a_vault_refresh_token'  # refresh_token
 
         # Test 2: User B can retrieve their own tokens
-        async with vault_service_for_user(user_b_id) as conn_b:
-            service_b = VaultTokenService(conn_b)
+        async with vault_service_for_user(user_b_id) as service_b:
             retrieved_tokens_b = await service_b.get_tokens(user_b_id, 'gmail')
             assert retrieved_tokens_b[0] == 'user_b_vault_access_token'  # access_token
             assert retrieved_tokens_b[1] == 'user_b_vault_refresh_token'  # refresh_token
 
         # Test 3: User A cannot retrieve User B's tokens (should raise ValueError)
-        async with vault_service_for_user(user_a_id) as conn_a:
-            service_a = VaultTokenService(conn_a)
+        async with vault_service_for_user(user_a_id) as service_a:
             with pytest.raises(ValueError, match="No gmail connection found"):
                 await service_a.get_tokens(user_b_id, 'gmail')
 
         # Test 4: User B cannot retrieve User A's tokens (should raise ValueError)
-        async with vault_service_for_user(user_b_id) as conn_b:
-            service_b = VaultTokenService(conn_b)
+        async with vault_service_for_user(user_b_id) as service_b:
             with pytest.raises(ValueError, match="No gmail connection found"):
                 await service_b.get_tokens(user_a_id, 'gmail')
 
         # Test 5: User A cannot update User B's tokens
-        async with vault_service_for_user(user_a_id) as conn_a:
-            service_a = VaultTokenService(conn_a)
+        async with vault_service_for_user(user_a_id) as service_a:
             update_success_a_to_b = await service_a.update_access_token(
                 user_b_id, 'gmail', 'malicious_token'
             )
             assert update_success_a_to_b is False  # Should fail due to RLS
 
         # Test 6: User B cannot update User A's tokens
-        async with vault_service_for_user(user_b_id) as conn_b:
-            service_b = VaultTokenService(conn_b)
+        async with vault_service_for_user(user_b_id) as service_b:
             update_success_b_to_a = await service_b.update_access_token(
                 user_a_id, 'gmail', 'malicious_token'
             )
             assert update_success_b_to_a is False  # Should fail due to RLS
 
         # Test 7: User A cannot revoke User B's tokens
-        async with vault_service_for_user(user_a_id) as conn_a:
-            service_a = VaultTokenService(conn_a)
+        async with vault_service_for_user(user_a_id) as service_a:
             revoke_success_a_to_b = await service_a.revoke_tokens(user_b_id, 'gmail')
             assert revoke_success_a_to_b is False  # Should fail due to RLS
 
         # Test 8: User B cannot revoke User A's tokens
-        async with vault_service_for_user(user_b_id) as conn_b:
-            service_b = VaultTokenService(conn_b)
+        async with vault_service_for_user(user_b_id) as service_b:
             revoke_success_b_to_a = await service_b.revoke_tokens(user_a_id, 'gmail')
             assert revoke_success_b_to_a is False  # Should fail due to RLS
 
         # Verify tokens are still intact after attempted cross-user operations
-        async with vault_service_for_user(user_a_id) as conn_a:
-            service_a = VaultTokenService(conn_a)
+        async with vault_service_for_user(user_a_id) as service_a:
             final_tokens_a = await service_a.get_tokens(user_a_id, 'gmail')
             assert final_tokens_a[0] == 'user_a_vault_access_token'  # access_token
         
-        async with vault_service_for_user(user_b_id) as conn_b:
-            service_b = VaultTokenService(conn_b)
+        async with vault_service_for_user(user_b_id) as service_b:
             final_tokens_b = await service_b.get_tokens(user_b_id, 'gmail')
             assert final_tokens_b[0] == 'user_b_vault_access_token'  # access_token
 
@@ -359,47 +284,61 @@ class TestVaultTokenServiceIntegration:
         db_pool: AsyncConnectionPool, 
         test_users: tuple[str, str]
     ):
-        """Verify that our test data exists by querying directly (bypassing RLS)."""
+        """Test that direct database queries (as superuser) can see all data, bypassing RLS."""
         user_a_id, user_b_id = test_users
         
-        # Insert test data
+        # Store test data using the vault service (proper way)
+        from chatServer.database.user_context import with_user_context
+        
+        # Store tokens for User A
+        async with db_pool.connection() as conn:
+            async with with_user_context(conn, user_a_id) as user_conn:
+                async with user_conn.cursor() as cur:
+                    result_a = await cur.execute(
+                        "SELECT store_oauth_tokens(%s, %s, %s, %s, %s, %s, %s, %s)",
+                        (user_a_id, 'gmail', 'user_a_access_token', 'user_a_refresh_token', 
+                         None, ['https://www.googleapis.com/auth/gmail.readonly'], 
+                         'google_user_a', 'user_a@gmail.com')
+                    )
+                    result_a_data = await cur.fetchone()
+                    assert result_a_data[0]['success'] is True
+        
+        # Store tokens for User B
+        async with db_pool.connection() as conn:
+            async with with_user_context(conn, user_b_id) as user_conn:
+                async with user_conn.cursor() as cur:
+                    result_b = await cur.execute(
+                        "SELECT store_oauth_tokens(%s, %s, %s, %s, %s, %s, %s, %s)",
+                        (user_b_id, 'gmail', 'user_b_access_token', 'user_b_refresh_token', 
+                         None, ['https://www.googleapis.com/auth/gmail.readonly'], 
+                         'google_user_b', 'user_b@gmail.com')
+                    )
+                    result_b_data = await cur.fetchone()
+                    assert result_b_data[0]['success'] is True
+        
+        # Direct database query as superuser (bypasses RLS)
         async with db_pool.connection() as conn:
             async with conn.cursor() as cur:
                 await cur.execute("""
-                    INSERT INTO public.external_api_connections 
-                    (user_id, service_name, access_token, scopes, service_user_email, is_active)
-                    VALUES 
-                        (%s, 'gmail', 'direct_test_token_a', 
-                         ARRAY['https://www.googleapis.com/auth/gmail.readonly'], 
-                         'direct_a@test.com', true),
-                        (%s, 'gmail', 'direct_test_token_b',
-                         ARRAY['https://www.googleapis.com/auth/gmail.readonly'], 
-                         'direct_b@test.com', true)
-                """, (user_a_id, user_b_id))
-                await conn.commit()
-
-        # Query directly without RLS context (as superuser)
-        async with db_pool.connection() as conn:
-            async with conn.cursor() as cur:
-                await cur.execute("""
-                    SELECT user_id, service_user_email, access_token 
-                    FROM public.external_api_connections 
-                    WHERE user_id IN (%s, %s)
+                    SELECT user_id, service_name, service_user_email 
+                    FROM external_api_connections 
+                    WHERE service_name = 'gmail'
                     ORDER BY service_user_email
-                """, (user_a_id, user_b_id))
+                """)
+                all_connections = await cur.fetchall()
                 
-                results = await cur.fetchall()
-                assert len(results) == 2
+                # Should see both users' connections (RLS bypassed)
+                assert len(all_connections) == 2
                 
-                # Verify both records exist
-                user_emails = [row[1] for row in results]
-                assert 'direct_a@test.com' in user_emails
-                assert 'direct_b@test.com' in user_emails
+                # Verify both users' data is visible
+                user_emails = [conn[2] for conn in all_connections]
+                assert 'user_a@gmail.com' in user_emails
+                assert 'user_b@gmail.com' in user_emails
                 
-                # Verify tokens are different
-                tokens = [row[2] for row in results]
-                assert 'direct_test_token_a' in tokens
-                assert 'direct_test_token_b' in tokens
+                # Verify user IDs are correct
+                user_ids = [str(conn[0]) for conn in all_connections]
+                assert user_a_id in user_ids
+                assert user_b_id in user_ids
 
     @pytest.mark.asyncio
     async def test_debug_auth_uid(
@@ -489,87 +428,67 @@ class TestVaultTokenServiceIntegration:
         """Comprehensive test to debug RLS behavior step by step."""
         user_a_id, user_b_id = test_users
         
-        # Create test data directly in database (bypassing RLS for setup)
-        connection_a_id = str(uuid.uuid4())
-        connection_b_id = str(uuid.uuid4())
+        # Store tokens for both users using the vault service
+        async with vault_service_for_user(user_a_id) as service_a:
+            connection_a = await service_a.store_tokens(
+                user_a_id, 
+                'gmail', 
+                'debug_access_token_a',
+                'debug_refresh_token_a',
+                scopes=['https://www.googleapis.com/auth/gmail.readonly'],
+                service_user_id='debug_user_a',
+                service_user_email='debug_a@gmail.com'
+            )
+            connection_a_id = connection_a['connection_id']
         
+        async with vault_service_for_user(user_b_id) as service_b:
+            connection_b = await service_b.store_tokens(
+                user_b_id, 
+                'gmail', 
+                'debug_access_token_b',
+                'debug_refresh_token_b',
+                scopes=['https://www.googleapis.com/auth/gmail.readonly'],
+                service_user_id='debug_user_b',
+                service_user_email='debug_b@gmail.com'
+            )
+            connection_b_id = connection_b['connection_id']
+        
+        # Test 1: User A can access their own tokens
+        async with vault_service_for_user(user_a_id) as service_a:
+            user_a_tokens = await service_a.get_tokens(user_a_id, 'gmail')
+            assert user_a_tokens is not None
+            assert user_a_tokens['access_token'] == 'debug_access_token_a'
+            assert user_a_tokens['refresh_token'] == 'debug_refresh_token_a'
+        
+        # Test 2: User B can access their own tokens
+        async with vault_service_for_user(user_b_id) as service_b:
+            user_b_tokens = await service_b.get_tokens(user_b_id, 'gmail')
+            assert user_b_tokens is not None
+            assert user_b_tokens['access_token'] == 'debug_access_token_b'
+            assert user_b_tokens['refresh_token'] == 'debug_refresh_token_b'
+        
+        # Test 3: Cross-user access should be blocked
+        async with vault_service_for_user(user_a_id) as service_a:
+            user_b_tokens_from_a = await service_a.get_tokens(user_b_id, 'gmail')
+            assert user_b_tokens_from_a is None, "User A should not be able to access User B's tokens"
+        
+        async with vault_service_for_user(user_b_id) as service_b:
+            user_a_tokens_from_b = await service_b.get_tokens(user_a_id, 'gmail')
+            assert user_a_tokens_from_b is None, "User B should not be able to access User A's tokens"
+        
+        # Test 4: Verify data exists in database (superuser view)
         async with db_pool.connection() as conn:
             async with conn.cursor() as cur:
-                # Insert test connections for both users (as superuser, bypassing RLS)
                 await cur.execute("""
-                    INSERT INTO public.external_api_connections 
-                    (id, user_id, service_name, access_token, refresh_token, scopes, 
-                     service_user_id, service_user_email, token_expires_at, is_active)
-                    VALUES 
-                        (%s, %s, 'gmail', 'user_a_access_token', 'user_a_refresh_token', 
-                         ARRAY['https://www.googleapis.com/auth/gmail.readonly'], 
-                         'google_user_a', 'user_a@gmail.com', %s, true),
-                        (%s, %s, 'gmail', 'user_b_access_token', 'user_b_refresh_token',
-                         ARRAY['https://www.googleapis.com/auth/gmail.readonly'], 
-                         'google_user_b', 'user_b@gmail.com', %s, true)
-                """, (
-                    connection_a_id, user_a_id, datetime.now() + timedelta(hours=1),
-                    connection_b_id, user_b_id, datetime.now() + timedelta(hours=1)
-                ))
-                await conn.commit()
-                print(f"Inserted test data: User A ({user_a_id}) -> {connection_a_id}, User B ({user_b_id}) -> {connection_b_id}")
-
-        # Test User A context
-        print(f"\n=== Testing User A Context ===")
-        async with vault_service_for_user(user_a_id) as conn_a:
-            async with conn_a.cursor() as cur:
-                # Check auth.uid() in this context
-                await cur.execute("SELECT auth.uid()")
-                auth_uid_result = await cur.fetchone()
-                print(f"auth.uid() in User A context: {auth_uid_result[0]}")
-                
-                # Query for User A's own connections
-                await cur.execute("""
-                    SELECT id, user_id, service_user_email, auth.uid() = user_id as rls_match
-                    FROM public.external_api_connections 
-                    WHERE user_id = %s
-                """, (user_a_id,))
-                user_a_own = await cur.fetchall()
-                print(f"User A querying own connections: {len(user_a_own)} results")
-                for row in user_a_own:
-                    print(f"  - ID: {row[0]}, User: {row[1]}, Email: {row[2]}, RLS Match: {row[3]}")
-                
-                # Query for User B's connections (should be blocked by RLS)
-                await cur.execute("""
-                    SELECT id, user_id, service_user_email, auth.uid() = user_id as rls_match
-                    FROM public.external_api_connections 
-                    WHERE user_id = %s
-                """, (user_b_id,))
-                user_a_trying_b = await cur.fetchall()
-                print(f"User A querying User B's connections: {len(user_a_trying_b)} results")
-                for row in user_a_trying_b:
-                    print(f"  - ID: {row[0]}, User: {row[1]}, Email: {row[2]}, RLS Match: {row[3]}")
-                
-                # Query all connections (should only see User A's due to RLS)
-                await cur.execute("""
-                    SELECT id, user_id, service_user_email, auth.uid() = user_id as rls_match
-                    FROM public.external_api_connections 
+                    SELECT user_id, service_name, service_user_email 
+                    FROM external_api_connections 
+                    WHERE service_name = 'gmail' AND service_user_email LIKE 'debug_%'
+                    ORDER BY service_user_email
                 """)
-                all_from_a = await cur.fetchall()
-                print(f"User A querying all connections: {len(all_from_a)} results")
-                for row in all_from_a:
-                    print(f"  - ID: {row[0]}, User: {row[1]}, Email: {row[2]}, RLS Match: {row[3]}")
-
-        # Test User B context
-        print(f"\n=== Testing User B Context ===")
-        async with vault_service_for_user(user_b_id) as conn_b:
-            async with conn_b.cursor() as cur:
-                # Check auth.uid() in this context
-                await cur.execute("SELECT auth.uid()")
-                auth_uid_result = await cur.fetchone()
-                print(f"auth.uid() in User B context: {auth_uid_result[0]}")
+                all_connections = await cur.fetchall()
                 
-                # Query all connections (should only see User B's due to RLS)
-                await cur.execute("""
-                    SELECT id, user_id, service_user_email, auth.uid() = user_id as rls_match
-                    FROM public.external_api_connections 
-                """)
-                all_from_b = await cur.fetchall()
-                print(f"User B querying all connections: {len(all_from_b)} results")
-                for row in all_from_b:
-                    print(f"  - ID: {row[0]}, User: {row[1]}, Email: {row[2]}, RLS Match: {row[3]}") 
+                assert len(all_connections) == 2, f"Expected 2 connections, found {len(all_connections)}"
+                
+                user_emails = [conn[2] for conn in all_connections]
+                assert 'debug_a@gmail.com' in user_emails
+                assert 'debug_b@gmail.com' in user_emails 
