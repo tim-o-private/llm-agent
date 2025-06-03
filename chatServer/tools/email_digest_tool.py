@@ -40,15 +40,24 @@ class EmailDigestTool(BaseTool):
     
     # User context for scoping
     user_id: str
+    # Optional parameters provided by agent loader (not used by this tool)
+    agent_name: Optional[str] = None
+    supabase_url: Optional[str] = None
+    supabase_key: Optional[str] = None
     
-    def __init__(self, user_id: str, **kwargs):
+    def __init__(self, user_id: str, agent_name: Optional[str] = None, 
+                 supabase_url: Optional[str] = None, supabase_key: Optional[str] = None, **kwargs):
         """Initialize email digest tool.
         
         Args:
             user_id: User ID for scoping
+            agent_name: Agent name (provided by loader, not used)
+            supabase_url: Supabase URL (provided by loader, not used)
+            supabase_key: Supabase key (provided by loader, not used)
             **kwargs: Additional tool configuration
         """
-        super().__init__(user_id=user_id, **kwargs)
+        super().__init__(user_id=user_id, agent_name=agent_name, 
+                        supabase_url=supabase_url, supabase_key=supabase_key, **kwargs)
     
     def _run(self, hours_back: int = 24, include_read: bool = False) -> str:
         """Synchronous run method (not used in async context)."""

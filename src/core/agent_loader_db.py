@@ -53,13 +53,6 @@ def register_specialized_agent(agent_name: str, agent_class: Type):
     AGENT_REGISTRY[agent_name] = agent_class
     logger.info(f"Registered specialized agent '{agent_name}' -> {agent_class.__name__}")
 
-# Register specialized agents
-try:
-    from chatServer.agents.email_digest_agent import EmailDigestAgent
-    register_specialized_agent('email_digest_agent', EmailDigestAgent)
-except ImportError as e:
-    logger.warning(f"Could not import EmailDigestAgent: {e}")
-
 def create_specialized_agent(agent_name: str, user_id: str, session_id: str) -> Any:
     """Create a specialized agent instance if one is registered.
     
@@ -392,13 +385,12 @@ def load_agent_executor_db(
     if specified), and returns an initialized `CustomizableAgentExecutor`.
 
     Workflow:
-    1. Checks for specialized agent implementations first (e.g., EmailDigestAgent)
-    2. Fetches the agent's core configuration (LLM settings, system prompt) from 'agent_configurations'.
-    3. Fetches the list of active tools assigned to this agent from 'agent_tools' joined with 'tools',
+    1. Fetches the agent's core configuration (LLM settings, system prompt) from 'agent_configurations'.
+    2. Fetches the list of active tools assigned to this agent from 'agent_tools' joined with 'tools',
        including their type, name, description, and JSONB configuration.
-    4. Calls `load_tools_from_db` to instantiate these tools, which handles dynamic
+    3. Calls `load_tools_from_db` to instantiate these tools, which handles dynamic
        `args_schema` creation for CRUDTools based on `runtime_args_schema` in their config.
-    5. Initializes and returns a `CustomizableAgentExecutor` with the loaded agent config and tools.
+    4. Initializes and returns a `CustomizableAgentExecutor` with the loaded agent config and tools.
 
     Args:
         agent_name: The name of the agent to load (must match 'agent_name' in DB).
@@ -419,26 +411,7 @@ def load_agent_executor_db(
     """
     logger.setLevel(log_level)
     
-    # 1. Check for specialized agent implementations first
-    specialized_agent = create_specialized_agent(agent_name, user_id, session_id)
-    if specialized_agent:
-        logger.info(f"Using specialized agent implementation for '{agent_name}'")
-        # For specialized agents, we need to return their executor
-        # This assumes specialized agents have a get_agent_executor() method
-        if hasattr(specialized_agent, 'get_agent_executor'):
-            import asyncio
-            try:
-                # Run the async method to get the executor
-                executor = asyncio.run(specialized_agent.get_agent_executor())
-                logger.info(f"Successfully loaded specialized agent executor for '{agent_name}'")
-                return executor
-            except Exception as e:
-                logger.error(f"Failed to get executor from specialized agent '{agent_name}': {e}")
-                logger.info(f"Falling back to generic agent loading for '{agent_name}'")
-        else:
-            logger.warning(f"Specialized agent '{agent_name}' does not have get_agent_executor method, falling back to generic loading")
-    
-    # 2. Continue with generic agent loading if no specialized agent or if specialized agent failed
+    # Use pure database-driven agent loading - no specialized agent classes needed
     effective_supabase_url = supabase_url or os.getenv("VITE_SUPABASE_URL")
     effective_supabase_key = supabase_key or os.getenv("SUPABASE_SERVICE_KEY")
     if not effective_supabase_url or not effective_supabase_key:
@@ -446,7 +419,7 @@ def load_agent_executor_db(
     
     db: SupabaseClient = create_client(effective_supabase_url, effective_supabase_key)
 
-    logger.info(f"Loading agent executor for agent_name='{agent_name}', user_id='{user_id}' using generic agent loading.")
+    logger.info(f"Loading agent executor for agent_name='{agent_name}', user_id='{user_id}' using database-driven agent loading.")
     # 3. Fetch agent config
     agent_resp = db.table("agent_configurations").select("*, id").eq("agent_name", agent_name).single().execute()
     if not agent_resp.data:
