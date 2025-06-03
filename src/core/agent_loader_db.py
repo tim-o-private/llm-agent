@@ -9,7 +9,8 @@ from pydantic import BaseModel, Field, ConfigDict, create_model
 from supabase import create_client, Client as SupabaseClient
 from core.agents.customizable_agent import CustomizableAgentExecutor
 from core.tools.crud_tool import CRUDTool, CRUDToolInput
-from chatServer.tools.gmail_tools import GmailDigestTool, GmailSearchTool
+from chatServer.tools.gmail_tools import GmailDigestTool, GmailSearchTool, GmailGetMessageTool
+from chatServer.tools.email_digest_tool import EmailDigestTool
 from chatServer.database.connection import get_db_connection
 # Example imports for specific tool subclasses (USER ACTION: Add actual tool class imports here)
 # from core.tools.agent_memory_tools import CreateMemoryTool, FetchMemoryTool, UpdateMemoryTool, DeleteMemoryTool
@@ -23,6 +24,8 @@ TOOL_REGISTRY: Dict[str, Type] = {
     "CRUDTool": CRUDTool,
     "GmailDigestTool": GmailDigestTool,
     "GmailSearchTool": GmailSearchTool,
+    "GmailGetMessageTool": GmailGetMessageTool,
+    "EmailDigestTool": EmailDigestTool,
     "GmailTool": None,  # Special handling - uses tool_class config to determine specific class
     # Add other distinct, non-CRUDTool Python classes here if any.
     # The string key (e.g., "CRUDTool") must match the 'type' column 
@@ -33,6 +36,7 @@ TOOL_REGISTRY: Dict[str, Type] = {
 GMAIL_TOOL_CLASSES: Dict[str, Type] = {
     "GmailDigestTool": GmailDigestTool,
     "GmailSearchTool": GmailSearchTool,
+    "GmailGetMessageTool": GmailGetMessageTool,
 }
 
 # Agent registry: maps agent_name to specialized agent classes

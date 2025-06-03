@@ -3,25 +3,31 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, Tuple, Any
+from typing import Optional, Dict, Tuple, Any, List
+from croniter import croniter
 
 try:
     from ..config.constants import SESSION_INSTANCE_TTL_SECONDS, SCHEDULED_TASK_INTERVAL_SECONDS
     from ..database.connection import get_database_manager
+    from ..services.vault_token_service import get_vault_token_service_for_scheduler
 except ImportError:
     from chatServer.config.constants import SESSION_INSTANCE_TTL_SECONDS, SCHEDULED_TASK_INTERVAL_SECONDS
     from chatServer.database.connection import get_database_manager
+    from chatServer.services.vault_token_service import get_vault_token_service_for_scheduler
 
 logger = logging.getLogger(__name__)
 
 
 class BackgroundTaskService:
-    """Service for managing background tasks like session cleanup and cache eviction."""
+    """Service for managing background tasks like session cleanup, cache eviction, and scheduled agent execution."""
     
     def __init__(self):
         self.deactivate_task: Optional[asyncio.Task] = None
         self.evict_task: Optional[asyncio.Task] = None
+        self.scheduled_agents_task: Optional[asyncio.Task] = None
         self._agent_executor_cache: Optional[Dict[Tuple[str, str], Any]] = None
+        self.agent_schedules: Dict[str, Dict] = {}
+        self._last_schedule_check: Optional[datetime] = None
     
     def set_agent_executor_cache(self, cache: Dict[Tuple[str, str], Any]) -> None:
         """Set the agent executor cache reference for eviction tasks."""
@@ -87,12 +93,156 @@ class BackgroundTaskService:
                 if key in self._agent_executor_cache:
                     del self._agent_executor_cache[key]
                     logger.info(f"Evicted agent executor for {key} due to no active sessions.")
-    
+
+    async def run_scheduled_agents(self) -> None:
+        """Execute scheduled agents (like daily email digest)."""
+        while True:
+            await asyncio.sleep(60)  # Check every minute
+            logger.debug("Running task: run_scheduled_agents")
+            
+            db_manager = get_database_manager()
+            if db_manager.pool is None:
+                logger.warning("db_pool not available, skipping scheduled agents task cycle.")
+                continue
+            
+            try:
+                current_time = datetime.now(timezone.utc)
+                
+                # Reload schedules periodically (every 5 minutes) or on first run
+                if (self._last_schedule_check is None or 
+                    current_time - self._last_schedule_check > timedelta(minutes=5)):
+                    await self._reload_agent_schedules()
+                    self._last_schedule_check = current_time
+                
+                # Check for agents that need to run
+                for schedule_id, schedule in self.agent_schedules.items():
+                    if self._should_run_now(schedule, current_time):
+                        # Create task for async execution without blocking the loop
+                        asyncio.create_task(self._execute_scheduled_agent(schedule))
+                        
+            except Exception as e:
+                logger.error(f"Error in run_scheduled_agents: {e}", exc_info=True)
+
+    async def _reload_agent_schedules(self) -> None:
+        """Reload agent schedules from database."""
+        try:
+            db_manager = get_database_manager()
+            async with db_manager.pool.connection() as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute("""
+                        SELECT id, user_id, agent_name, schedule_cron, prompt, config
+                        FROM agent_schedules 
+                        WHERE active = true
+                    """)
+                    
+                    schedules = await cur.fetchall()
+                    
+                    # Clear existing schedules and reload
+                    self.agent_schedules.clear()
+                    
+                    for schedule_row in schedules:
+                        schedule_id, user_id, agent_name, schedule_cron, prompt, config = schedule_row
+                        
+                        self.agent_schedules[str(schedule_id)] = {
+                            'id': schedule_id,
+                            'user_id': str(user_id),
+                            'agent_name': agent_name,
+                            'schedule_cron': schedule_cron,
+                            'prompt': prompt,
+                            'config': config or {},
+                            'last_run': None  # Track last execution time
+                        }
+                    
+                    logger.info(f"Loaded {len(self.agent_schedules)} active agent schedules")
+                    
+        except Exception as e:
+            logger.error(f"Error reloading agent schedules: {e}", exc_info=True)
+
+    def _should_run_now(self, schedule: Dict, current_time: datetime) -> bool:
+        """Check if a schedule should run now based on cron expression."""
+        try:
+            cron_expr = schedule['schedule_cron']
+            last_run = schedule.get('last_run')
+            
+            # Create croniter instance
+            cron = croniter(cron_expr, current_time)
+            
+            # Get the previous scheduled time
+            prev_time = cron.get_prev(datetime)
+            
+            # If we've never run, or the previous scheduled time is after our last run
+            if last_run is None or prev_time > last_run:
+                # Check if we're within 2 minutes of the scheduled time to avoid missing runs
+                time_diff = abs((current_time - prev_time).total_seconds())
+                if time_diff <= 120:  # Within 2 minutes
+                    schedule['last_run'] = current_time  # Update last run time
+                    return True
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error checking schedule for {schedule.get('id')}: {e}")
+            return False
+
+    async def _execute_scheduled_agent(self, schedule: Dict) -> None:
+        """Execute a single scheduled agent."""
+        schedule_id = schedule.get('id')
+        user_id = schedule.get('user_id')
+        agent_name = schedule.get('agent_name')
+        prompt = schedule.get('prompt')
+        config = schedule.get('config', {})
+        
+        try:
+            logger.info(f"Executing scheduled agent {agent_name} for user {user_id} (schedule {schedule_id})")
+            
+            # Import EmailDigestService here to avoid circular imports
+            from ..services.email_digest_service import EmailDigestService
+            
+            # Check if this is an email digest schedule
+            if 'email digest' in prompt.lower() or config.get('context') == 'scheduled':
+                # Use EmailDigestService for email digest execution
+                service = EmailDigestService(user_id, context="scheduled")
+                result = await service.generate_digest(
+                    hours_back=config.get('hours_back', 24),
+                    include_read=config.get('include_read', False),
+                    context="scheduled"
+                )
+                
+                if result.get("success"):
+                    logger.info(f"Scheduled email digest completed for user {user_id}")
+                else:
+                    logger.error(f"Scheduled email digest failed for user {user_id}: {result.get('error')}")
+            else:
+                # For other types of scheduled agents, use the agent executor cache
+                if self._agent_executor_cache is not None:
+                    executor_key = (user_id, agent_name)
+                    executor = self._agent_executor_cache.get(executor_key)
+                    
+                    if executor is None:
+                        # Create new executor if not cached
+                        # This would require importing and using the agent creation logic
+                        logger.warning(f"No cached executor for {executor_key}, skipping scheduled execution")
+                        return
+                    
+                    # Execute with schedule-specific input
+                    await executor.ainvoke({
+                        "input": prompt,
+                        "chat_history": []  # Fresh context for scheduled runs
+                    })
+                    
+                    logger.info(f"Scheduled agent {agent_name} completed for user {user_id}")
+                else:
+                    logger.warning("Agent executor cache not available, skipping scheduled execution")
+                    
+        except Exception as e:
+            logger.error(f"Scheduled agent execution failed for schedule {schedule_id}: {e}", exc_info=True)
+
     def start_background_tasks(self) -> None:
         """Start all background tasks."""
         self.deactivate_task = asyncio.create_task(self.deactivate_stale_chat_session_instances())
         self.evict_task = asyncio.create_task(self.evict_inactive_executors())
-        logger.info("Background tasks for session and cache cleanup started.")
+        self.scheduled_agents_task = asyncio.create_task(self.run_scheduled_agents())
+        logger.info("Background tasks for session cleanup, cache eviction, and scheduled agents started.")
     
     async def stop_background_tasks(self) -> None:
         """Stop all background tasks gracefully."""
@@ -111,6 +261,14 @@ class BackgroundTaskService:
                 await self.evict_task
             except asyncio.CancelledError:
                 logger.info("Evict inactive executors task successfully cancelled.")
+        
+        if self.scheduled_agents_task:
+            self.scheduled_agents_task.cancel()
+            logger.info("Scheduled agents task cancelling...")
+            try:
+                await self.scheduled_agents_task
+            except asyncio.CancelledError:
+                logger.info("Scheduled agents task successfully cancelled.")
 
 
 # Global instance for use in main.py
