@@ -1,87 +1,117 @@
-# Memory Bank Navigation
+# Memory Bank - Clarity v2 Project Documentation
 
-> **For AI Agents**: Read exactly what you need for your task. No more hunting.
+**Single Source of Truth for Clarity v2 Development**
 
-## Quick Start by Area
+This directory contains the essential documentation for the **Clarity v2** project - an executive-function assistant that filters noise, multiplies output, and eliminates manual data entry.
 
-### 🎨 Frontend (`webApp/`)
-**Read**: [`patterns/ui-patterns.md`](patterns/ui-patterns.md) → [`rules/ui-rules.json`](rules/ui-rules.json)
-**Quick Rules**: Radix primitives + Tailwind, semantic colors only, React Query hooks, centralized overlays
+## 🎯 PROJECT FOCUS: CLARITY V2
 
-### 🔧 Backend (`chatServer/`)
-**Read**: [`patterns/api-patterns.md`](patterns/api-patterns.md) → [`rules/api-rules.json`](rules/api-rules.json)
-**Quick Rules**: Single PostgreSQL DB, prescribed connections only, service layer, avoid unnecessary endpoints
+**Current Status**: Foundation Setup (Phase 0)  
+**Next Phase**: Phase 1 - Foundation Implementation (Brain Dump + Memory System)
 
-### 🤖 Agent (`src/core/`)
-**Read**: [`patterns/agent-patterns.md`](patterns/agent-patterns.md) → [`rules/agent-rules.json`](rules/agent-rules.json)
-**Quick Rules**: Generic LangChain tools, CRUD from DB config, PostgresChatMessageHistory
+## 📋 NAVIGATION
 
-### 📊 Database (`supabase/`)
-**Read**: [`patterns/data-patterns.md`](patterns/data-patterns.md) → [`schemas/database-schema.sql`](schemas/database-schema.sql)
-**Quick Rules**: Migrations only, RLS with `is_record_owner`, consistent naming
+### 🚀 START HERE - Project Definition
+- **[`Clarity v2: PRD.md`](Clarity%20v2:%20PRD.md)** - Product requirements and user experience vision
+- **[`Clarity v2: Design & Implementation Plan.md`](Clarity%20v2:%20Design%20&%20Implementation%20Plan.md)** - Technical architecture and implementation strategy
 
-## Core Files
+### 📊 Current Status
+- **[`tasks.md`](tasks.md)** - Active tasks and current work (Clarity v2 focused)
+- **[`progress.md`](progress.md)** - Development progress and milestones
+- **[`activeContext.md`](activeContext.md)** - Current active context and immediate priorities
 
-- [`project-context.md`](project-context.md) - Project vision, architecture, tech stack
-- [`active-tasks.md`](active-tasks.md) - Current tasks only (no history)
+### 🏗️ Project Context
+- **[`project-context.md`](project-context.md)** - Current project state and technical context
+- **[`techContext.md`](techContext.md)** - Technical infrastructure and capabilities
+- **[`systemPatterns.md`](systemPatterns.md)** - System architecture patterns
+- **[`productContext.md`](productContext.md)** - Product context and user requirements
 
-## Pattern Files (Implementation Examples)
+### 🎨 Development Patterns
+- **[`patterns/`](patterns/)** - Established development patterns and examples
+  - [`ui-patterns.md`](patterns/ui-patterns.md) - UI component patterns and examples
+  - [`api-patterns.md`](patterns/api-patterns.md) - Backend API patterns
+  - [`agent-patterns.md`](patterns/agent-patterns.md) - Agent development patterns
+  - [`data-patterns.md`](patterns/data-patterns.md) - Database and data patterns
 
-- [`patterns/ui-patterns.md`](patterns/ui-patterns.md) - Frontend DO/DON'T examples
-- [`patterns/api-patterns.md`](patterns/api-patterns.md) - Backend DO/DON'T examples  
-- [`patterns/data-patterns.md`](patterns/data-patterns.md) - Database DO/DON'T examples
-- [`patterns/agent-patterns.md`](patterns/agent-patterns.md) - Agent DO/DON'T examples
+### 🔧 Development Tools
+- **[`rules/`](rules/)** - Machine-readable development rules (JSON)
+- **[`tools/`](tools/)** - Validation and automation tools
+- **[`style-guide.md`](style-guide.md)** - Code style and formatting guidelines
 
-## Rule Files (Machine-Readable)
+### 📚 Supporting Documentation
+- **[`projectbrief.md`](projectbrief.md)** - Project overview and objectives
+- **[`database-connection-patterns.md`](database-connection-patterns.md)** - Database architecture patterns
+- **[`IMPLEMENTATION_SUMMARY.md`](IMPLEMENTATION_SUMMARY.md)** - Previous implementation approach reference
 
-- [`rules/ui-rules.json`](rules/ui-rules.json) - Enforceable UI rules
-- [`rules/api-rules.json`](rules/api-rules.json) - Enforceable API rules
-- [`rules/data-rules.json`](rules/data-rules.json) - Enforceable DB rules
-- [`rules/agent-rules.json`](rules/agent-rules.json) - Enforceable agent rules
+### 🗄️ Historical Context
+- **[`archive/`](archive/)** - Completed projects and historical documentation
+  - [`historical-cleanup-2025/`](archive/historical-cleanup-2025/) - Recently archived content
+  - [`gmail-tools-backup/`](archive/gmail-tools-backup/) - Previous email digest implementation
 
-## Schema Files (Current State)
+## 🎯 CLARITY V2 OVERVIEW
 
-- [`schemas/database-schema.sql`](schemas/database-schema.sql) - Current DDL
-- [`schemas/api-types.ts`](schemas/api-types.ts) - API type definitions
-- [`schemas/ui-types.ts`](schemas/ui-types.ts) - UI component types
+### Project Vision
+Create an executive-function assistant that:
+- **Filters inbound noise** so users stop paying attention to what doesn't matter
+- **Multiplies outbound output** so goals are met with less effort  
+- **Eliminates manual data entry** and returns attention to the user
 
-## Agent Workflow
+### Core User Experience Principles
+1. **Single Interface**: All complexity hidden; user interacts through chat and planner UI
+2. **Proactive Intelligence**: Clarity initiates work when possible—not just responds
+3. **Low Friction**: No manual tagging, no setup, no structured inputs required
+4. **Memory + Agency**: Clarity remembers, reasons, and acts on behalf of the user
+5. **Privacy-Respecting**: Always clear what's being used and why
 
-1. **Identify work area** (webApp, chatServer, src/core, supabase)
-2. **Read pattern file** for implementation examples
-3. **Check rule file** for constraints
-4. **Reference schemas** for types/structure
-5. **Update active-tasks.md** with progress
+### Implementation Phases
+- **✅ Phase 0**: Foundation Setup (Documentation cleanup complete)
+- **📋 Phase 1**: Foundation - Ingest + Tasking (Brain Dump, Memory, Basic Agents)
+- **📋 Phase 2**: Output Automation - Agents & Digest (Proactive capabilities)
+- **📋 Phase 3**: Assistant as Multiplier (Advanced proactive behaviors)
 
-## Emergency Rules
+## 🚀 QUICK START FOR AGENTS
 
-1. **Read entire files** before making changes
-2. **Follow established patterns** - don't reinvent
-3. **Use existing types/schemas** - don't duplicate
-4. **Test changes** before marking complete
-5. **Update docs** if you change patterns
+### For New Agents
+1. **Read Project Definition**: Start with [`Clarity v2: PRD.md`](Clarity%20v2:%20PRD.md) and [`Design & Implementation Plan.md`](Clarity%20v2:%20Design%20&%20Implementation%20Plan.md)
+2. **Check Current Status**: Review [`tasks.md`](tasks.md) and [`activeContext.md`](activeContext.md)
+3. **Understand Patterns**: Consult relevant pattern files in [`patterns/`](patterns/)
+4. **Follow Guidelines**: Adhere to [`style-guide.md`](style-guide.md) and rules in [`rules/`](rules/)
 
-## Getting Help
+### For Continuing Work
+1. **Current Context**: Check [`activeContext.md`](activeContext.md) for immediate priorities
+2. **Active Tasks**: Review [`tasks.md`](tasks.md) for current work items
+3. **Recent Progress**: Check [`progress.md`](progress.md) for latest developments
+4. **Relevant Patterns**: Use appropriate pattern files for your work area
 
-- **Missing pattern?** Check [`archive/deprecated-patterns/`](archive/deprecated-patterns/)
-- **Pattern outdated?** Update in [`active-tasks.md`](active-tasks.md)
-- **Need new pattern?** Add to appropriate pattern file
-- **Rule conflicts?** Escalate to human
+## 📊 DOCUMENTATION PRINCIPLES
 
-## Validation
+### File Length Limits
+- **README.md**: <200 lines (navigation only)
+- **Active files**: <300 lines (current context only)
+- **Pattern files**: <400 lines (examples over explanations)
+- **Archive**: Unlimited (historical reference)
 
-Run `npm run docs:check-all` to validate:
-- File length limits
-- Bidirectional links
-- Rule references
-- Unused files
+### Content Focus
+- **Current Work**: All files focus on active Clarity v2 development
+- **Historical Context**: Archived to [`archive/`](archive/) directory
+- **Single Source**: No contradictory or duplicate information
+- **Agent-Friendly**: Optimized for AI agent consumption and navigation
 
-## Status ✅
+## 🔄 MAINTENANCE
 
-- **File Limits**: All files under 400 lines
-- **Links**: No broken references in active docs
-- **Patterns**: 40 total patterns with DO/DON'T examples
-- **Rules**: 40 total machine-readable rules
-- **@docs Headers**: Added to key implementation files
-- **Legacy Content**: Safely archived (12 files, ~60KB)
-- **Validation**: All checks passing 
+### Regular Updates
+- **Weekly**: Update [`progress.md`](progress.md) with latest developments
+- **Per Task**: Update [`tasks.md`](tasks.md) and [`activeContext.md`](activeContext.md)
+- **Per Phase**: Archive completed work to [`archive/`](archive/)
+
+### Quality Assurance
+- **File Length**: Enforce limits to ensure agents read complete files
+- **Link Validation**: Ensure all internal links work correctly
+- **Content Relevance**: Remove outdated information regularly
+- **Pattern Consistency**: Maintain consistent development patterns
+
+---
+
+**Last Updated**: January 30, 2025  
+**Current Focus**: Clarity v2 Foundation Setup and Phase 1 Planning  
+**Next Milestone**: Project structure validation and Phase 1 architecture design 

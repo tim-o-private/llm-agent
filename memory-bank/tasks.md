@@ -1,476 +1,431 @@
 # CRITICAL INSTRUCTIONS
 All agents MUST read `README.md` for navigation, then consult the relevant pattern files (`patterns/ui-patterns.md`, `patterns/api-patterns.md`, `patterns/agent-patterns.md`, `patterns/data-patterns.md`) and rule files (`rules/*.json`) for their work area. Adhere to established patterns unless EXPLICITLY told by the user to deviate.
 
-# Tasks
-
-This file tracks the current tasks, steps, checklists, and component lists for the Local LLM Terminal Environment and the Clarity web application. It consolidates information from previous implementation plans and backlog documents.
-
-## PENDING / ACTIVE TASKS
-
-**CURRENT TASK: VAN-ARCH-001: Email Digest System Architecture Iteration**
-*   **Status:** IMPLEMENT Mode - Phase 4 End-to-End Testing
-*   **Complexity:** 3 (Intermediate Feature - System architecture refinement with existing components)
-*   **Objective:** Complete end-to-end testing and database configuration validation for the unified Email Digest System
-*   **Context:** ✅ **INFRASTRUCTURE COMPLETE** - TTL cache and error handling working perfectly. Core implementation complete. EmailDigestService cleaned up and ready. Need to validate database configurations and test end-to-end functionality.
-
-**COMPLETED TASK: TASK-INFRA-002: Infrastructure Improvements - TTL Cache & Error Handling**
-*   **Status:** ✅ **COMPLETED** - All phases complete, system running perfectly
-*   **Complexity:** 3 (Intermediate Feature - Infrastructure enhancement)
-*   **Achievement:** Complete infrastructure overhaul with TTL caching, error handling, and DRY refactoring
-*   **Impact:** 95% reduction in database queries, graceful error handling, production-ready reliability
-
-## 📋 Requirements Analysis
-
-### Core Requirements
-- [X] **REQ-001**: Scheduled agent execution system for daily email digests - ✅ **IMPLEMENTED**
-- [X] **REQ-002**: On-demand email digest generation via chat interface - ✅ **IMPLEMENTED**
-- [X] **REQ-003**: Latency optimization through parallel execution - ✅ **IMPLEMENTED**
-- [X] **REQ-004**: Leverage existing BackgroundTaskService infrastructure - ✅ **IMPLEMENTED**
-- [X] **REQ-005**: Unified service architecture with shared entry point - ✅ **IMPLEMENTED**
-- [X] **REQ-006**: Infrastructure reliability and performance optimization - ✅ **IMPLEMENTED**
-
-### Technical Constraints
-- [X] **CONST-001**: Must use existing LangChain Gmail toolkit (no custom wrappers) - ✅ **IMPLEMENTED**
-- [X] **CONST-002**: Must integrate with existing VaultTokenService for OAuth - ✅ **IMPLEMENTED**
-- [X] **CONST-003**: Must extend BackgroundTaskService (no new orchestrator) - ✅ **IMPLEMENTED**
-- [X] **CONST-004**: Must maintain agent executor caching patterns - ✅ **IMPLEMENTED**
-- [X] **CONST-005**: Must provide graceful error handling and fallbacks - ✅ **IMPLEMENTED**
-
-## 🔍 Component Analysis
-
-### ✅ **Infrastructure Components (COMPLETE)**
-- **TTLCacheService** (`chatServer/services/ttl_cache_service.py`)
-  - Status: ✅ **COMPLETE** - Generic TTL cache for any data type
-  
-- **ToolCacheService** (`chatServer/services/tool_cache_service.py`)
-  - Status: ✅ **COMPLETE** - Tool-specific cache with database integration
-  
-- **InfrastructureErrorHandler** (`chatServer/services/infrastructure_error_handler.py`)
-  - Status: ✅ **COMPLETE** - Decorator-based error handling with graceful fallbacks
-  
-- **Agent Loader** (`src/core/agent_loader_db.py`)
-  - Status: ✅ **COMPLETE** - DRY refactoring with unified caching interface
-
-### ✅ **Email Digest Components (COMPLETE)**
-- **BackgroundTaskService** (`chatServer/services/background_tasks.py`)
-  - Status: ✅ **COMPLETE** - Added scheduled agent execution capability
-  
-- **Gmail Tools** (`chatServer/tools/gmail_tools.py`)
-  - Status: ✅ **COMPLETE** - Simplified LangChain toolkit provider (380→137 lines)
-  
-- **EmailDigestService** (`chatServer/services/email_digest_service.py`)
-  - Status: ✅ **COMPLETE** - Unified service for both scheduled and on-demand execution
-  
-- **EmailDigestTool** (`chatServer/tools/email_digest_tool.py`)
-  - Status: ✅ **COMPLETE** - Tool wrapper for assistant agent
-
-## 🎨 Design Decisions
-
-### ✅ **Infrastructure Decisions (IMPLEMENTED)**
-- [X] **INFRA-DEC-001**: Generic TTL cache service for reusability - ✅ **IMPLEMENTED**
-- [X] **INFRA-DEC-002**: Decorator-based error handling for consistency - ✅ **IMPLEMENTED**
-- [X] **INFRA-DEC-003**: DRY refactoring of agent loader - ✅ **IMPLEMENTED**
-- [X] **INFRA-DEC-004**: Graceful fallbacks for database schema issues - ✅ **IMPLEMENTED**
-
-### ✅ **Architecture Decisions (IMPLEMENTED)**
-- [X] **ARCH-DEC-001**: Unified service pattern with context parameter - ✅ **IMPLEMENTED**
-- [X] **ARCH-DEC-002**: Tool layer → Service layer → Infrastructure layer separation - ✅ **IMPLEMENTED**
-- [X] **ARCH-DEC-003**: Database-driven agent loading via load_agent_executor_db() - ✅ **IMPLEMENTED**
-- [X] **ARCH-DEC-004**: BackgroundTaskService extension vs new orchestrator - ✅ **IMPLEMENTED**
-
-### ✅ **Implementation Decisions (IMPLEMENTED)**
-- [X] **IMPL-DEC-001**: LangChain Gmail toolkit direct usage - ✅ **IMPLEMENTED**
-- [X] **IMPL-DEC-002**: Async execution patterns for all components - ✅ **IMPLEMENTED**
-- [X] **IMPL-DEC-003**: PostgreSQL storage for digest results - ✅ **IMPLEMENTED**
-- [X] **IMPL-DEC-004**: Error handling and logging patterns - ✅ **IMPLEMENTED**
-
-## ⚙️ Implementation Strategy
-
-### ✅ **Infrastructure Phase: TTL Cache & Error Handling (COMPLETE)**
-1. [X] **INFRA-001**: Generic TTL cache service implementation
-2. [X] **INFRA-002**: Tool-specific cache with database integration
-3. [X] **INFRA-003**: Infrastructure error handler with decorators
-4. [X] **INFRA-004**: DRY refactoring of agent loader
-5. [X] **INFRA-005**: Comprehensive testing and validation
-
-### ✅ **Phase 1: BackgroundTaskService Extension (COMPLETE)**
-1. [X] **PHASE1-001**: Analyze existing BackgroundTaskService patterns
-2. [X] **PHASE1-002**: Add scheduled agent execution capability
-3. [X] **PHASE1-003**: Create schedule configuration system
-
-### ✅ **Phase 2: Gmail Tools Database Integration (COMPLETE)**
-1. [X] **PHASE2-001**: Analyze existing Gmail tools in database
-2. [X] **PHASE2-002**: Create database-compatible Gmail tool classes
-3. [X] **PHASE2-003**: Integrate with VaultTokenService authentication
-
-### ✅ **Phase 3: Unified Email Digest Service (COMPLETE)**
-1. [X] **PHASE3-001**: Create EmailDigestService using database-driven agents
-2. [X] **PHASE3-002**: Implement unified service interface
-3. [X] **PHASE3-003**: Database integration for digest storage
-4. [X] **PHASE3-004**: EmailDigestService cleanup and optimization
-
-### Phase 4: Integration & Testing 🔄 **IN PROGRESS**
-1. [X] **PHASE4-001**: BackgroundTaskService integration
-2. [X] **PHASE4-002**: EmailDigestTool for assistant agent
-3. [ ] **PHASE4-003**: Database configuration validation - **CURRENT FOCUS**
-4. [ ] **PHASE4-004**: End-to-end testing - **PENDING**
-
-## 🎯 Architecture Summary
-
-### ✅ **Infrastructure Architecture Implemented**
-
-**TTL Cache System:**
-- **Generic Cache**: `TTLCacheService[T]` for any data type with configurable TTL
-- **Tool Cache**: Specialized implementation for tool configurations
-- **Performance**: 95% reduction in database queries, 3 agents cached successfully
-- **Reliability**: Graceful fallbacks and error recovery
-
-**Error Handling:**
-- **Decorator Pattern**: `@handle_database_errors`, `@handle_cache_errors`
-- **Automatic Recovery**: Database pool recreation on connection failures
-- **Schema Tolerance**: Graceful handling of database schema mismatches
-- **Comprehensive Logging**: Detailed error tracking and debugging
-
-### ✅ **Database-Driven Architecture Implemented**
-
-**Agent Configuration:**
-- **`email_digest_agent`** exists in `agent_configurations` with proper system prompt
-- **Gmail tools** (`gmail_search`, `gmail_get_message`, `gmail_digest`) exist in `tools` table
-- **Tool assignments** properly configured via `agent_tools` table
-
-**Service Layer:**
-- **`EmailDigestService`** uses database-driven `email_digest_agent` (not custom prompts)
-- **Agent loading** via `load_agent_executor_db()` automatically gets tools from database
-- **Context-aware** authentication via `VaultTokenService`
-
-**Execution Paths:**
-1. **Scheduled**: `BackgroundTaskService` → `EmailDigestService` → `email_digest_agent` (from DB)
-2. **On-demand**: `EmailDigestTool` → `EmailDigestService` → `email_digest_agent` (from DB)
-
-**Storage:**
-- **Digest results** stored in existing `email_digests` table
-- **Schedule configuration** in new `agent_schedules` table
-
-## 🔧 Key Implementation Details
-
-### ✅ **Infrastructure Implementation**
-- **TTL Cache**: 5-minute TTL, 1-minute refresh, automatic cache warming
-- **Error Handling**: Decorator-based with automatic fallbacks and recovery
-- **Agent Loader**: Unified interface with optional caching (default enabled)
-- **Database Integration**: Graceful handling of schema mismatches
-
-### ✅ **Database Schema**
-- **`agent_schedules`**: Stores cron-based schedule configuration
-- **`email_digests`**: Stores individual digest results (existing table)
-
-### ✅ **Gmail Tools**
-- **Database-compatible classes**: `GmailSearchTool`, `GmailGetMessageTool`, `GmailDigestTool`
-- **LangChain integration**: Uses `GmailToolkit` with Vault authentication
-- **Context-aware**: Supports both user and scheduler contexts
-
-### ✅ **Authentication**
-- **VaultTokenService**: Context-aware token retrieval
-- **OAuth flow**: Proper Google credentials management
-- **Error handling**: Clear messages for missing/expired tokens
-
-## 🚀 Benefits Achieved
-
-### ✅ **Infrastructure Benefits**
-- **Performance**: 95% reduction in tool loading database queries
-- **Reliability**: Graceful error handling with automatic recovery
-- **Maintainability**: DRY principles with unified interfaces
-- **Scalability**: Generic cache system for future use cases
-
-### ✅ **Leverages Existing Infrastructure**
-- Uses existing `email_digest_agent` and Gmail tools from database
-- Extends `BackgroundTaskService` instead of creating new orchestrator
-- Reuses agent executor caching and database patterns
-
-### ✅ **Unified Architecture**
-- Single `EmailDigestService` handles both scheduled and on-demand execution
-- Same agent, same tools, same prompts for consistent behavior
-- Context-aware authentication and execution
-
-### ✅ **Database-Driven Configuration**
-- Agent prompts and tool configurations managed in database
-- No hardcoded prompts in service layer
-- Easy to modify agent behavior without code changes
-
-### ✅ **Proper Error Handling**
-- Graceful handling of authentication failures
-- Clear error messages for users
-- Proper logging and monitoring
-
-## 📋 Current Focus: Phase 4 Database Configuration Validation
-
-### 🔍 **Database Configuration Review Needed**
-1. **Agent Configuration**: Verify `email_digest_agent` system prompt is appropriate for EmailDigestService usage
-2. **Tool Configuration**: Ensure Gmail tools are properly configured with correct `tool_class` values
-3. **Tool Registry**: Verify all Gmail tools are registered in `agent_loader_db.py`
-4. **Missing Configurations**: Check for any missing tool configurations or registry entries
-
-### 📋 Next Steps
-1. **Database Review**: Review agent_configurations and tools tables for EmailDigestService compatibility
-2. **Configuration Updates**: Apply any needed database configuration updates
-3. **End-to-end Testing**: Test both scheduled and on-demand execution paths
-4. **Performance Validation**: Verify latency improvements and error handling
-
-## 🎯 Success Criteria
-
-### ✅ Infrastructure Requirements (ALL COMPLETE)
-1. **TTL Cache System**: ✅ Generic cache with tool-specific implementation
-2. **Error Handling**: ✅ Decorator-based with graceful fallbacks
-3. **Performance Optimization**: ✅ 95% reduction in database queries
-4. **DRY Refactoring**: ✅ Unified agent loader interface
-5. **Production Reliability**: ✅ Comprehensive error recovery
-
-### ✅ Core Requirements (ALL COMPLETE)
-1. **Scheduled Agent Execution**: ✅ BackgroundTaskService extended with cron scheduling
-2. **On-Demand Email Digests**: ✅ EmailDigestTool integrated with assistant agent
-3. **Latency Optimization**: ✅ LangChain toolkit parallelization implemented
-4. **Infrastructure Reuse**: ✅ Existing services extended, minimal new components
-5. **Authentication Security**: ✅ Context-aware VaultTokenService implemented
-
-### ✅ Technical Constraints (ALL MET)
-1. **No Serial Tool Calls**: ✅ LangChain toolkit handles Gmail API parallelization
-2. **Agent Executor Caching**: ✅ Existing cache reused for scheduled agents
-3. **Database Schema Reuse**: ✅ Uses existing email_digests table with minimal additions
-4. **Security Model**: ✅ Proper RLS policies for user and scheduler contexts
-
-## 📋 Implementation Checklist
-
-### ✅ Infrastructure Layer
-- [X] Generic TTL cache service implementation
-- [X] Tool-specific cache with database integration
-- [X] Infrastructure error handler with decorators
-- [X] DRY refactoring of agent loader
-- [X] Comprehensive testing (32 tests, 100% pass rate)
-
-### ✅ Database Layer
-- [X] Create agent_schedules table
-- [X] Extend email_digests table with context tracking
-- [X] RLS policies for user and scheduler access
-- [X] Default schedule creation for Gmail users
-
-### ✅ Service Layer  
-- [X] BackgroundTaskService extension (120 lines added)
-- [X] EmailDigestService creation (cleaned up and optimized)
-- [X] VaultTokenService context awareness
-- [X] Gmail tools simplification (380 → 137 lines)
-
-### ✅ Tool Layer
-- [X] EmailDigestTool creation (108 lines)
-- [X] LangChain tool interface compliance
-- [X] Parameter validation and error handling
-- [X] Assistant agent integration
-
-### ✅ Infrastructure
-- [X] croniter dependency added
-- [X] Module import verification
-- [X] Backward compatibility maintained
-- [X] Error handling and logging
-
-## 🚀 Deployment Status
-
-**✅ INFRASTRUCTURE COMPLETE - TTL Cache & Error Handling Working Perfectly**
-
-**🔄 PHASE 4 IN PROGRESS - Database Configuration Validation**
-
-Infrastructure improvements are complete and working beautifully:
-
-- **TTL Cache**: ✅ 3 agents cached, 60-second refresh working
-- **Error Handling**: ✅ Graceful fallbacks for schema mismatches
-- **Performance**: ✅ 95% reduction in database queries
-- **Reliability**: ✅ Automatic error recovery and pool recreation
-
-Core implementation phases are complete. The Email Digest System provides:
-
-- **Unified Architecture**: Single service handles both scheduled and on-demand execution
-- **Clean Integration**: Leverages existing infrastructure with minimal additions  
-- **Performance Optimized**: LangChain toolkit parallelization addresses latency concerns
-- **Security Compliant**: Context-aware authentication with proper RLS policies
-- **Maintainable Code**: 64% reduction in Gmail tools complexity, comprehensive documentation
-
-**Current Focus**: Validating database configurations work correctly with EmailDigestService
-
-## 🧪 Testing Strategy
-
-### ✅ Infrastructure Testing (COMPLETE)
-- [X] **TEST-INFRA-001**: TTL cache service testing (12 tests passing)
-- [X] **TEST-INFRA-002**: Infrastructure error handler testing (12 tests passing)
-- [X] **TEST-INFRA-003**: Tool cache service testing (8 tests passing)
-- [X] **TEST-INFRA-004**: Server startup and integration testing
-
-### Database Configuration Testing
-- [ ] **TEST-DB-001**: Verify email_digest_agent configuration
-  - [ ] System prompt appropriate for EmailDigestService
-  - [ ] Agent loads correctly via load_agent_executor_db()
-  - [ ] Tool assignments are correct
-- [ ] **TEST-DB-002**: Verify Gmail tools configuration
-  - [ ] All tools have correct tool_class values
-  - [ ] Tools are registered in agent_loader_db.py
-  - [ ] Tool instantiation works correctly
-
-### Integration Tests
-- [ ] **TEST-INT-001**: End-to-end scheduled digest test
-  - [ ] Schedule configuration
-  - [ ] Agent execution
-  - [ ] Result storage
-- [ ] **TEST-INT-002**: End-to-end on-demand digest test
-  - [ ] Chat interface integration
-  - [ ] Tool execution
-  - [ ] Response generation
-
-## 📚 Documentation Plan
-
-- [X] **DOC-001**: Architecture documentation update
-- [X] **DOC-002**: Implementation progress tracking
-- [X] **DOC-003**: Infrastructure improvements documentation
-- [ ] **DOC-004**: Database configuration guide
-- [ ] **DOC-005**: Testing and deployment guide
-
-## 🎨 Creative Phases Required
-
-- [X] **CREATIVE-001**: 🏗️ Architecture Design - ✅ **COMPLETE**
-- [X] **CREATIVE-002**: ⚙️ Algorithm Design - ✅ **COMPLETE** (Standard service patterns)
-- [X] **CREATIVE-003**: 🎨 UI/UX Design - ✅ **NOT REQUIRED** (Chat interface integration only)
-
-## ✅ Checkpoints
-
-- [X] **CP-001**: Requirements verified - ✅ **COMPLETE**
-- [X] **CP-002**: Architecture decisions made - ✅ **COMPLETE**
-- [X] **CP-003**: Implementation plan detailed - ✅ **COMPLETE**
-- [X] **CP-004**: Infrastructure improvements complete - ✅ **COMPLETE**
-- [X] **CP-005**: Core implementation complete - ✅ **COMPLETE**
-- [X] **CP-006**: EmailDigestService cleaned up - ✅ **COMPLETE**
-- [ ] **CP-007**: Database configurations validated - 🔄 **IN PROGRESS**
-- [ ] **CP-008**: End-to-end testing complete - ⏳ **PENDING**
-
-## 📊 Current Status
-- **Phase**: IMPLEMENT Mode - Phase 4 Database Configuration Validation
-- **Status**: 🔄 **DATABASE REVIEW IN PROGRESS** - Infrastructure complete, core implementation complete, validating configurations
-- **Blockers**: None - Need to review database configurations for compatibility
-- **Next Steps**: Database configuration review and validation, then end-to-end testing
-
-✅ **INFRASTRUCTURE & CORE IMPLEMENTATION COMPLETE**:
-- **Infrastructure**: ✅ **COMPLETE** - TTL cache, error handling, DRY refactoring working perfectly
-- **EmailDigestService**: ✅ **CLEANED UP** - Optimized, imports correctly, ready for testing
-- **Architecture**: ✅ **IMPLEMENTED** - Database-driven agent loading working correctly
-- **Integration**: ✅ **COMPLETE** - All components integrated and tested individually
-- **Database Schema**: ✅ **READY** - All tables and migrations in place
-
-## 🔄 Dependencies
-
-### Internal Dependencies
-- **BackgroundTaskService** - ✅ Extended successfully
-- **VaultTokenService** - ✅ Context-aware implementation complete
-- **Agent executor cache** - ✅ Integration verified
-- **PostgreSQL connection pool** - ✅ Used throughout
-- **TTL Cache System** - ✅ Working perfectly with 3 agents cached
-- **Infrastructure Error Handler** - ✅ Graceful fallbacks working
-
-### External Dependencies
-- **LangChain Gmail toolkit** - ✅ Integrated successfully
-- **Google OAuth credentials** - ✅ VaultTokenService handles securely
-- **Gmail API access** - ✅ Ready for testing
-
-## ⚠️ Current Focus Areas
-
-- **DATABASE-CONFIG-001**: Review email_digest_agent system prompt for EmailDigestService compatibility
-- **DATABASE-CONFIG-002**: Verify Gmail tools have correct tool_class configurations
-- **DATABASE-CONFIG-003**: Ensure all tools are registered in agent_loader_db.py
-- **DATABASE-CONFIG-004**: Test agent loading and tool instantiation end-to-end
-
-## 📋 Technology Stack
-
-### Framework & Tools
-- **Backend Framework**: FastAPI (existing)
-- **Agent Framework**: LangChain (existing)
-- **Database**: PostgreSQL (existing)
-- **Authentication**: Supabase Vault (existing)
-- **Caching**: TTL-based in-memory cache (new)
-- **Error Handling**: Decorator-based infrastructure patterns (new)
-
-### Technology Validation Checkpoints
-- [X] **TECH-001**: LangChain Gmail toolkit compatibility verified
-- [X] **TECH-002**: BackgroundTaskService extension feasibility confirmed
-- [X] **TECH-003**: VaultTokenService integration validated
-- [X] **TECH-004**: Agent executor caching patterns verified
-- [X] **TECH-005**: PostgreSQL storage patterns confirmed
-- [X] **TECH-006**: EmailDigestService import and functionality verified
-- [X] **TECH-007**: TTL cache system performance validated
-- [X] **TECH-008**: Infrastructure error handling tested
-
-## 📋 Files Created/Modified
-
-### ✅ Infrastructure Files Created
-- [X] **`chatServer/services/ttl_cache_service.py`** - Generic TTL cache (320 lines)
-- [X] **`chatServer/services/tool_cache_service.py`** - Tool-specific cache (200 lines)
-- [X] **`chatServer/services/infrastructure_error_handler.py`** - Error handling (217 lines)
-- [X] **`tests/chatServer/services/test_ttl_cache_service.py`** - TTL cache tests (280 lines)
-- [X] **`tests/chatServer/services/test_tool_cache_service_simple.py`** - Tool cache tests (150 lines)
-- [X] **`tests/chatServer/services/test_infrastructure_error_handler.py`** - Error handler tests (173 lines)
-
-### ✅ Email Digest Files Created
-- [X] **`supabase/migrations/20250130000010_email_digest_schedules.sql`** - Schedule configuration schema
-- [X] **`chatServer/services/email_digest_service.py`** - Unified email digest service (cleaned up)
-- [X] **`chatServer/tools/email_digest_tool.py`** - LangChain tool wrapper
-
-### ✅ Modified Files
-- [X] **`src/core/agent_loader_db.py`** - DRY refactoring with unified caching interface
-- [X] **`chatServer/main.py`** - TTL cache lifecycle integration
-- [X] **`chatServer/services/background_tasks.py`** - Added scheduled agent execution
-- [X] **`chatServer/tools/gmail_tools.py`** - Simplified provider (380→137 lines)
-- [X] **`requirements.txt`** - Added croniter dependency
-
-### ✅ Backup Files
-- [X] **`memory-bank/archive/gmail-tools-backup/`** - Backup existing implementation
-
-## 🔧 Implementation Details
-
-### ✅ Infrastructure Implementation
-- **TTL Cache System**: Generic `TTLCacheService[T]` with configurable TTL and refresh intervals
-- **Tool Cache**: Specialized implementation with database integration and graceful fallbacks
-- **Error Handling**: Decorator-based patterns with automatic recovery and pool recreation
-- **DRY Refactoring**: Unified agent loader interface with optional caching
-
-### ✅ BackgroundTaskService Extension
-- **Scheduled Agent Execution**: Added `run_scheduled_agents()` method with cron-based scheduling
-- **Schedule Management**: Database-driven schedule configuration with automatic reloading
-- **Agent Integration**: Seamless integration with existing agent executor cache
-- **Error Handling**: Comprehensive error handling and logging for scheduled execution
-
-### ✅ Gmail Tools Simplification  
-- **LangChain Native**: Direct use of LangChain Gmail toolkit without custom wrappers
-- **VaultTokenService Integration**: Context-aware authentication (user vs scheduler)
-- **Simplified Architecture**: Reduced from 380 lines to 137 lines of clean, focused code
-- **Backward Compatibility**: Factory functions maintain existing interfaces
-
-### ✅ Unified Email Digest Service
-- **Shared Entry Point**: Single service for both scheduled and on-demand execution
-- **Context Awareness**: Automatic context detection and appropriate authentication
-- **Database-Driven**: Uses load_agent_executor_db() for agent loading
-- **Error Recovery**: Graceful error handling with user-friendly error messages
-- **Result Storage**: Automatic storage of scheduled digest results for audit trail
-
-### ✅ EmailDigestTool Integration
-- **LangChain Compatible**: Standard BaseTool implementation for agent framework
-- **Input Validation**: Pydantic schema with proper validation and defaults
-- **Async Support**: Full async execution for optimal performance
-- **Service Integration**: Clean integration with unified EmailDigestService
-
-✅ **LEVEL 3 COMPREHENSIVE IMPLEMENTATION COMPLETE**
-- [X] Requirements analysis complete
-- [X] Component analysis complete  
-- [X] Architecture decisions made
-- [X] Technology stack validated
-- [X] Implementation strategy executed
-- [X] Infrastructure improvements complete
-- [X] Core implementation complete
-- [X] EmailDigestService cleaned up and optimized
-- [ ] Database configurations validated
-- [ ] End-to-end testing complete
-
-**CURRENT FOCUS**: **DATABASE CONFIGURATION VALIDATION** - Review and validate database configurations for EmailDigestService compatibility
-
-**NEXT RECOMMENDED ACTION**: **Review database agent_configurations and tools tables** - Ensure configurations work with EmailDigestService
+# Active Tasks
+
+This file tracks current tasks for the **Clarity v2** project - an executive-function assistant that filters noise, multiplies output, and eliminates manual data entry.
+
+## 🎯 PROJECT FOCUS: CLARITY V2
+
+**Current Objective**: Implement Clarity v2 using **PostgREST + Minimal Chat Gateway** architecture  
+**Architecture Document**: `creative/clarity-v2-postgrest-architecture.md`
+
+**Project Vision**: Create an executive-function assistant that:
+- **Filters inbound noise** so users stop paying attention to what doesn't matter
+- **Multiplies outbound output** so goals are met with less effort  
+- **Eliminates manual data entry** and returns attention to the user
+
+## 📋 CURRENT TASK: TASK-CLARITY-002 - PostgREST Architecture Implementation
+
+**Status**: 🔄 IN PROGRESS - Planning complete, ready for technology validation  
+**Complexity**: Level 4 (Complex System - Multi-phase implementation)  
+**Priority**: HIGH - Foundation for all future development  
+**Planning Methodology**: Memory Bank Level 4 Architectural Planning
+
+### 📋 REQUIREMENTS ANALYSIS
+
+#### Core Requirements
+- [x] **R1**: Eliminate custom API layer - Use router-proxied PostgREST for all data operations
+- [x] **R2**: Establish consistent typing - Auto-generated types + custom chat types
+- [x] **R3**: Implement controlled DB access - Rate limiting and caching built into stores
+- [x] **R4**: Create minimal backend - Router with PostgREST proxy + chat gateway
+- [x] **R5**: Maintain data freshness - Periodic polling via router
+- [x] **R6**: Preserve existing UI patterns - Assistant-UI + Radix components
+- [x] **R7**: Enable rapid feature development - Tool = router → PostgREST HTTP call
+
+#### Technical Constraints
+- [x] **C1**: Must use existing Supabase database schema
+- [x] **C2**: Must maintain compatibility with existing frontend components
+- [x] **C3**: Must preserve AI agent orchestration capabilities
+- [x] **C4**: Must support data updates via periodic polling through router
+- [x] **C5**: Must eliminate 80%+ of custom backend code
+- [x] **C6**: Must maintain database isolation - no direct frontend access
+
+#### Non-Functional Requirements
+- **Performance**: Response time < 200ms for data operations
+- **Scalability**: Support 100+ concurrent users with controlled query limits
+- **Maintainability**: Reduce codebase complexity by 80%
+- **Type Safety**: 100% type coverage via auto-generation
+- **Reliability**: 99.9% uptime with built-in error handling
+
+### 🏗️ ARCHITECTURAL ANALYSIS
+
+#### System Components Affected
+1. **Frontend Layer (webApp/)**
+   - Components: Chat, Tasks, Memory, UI (Radix)
+   - Stores: Zustand stores with router-proxied PostgREST calls
+   - Hooks: Custom hooks for typed interfaces
+   - Types: Auto-generated + custom chat types
+
+2. **Backend Layer (chatServer/)**
+   - Minimal FastAPI app with routing
+   - Chat gateway for AI orchestration
+   - PostgREST proxy for data operations
+   - AI orchestration system
+   - Tool system (PostgREST-based)
+   - Type definitions (Pydantic)
+
+3. **Data Layer (Supabase)**
+   - PostgREST API (auto-generated)
+   - PostgreSQL with RLS
+   - Periodic data polling
+   - Authentication
+
+4. **Integration Layer**
+   - External APIs (Gmail, Calendar, Slack)
+   - Tool execution engine
+   - Type consistency validation
+
+#### Dependencies & Integration Points
+- **Frontend ↔ Router**: HTTP calls to our FastAPI router
+- **Router ↔ PostgREST**: Proxied PostgREST calls with validation
+- **Chat Gateway ↔ AI System**: Agent orchestration and tool execution
+- **Tools ↔ PostgREST**: Direct HTTP calls via router proxy
+- **Data Updates ↔ Frontend**: Periodic polling via router
+- **Types ↔ All Layers**: Auto-generated types ensure consistency
+
+### 🔧 TECHNOLOGY STACK VALIDATION
+
+#### Selected Technologies
+- **Frontend Framework**: Next.js with TypeScript
+- **State Management**: Zustand stores
+- **UI Components**: Assistant-UI + Radix
+- **Backend Framework**: FastAPI (minimal router + chat gateway)
+- **Database API**: Router-proxied Supabase PostgREST
+- **Type Generation**: Supabase CLI
+- **Data Updates**: Periodic polling via router
+- **AI Integration**: Existing agent system
+
+#### Technology Validation Checkpoints
+- [ ] **TV1**: Supabase CLI type generation verified
+- [ ] **TV2**: Router-proxied PostgREST calls from frontend validated
+- [ ] **TV3**: FastAPI router with PostgREST proxy functional
+- [ ] **TV4**: Zustand + router integration tested
+- [ ] **TV5**: Periodic polling via router working
+- [ ] **TV6**: Tool → router → PostgREST HTTP calls validated
+- [ ] **TV7**: Type consistency across all layers verified
+- [ ] **TV8**: End-to-end build process successful
+
+### 📊 IMPLEMENTATION STRATEGY
+
+#### Phased Implementation Approach
+```mermaid
+graph TD
+    P0["Phase 0: Foundation<br>(Day 1)"] --> P1["Phase 1: Router<br>(Day 2)"]
+    P1 --> P2["Phase 2: Types<br>(Day 3)"]
+    P2 --> P3["Phase 3: Frontend Migration<br>(Day 4-5)"]
+    P3 --> P4["Phase 4: Backend Migration<br>(Day 6-7)"]
+    P4 --> P5["Phase 5: Cleanup<br>(Day 8)"]
+    
+    P0 -.-> TV["Technology Validation<br>Continuous"]
+    P1 -.-> TV
+    P2 -.-> TV
+    P3 -.-> TV
+    P4 -.-> TV
+```
+
+#### Detailed Implementation Steps
+
+##### ✅ Phase 0: Foundation Setup (Day 1) - NEXT
+**Objective**: Establish new simplified directory structure and basic configuration
+
+**Technology Validation Required**: Project initialization and Supabase setup
+
+**Tasks**:
+- [ ] **0.1 Directory Structure Creation**
+  ```bash
+  # Frontend structure
+  mkdir -p webApp/src/{components/{chat,tasks,memory,ui},stores,hooks,lib,types}
+  # Backend structure (minimal)
+  mkdir -p chatServer/{routers,ai,tools,types,config,dependencies}
+  ```
+
+- [ ] **0.2 Supabase Type Generation Setup**
+  ```bash
+  # Install Supabase CLI if needed
+  npm install -g supabase
+  # Generate initial TypeScript types
+  npx supabase gen types typescript --project-id YOUR_PROJECT_ID > webApp/src/types/database.ts
+  ```
+
+- [ ] **0.3 Basic Configuration Files**
+  - Create Supabase client configuration (`webApp/src/lib/supabase.ts`)
+  - Create minimal FastAPI app skeleton (`chatServer/main.py`)
+  - Set up environment variables and configuration
+
+**Technology Validation Checkpoints**:
+- [ ] Supabase CLI installed and functional
+- [ ] Type generation produces valid TypeScript
+- [ ] Directory structure created successfully
+- [ ] Basic configuration files compile without errors
+
+##### 📅 Phase 1: Minimal Router (Day 2)
+**Objective**: Create FastAPI router with PostgREST proxy and chat gateway
+
+**Technology Validation Required**: FastAPI setup with PostgREST proxy
+
+**Tasks**:
+- [ ] **1.1 FastAPI Router with PostgREST Proxy**
+  - Create FastAPI app with dual routing: `/chat` and `/api/*`
+  - Implement PostgREST proxy for `/api/*` routes
+  - Configure CORS for frontend access
+  - Add health check endpoint (`/health`)
+  - Basic error handling and request validation
+
+- [ ] **1.2 Routing Validation**
+  - Test routing: `/chat` → AI gateway, `/api/*` → PostgREST proxy
+  - Verify frontend can reach both endpoints
+  - Confirm database isolation (no direct access)
+  - Test CORS configuration
+  - Validate request/response proxying
+
+**Technology Validation Checkpoints**:
+- [ ] FastAPI app starts without errors
+- [ ] Health endpoint returns 200 status
+- [ ] PostgREST proxy routes requests correctly
+- [ ] CORS allows frontend requests
+- [ ] Chat endpoint accepts POST requests
+- [ ] Frontend cannot access database directly
+
+##### 📅 Phase 2: Type System (Day 3)
+**Objective**: Establish consistent typing across all layers
+
+**Technology Validation Required**: Type generation and compilation
+
+**Tasks**:
+- [ ] **2.1 Auto-Generated Database Types**
+  - Generate TypeScript types from Supabase schema
+  - Create type generation script for CI/CD
+  - Validate type accuracy against database
+  - Set up type watching for development
+
+- [ ] **2.2 Custom Chat Types**
+  - Create chat-specific TypeScript types
+  - Create corresponding Pydantic models
+  - Validate type consistency between frontend/backend
+  - Test type compilation and imports
+
+**Technology Validation Checkpoints**:
+- [ ] Database types generate without errors
+- [ ] Custom types compile successfully
+- [ ] Type imports work across modules
+- [ ] Pydantic models validate correctly
+- [ ] No type conflicts or circular dependencies
+
+##### 📅 Phase 3: Frontend Migration (Day 4-5)
+**Objective**: Convert frontend to router-proxied PostgREST calls with controlled access
+
+**Technology Validation Required**: Zustand + Router integration
+
+**Tasks**:
+- [ ] **3.1 Zustand Store Migration**
+  - Convert `taskStore` to router-proxied PostgREST calls
+  - Implement controlled DB access patterns (limits, caching)
+  - Add periodic polling for data updates via router
+  - Implement staleness detection and cache management
+
+- [ ] **3.2 Custom Hook Migration**
+  - Update `useTasks` hook for router integration
+  - Implement caching and error handling
+  - Add optimistic updates for better UX
+  - Test frontend-to-router-to-database flow end-to-end
+
+- [ ] **3.3 UI Component Integration**
+  - Connect task components to new stores
+  - Test periodic data refresh via router
+  - Verify controlled DB access (query limits)
+  - Validate type safety in components
+
+**Technology Validation Checkpoints**:
+- [ ] Zustand stores connect to router successfully
+- [ ] Periodic polling retrieves data updates via router
+- [ ] Query limits prevent excessive DB calls
+- [ ] Caching reduces redundant requests
+- [ ] UI updates reflect database changes via router polling
+- [ ] Type safety maintained throughout
+
+##### 📅 Phase 4: Backend Migration (Day 6-7)
+**Objective**: Convert AI tools to router-proxied PostgREST calls
+
+**Technology Validation Required**: Tool → Router → PostgREST integration
+
+**Tasks**:
+- [ ] **4.1 Tool System Migration**
+  - Convert `CreateTaskTool` to router-proxied PostgREST calls
+  - Convert `GetTasksTool` to router-proxied PostgREST calls
+  - Implement controlled error handling and retries
+  - Add tool execution logging and monitoring
+
+- [ ] **4.2 Chat Gateway Integration**
+  - Implement chat endpoint with AI orchestration
+  - Integrate tools with agent orchestrator via router
+  - Add request/response validation
+  - Implement rate limiting for chat requests
+
+- [ ] **4.3 End-to-End Validation**
+  - Test complete flow: chat → AI → tools → router → PostgREST → database
+  - Verify periodic polling updates reach frontend via router
+  - Validate type safety throughout entire stack
+  - Performance testing under load
+
+**Technology Validation Checkpoints**:
+- [ ] Tools make successful router-proxied PostgREST calls
+- [ ] Agent orchestrator integrates with tools via router
+- [ ] Chat endpoint processes requests correctly
+- [ ] End-to-end flow completes successfully
+- [ ] Periodic polling updates propagate via router to frontend
+- [ ] Performance meets requirements
+
+##### 📅 Phase 5: System Cleanup (Day 8)
+**Objective**: Remove all custom API layer code and finalize system
+
+**Technology Validation Required**: Complete system validation
+
+**Tasks**:
+- [ ] **5.1 Code Removal**
+  - Delete `chatServer/routers/` (except `chat.py`)
+  - Delete `chatServer/services/`
+  - Delete `chatServer/models/`
+  - Clean up unused dependencies
+  - Update documentation
+
+- [ ] **5.2 Final System Validation**
+  - Test complete system functionality
+  - Verify type safety end-to-end
+  - Performance testing and optimization
+  - Security validation
+  - Documentation update and review
+
+**Technology Validation Checkpoints**:
+- [ ] System functions without deleted components
+- [ ] All tests pass after cleanup
+- [ ] Performance meets success metrics
+- [ ] Security requirements satisfied
+- [ ] Documentation is complete and accurate
+
+### 🎨 CREATIVE PHASES REQUIRED
+
+#### Architecture Design Phase
+- **Component**: System Architecture
+- **Decisions Required**: 
+  - PostgREST integration patterns
+  - Tool execution architecture
+  - Error handling strategies
+- **Status**: ✅ COMPLETE (documented in architecture.md)
+
+#### Data Flow Design Phase
+- **Component**: Data Synchronization via Polling
+- **Decisions Required**:
+  - Optimistic update patterns
+  - Polling frequency strategies
+  - Cache invalidation logic
+- **Status**: 🔄 REQUIRED during Phase 3
+
+#### Tool Integration Design Phase
+- **Component**: AI Tool → PostgREST Integration
+- **Decisions Required**:
+  - HTTP client patterns
+  - Error handling and retries
+  - Authentication flow
+- **Status**: 🔄 REQUIRED during Phase 4
+
+### ⚠️ CHALLENGES & MITIGATIONS
+
+#### Challenge 1: Type Consistency Across Layers
+- **Risk**: Type mismatches between auto-generated and custom types
+- **Mitigation**: Automated type validation in CI/CD pipeline
+- **Validation**: Compile-time type checking + runtime validation
+
+#### Challenge 2: Data Update Performance
+- **Risk**: Periodic polling may impact performance or user experience
+- **Mitigation**: Intelligent polling frequency with exponential backoff and cache optimization
+- **Validation**: Performance testing with polling frequency optimization
+
+#### Challenge 3: Tool Error Handling
+- **Risk**: PostgREST HTTP calls may fail or timeout
+- **Mitigation**: Robust retry logic with exponential backoff
+- **Validation**: Fault injection testing
+
+#### Challenge 4: Database Query Control
+- **Risk**: Uncontrolled queries may impact database performance
+- **Mitigation**: Built-in query limits and caching in stores
+- **Validation**: Query monitoring and performance metrics
+
+### 📊 SUCCESS METRICS
+
+#### Code Reduction Metrics
+- **Target**: Eliminate 80%+ of custom backend code
+- **Measurement**: Lines of code before/after migration
+- **Current**: ~5000 LOC → Target: <1000 LOC
+
+#### Type Safety Metrics
+- **Target**: 100% shared types via auto-generation
+- **Measurement**: TypeScript compilation without `any` types
+- **Validation**: Automated type checking in CI/CD
+
+#### Performance Metrics
+- **Target**: Response time < 200ms for data operations
+- **Measurement**: API response time monitoring
+- **Validation**: Load testing with 100+ concurrent users
+
+#### Development Velocity Metrics
+- **Target**: New features = database change + tool
+- **Measurement**: Time to implement new feature
+- **Validation**: Feature development time tracking
+
+### 🔄 MEMORY BANK INTEGRATION
+
+#### Files Updated During Planning
+- [x] **tasks.md**: Comprehensive implementation plan
+- [x] **creative/clarity-v2-postgrest-architecture.md**: Architecture documentation
+- [ ] **activeContext.md**: Current implementation focus
+- [ ] **progress.md**: Implementation progress tracking
+
+#### Next Mode Recommendation
+**NEXT MODE**: IMPLEMENT MODE (Technology Validation Phase)
+- Technology validation checkpoints must be completed before full implementation
+- Focus on Phase 0: Foundation Setup with technology validation
+- Validate Supabase type generation and basic FastAPI setup
+
+### 🚨 PLANNING VERIFICATION CHECKLIST
+
+```
+✓ LEVEL 4 PLANNING VERIFICATION CHECKLIST
+
+Requirements Analysis
+- [x] Functional requirements analyzed and documented
+- [x] Non-functional requirements specified with metrics
+- [x] Technical constraints identified and addressed
+- [x] Domain model and component identification complete
+
+Architectural Analysis
+- [x] System components and affected areas identified
+- [x] Dependencies and integration points documented
+- [x] Technology stack selected and justified
+- [x] Architectural decisions documented with rationales
+
+Implementation Strategy
+- [x] Phased implementation approach defined
+- [x] Detailed steps for each phase documented
+- [x] Technology validation checkpoints established
+- [x] Success metrics and validation criteria defined
+
+Creative Phases
+- [x] Architecture design phase completed
+- [x] Data flow design phase identified for Phase 3
+- [x] Tool integration design phase identified for Phase 4
+- [x] Creative phase requirements documented
+
+Risk Management
+- [x] Key challenges identified with specific mitigations
+- [x] Validation strategies defined for each risk
+- [x] Contingency plans documented
+- [x] Performance and security considerations addressed
+
+Memory Bank Integration
+- [x] Planning documentation complete in tasks.md
+- [x] Architecture documentation in creative/ folder
+- [x] Next mode recommendation provided
+- [x] Progress tracking structure established
+
+→ PLANNING COMPLETE: Ready for IMPLEMENT MODE with Technology Validation
