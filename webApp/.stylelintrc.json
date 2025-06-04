@@ -1,0 +1,20 @@
+{
+  "extends": ["stylelint-config-standard"],
+  "rules": {
+    "color-hex-length": "long",
+    "color-no-invalid-hex": true,
+    "declaration-property-value-disallowed-list": {
+      "color": ["/^#/", "/^rgb/", "/^hsl/"],
+      "background-color": ["/^#/", "/^rgb/", "/^hsl/"],
+      "border-color": ["/^#/", "/^rgb/", "/^hsl/"],
+      "background": ["/^#/", "/^rgb/", "/^hsl/"]
+    },
+    "custom-property-pattern": "^(accent|gray|color|space|radius|font|line-height|letter-spacing|shadow|border|ui|text|brand|success|warning|destructive)-.*$",
+    "selector-class-pattern": null
+  },
+  "ignoreFiles": [
+    "dist/**/*",
+    "node_modules/**/*"
+  ],
+  "customSyntax": "postcss-scss"
+} 

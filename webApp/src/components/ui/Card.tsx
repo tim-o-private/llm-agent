@@ -1,3 +1,8 @@
+/**
+ * @docs memory-bank/patterns/ui-patterns.md#pattern-10-wrapper-components
+ * @rules memory-bank/rules/ui-rules.json#ui-003
+ * @examples memory-bank/patterns/ui-patterns.md#pattern-10-wrapper-components
+ */
 import React from 'react';
 import { clsx } from 'clsx';
 

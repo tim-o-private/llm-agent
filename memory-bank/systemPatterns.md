@@ -1,17 +1,71 @@
 # System Patterns
 
-This document is intended to house high-level system-wide architectural patterns and diagrams that might not fit specifically into `techContext.md` (which covers stack, specific implementation patterns, and data models) or `productContext.md` (which covers product vision, features, and user flows).
+> **⚠️ IMPORTANT**: This file has been restructured. System patterns are now organized in dedicated pattern files by area. See [`README.md`](README.md) for navigation.
 
-**Initial State (Post-Consolidation - YYYY-MM-DD):**
+## Current Pattern Organization
 
-Much of the content from a previous version of `systemPatterns.md` (which included architectural diagrams) has been summarized or integrated into `techContext.md` (see "System Architecture Overview" which references original Mermaid diagrams) and relevant implementation patterns have also been moved there.
+### 📁 **Pattern Files by Area**
+- **Frontend**: [`patterns/ui-patterns.md`](patterns/ui-patterns.md) - React, Radix UI, TailwindCSS patterns
+- **Backend**: [`patterns/api-patterns.md`](patterns/api-patterns.md) - FastAPI, service layer patterns  
+- **Agents**: [`patterns/agent-patterns.md`](patterns/agent-patterns.md) - LangChain, CRUD tool patterns
+- **Database**: [`patterns/data-patterns.md`](patterns/data-patterns.md) - PostgreSQL, migration patterns
 
-**Guidelines for Use:**
+### 🔧 **Machine-Readable Rules**
+- **Frontend**: [`rules/ui-rules.json`](rules/ui-rules.json) - Automated UI constraints
+- **Backend**: [`rules/api-rules.json`](rules/api-rules.json) - Automated API constraints
+- **Agents**: [`rules/agent-rules.json`](rules/agent-rules.json) - Automated agent constraints  
+- **Database**: [`rules/data-rules.json`](rules/data-rules.json) - Automated DB constraints
 
-*   Use this document for overarching patterns that span multiple components or layers of the system (CLI, WebApp, API, Database) if they are not adequately covered in `techContext.md`.
-*   Consider this for high-level visual diagrams (e.g., C4 model diagrams, complex sequence diagrams) if `techContext.md` becomes too verbose.
-*   If `techContext.md`'s sections on "System Architecture Overview" and "Key Implementation Patterns" are sufficient, this file may remain high-level or be formally deprecated in favor of consolidating all technical patterns within `techContext.md`.
+## System-Wide Architectural Principles
 
-**To Be Determined:**
+### 1. **Separation of Concerns**
+- **Frontend (`webApp/`)**: React UI with Radix + Tailwind
+- **Backend (`chatServer/`)**: FastAPI service layer
+- **Agents (`src/core/`)**: LangChain-based AI agents
+- **Database (`supabase/`)**: PostgreSQL with RLS
 
-*   Does a distinct `systemPatterns.md` add value beyond what is now in `techContext.md`? If so, what specific content should live here exclusively? 
+### 2. **Established Integration Patterns**
+- **State Management**: Zustand (client) + React Query (server)
+- **Authentication**: Supabase OAuth with RLS
+- **Memory System**: PostgreSQL-based STM/LTM
+- **Agent Orchestration**: Executor caching with session management
+
+### 3. **Documentation Strategy**
+- **40 total patterns** with DO/DON'T examples
+- **40 total rules** for automated validation
+- **File limits**: All files under 400 lines
+- **Validation**: `npm run docs:check-all`
+
+## Migration from Legacy Content
+
+This file previously contained high-level architectural diagrams and patterns that have been:
+
+1. **Distributed** into area-specific pattern files
+2. **Enhanced** with concrete DO/DON'T examples
+3. **Validated** against current codebase implementation
+4. **Structured** for both human and AI agent consumption
+
+### For Historical Context
+- **Legacy diagrams**: Available in `archive/deprecated-patterns/`
+- **Migration details**: See `CONSOLIDATION_COMPLETE.md`
+- **Current status**: All patterns validated and organized
+
+## Usage Guidelines
+
+### For System-Wide Changes
+1. **Check multiple pattern files** if change spans areas
+2. **Update relevant rule files** for new constraints
+3. **Validate with automated checks** before committing
+4. **Document cross-cutting concerns** in appropriate pattern files
+
+### For Architecture Decisions
+1. **Consult existing patterns** before designing new approaches
+2. **Follow established integration patterns** between areas
+3. **Update pattern files** when introducing new architectural decisions
+4. **Maintain consistency** with documented principles
+
+---
+
+**Last Updated**: 2025-01-27  
+**Status**: ✅ Restructured and aligned with current organization  
+**Primary Reference**: [`README.md`](README.md) for navigation and quick rules 

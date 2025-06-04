@@ -1,0 +1,295 @@
+{
+  "version": "1.0.0",
+  "area": "ui",
+  "description": "Enforceable rules for UI development in webApp/",
+  "rules": [
+    {
+      "id": "ui-001",
+      "category": "components",
+      "title": "Use Radix UI Primitives",
+      "description": "Use @radix-ui/react-* primitives for component behavior, not @radix-ui/themes components",
+      "enforcement_level": "error",
+      "applies_to": ["*.tsx", "*.jsx"],
+      "examples": {
+        "correct": [
+          "import * as Dialog from '@radix-ui/react-dialog';",
+          "import * as Button from '@radix-ui/react-button';"
+        ],
+        "incorrect": [
+          "import { Button } from '@radix-ui/themes';",
+          "import { Dialog } from '@radix-ui/themes';"
+        ]
+      },
+      "auto_fixable": false
+    },
+    {
+      "id": "ui-002",
+      "category": "styling",
+      "title": "No Hardcoded Colors",
+      "description": "Use semantic color tokens only, never hardcoded hex/rgb values or default Tailwind colors",
+      "enforcement_level": "error",
+      "applies_to": ["*.tsx", "*.jsx", "*.css"],
+      "forbidden_patterns": [
+        "bg-blue-\\d+",
+        "text-red-\\d+",
+        "border-gray-\\d+",
+        "#[0-9a-fA-F]{3,6}",
+        "rgb\\(",
+        "rgba\\(",
+        "hsl\\("
+      ],
+      "allowed_patterns": [
+        "bg-ui-element-bg",
+        "text-text-primary",
+        "border-ui-border",
+        "bg-brand-primary",
+        "var\\(--[a-z-]+\\)"
+      ],
+      "examples": {
+        "correct": [
+          "className=\"bg-ui-element-bg text-text-primary\"",
+          "style={{ backgroundColor: 'var(--accent-9)' }}"
+        ],
+        "incorrect": [
+          "className=\"bg-blue-500 text-white\"",
+          "style={{ backgroundColor: '#3b82f6' }}"
+        ]
+      },
+      "auto_fixable": true,
+      "auto_fix_suggestions": {
+        "bg-blue-500": "bg-brand-primary",
+        "text-white": "text-white",
+        "bg-gray-100": "bg-ui-element-bg"
+      }
+    },
+    {
+      "id": "ui-003",
+      "category": "state",
+      "title": "Use Centralized Overlay State",
+      "description": "Use useOverlayStore for modals, trays, and overlays instead of local state",
+      "enforcement_level": "warning",
+      "applies_to": ["*.tsx", "*.jsx"],
+      "forbidden_patterns": [
+        "useState.*[Mm]odal",
+        "useState.*[Oo]pen",
+        "useState.*[Ss]how"
+      ],
+      "required_imports": [
+        "import { useOverlayStore } from '@/stores/useOverlayStore';"
+      ],
+      "examples": {
+        "correct": [
+          "const { openModal } = useOverlayStore();",
+          "openModal('editTask', { taskId });"
+        ],
+        "incorrect": [
+          "const [isModalOpen, setIsModalOpen] = useState(false);",
+          "const [showDialog, setShowDialog] = useState(false);"
+        ]
+      },
+      "auto_fixable": false
+    },
+    {
+      "id": "ui-004",
+      "category": "api",
+      "title": "Use React Query Hooks",
+      "description": "Use custom React Query hooks from @/api/hooks/ for all API interactions",
+      "enforcement_level": "error",
+      "applies_to": ["*.tsx", "*.jsx"],
+      "forbidden_patterns": [
+        "supabase\\.from\\(",
+        "fetch\\(",
+        "axios\\."
+      ],
+      "required_patterns": [
+        "use[A-Z][a-zA-Z]*Hooks\\."
+      ],
+      "examples": {
+        "correct": [
+          "const { data, isLoading, error } = useTaskHooks.useFetchTasks();",
+          "const { mutate } = useTaskHooks.useCreateTask();"
+        ],
+        "incorrect": [
+          "supabase.from('tasks').select('*')",
+          "fetch('/api/tasks')"
+        ]
+      },
+      "auto_fixable": false
+    },
+    {
+      "id": "ui-005",
+      "category": "error-handling",
+      "title": "Handle Loading and Error States",
+      "description": "Always handle loading and error states from React Query",
+      "enforcement_level": "warning",
+      "applies_to": ["*.tsx", "*.jsx"],
+      "required_checks": [
+        "isLoading",
+        "error"
+      ],
+      "examples": {
+        "correct": [
+          "if (isLoading) return <LoadingSpinner />;",
+          "if (error) return <ErrorMessage error={error} />;"
+        ],
+        "incorrect": [
+          "const { data } = useQuery(); // Missing error/loading checks"
+        ]
+      },
+      "auto_fixable": false
+    },
+    {
+      "id": "ui-006",
+      "category": "accessibility",
+      "title": "Include ARIA Labels",
+      "description": "Interactive elements must have accessible names via aria-label or aria-labelledby",
+      "enforcement_level": "warning",
+      "applies_to": ["*.tsx", "*.jsx"],
+      "required_attributes": {
+        "button": ["aria-label", "aria-labelledby", "children"],
+        "input": ["aria-label", "aria-labelledby", "placeholder"],
+        "select": ["aria-label", "aria-labelledby"]
+      },
+      "examples": {
+        "correct": [
+          "<button aria-label=\"Edit task\">✏️</button>",
+          "<input aria-label=\"Task title\" />"
+        ],
+        "incorrect": [
+          "<button>✏️</button>",
+          "<input />"
+        ]
+      },
+      "auto_fixable": false
+    },
+    {
+      "id": "ui-007",
+      "category": "forms",
+      "title": "Use React Hook Form with Zod",
+      "description": "Use React Hook Form with Zod validation for all forms",
+      "enforcement_level": "error",
+      "applies_to": ["*Form*.tsx", "*form*.tsx"],
+      "required_imports": [
+        "import { useForm } from 'react-hook-form';",
+        "import { zodResolver } from '@hookform/resolvers/zod';",
+        "import { z } from 'zod';"
+      ],
+      "examples": {
+        "correct": [
+          "const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(schema) });"
+        ],
+        "incorrect": [
+          "const [formData, setFormData] = useState({});"
+        ]
+      },
+      "auto_fixable": false
+    },
+    {
+      "id": "ui-008",
+      "category": "imports",
+      "title": "Use Path Aliases",
+      "description": "Use @ path aliases instead of relative imports for src/ directories",
+      "enforcement_level": "warning",
+      "applies_to": ["*.tsx", "*.jsx", "*.ts"],
+      "forbidden_patterns": [
+        "from ['\"]\\.\\.\\./\\.\\.\\./",
+        "from ['\"]\\.\\.\\./\\.\\.\\./\\.\\.\\./",
+        "from ['\"]\\.\\.\\./src/"
+      ],
+      "required_patterns": [
+        "from ['\"]@/"
+      ],
+      "examples": {
+        "correct": [
+          "import { Button } from '@/components/ui/Button';",
+          "import { useTaskHooks } from '@/api/hooks/useTaskHooks';"
+        ],
+        "incorrect": [
+          "import { Button } from '../../../components/ui/Button';",
+          "import { useTaskHooks } from '../../api/hooks/useTaskHooks';"
+        ]
+      },
+      "auto_fixable": true
+    },
+    {
+      "id": "ui-009",
+      "category": "components",
+      "title": "Use Existing UI Components",
+      "description": "Use existing components from @/components/ui/ before creating new ones",
+      "enforcement_level": "warning",
+      "applies_to": ["*.tsx", "*.jsx"],
+      "existing_components": [
+        "Button",
+        "Modal",
+        "ErrorMessage",
+        "LoadingSpinner",
+        "Card",
+        "Input",
+        "Select"
+      ],
+      "check_before_creating": [
+        "Modal",
+        "Dialog",
+        "Button",
+        "Input",
+        "Form",
+        "Card",
+        "Spinner",
+        "Loading"
+      ],
+      "auto_fixable": false
+    },
+    {
+      "id": "ui-010",
+      "category": "performance",
+      "title": "Avoid Inline Functions in JSX",
+      "description": "Define event handlers outside JSX or use useCallback for performance",
+      "enforcement_level": "info",
+      "applies_to": ["*.tsx", "*.jsx"],
+      "forbidden_patterns": [
+        "onClick=\\{\\(\\) =>",
+        "onSubmit=\\{\\(\\) =>",
+        "onChange=\\{\\(\\) =>"
+      ],
+      "examples": {
+        "correct": [
+          "const handleClick = useCallback(() => {}, []);",
+          "const handleSubmit = (data) => {};"
+        ],
+        "incorrect": [
+          "onClick={() => doSomething()}",
+          "onSubmit={() => handleSubmit()}"
+        ]
+      },
+      "auto_fixable": false
+    }
+  ],
+  "enforcement_config": {
+    "error": {
+      "block_commit": true,
+      "show_in_ide": true,
+      "fail_build": true
+    },
+    "warning": {
+      "block_commit": false,
+      "show_in_ide": true,
+      "fail_build": false
+    },
+    "info": {
+      "block_commit": false,
+      "show_in_ide": true,
+      "fail_build": false
+    }
+  },
+  "tools": {
+    "eslint_rules": [
+      "@typescript-eslint/no-unused-vars",
+      "react-hooks/exhaustive-deps"
+    ],
+    "prettier_config": {
+      "semi": true,
+      "singleQuote": true,
+      "trailingComma": "es5"
+    }
+  }
+} 

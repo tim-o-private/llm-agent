@@ -1,3 +1,6 @@
+# @docs memory-bank/patterns/api-patterns.md#pattern-11-fastapi-project-structure
+# @rules memory-bank/rules/api-rules.json#api-001
+# @examples memory-bank/patterns/api-patterns.md#pattern-1-single-database-use-prescribed-connections
 import sys
 import os
 import logging # Added for log_level
@@ -32,6 +35,8 @@ try:
     from .dependencies.agent_loader import get_agent_loader
     from .services.chat import get_chat_service
     from .services.prompt_customization import get_prompt_customization_service
+    from .routers.external_api_router import router as external_api_router
+    from .routers.email_agent_router import router as email_agent_router
 except ImportError:
     # Fall back to absolute imports (when run directly)
     from models.chat import ChatRequest, ChatResponse
@@ -47,6 +52,8 @@ except ImportError:
     from dependencies.agent_loader import get_agent_loader
     from services.chat import get_chat_service
     from services.prompt_customization import get_prompt_customization_service
+    from routers.external_api_router import router as external_api_router
+    from routers.email_agent_router import router as email_agent_router
 
 # Correctly import ConfigLoader
 from utils.config_loader import ConfigLoader
@@ -111,16 +118,6 @@ except Exception as e:
 # AgentExecutor type hint needs to be imported, e.g., from langchain.agents import AgentExecutor
 # ACTIVE_AGENTS: Dict[Tuple[str, str], AgentExecutor] = {} # REMOVED - Per documentation, this is not used.
 
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")  # Set this in your .env or Fly secrets
 
 @asynccontextmanager
@@ -129,10 +126,12 @@ async def lifespan(app: FastAPI):
         from .database.connection import get_database_manager
         from .database.supabase_client import get_supabase_manager
         from .services.background_tasks import get_background_task_service
+        from .services.tool_cache_service import initialize_tool_cache, shutdown_tool_cache
     except ImportError:
         from database.connection import get_database_manager
         from database.supabase_client import get_supabase_manager
         from services.background_tasks import get_background_task_service
+        from services.tool_cache_service import initialize_tool_cache, shutdown_tool_cache
     
     global AGENT_EXECUTOR_CACHE
     logger.info("Application startup: Initializing resources...")
@@ -148,6 +147,13 @@ async def lifespan(app: FastAPI):
     supabase_manager = get_supabase_manager()
     await supabase_manager.initialize()
 
+    # Initialize tool cache service
+    try:
+        await initialize_tool_cache()
+        logger.info("Tool cache service initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize tool cache service: {e}", exc_info=True)
+
     # Initialize and start background tasks
     background_service = get_background_task_service()
     background_service.set_agent_executor_cache(AGENT_EXECUTOR_CACHE)
@@ -160,11 +166,31 @@ async def lifespan(app: FastAPI):
     # Stop background tasks
     await background_service.stop_background_tasks()
     
+    # Stop tool cache service
+    try:
+        await shutdown_tool_cache()
+        logger.info("Tool cache service stopped successfully")
+    except Exception as e:
+        logger.error(f"Failed to stop tool cache service: {e}", exc_info=True)
+    
     # Close database manager
     await db_manager.close()
 
-# Re-assign app with the new lifespan
+# Create app with lifespan
 app = FastAPI(lifespan=lifespan)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include routers
+app.include_router(external_api_router)
+app.include_router(email_agent_router)
 
 # --- Logger setup ---
 # Ensure logger is available if not already globally configured

@@ -1,3 +1,6 @@
+-- @docs memory-bank/patterns/data-patterns.md#pattern-2-row-level-security-rls-pattern
+-- @rules memory-bank/rules/data-rules.json#data-002
+-- @examples memory-bank/patterns/data-patterns.md#pattern-3-consistent-table-structure
 -- supabase/migrations/{datetime.now().strftime('%Y%m%d%H%M%S')}_agent_memory_v2_schemas.sql
 -- Ran on 2025-05-20 14:00:00. Added column to existing public.agent_sessions table.
 -- Drop existing tables if they exist (optional, for clean slate during dev)

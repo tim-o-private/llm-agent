@@ -74,7 +74,7 @@ const AddTaskTray: React.FC<AddTaskTrayProps> = ({ isOpen, onClose }) => {
         </div>
         <div className="mt-5 sm:mt-6 sm:grid sm:grid-flow-row-dense sm:grid-cols-2 sm:gap-3">
           <Button
-            variant="primary"
+            variant="solid"
             type="submit"
             className="w-full justify-center sm:col-start-2"
             disabled={isLoading}
@@ -82,7 +82,7 @@ const AddTaskTray: React.FC<AddTaskTrayProps> = ({ isOpen, onClose }) => {
             {isLoading ? 'Adding...' : 'Add Task'}
           </Button>
           <Button
-            variant="secondary"
+            variant="soft"
             onClick={onClose} 
             className="mt-3 w-full justify-center sm:col-start-1 sm:mt-0"
             disabled={isLoading}

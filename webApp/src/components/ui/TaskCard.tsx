@@ -1,43 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import clsx from 'clsx';
+import { Card } from '@radix-ui/themes';
 import { Checkbox } from './Checkbox';
 import { Button } from './Button';
-import clsx from 'clsx';
-import { Task, TaskPriority, TaskStatus } from '@/api/types';
+import { IconButton } from './IconButton';
+import { Badge } from './Badge';
+import { Task } from '@/api/types';
+import SubtaskList from '../features/TaskDetail/SubtaskList';
+import { getFocusClasses, getFocusRing } from '@/utils/focusStates';
 
 import {
-  ChevronUpIcon,
-  DoubleArrowUpIcon,
-  TriangleUpIcon,
   DragHandleDots2Icon,
   CheckCircledIcon,
   TrashIcon,
   PlayIcon,
   ChevronDownIcon,
   ChevronRightIcon,
-  Pencil2Icon
+  Pencil2Icon,
+  DotsHorizontalIcon
 } from '@radix-ui/react-icons';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 
-import { SubtaskItem } from '../features/TaskDetail/SubtaskItem';
-
-import {
-  DndContext as SubtaskDndContext,
-  closestCenter as subtaskClosestCenter,
-  KeyboardSensor as SubtaskKeyboardSensor,
-  PointerSensor as SubtaskPointerSensor,
-  useSensor as useSubtaskSensor,
-  useSensors as useSubtaskSensors,
-  DragEndEvent as SubtaskDragEndEvent,
-} from '@dnd-kit/core';
-import {
-  arrayMove as subtaskArrayMove,
-  SortableContext as SubtaskSortableContext,
-  sortableKeyboardCoordinates as subtaskSortableKeyboardCoordinates,
-  verticalListSortingStrategy as subtaskVerticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-
-import { useUpdateSubtaskOrder } from '@/api/hooks/useTaskHooks';
+import { CSS } from '@dnd-kit/utilities';
+import { useSortable } from '@dnd-kit/sortable';
 
 export interface TaskCardProps extends Omit<Task, 'subtasks'> {
   onStartTask: (id: string) => void;
@@ -47,24 +32,11 @@ export interface TaskCardProps extends Omit<Task, 'subtasks'> {
   onSelectTask?: (id: string, selected: boolean) => void;
   onMarkComplete?: (id: string) => void;
   onDeleteTask?: (id: string) => void;
+  onFocus?: (id: string) => void;
   subtasks?: Task[];
   className?: string;
   isFocused?: boolean;
 }
-
-const priorityIcons: Record<TaskPriority, React.ReactNode | null> = {
-  0: null,
-  1: <ChevronUpIcon className="h-4 w-4 text-gray-400 dark:text-gray-500" />,
-  2: <DoubleArrowUpIcon className="h-4 w-4 text-yellow-500" />,
-  3: <TriangleUpIcon className="h-4 w-4 text-red-500" />,
-};
-
-const getStatusStyles = (status: TaskStatus, completed: boolean) => {
-  if (completed || status === 'completed') return 'opacity-60 line-through';
-  if (status === 'in_progress') return 'border-blue-500 dark:border-blue-400 shadow-md';
-  if (status === 'planning') return 'border-green-500 dark:border-green-400';
-  return 'border-gray-200 dark:border-gray-700';
-};
 
 export const TaskCard: React.FC<TaskCardProps> = ({
   id,
@@ -79,6 +51,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   onSelectTask,
   onMarkComplete,
   onDeleteTask,
+  onFocus,
   isFocused,
   className,
   subtasks: initialSubtasksProp,
@@ -93,78 +66,39 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   } = useSortable({ id });
 
   const [isSubtasksExpanded, setIsSubtasksExpanded] = useState(false);
-  const [displayedSubtasks, setDisplayedSubtasks] = useState<Task[] | undefined>(initialSubtasksProp);
+  const [cardElement, setCardElement] = useState<HTMLDivElement | null>(null);
 
+  // Synchronize keyboard navigation focus with DOM focus
   useEffect(() => {
-    setDisplayedSubtasks(initialSubtasksProp);
-  }, [initialSubtasksProp]);
+    if (isFocused && cardElement) {
+      // When keyboard navigation focuses this card, also set DOM focus
+      cardElement.focus();
+    }
+  }, [isFocused, cardElement]);
 
-  const updateSubtaskOrderMutation = useUpdateSubtaskOrder();
-
-  const subtaskSensors = useSubtaskSensors(
-    useSubtaskSensor(SubtaskPointerSensor),
-    useSubtaskSensor(SubtaskKeyboardSensor, {
-      coordinateGetter: subtaskSortableKeyboardCoordinates,
-    })
-  );
-
-  const handleSubtaskDragEnd = (event: SubtaskDragEndEvent) => {
-    const { active, over } = event;
-
-    if (active.id !== over?.id && displayedSubtasks && over) {
-      const oldIndex = displayedSubtasks.findIndex((item: Task) => item.id === active.id);
-      const newIndex = displayedSubtasks.findIndex((item: Task) => item.id === over.id);
-
-      if (oldIndex === -1 || newIndex === -1) {
-        return;
-      }
-
-      const reorderedSubtasks = subtaskArrayMove(displayedSubtasks, oldIndex, newIndex);
-      setDisplayedSubtasks(reorderedSubtasks);
-
-      const subtasksToUpdate = reorderedSubtasks.map((sub: Task, index: number) => ({
-        id: sub.id,
-        subtask_position: index + 1,
-      }));
-
-      updateSubtaskOrderMutation.mutate(
-        { parentTaskId: id, orderedSubtasks: subtasksToUpdate },
-        {
-          onSuccess: () => {
-            // console.log(`[TaskCard ${id}] updateSubtaskOrderMutation onSuccess`);
-          },
-          onError: (error) => {
-            console.error(`[TaskCard ${id}] updateSubtaskOrderMutation onError:`, error.message);
-            // Potentially revert optimistic update if backend fails
-            // setDisplayedSubtasks(initialSubtasksProp); // Or more robustly, the state before this drag
-          },
-        }
-      );
+  const handleFocus = () => {
+    // When DOM focus happens, notify the keyboard navigation system
+    if (onFocus) {
+      onFocus(id);
     }
   };
-  
-  const handleSubtaskUpdate = (subtaskId: string, updates: Partial<Task>) => {
-    console.warn(`[TaskCard ${id}] Subtask update requested for ${subtaskId} with`, updates, '. Handler not fully implemented.');
-    // Placeholder: This would involve calling a mutation for updating the subtask
-    // For optimistic UI, you might update `displayedSubtasks` here:
-    // setDisplayedSubtasks(prev => prev?.map(st => st.id === subtaskId ? {...st, ...updates} : st));
+
+  const handleBlur = () => {
+    // Handle DOM blur if needed
   };
 
-  const handleSubtaskRemove = (subtaskId: string) => {
-    console.warn(`[TaskCard ${id}] Subtask removal requested for ${subtaskId}. Handler not fully implemented.`);
-    // Placeholder: This would involve calling a mutation for deleting the subtask
-    // For optimistic UI, you might update `displayedSubtasks` here:
-    // setDisplayedSubtasks(prev => prev?.filter(st => st.id !== subtaskId));
+  // Combined ref callback for both DnD and focus management
+  const setRefs = (node: HTMLDivElement | null) => {
+    setNodeRef(node);
+    setCardElement(node);
   };
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
+    transition: isDragging ? transition : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
     zIndex: isDragging ? 100 : 'auto',
-    boxShadow: isDragging ? '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)' : 'none',
+    boxShadow: isDragging ? '0 25px 50px -12px rgba(139, 92, 246, 0.25), 0 0 30px rgba(139, 92, 246, 0.3)' : 'none',
   };
-
-  const statusCardStyles = getStatusStyles(status, completed);
 
   const handleCardClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
@@ -175,160 +109,225 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         target.closest('.subtask-drag-context')) {
       return;
     }
+    
+    // Focus this task when clicked
+    if (onFocus) {
+      onFocus(id);
+    }
+    
     if (onEdit) {
       onEdit();
     }
   };
 
+  // Determine card variant based on status
+  const getCardVariant = () => {
+    if (completed || status === 'completed') return 'ghost';
+    if (status === 'in_progress') return 'surface';
+    return 'surface';
+  };
+
   return (
-    <div ref={setNodeRef} style={style} {...attributes} className={clsx('task-card-wrapper', isDragging && 'dragging-shadow')} >
-      <div
+    <div 
+      ref={setRefs} 
+      style={style} 
+      {...attributes} 
+      className={clsx(
+        'task-card-wrapper', 
+        isDragging && 'opacity-50',
+        // Suppress browser's default focus ring - we use our custom focus system instead
+        'outline-none focus:outline-none focus-visible:outline-none'
+      )}
+      tabIndex={0}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+    >
+      <Card
+        asChild={!!onEdit}
+        variant={getCardVariant()}
+        size="2"
         className={clsx(
-          'task-card bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm flex items-center space-x-3 group relative',
-          'border',
-          statusCardStyles,
-          isFocused && 'ring-4 ring-blue-500 dark:ring-blue-400 shadow-xl bg-blue-100 dark:bg-slate-700',
+          'task-card relative cursor-pointer',
+          '[&]:focus-within:outline-none [&]:focus:outline-none [&]:focus-visible:outline-none',
+          getFocusClasses(),
+          isFocused && getFocusRing('focused'),
+          isSelected && !completed && 'ring-2 ring-brand-primary/50',
+          isSelected && completed && 'ring-2 ring-ui-border/50',
+          completed && 'opacity-70',
+          status === 'in_progress' && 'border-brand-primary',
           className,
         )}
+        onClick={onEdit ? handleCardClick : undefined}
       >
-        <div
-          {...listeners}
-          className="p-1 cursor-grab touch-none group-hover:bg-gray-100 dark:group-hover:bg-gray-700 rounded"
-          aria-label="Drag to reorder task"
-          role="button"
-          tabIndex={0}
-        >
-          <DragHandleDots2Icon className="h-5 w-5 text-gray-400 dark:text-gray-500" />
-        </div>
+        <div className="flex items-center gap-3 p-4">
+          {/* Priority indicator */}
+          {priority && (
+            <div className={clsx(
+              'w-2 h-2 rounded-full flex-shrink-0',
+              priority === 3 && 'bg-danger-bg',
+              priority === 2 && 'bg-warning-strong', 
+              priority === 1 && 'bg-info-electric',
+              completed && 'bg-text-disabled opacity-50'
+            )} />
+          )}
 
-        <div className="flex items-center h-5">
+          {/* Drag handle */}
+          <IconButton
+            {...listeners}
+            variant="ghost"
+            size="1"
+            aria-label="Drag to reorder task"
+            className={clsx(
+              'cursor-grab active:cursor-grabbing',
+              completed && 'opacity-50'
+            )}
+          >
+            <DragHandleDots2Icon />
+          </IconButton>
+
+          {/* Selection checkbox */}
           <Checkbox
             id={`task-checkbox-${id}`}
             checked={!!isSelected}
             onCheckedChange={(checked) => onSelectTask && onSelectTask(id, !!checked)}
             aria-label={`Select task ${title} for prioritization`}
           />
-        </div>
 
-        <div className="flex-grow min-w-0" onClick={onEdit ? handleCardClick : undefined} style={onEdit ? {cursor: 'pointer'} : {}} >
-          <p className={clsx("text-sm font-medium text-gray-900 dark:text-white truncate", (completed || status === 'completed') && "line-through")}>
-            {title}
-          </p>
-        </div>
-
-        {priorityIcons[priority] && (
-          <div className="ml-auto pl-2" title={`Priority: ${priority === 1 ? 'Low' : priority === 2 ? 'Medium' : 'High'}`}>
-            {priorityIcons[priority]}
+          {/* Task title */}
+          <div className="flex-grow min-w-0">
+            <p className={clsx(
+              "text-sm font-medium break-words leading-tight",
+              completed && 'line-through text-text-muted',
+              !completed && 'text-text-primary'
+            )}>
+              {title}
+            </p>
           </div>
-        )}
 
-        {displayedSubtasks && displayedSubtasks.length > 0 && (
-          <button
-            onClick={(e) => { e.stopPropagation(); setIsSubtasksExpanded(!isSubtasksExpanded); }}
-            className="p-1 ml-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 rounded focus:outline-none"
-            aria-label={isSubtasksExpanded ? "Collapse subtasks" : "Expand subtasks"}
-          >
-            {isSubtasksExpanded ? <ChevronDownIcon className="h-4 w-4" /> : <ChevronRightIcon className="h-4 w-4" />}
-          </button>
-        )}
-
-        <div className="ml-auto flex items-center space-x-1 pl-2">
-          {onStartFocus && !completed && status !== 'completed' && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onStartFocus(id);
-              }}
-              aria-label="Prepare and Focus on task"
-              title="Prepare & Focus"
-              className="p-1.5 text-blue-500 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+          {/* Subtask toggle */}
+          {initialSubtasksProp && initialSubtasksProp.length > 0 && (
+            <IconButton
+              onClick={(e) => { e.stopPropagation(); setIsSubtasksExpanded(!isSubtasksExpanded); }}
+              variant="ghost"
+              size="1"
+              aria-label={isSubtasksExpanded ? "Collapse subtasks" : "Expand subtasks"}
             >
-              <PlayIcon className="h-4 w-4" />
-            </button>
+              {isSubtasksExpanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
+            </IconButton>
           )}
 
-          {onEdit && (
-            <button
+          {/* Status indicator or Start button */}
+          {status === 'in_progress' && (
+            <Badge variant="soft" color="blue" size="1">
+              In Progress
+            </Badge>
+          )}
+          
+          {status !== 'in_progress' && status !== 'completed' && !completed && (
+            <Button
+              variant="soft"
+              size="1"
               onClick={(e) => {
                 e.stopPropagation();
-                onEdit();
+                onStartTask(id);
               }}
-              aria-label="Edit task"
-              className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
             >
-              <Pencil2Icon className="h-4 w-4" />
-            </button>
+              Start
+            </Button>
           )}
 
-          {onMarkComplete && !completed && status !== 'completed' && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onMarkComplete(id);
-              }}
-              aria-label="Mark task complete"
-              className="p-1.5 text-green-500 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
-            >
-              <CheckCircledIcon className="h-4 w-4" />
-            </button>
-          )}
+          {/* Actions Dropdown Menu */}
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger asChild>
+              <IconButton
+                variant="ghost"
+                size="1"
+                aria-label="Task actions"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <DotsHorizontalIcon />
+              </IconButton>
+            </DropdownMenu.Trigger>
 
-          {onDeleteTask && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onDeleteTask(id);
-              }}
-              aria-label="Delete task"
-              className="p-1.5 text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
-            >
-              <TrashIcon className="h-4 w-4" />
-            </button>
-          )}
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content
+                className="min-w-[160px] bg-ui-element-bg rounded-lg border border-ui-border shadow-lg p-1 z-50"
+                sideOffset={5}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {onEdit && (
+                  <DropdownMenu.Item
+                    className="flex items-center gap-2 px-3 py-2 text-sm rounded-md text-text-primary hover:bg-ui-interactive-bg-hover cursor-pointer outline-none focus:bg-ui-interactive-bg-hover"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEdit();
+                    }}
+                  >
+                    <Pencil2Icon className="h-4 w-4" />
+                    <span>Edit Task</span>
+                  </DropdownMenu.Item>
+                )}
+
+                {onStartFocus && !completed && status !== 'completed' && (
+                  <DropdownMenu.Item
+                    className="flex items-center gap-2 px-3 py-2 text-sm rounded-md text-brand-primary hover:bg-ui-interactive-bg-hover cursor-pointer outline-none focus:bg-ui-interactive-bg-hover"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onStartFocus(id);
+                    }}
+                  >
+                    <PlayIcon className="h-4 w-4" />
+                    <span>Focus on Task</span>
+                  </DropdownMenu.Item>
+                )}
+
+                {onMarkComplete && !completed && status !== 'completed' && (
+                  <DropdownMenu.Item
+                    className="flex items-center gap-2 px-3 py-2 text-sm rounded-md text-success-strong hover:bg-ui-interactive-bg-hover cursor-pointer outline-none focus:bg-ui-interactive-bg-hover"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onMarkComplete(id);
+                    }}
+                  >
+                    <CheckCircledIcon className="h-4 w-4" />
+                    <span>Mark Complete</span>
+                  </DropdownMenu.Item>
+                )}
+
+                {onDeleteTask && (
+                  <>
+                    <DropdownMenu.Separator className="h-px bg-ui-border my-1" />
+                    <DropdownMenu.Item
+                      className="flex items-center gap-2 px-3 py-2 text-sm rounded-md text-destructive hover:bg-ui-interactive-bg-hover cursor-pointer outline-none focus:bg-ui-interactive-bg-hover"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteTask(id);
+                      }}
+                    >
+                      <TrashIcon className="h-4 w-4" />
+                      <span>Delete Task</span>
+                    </DropdownMenu.Item>
+                  </>
+                )}
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
         </div>
+      </Card>
 
-        {status !== 'in_progress' && status !== 'completed' && !completed && (
-          <Button
-            variant="secondary"
-            onClick={(e) => {
-              e.stopPropagation();
-              onStartTask(id);
-            }}
-            className="ml-auto flex-shrink-0 px-2 py-1 text-xs"
-          >
-            Start
-          </Button>
-        )}
-         {status === 'in_progress' && (
-          <span className="ml-auto text-xs text-blue-600 dark:text-blue-400 font-semibold flex-shrink-0">In Progress</span>
-        )}
-      </div>
-
-      {isSubtasksExpanded && displayedSubtasks && displayedSubtasks.length > 0 && (
-        <SubtaskDndContext
-          sensors={subtaskSensors}
-          collisionDetection={subtaskClosestCenter}
-          onDragEnd={handleSubtaskDragEnd}
-          onDragStart={(e) => e.activatorEvent.stopPropagation()}
-          onDragOver={(e) => e.activatorEvent.stopPropagation()}
-          onDragMove={(e) => e.activatorEvent.stopPropagation()}
-        >
-          <SubtaskSortableContext
-            items={displayedSubtasks.map((s: Task) => s.id)}
-            strategy={subtaskVerticalListSortingStrategy}
-          >
-            <div className="subtask-item-container subtask-drag-context pl-8 pr-2 pb-2 pt-1 bg-gray-50 dark:bg-gray-800/50 rounded-b-lg border-t border-gray-200 dark:border-gray-700 space-y-1">
-              {displayedSubtasks.map((subtask: Task) => (
-                <SubtaskItem
-                  key={subtask.id}
-                  subtask={subtask}
-                  onUpdate={handleSubtaskUpdate}
-                  onRemove={handleSubtaskRemove}
-                />
-              ))}
-            </div>
-          </SubtaskSortableContext>
-        </SubtaskDndContext>
+      {isSubtasksExpanded && initialSubtasksProp && initialSubtasksProp.length > 0 && (
+        <div className={clsx(
+          "pl-8 pr-4 pb-3 pt-2 mt-2",
+          "bg-ui-element-bg/60 rounded-b-xl border border-ui-border/50",
+          completed && "opacity-70"
+        )}>
+          <SubtaskList
+            parentTaskId={id}
+            showAddSubtask={false}
+            compact={true}
+            className="space-y-1"
+          />
+        </div>
       )}
     </div>
   );

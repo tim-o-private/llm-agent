@@ -42,8 +42,8 @@ export const ExecuteView: React.FC<ExecuteViewProps> = ({
 
   if (!task || !sessionConfig) {
     return (
-      <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[100]">
-        <p className="text-white text-xl">Loading focus session...</p>
+      <div className="fixed inset-0 bg-ui-bg/70 flex items-center justify-center z-[100]">
+        <p className="text-text-primary text-xl">Loading focus session...</p>
       </div>
     );
   }
@@ -55,13 +55,13 @@ export const ExecuteView: React.FC<ExecuteViewProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900 text-white flex flex-col items-center justify-center p-8 z-[100]">
+    <div className="fixed inset-0 bg-ui-bg text-text-primary flex flex-col items-center justify-center p-8 z-[100]">
       <div className="absolute top-8 left-8">
         <h1 className="text-2xl font-bold">Focus Mode</h1>
       </div>
       
       <div className="text-center">
-        <p className="text-lg text-gray-400 mb-2">Focusing on:</p>
+        <p className="text-lg text-text-muted mb-2">Focusing on:</p>
         <h2 className="text-4xl font-semibold mb-8 truncate max-w-xl">{task.title}</h2>
         
         <div className="text-8xl font-mono mb-12">
@@ -69,20 +69,20 @@ export const ExecuteView: React.FC<ExecuteViewProps> = ({
         </div>
 
         {sessionConfig.breakdown && (
-            <div className="mb-8 p-4 bg-gray-800 rounded-lg max-w-md mx-auto">
-                <h3 className="text-md font-semibold text-gray-300 mb-2">Session Steps:</h3>
-                <p className="text-sm text-gray-400 whitespace-pre-line">
+            <div className="mb-8 p-4 bg-ui-element-bg rounded-lg max-w-md mx-auto">
+                <h3 className="text-md font-semibold text-text-secondary mb-2">Session Steps:</h3>
+                <p className="text-sm text-text-muted whitespace-pre-line">
                     {sessionConfig.breakdown}
                 </p>
             </div>
         )}
 
-        <div className="space-x-4">
-          <Button variant="secondary" onClick={() => {/* TODO: Pause timer */}}>
+        <div className="flex space-x-4">
+          <Button variant="soft" onClick={() => {/* TODO: Pause timer */}}>
             Pause
           </Button>
-          <Button variant="danger" onClick={onEndSession}>
-            End Session Early
+          <Button variant="solid" color="red" onClick={onEndSession}>
+            End Session
           </Button>
         </div>
       </div>

@@ -1,0 +1,152 @@
+{
+  "version": "1.0.0",
+  "description": "Enforceable API development rules for the chatServer backend",
+  "rules": [
+    {
+      "id": "api-001",
+      "category": "database",
+      "title": "Use Prescribed Database Connections Only",
+      "description": "Must use get_db_connection() or get_supabase_client() dependencies, never create new connections",
+      "enforcement": "error",
+      "pattern": "create_client\\(|psycopg\\.connect\\(|AsyncConnectionPool\\(",
+      "message": "Use get_db_connection() or get_supabase_client() dependencies instead of creating new connections",
+      "examples": {
+        "correct": "db = Depends(get_supabase_client)",
+        "incorrect": "db = create_client(url, key)"
+      }
+    },
+    {
+      "id": "api-002",
+      "category": "endpoints",
+      "title": "Avoid Unnecessary API Endpoints",
+      "description": "Don't create new API endpoints when React Query hooks can handle the functionality",
+      "enforcement": "warning",
+      "pattern": "@app\\.(get|post|put|delete).*user.*filter|@app\\.(get|post|put|delete).*simple.*crud",
+      "message": "Consider using React Query hooks instead of creating new API endpoints for simple operations",
+      "examples": {
+        "correct": "const { data } = useTaskHooks.useFetchTasks(); // Client-side filtering",
+        "incorrect": "@app.get('/api/tasks/user/{user_id}') // Unnecessary endpoint"
+      }
+    },
+    {
+      "id": "api-003",
+      "category": "architecture",
+      "title": "Use Service Layer Pattern",
+      "description": "Extract business logic into service classes, keep endpoints thin",
+      "enforcement": "warning",
+      "pattern": "@app\\.(post|put|delete).*\\n.*if.*\\n.*raise HTTPException",
+      "message": "Extract business logic into service classes instead of putting it in endpoints",
+      "examples": {
+        "correct": "service: TaskService = Depends(get_task_service)",
+        "incorrect": "if not task_data.title: raise HTTPException(400, 'Title required')"
+      }
+    },
+    {
+      "id": "api-004",
+      "category": "dependency-injection",
+      "title": "Use FastAPI Dependency Injection",
+      "description": "Use Depends() for service instantiation, don't manually create instances",
+      "enforcement": "error",
+      "pattern": "Service\\(.*\\)|get_supabase_client\\(\\).*=.*(?!Depends)",
+      "message": "Use FastAPI Depends() for dependency injection instead of manual instantiation",
+      "examples": {
+        "correct": "service: TaskService = Depends(get_task_service)",
+        "incorrect": "service = TaskService(get_supabase_client())"
+      }
+    },
+    {
+      "id": "api-005",
+      "category": "validation",
+      "title": "Use Pydantic Models for Validation",
+      "description": "Use Pydantic models for request/response validation, not manual validation",
+      "enforcement": "error",
+      "pattern": "request\\.json\\(\\)|if.*not.*in.*data|len\\(data\\[",
+      "message": "Use Pydantic models for validation instead of manual checks",
+      "examples": {
+        "correct": "async def create_task(task_data: TaskCreate):",
+        "incorrect": "data = await request.json(); if 'title' not in data:"
+      }
+    },
+    {
+      "id": "api-006",
+      "category": "security",
+      "title": "Rely on RLS for Data Scoping",
+      "description": "Don't manually filter by user_id when RLS policies handle it automatically",
+      "enforcement": "warning",
+      "pattern": "\\.eq\\('user_id',.*user_id\\)",
+      "message": "Remove manual user_id filtering when RLS policies handle data scoping automatically",
+      "examples": {
+        "correct": "result = await db.table('tasks').select('*').execute()",
+        "incorrect": "result = await db.table('tasks').select('*').eq('user_id', user_id).execute()"
+      }
+    },
+    {
+      "id": "api-007",
+      "category": "error-handling",
+      "title": "Structured Error Handling",
+      "description": "Use proper HTTP status codes and structured error messages",
+      "enforcement": "warning",
+      "pattern": "except:.*return.*error|raise HTTPException\\(400,",
+      "message": "Use proper HTTP status codes and structured error handling",
+      "examples": {
+        "correct": "raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Task not found')",
+        "incorrect": "except: return {'error': 'Something went wrong'}"
+      }
+    },
+    {
+      "id": "api-008",
+      "category": "abstraction",
+      "title": "Prefer Configuration Over Hardcoding",
+      "description": "Use configuration-driven patterns instead of hardcoded implementations",
+      "enforcement": "info",
+      "pattern": "class.*Tool.*def.*table.*hardcoded",
+      "message": "Consider using configuration-driven patterns like CRUDTool instead of hardcoded implementations",
+      "examples": {
+        "correct": "CRUDTool(config={'table_name': 'tasks', 'method': 'create'})",
+        "incorrect": "class TaskCreateTool: def _run(self): return db.table('tasks').insert()"
+      }
+    },
+    {
+      "id": "api-009",
+      "category": "separation-of-concerns",
+      "title": "Separate Concerns Into Focused Modules",
+      "description": "Keep models, services, and routers in separate modules",
+      "enforcement": "warning",
+      "pattern": "class.*BaseModel.*\\n.*class.*Service.*\\n.*@app\\.",
+      "message": "Separate models, services, and routers into different modules",
+      "examples": {
+        "correct": "from .models.task import Task; from .services.task_service import TaskService",
+        "incorrect": "class Task(BaseModel): pass; class TaskService: pass; @app.post('/tasks'):"
+      }
+    },
+    {
+      "id": "api-010",
+      "category": "database",
+      "title": "Single Database Principle",
+      "description": "Use only the PostgreSQL database hosted on Supabase, no additional databases",
+      "enforcement": "error",
+      "pattern": "sqlite|mysql|mongodb|redis.*database|create.*database",
+      "message": "Use only the PostgreSQL database on Supabase, no additional databases",
+      "examples": {
+        "correct": "db = Depends(get_supabase_client) # PostgreSQL on Supabase",
+        "incorrect": "sqlite_conn = sqlite3.connect('local.db')"
+      }
+    }
+  ],
+  "categories": {
+    "database": "Database connection and access patterns",
+    "endpoints": "API endpoint design and necessity",
+    "architecture": "Service layer and architectural patterns",
+    "dependency-injection": "FastAPI dependency injection usage",
+    "validation": "Request/response validation patterns",
+    "security": "Security and data scoping patterns",
+    "error-handling": "Error handling and HTTP status codes",
+    "abstraction": "Abstraction and parameterization patterns",
+    "separation-of-concerns": "Module organization and responsibility separation"
+  },
+  "enforcement_levels": {
+    "error": "Build-breaking violations that must be fixed",
+    "warning": "Code review flags that should be addressed",
+    "info": "Suggestions for improvement"
+  }
+} 

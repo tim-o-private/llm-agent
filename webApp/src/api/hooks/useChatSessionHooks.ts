@@ -13,7 +13,7 @@ export interface ChatSessionInstance {
   is_active: boolean;
   updated_at: string; // ISO string
   created_at: string; // ISO string
-  metadata?: Record<string, any> | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 // --- Data types for mutation functions ---
@@ -22,14 +22,14 @@ export interface CreateChatSessionInstancePayload {
   agent_name: string;
   chat_id: string; // A new or existing chat_id
   is_active?: boolean; // Defaults to true on creation
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface UpdateChatSessionInstancePayload {
   sessionInstanceId: string; // The 'id' (PK) of the chat_sessions row
   is_active?: boolean;
   updated_at?: string; // Typically set to now() by the hook
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 
@@ -100,7 +100,7 @@ export function useFetchLatestChatId(agentName: string | null | undefined) {
       return null; // No session history found for this user/agent
     },
     enabled: !!user && !!agentName,
-    retry: (failureCount, _error) => {
+    retry: (failureCount) => {
       // Example: Don't retry for specific non-recoverable errors if identified
       // if (error.message.includes('SPECIFIC_ERROR_CODE')) return false;
       return failureCount < 3;

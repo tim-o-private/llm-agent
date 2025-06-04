@@ -9,6 +9,7 @@ export interface NavItem {
 
 export const navItems: NavItem[] = [
   { path: '/today', label: 'Today', icon: '[T]', exact: true }, // Assuming /today is the main view, similar to /
+  { path: '/today-mockup', label: 'Today Mockup', icon: '[TM]' }, // Card system mockup
   { path: '/focus', label: 'Focus', icon: '[F]' },
   { path: '/coach', label: 'Coach', icon: '[C]' },
   { path: '/settings', label: 'Settings', icon: '[S]' },

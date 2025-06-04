@@ -1,0 +1,302 @@
+/* Assistant-UI Theme Integration with Radix Design System */
+
+/* 
+ * This file provides theming for assistant-ui components by directly targeting
+ * their CSS classes and applying Radix Theme colors. Since assistant-ui only
+ * exposes one CSS variable (--aui-thread-max-width), we use CSS selectors
+ * to override component styles and integrate with our Radix-based design system.
+ */
+
+/* ===== THREAD CONTAINER ===== */
+.radix-themes {
+  /* Only real assistant-ui CSS variable */
+  --aui-thread-max-width: 100%;
+}
+
+/* Thread container styling */
+.radix-themes [data-aui-thread] {
+  background-color: var(--ui-bg);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  gap: 1rem;
+}
+
+/* ===== MESSAGE BUBBLES ===== */
+
+/* User Messages */
+.radix-themes .aui-user-message-content {
+  background-color: var(--accent-9) !important;
+  color: var(--accent-contrast) !important;
+  border: 1px solid var(--accent-7) !important;
+  border-radius: 1rem 1rem 0.25rem 1rem !important;
+  padding: 0.75rem 1rem !important;
+  margin: 0.5rem 0 !important;
+  box-shadow: 0 1px 3px 0 var(--gray-a3), 0 1px 2px -1px var(--gray-a3) !important;
+  max-width: 80% !important;
+  margin-left: auto !important;
+}
+
+/* Assistant Messages */
+.radix-themes .aui-assistant-message-content {
+  background-color: var(--gray-3) !important;
+  color: var(--gray-12) !important;
+  border: 1px solid var(--gray-6) !important;
+  border-radius: 1rem 1rem 1rem 0.25rem !important;
+  padding: 0.75rem 1rem !important;
+  margin: 0.5rem 0 !important;
+  box-shadow: 0 1px 3px 0 var(--gray-a3), 0 1px 2px -1px var(--gray-a3) !important;
+  max-width: 80% !important;
+  margin-right: auto !important;
+}
+
+/* ===== COMPOSER (INPUT AREA) ===== */
+
+/* Composer container */
+.radix-themes [data-aui-composer] {
+  background-color: var(--gray-2) !important;
+  border: 1px solid var(--gray-6) !important;
+  border-radius: 0.5rem !important;
+  padding: 0.75rem 1rem !important;
+  box-shadow: 0 1px 3px 0 var(--gray-a3) !important;
+}
+
+/* Composer input */
+.radix-themes .data-aui-composer-input,
+.radix-themes .data-aui-composer-textarea {
+  background-color: transparent !important;
+  color: var(--gray-12) !important;
+  border: none !important;
+  outline: none !important;
+}
+
+.radix-themes [data-aui-composer] input::placeholder,
+.radix-themes [data-aui-composer] textarea::placeholder {
+  color: var(--gray-9) !important;
+}
+
+.radix-themes [data-aui-composer]:focus-within {
+  border-color: var(--accent-8) !important;
+  box-shadow: 0 0 0 3px var(--accent-3) !important;
+}
+
+/* Composer Send Button */
+.radix-themes [data-aui-composer-send] {
+  background-color: var(--accent-9) !important;
+  color: var(--accent-contrast) !important;
+  border: none !important;
+  border-radius: 0.375rem !important;
+  padding: 0.5rem 1rem !important;
+  transition: background-color 150ms ease-in-out !important;
+}
+
+.radix-themes [data-aui-composer-send]:hover:not(:disabled) {
+  background-color: var(--accent-10) !important;
+}
+
+.radix-themes [data-aui-composer-send]:disabled {
+  background-color: var(--gray-6) !important;
+  color: var(--gray-9) !important;
+  cursor: not-allowed !important;
+}
+
+/* ===== ACTION BARS ===== */
+
+.radix-themes [data-aui-action-bar] {
+  background-color: transparent !important;
+  border: 1px solid var(--gray-6) !important;
+  border-radius: 0.5rem !important;
+  padding: 0.25rem !important;
+  gap: 0.25rem !important;
+  margin: 0.5rem 0 0 0 !important;
+}
+
+/* Action Bar Buttons */
+.radix-themes [data-aui-action-bar] button {
+  background-color: transparent !important;
+  color: var(--gray-11) !important;
+  border: 1px solid var(--gray-6) !important;
+  border-radius: 0.375rem !important;
+  padding: 0.375rem !important;
+  width: 1.75rem !important;
+  height: 1.75rem !important;
+  transition: all 150ms ease-in-out !important;
+}
+
+.radix-themes [data-aui-action-bar] button:hover {
+  background-color: var(--gray-4) !important;
+  color: var(--gray-12) !important;
+}
+
+.radix-themes [data-aui-action-bar] button:active {
+  background-color: var(--accent-3) !important;
+}
+
+/* ===== MARKDOWN CONTENT ===== */
+
+/* Code (inline) */
+.radix-themes [data-aui-message] code {
+  background-color: var(--gray-3) !important;
+  color: var(--gray-12) !important;
+  border: 1px solid var(--gray-6) !important;
+  border-radius: 0.375rem !important;
+  padding: 0.125rem 0.375rem !important;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace !important;
+}
+
+/* Code blocks (multi-line) */
+.radix-themes [data-aui-message] pre {
+  background-color: var(--gray-3) !important;
+  color: var(--gray-12) !important;
+  border: 1px solid var(--gray-6) !important;
+  border-radius: 0.5rem !important;
+  padding: 1rem !important;
+  overflow-x: auto !important;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace !important;
+}
+
+.radix-themes [data-aui-message] pre code {
+  background-color: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
+/* Blockquotes */
+.radix-themes [data-aui-message] blockquote {
+  background-color: var(--gray-2) !important;
+  border-left: 4px solid var(--accent-9) !important;
+  color: var(--gray-11) !important;
+  padding: 0.75rem 1rem !important;
+  border-radius: 0 0.375rem 0.375rem 0 !important;
+  margin: 1rem 0 !important;
+}
+
+/* Links */
+.radix-themes [data-aui-message] a {
+  color: var(--accent-11) !important;
+  text-decoration: underline !important;
+  text-decoration-color: var(--accent-3) !important;
+  transition: color 150ms ease-in-out !important;
+}
+
+.radix-themes [data-aui-message] a:hover {
+  color: var(--accent-12) !important;
+}
+
+/* ===== BUTTONS ===== */
+
+/* Primary Button */
+.radix-themes .aui-button-primary {
+  background-color: var(--accent-9) !important;
+  color: var(--accent-contrast) !important;
+  border: none !important;
+  border-radius: 0.375rem !important;
+  padding: 0.5rem 1rem !important;
+  transition: background-color 150ms ease-in-out !important;
+}
+
+.radix-themes .aui-button-primary:hover:not(:disabled) {
+  background-color: var(--accent-10) !important;
+}
+
+.radix-themes .aui-button-primary:disabled {
+  background-color: var(--gray-6) !important;
+  color: var(--gray-9) !important;
+  cursor: not-allowed !important;
+}
+
+/* Secondary Button */
+.radix-themes .aui-button-secondary {
+  background-color: var(--gray-3) !important;
+  color: var(--gray-12) !important;
+  border: 1px solid var(--gray-6) !important;
+  border-radius: 0.375rem !important;
+  padding: 0.5rem 1rem !important;
+  transition: all 150ms ease-in-out !important;
+}
+
+.radix-themes .aui-button-secondary:hover:not(:disabled) {
+  background-color: var(--gray-4) !important;
+  border-color: var(--gray-7) !important;
+}
+
+.radix-themes .aui-button-secondary:disabled {
+  background-color: var(--gray-3) !important;
+  color: var(--gray-9) !important;
+  border-color: var(--gray-6) !important;
+  cursor: not-allowed !important;
+}
+
+/* Generic button override for any assistant-ui buttons */
+.radix-themes button[class*="aui-button"] {
+  font-family: inherit !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  line-height: 1.25rem !important;
+}
+
+/* Override any CSS custom properties that assistant-ui might be using */
+.radix-themes {
+  --aui-primary: var(--accent-9) !important;
+  --aui-primary-foreground: var(--accent-contrast) !important;
+  --aui-secondary: var(--gray-3) !important;
+  --aui-secondary-foreground: var(--gray-12) !important;
+  --aui-border: var(--gray-6) !important;
+  --aui-background: var(--color-background) !important;
+  --aui-foreground: var(--gray-12) !important;
+  --aui-muted: var(--gray-9) !important;
+}
+
+/* ===== LOADING INDICATORS ===== */
+
+.radix-themes [data-aui-loading] {
+  color: var(--gray-11) !important;
+}
+
+.radix-themes [data-aui-loading] [data-aui-spinner] {
+  color: var(--accent-9) !important;
+}
+
+/* ===== DEBUG TEST ===== */
+/* Debug styles removed - theming complete */
+
+/* ===== RESPONSIVE DESIGN ===== */
+
+@media (max-width: 768px) {
+  .radix-themes [data-aui-message] {
+    max-width: 95% !important;
+    padding: 0.5rem 0.75rem !important;
+    font-size: 0.875rem !important;
+  }
+  
+  .radix-themes [data-aui-composer] {
+    padding: 0.5rem 0.75rem !important;
+  }
+  
+  .radix-themes [data-aui-thread] {
+    padding: 0.5rem !important;
+  }
+}
+
+/* ===== ACCESSIBILITY ===== */
+
+@media (prefers-contrast: high) {
+  .radix-themes [data-aui-message][data-aui-message-role="user"] {
+    border-width: 2px !important;
+  }
+  
+  .radix-themes [data-aui-message][data-aui-message-role="assistant"] {
+    border-width: 2px !important;
+  }
+  
+  .radix-themes [data-aui-composer] {
+    border-width: 2px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .radix-themes [data-aui-composer-send],
+  .radix-themes [data-aui-action-bar] button,
+  .radix-themes [data-aui-message] a {
+    transition: none !important;
+  }
+} 

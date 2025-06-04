@@ -13,7 +13,7 @@ export interface ChatMessage {
   sender: 'user' | 'ai' | 'tool'; // Added 'tool' sender type if applicable
   timestamp: Date;
   tool_name?: string; // Optional: for tool messages
-  tool_input?: Record<string, any>; // Optional: for tool messages
+  tool_input?: Record<string, unknown>; // Optional: for tool messages
   // Add any other fields that might come from server responses or UI needs
 }
 

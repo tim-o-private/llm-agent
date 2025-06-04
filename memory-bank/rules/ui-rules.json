@@ -1,0 +1,151 @@
+{
+  "version": "1.0.0",
+  "description": "Enforceable UI development rules for the Clarity web application",
+  "rules": [
+    {
+      "id": "ui-001",
+      "category": "components",
+      "title": "Use Radix Themes Provider + Primitives",
+      "description": "Must use @radix-ui/themes Theme provider and @radix-ui/react-* primitives, not pre-styled components",
+      "enforcement": "error",
+      "pattern": "import.*@radix-ui/themes.*Button|Dialog|Select",
+      "message": "Use @radix-ui/react-* primitives with custom styling instead of pre-styled @radix-ui/themes components",
+      "examples": {
+        "correct": "import { Theme } from '@radix-ui/themes'; import * as Dialog from '@radix-ui/react-dialog';",
+        "incorrect": "import { Button } from '@radix-ui/themes';"
+      }
+    },
+    {
+      "id": "ui-002", 
+      "category": "styling",
+      "title": "Semantic Color Tokens Only",
+      "description": "Must use semantic tokens from tailwind.config.js, not hardcoded colors",
+      "enforcement": "error",
+      "pattern": "className.*bg-(blue|red|green|yellow|purple|pink|indigo|gray)-[0-9]",
+      "message": "Use semantic tokens like bg-ui-element-bg, text-text-primary instead of hardcoded colors",
+      "examples": {
+        "correct": "className=\"bg-ui-element-bg text-text-primary\"",
+        "incorrect": "className=\"bg-blue-500 text-white\""
+      }
+    },
+    {
+      "id": "ui-003",
+      "category": "state",
+      "title": "React Query for API State",
+      "description": "Must use custom hooks from @/api/hooks/ for API state management",
+      "enforcement": "error",
+      "pattern": "supabase\\.from\\(.*\\)\\.select|useState.*fetch|useEffect.*fetch",
+      "message": "Use custom hooks from @/api/hooks/ instead of direct API calls",
+      "examples": {
+        "correct": "const { data, isLoading, error } = useTaskHooks.useFetchTasks();",
+        "incorrect": "useEffect(() => supabase.from('tasks').select('*'), []);"
+      }
+    },
+    {
+      "id": "ui-004",
+      "category": "state",
+      "title": "Centralized Overlay Management",
+      "description": "Must use useOverlayStore for modal/dialog state",
+      "enforcement": "warning",
+      "pattern": "useState.*[Mm]odal|useState.*[Dd]ialog|useState.*[Oo]pen",
+      "message": "Use useOverlayStore for modal/dialog state management",
+      "examples": {
+        "correct": "const { openModal } = useOverlayStore();",
+        "incorrect": "const [isModalOpen, setIsModalOpen] = useState(false);"
+      }
+    },
+    {
+      "id": "ui-005",
+      "category": "error-handling",
+      "title": "Consistent Error/Loading States",
+      "description": "Must handle loading and error states with standard components",
+      "enforcement": "warning",
+      "pattern": "useQuery.*without.*isLoading|useMutation.*without.*isPending",
+      "message": "Always handle loading and error states with LoadingSpinner and ErrorMessage",
+      "examples": {
+        "correct": "if (isLoading) return <LoadingSpinner />; if (error) return <ErrorMessage error={error} />;",
+        "incorrect": "const { data } = useQuery('tasks', fetchTasks);"
+      }
+    },
+    {
+      "id": "ui-006",
+      "category": "accessibility",
+      "title": "ARIA Labels Required",
+      "description": "Interactive elements must have proper ARIA labels and keyboard support",
+      "enforcement": "warning",
+      "pattern": "onClick.*without.*aria-label|role=\"button\".*without.*aria-label",
+      "message": "Add aria-label and keyboard support to interactive elements",
+      "examples": {
+        "correct": "<div role=\"button\" aria-label=\"Edit task\" onKeyDown={handleKeyDown} onClick={onClick}>",
+        "incorrect": "<div onClick={onClick}>"
+      }
+    },
+    {
+      "id": "ui-007",
+      "category": "forms",
+      "title": "React Hook Form + Zod",
+      "description": "Must use React Hook Form with Zod validation for forms",
+      "enforcement": "error",
+      "pattern": "useState.*form|onChange.*form.*without.*register",
+      "message": "Use React Hook Form with Zod validation instead of manual form state",
+      "examples": {
+        "correct": "const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(schema) });",
+        "incorrect": "const [formData, setFormData] = useState({});"
+      }
+    },
+    {
+      "id": "ui-008",
+      "category": "styling",
+      "title": "No Inline Styles",
+      "description": "Must not use inline styles with hardcoded values",
+      "enforcement": "error",
+      "pattern": "style=\\{\\{.*backgroundColor.*#|style=\\{\\{.*color.*#",
+      "message": "Use Tailwind classes instead of inline styles",
+      "examples": {
+        "correct": "className=\"bg-ui-element-bg text-text-primary\"",
+        "incorrect": "style={{ backgroundColor: '#3b82f6', color: '#ffffff' }}"
+      }
+    },
+    {
+      "id": "ui-009",
+      "category": "animation",
+      "title": "CSS Transitions Preferred",
+      "description": "Use CSS transitions for simple animations, not framer-motion",
+      "enforcement": "warning",
+      "pattern": "import.*framer-motion.*for.*simple.*animation",
+      "message": "Use CSS transitions for simple animations, reserve framer-motion for complex needs",
+      "examples": {
+        "correct": ".modal { transition: opacity 0.2s ease-in-out; }",
+        "incorrect": "import { motion } from 'framer-motion'; // for simple fade"
+      }
+    },
+    {
+      "id": "ui-010",
+      "category": "layout",
+      "title": "AppShell Wrapper Required",
+      "description": "All pages must use AppShell wrapper for consistent layout",
+      "enforcement": "warning",
+      "pattern": "export.*function.*Page.*without.*AppShell",
+      "message": "Wrap page components with AppShell for consistent layout",
+      "examples": {
+        "correct": "export function TasksPage() { return <AppShell><TaskList /></AppShell>; }",
+        "incorrect": "export function TasksPage() { return <TaskList />; }"
+      }
+    }
+  ],
+  "categories": {
+    "components": "Component usage and structure rules",
+    "styling": "CSS and styling approach rules", 
+    "state": "State management patterns",
+    "error-handling": "Error and loading state handling",
+    "accessibility": "WCAG 2.1 AA compliance rules",
+    "forms": "Form handling and validation",
+    "animation": "Animation and transition guidelines",
+    "layout": "Layout and structure patterns"
+  },
+  "enforcement_levels": {
+    "error": "Build-breaking violations that must be fixed",
+    "warning": "Code review flags that should be addressed",
+    "info": "Suggestions for improvement"
+  }
+} 

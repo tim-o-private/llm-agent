@@ -1,6 +1,12 @@
+/**
+ * @docs memory-bank/patterns/ui-patterns.md#pattern-1-radix-themes-primitives-tailwind
+ * @rules memory-bank/rules/ui-rules.json#ui-001
+ * @examples memory-bank/patterns/ui-patterns.md#pattern-4-modal-dialogs
+ */
 import * as Dialog from '@radix-ui/react-dialog';
 import React from 'react';
 import { clsx } from 'clsx';
+import { getFocusClasses } from '@/utils/focusStates';
 
 export interface ModalProps {
   open: boolean;
@@ -35,7 +41,10 @@ export const Modal: React.FC<ModalProps> = ({ open, onOpenChange, title, descrip
         {children}
         <Dialog.Close asChild>
           <button 
-            className="absolute top-3 right-3 p-1 rounded-full text-text-muted hover:text-text-secondary focus:outline-none focus:ring-2 focus:ring-ui-border-focus focus:ring-offset-2 focus:ring-offset-ui-element-bg transition-colors"
+            className={clsx(
+              "absolute top-3 right-3 p-1 rounded-full text-text-muted hover:text-text-secondary transition-colors",
+              getFocusClasses()
+            )}
             aria-label="Close"
           >
             ✕

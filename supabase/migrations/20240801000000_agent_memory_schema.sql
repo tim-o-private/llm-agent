@@ -1,3 +1,6 @@
+-- @docs memory-bank/patterns/data-patterns.md#pattern-2-row-level-security-rls-pattern
+-- @rules memory-bank/rules/data-rules.json#data-002
+-- @examples memory-bank/patterns/data-patterns.md#pattern-7-timestamp-and-audit-patterns
 -- supabase/migrations/YYYYMMDDHHMMSS_agent_memory_schema.sql
 
 -- Enable UUID generation

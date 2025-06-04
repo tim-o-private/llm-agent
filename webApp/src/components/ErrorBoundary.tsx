@@ -22,7 +22,7 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
       return (
         <div className="p-8 text-center">
           <h1 className="text-2xl font-bold mb-4">Something went wrong.</h1>
-          <pre className="text-red-600 whitespace-pre-wrap">{this.state.error?.message}</pre>
+          <pre className="text-destructive whitespace-pre-wrap">{this.state.error?.message}</pre>
         </div>
       );
     }

@@ -1,0 +1,151 @@
+{
+  "version": "1.0.0",
+  "description": "Enforceable agent development rules for LangChain-based agents",
+  "rules": [
+    {
+      "id": "agent-001",
+      "category": "tools",
+      "title": "Use Generic CRUDTool with Database Configuration",
+      "description": "Use the generic CRUDTool configured via database instead of creating separate tool classes",
+      "enforcement": "error",
+      "pattern": "class.*Tool.*BaseTool.*def _run.*table.*insert|class.*Tool.*BaseTool.*def _run.*table.*select",
+      "message": "Use generic CRUDTool with database configuration instead of creating separate tool classes for each table",
+      "examples": {
+        "correct": "CRUDTool(table_name='tasks', method='create', field_map={...})",
+        "incorrect": "class TaskCreateTool(BaseTool): def _run(self): return db.table('tasks').insert()"
+      }
+    },
+    {
+      "id": "agent-002",
+      "category": "tools",
+      "title": "Extend LangChain BaseTool",
+      "description": "All custom tools must extend LangChain's BaseTool class",
+      "enforcement": "error",
+      "pattern": "class.*Tool.*(?!.*BaseTool)",
+      "message": "All tool classes must extend langchain_core.tools.BaseTool",
+      "examples": {
+        "correct": "class CustomTool(BaseTool):",
+        "incorrect": "class CustomTool: # Missing BaseTool inheritance"
+      }
+    },
+    {
+      "id": "agent-003",
+      "category": "memory",
+      "title": "Use PostgresChatMessageHistory",
+      "description": "Use PostgresChatMessageHistory for agent memory instead of manual memory management",
+      "enforcement": "error",
+      "pattern": "self\\.messages.*=.*\\[\\]|messages\\.append|manual.*memory",
+      "message": "Use PostgresChatMessageHistory from langchain_postgres instead of manual memory management",
+      "examples": {
+        "correct": "self.memory = PostgresChatMessageHistory(connection_string=DATABASE_URL, session_id=session_id)",
+        "incorrect": "self.messages = []; self.messages.append(message)"
+      }
+    },
+    {
+      "id": "agent-004",
+      "category": "validation",
+      "title": "Use Pydantic for Tool Input Validation",
+      "description": "Define args_schema with Pydantic models for tool input validation",
+      "enforcement": "warning",
+      "pattern": "class.*Tool.*BaseTool.*(?!.*args_schema)",
+      "message": "Define args_schema with Pydantic BaseModel for tool input validation",
+      "examples": {
+        "correct": "class MyTool(BaseTool): args_schema: Type[BaseModel] = MyToolInput",
+        "incorrect": "class MyTool(BaseTool): # Missing args_schema"
+      }
+    },
+    {
+      "id": "agent-005",
+      "category": "error-handling",
+      "title": "Use ToolException for Tool Errors",
+      "description": "Raise ToolException for tool errors instead of returning error strings",
+      "enforcement": "error",
+      "pattern": "return.*[\"'].*[Ee]rror|return.*[\"'].*[Ff]ailed",
+      "message": "Raise ToolException for errors instead of returning error strings",
+      "examples": {
+        "correct": "raise ToolException(f'Database operation failed: {e}')",
+        "incorrect": "return 'Error: Database operation failed'"
+      }
+    },
+    {
+      "id": "agent-006",
+      "category": "configuration",
+      "title": "Database-Driven Tool Loading",
+      "description": "Load tools from database configuration instead of hardcoding tool lists",
+      "enforcement": "warning",
+      "pattern": "tools.*=.*\\[.*Tool\\(\\).*Tool\\(\\).*\\]",
+      "message": "Load tools from database configuration instead of hardcoding tool instantiation",
+      "examples": {
+        "correct": "tools = await loader.load_tools_for_agent(agent_name, user_id)",
+        "incorrect": "tools = [TaskCreateTool(), TaskFetchTool(), NoteCreateTool()]"
+      }
+    },
+    {
+      "id": "agent-007",
+      "category": "caching",
+      "title": "Cache Agent Executors",
+      "description": "Use caching for agent executors to improve performance",
+      "enforcement": "info",
+      "pattern": "AgentExecutor\\(.*\\).*(?!.*cache)",
+      "message": "Consider caching agent executors for better performance",
+      "examples": {
+        "correct": "executor = self.executor_cache.get(cache_key) or self._create_executor()",
+        "incorrect": "executor = AgentExecutor(user_id, agent_name) # Creates new every time"
+      }
+    },
+    {
+      "id": "agent-008",
+      "category": "abstraction",
+      "title": "Create Abstraction Layers",
+      "description": "Use base classes to avoid duplicating common logic across tools",
+      "enforcement": "info",
+      "pattern": "get_supabase_client\\(\\).*get_supabase_client\\(\\)|user_id.*=.*user_id.*=",
+      "message": "Create base classes to avoid duplicating common logic like database connections and user scoping",
+      "examples": {
+        "correct": "class DatabaseTool(BaseTool): # Base class with common logic",
+        "incorrect": "# Duplicated db connection logic in multiple tools"
+      }
+    },
+    {
+      "id": "agent-009",
+      "category": "configuration",
+      "title": "Configuration-Driven Agent Setup",
+      "description": "Use configuration objects instead of hardcoding agent parameters",
+      "enforcement": "warning",
+      "pattern": "model.*=.*[\"']gpt-4[\"']|prompt.*=.*[\"']You are|tools.*=.*\\[.*hardcoded",
+      "message": "Use configuration objects instead of hardcoding agent parameters",
+      "examples": {
+        "correct": "agent = ConfigurableAgent(config=agent_config, user_id=user_id)",
+        "incorrect": "self.model = 'gpt-4'; self.prompt = 'You are a task assistant'"
+      }
+    },
+    {
+      "id": "agent-010",
+      "category": "registry",
+      "title": "Use Tool Registry Pattern",
+      "description": "Use registry pattern for tool discovery instead of hardcoded if/elif chains",
+      "enforcement": "info",
+      "pattern": "if.*tool_type.*==.*elif.*tool_type.*==",
+      "message": "Use registry pattern for tool discovery instead of hardcoded type mapping",
+      "examples": {
+        "correct": "tool = self.tool_registry.create_tool(tool_config)",
+        "incorrect": "if tool_type == 'crud': return CRUDTool(); elif tool_type == 'web': return WebTool()"
+      }
+    }
+  ],
+  "categories": {
+    "tools": "Tool development and usage patterns",
+    "memory": "Agent memory management",
+    "validation": "Input validation and schema definition",
+    "error-handling": "Error handling in tools and agents",
+    "configuration": "Configuration-driven development",
+    "caching": "Performance optimization through caching",
+    "abstraction": "Code organization and abstraction layers",
+    "registry": "Tool discovery and registration patterns"
+  },
+  "enforcement_levels": {
+    "error": "Build-breaking violations that must be fixed",
+    "warning": "Code review flags that should be addressed",
+    "info": "Suggestions for improvement"
+  }
+} 

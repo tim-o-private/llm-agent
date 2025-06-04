@@ -20,6 +20,7 @@ export interface Task {
   updated_at: string;
   completed: boolean; // Derived from status for easier filtering, ensure it's kept in sync
   completed_at?: string | null;
+  deleted: boolean; // Soft delete flag
   subtasks?: Task[]; // Added for client-side handling of subtasks
 }
 
@@ -50,8 +51,11 @@ export interface FocusSession {
   completion_note?: string | null; 
 }
 
-export type NewTaskData = Omit<Task, 'id' | 'created_at' | 'updated_at' | 'completed' | 'subtasks'> & { user_id: string };
+export type NewTaskData = Omit<Task, 'id' | 'created_at' | 'updated_at' | 'completed' | 'deleted' | 'subtasks'> & { user_id: string };
 export type UpdateTaskData = Partial<Omit<Task, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'subtasks'>>;
+
+export type TaskCreatePayload = NewTaskData;
+export type TaskUpdatePayload = UpdateTaskData;
 
 export type NewFocusSessionData = Pick<FocusSession, 'user_id' | 'task_id' | 'planned_duration_minutes'> & Partial<Omit<FocusSession, 'id' | 'created_at' | 'user_id' | 'task_id' | 'start_time' | 'planned_duration_minutes'>>;
 export type UpdateFocusSessionData = Partial<Omit<FocusSession, 'id' | 'user_id' | 'task_id' | 'created_at'>>;
@@ -80,6 +84,22 @@ export interface ScratchPadEntry {
     created_at: string;
     updated_at: string;
 }
+
+export interface Note {
+    id: string;
+    user_id: string;
+    title?: string | null;
+    content: string;
+    created_at: string;
+    updated_at: string;
+    deleted: boolean; // Soft delete flag
+}
+
+export type NewNoteData = Omit<Note, 'id' | 'created_at' | 'updated_at' | 'deleted'> & { user_id: string };
+export type UpdateNoteData = Partial<Omit<Note, 'id' | 'user_id' | 'created_at' | 'updated_at'>>;
+
+export type NoteCreatePayload = NewNoteData;
+export type NoteUpdatePayload = UpdateNoteData;
 
 // Generic type for API responses with pagination (if needed)
 export interface PaginatedResponse<T> {

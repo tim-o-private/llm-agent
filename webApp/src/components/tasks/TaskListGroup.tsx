@@ -14,7 +14,7 @@ const TaskListGroup: React.FC<TaskListGroupProps> = ({ title, tasks }) => {
 
   return (
     <div className="mb-8">
-      <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
+      <h2 className="text-xl font-semibold text-text-primary mb-4 pb-2 border-b border-ui-border">
         {title}
       </h2>
       <div className="space-y-3">

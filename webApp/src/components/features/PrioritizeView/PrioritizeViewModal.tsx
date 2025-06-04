@@ -1,14 +1,15 @@
 import React, { useState, useEffect, ChangeEvent } from 'react';
 import * as RadixDialog from '@radix-ui/react-dialog';
 import { Cross2Icon } from '@radix-ui/react-icons';
+import { useQueryClient } from '@tanstack/react-query';
 import { useFetchTaskById, useUpdateTask } from '@/api/hooks/useTaskHooks';
 import { Task } from '@/api/types';
 import { Button } from '@/components/ui/Button';
-import { Textarea } from '@/components/ui/Textarea';
+import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
+import { Textarea } from '@/components/ui/Textarea';
 import { Spinner } from '@/components/ui/Spinner';
 import { toast } from '@/components/ui/toast';
-import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/features/auth/useAuthStore';
 
 interface PrioritizeViewModalProps {
@@ -110,11 +111,11 @@ export const PrioritizeViewModal: React.FC<PrioritizeViewModalProps> = ({
     <RadixDialog.Root open={isOpen} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
         <RadixDialog.Overlay className="fixed inset-0 bg-black/50 data-[state=open]:animate-overlayShow" />
-        <RadixDialog.Content className="fixed top-1/2 left-1/2 w-[90vw] max-w-lg max-h-[85vh] -translate-x-1/2 -translate-y-1/2 rounded-lg bg-white dark:bg-gray-800 p-6 shadow-lg data-[state=open]:animate-contentShow focus:outline-none flex flex-col">
-          <RadixDialog.Title className="text-xl font-semibold text-gray-900 dark:text-white mb-1">
+        <RadixDialog.Content className="fixed top-1/2 left-1/2 w-[90vw] max-w-lg max-h-[85vh] -translate-x-1/2 -translate-y-1/2 rounded-lg bg-ui-modal-bg p-6 shadow-lg data-[state=open]:animate-contentShow focus:outline-none flex flex-col">
+          <RadixDialog.Title className="text-xl font-semibold text-text-primary mb-1">
             {isLoading ? 'Loading...' : task ? `Prepare: ${task.title}` : 'Prepare Task'}
           </RadixDialog.Title>
-          <RadixDialog.Description className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+          <RadixDialog.Description className="text-sm text-text-muted mb-4">
             Focus your intent before starting this task.
           </RadixDialog.Description>
 
@@ -126,13 +127,13 @@ export const PrioritizeViewModal: React.FC<PrioritizeViewModalProps> = ({
           )}
 
           {error && !isLoading && (
-            <div className="text-red-500">
+            <div className="text-destructive">
               Error loading task: {error.message}
             </div>
           )}
           
           {!taskId && isOpen && !isLoading && (
-             <div className="text-gray-500 dark:text-gray-400 p-4">
+             <div className="text-text-muted p-4">
                 No task selected or task ID is missing.
             </div>
           )}
@@ -179,13 +180,13 @@ export const PrioritizeViewModal: React.FC<PrioritizeViewModalProps> = ({
                 <div>
                   <Label htmlFor="timer_duration">Focus Session Duration:</Label>
                   <div className="mt-1 flex items-center space-x-2">
-                    <input 
+                    <Input 
                         type="number" 
                         id="timer_duration_minutes"
                         name="timer_duration_minutes"
                         value={timerDuration / 60}
                         onChange={(e) => setTimerDuration(parseInt(e.target.value) * 60)}
-                        className="w-20 p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className="w-20"
                         min="5"
                         step="5"
                     />
@@ -194,9 +195,9 @@ export const PrioritizeViewModal: React.FC<PrioritizeViewModalProps> = ({
                 </div>
               </div>
 
-              <div className="mt-6 flex justify-end items-center pt-4 border-t border-gray-200 dark:border-gray-700 space-x-2">
+              <div className="mt-6 flex justify-end items-center pt-4 border-t border-ui-border space-x-2">
                 <RadixDialog.Close asChild>
-                  <Button variant="secondary" type="button">Cancel</Button>
+                  <Button variant="soft" type="button">Cancel</Button>
                 </RadixDialog.Close>
                 <Button 
                   type="button"
@@ -211,7 +212,7 @@ export const PrioritizeViewModal: React.FC<PrioritizeViewModalProps> = ({
           )}
           <RadixDialog.Close asChild>
             <button
-              className="absolute top-3.5 right-3.5 inline-flex h-6 w-6 appearance-none items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-400"
+              className="absolute top-3.5 right-3.5 inline-flex h-6 w-6 appearance-none items-center justify-center rounded-full text-text-muted hover:bg-ui-interactive-bg-hover"
               aria-label="Close"
               type="button"
             >

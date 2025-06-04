@@ -23,6 +23,9 @@ class CRUDToolInput(BaseModel):
         description="Filters for 'fetch', 'update', or 'delete' operations. The expected structure of this dictionary is defined by the specific tool instance's 'runtime_args_schema' in the database."
     )
 
+# @docs memory-bank/patterns/agent-patterns.md#pattern-1-generic-crudtool-configuration
+# @rules memory-bank/rules/agent-rules.json#agent-001
+# @examples memory-bank/patterns/agent-patterns.md#pattern-8-abstraction-layers
 class CRUDTool(BaseTool):
     """
     A generic, database-configurable tool for performing CRUD (Create, Read/Fetch, Update, Delete)

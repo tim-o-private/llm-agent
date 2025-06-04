@@ -12,7 +12,7 @@ interface ChatApiResponse {
   session_id: string;
   response: string; // The AI's textual response or a generic error message if data.error is also set
   tool_name?: string | null;
-  tool_input?: Record<string, any> | null;
+  tool_input?: Record<string, unknown> | null;
   error?: string | null; // Null if successful, error message string if an error occurred server-side
 }
 

@@ -13,7 +13,7 @@ export const SidebarNav: React.FC = () => (
       <Button
         asChild
         key={link.to}
-        variant="secondary"
+        variant="soft"
       >
         <NavLink 
           to={link.to} 

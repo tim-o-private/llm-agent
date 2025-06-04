@@ -1,4 +1,7 @@
 """Chat service for handling chat processing logic."""
+# @docs memory-bank/patterns/api-patterns.md#pattern-3-service-layer-pattern
+# @rules memory-bank/rules/api-rules.json#api-003
+# @examples memory-bank/patterns/api-patterns.md#pattern-4-dependency-injection-pattern
 
 import logging
 from typing import Dict, Any, List, Optional, Tuple, Callable

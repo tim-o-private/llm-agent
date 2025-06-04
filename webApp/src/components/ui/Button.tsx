@@ -1,30 +1,42 @@
+/**
+ * @docs memory-bank/patterns/ui-patterns.md#pattern-1-radix-themes-primitives-tailwind
+ * @rules memory-bank/rules/ui-rules.json#ui-002
+ * @examples memory-bank/patterns/ui-patterns.md#pattern-3-button-variants
+ */
 import React from 'react';
-import { Slot } from '@radix-ui/react-slot';
+import { Button as RadixButton } from '@radix-ui/themes';
 import { clsx } from 'clsx';
+import { getFocusClasses } from '@/utils/focusStates';
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   asChild?: boolean;
-  variant?: 'primary' | 'secondary' | 'danger';
+  variant?: 'classic' | 'solid' | 'soft' | 'surface' | 'outline' | 'ghost';
+  size?: '1' | '2' | '3' | '4';
+  color?: 'gray' | 'gold' | 'bronze' | 'brown' | 'yellow' | 'amber' | 'orange' | 'tomato' | 'red' | 'crimson' | 'pink' | 'plum' | 'purple' | 'violet' | 'iris' | 'indigo' | 'blue' | 'cyan' | 'teal' | 'jade' | 'green' | 'grass' | 'lime' | 'mint' | 'sky';
 }
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ asChild = false, variant = 'primary', className, ...props }, ref) => {
-    const Comp = asChild ? Slot : 'button';
+  ({ asChild = false, variant = 'solid', size = '2', className, disabled, children, ...props }, ref) => {
+    
     return (
-      <Comp
+      <RadixButton
         ref={ref}
+        variant={variant}
+        size={size}
+        disabled={disabled}
+        asChild={asChild}
         className={clsx(
-          'btn',
-          {
-            'btn-primary': variant === 'primary',
-            'btn-secondary': variant === 'secondary',
-            'btn-danger': variant === 'danger',
-          },
+          // Override Radix focus styles with our global focus system
+          '[&]:focus:outline-none [&]:focus-visible:outline-none',
+          !disabled && getFocusClasses(),
           className
         )}
         {...props}
-      />
+      >
+        {asChild ? children : <span>{children}</span>}
+      </RadixButton>
     );
   }
 );
+
 Button.displayName = 'Button'; 

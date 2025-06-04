@@ -1,0 +1,19 @@
+{
+  "name": "memory-bank-tools",
+  "version": "1.0.0",
+  "description": "Documentation validation and link checking tools",
+  "scripts": {
+    "docs:validate": "node tools/link-checker.js",
+    "docs:lint": "node tools/doc-linter.js",
+    "docs:unused": "node tools/unused-file-detector.js",
+    "docs:check-all": "npm run docs:validate",
+    "install-deps": "npm install"
+  },
+  "dependencies": {
+    "glob": "^8.0.0"
+  },
+  "devDependencies": {
+    "husky": "^8.0.0",
+    "lint-staged": "^13.0.0"
+  }
+} 

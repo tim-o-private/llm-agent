@@ -31,6 +31,7 @@ export function useFetchTasks() {
         .from('tasks')
         .select('*')
         .eq('user_id', user.id)
+        .eq('deleted', false)
         .order('position', { ascending: true, nullsFirst: true })
         .order('priority', { ascending: false })
         .order('created_at', { ascending: false });
@@ -60,6 +61,7 @@ export function useFetchSubtasks(parentTaskId: string | undefined | null) {
         .select('*')
         .eq('user_id', user.id)
         .eq('parent_task_id', parentTaskId)
+        .eq('deleted', false)
         .order('subtask_position', { ascending: true, nullsFirst: true })
         .order('created_at', { ascending: true });
 
@@ -88,7 +90,7 @@ export function useCreateTask() {
 
       const { data, error } = await supabase
         .from('tasks')
-        .insert([taskWithUser] as any)
+        .insert([taskWithUser])
         .select()
         .single();
 
@@ -112,7 +114,7 @@ export function useUpdateTask() {
     mutationFn: async ({ id, updates }: { id: string; updates: UpdateTaskData }) => {
       const { data, error } = await supabase
         .from('tasks')
-        .update(updates as any)
+        .update(updates)
         .eq('id', id)
         .select()
         .single();
@@ -174,7 +176,7 @@ export const useUpdateTaskOrder = () => {
       console.log('[useUpdateTaskOrder] All Supabase update results:', results);
       return results; 
     },
-    onSuccess: (_data, _variables, _context) => {
+    onSuccess: () => {
       toast.success('Task order updated successfully!');
       if (user) {
         queryClient.invalidateQueries({ queryKey: [TASKS_QUERY_KEY_PREFIX, user.id] });
@@ -182,7 +184,7 @@ export const useUpdateTaskOrder = () => {
         queryClient.invalidateQueries({ queryKey: [TASKS_QUERY_KEY_PREFIX] });
       }
     },
-    onError: (error: Error, _variables, _context) => {
+    onError: (error: Error) => {
       toast.error('Failed to update task order', error.message);
     },
   });
@@ -304,7 +306,7 @@ export const useCreateFocusSession = () => {
       };
       const { data, error } = await supabase
         .from('focus_sessions')
-        .insert(newSessionData as any)
+        .insert(newSessionData)
         .select()
         .single();
 
@@ -315,7 +317,7 @@ export const useCreateFocusSession = () => {
       console.log('[useCreateFocusSession] Success, data:', data);
       return data as FocusSession;
     },
-    onSuccess: (_data) => {
+    onSuccess: () => {
       toast.success('Focus session started!');
       queryClient.invalidateQueries({ queryKey: [FOCUS_SESSIONS_QUERY_KEY_PREFIX, user?.id] });
     },
@@ -347,7 +349,7 @@ export const useEndFocusSession = () => {
 
       const { data, error } = await supabase
         .from('focus_sessions')
-        .update(updates as any)
+        .update(updates)
         .eq('id', sessionId)
         .eq('user_id', user.id) 
         .select()
@@ -360,7 +362,7 @@ export const useEndFocusSession = () => {
       console.log('[useEndFocusSession] Success, data:', data);
       return data as FocusSession;
     },
-    onSuccess: (_data) => {
+    onSuccess: () => {
       toast.success('Focus session ended & reflection saved!');
       queryClient.invalidateQueries({ queryKey: [FOCUS_SESSIONS_QUERY_KEY_PREFIX, user?.id] });
     },
@@ -387,6 +389,7 @@ export function useFetchTaskById(taskId: string | null | undefined) {
         .select('*')
         .eq('user_id', user.id)
         .eq('id', taskId)
+        .eq('deleted', false)
         .single();
 
       if (error && error.code !== 'PGRST116') {
@@ -399,7 +402,7 @@ export function useFetchTaskById(taskId: string | null | undefined) {
   });
 }
 
-// New hook to delete a task
+// New hook to delete a task with soft deletion
 export const useDeleteTask = () => {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
@@ -412,18 +415,50 @@ export const useDeleteTask = () => {
     mutationFn: async ({ id }) => {
       if (!user) throw new Error('User not authenticated');
       
+      // First, fetch all subtasks for this parent task
+      const { data: subtasks, error: subtasksError } = await supabase
+        .from('tasks')
+        .select('id')
+        .eq('parent_task_id', id)
+        .eq('user_id', user.id)
+        .eq('deleted', false);
+
+      if (subtasksError) {
+        console.error('Error fetching subtasks for deletion:', subtasksError);
+        throw subtasksError;
+      }
+
+      // Soft delete all subtasks first
+      if (subtasks && subtasks.length > 0) {
+        console.log(`Soft deleting ${subtasks.length} subtasks for parent task ${id}`);
+        
+        const { error: subtaskDeleteError } = await supabase
+          .from('tasks')
+          .update({ deleted: true })
+          .in('id', subtasks.map((st: { id: string }) => st.id))
+          .eq('user_id', user.id);
+
+        if (subtaskDeleteError) {
+          console.error('Error soft deleting subtasks:', subtaskDeleteError);
+          throw subtaskDeleteError;
+        }
+      }
+
+      // Now soft delete the parent task
       const { data, error } = await supabase
         .from('tasks')
-        .delete()
-        .match({ id, user_id: user.id });
+        .update({ deleted: true })
+        .match({ id, user_id: user.id })
+        .select()
+        .single();
 
       if (error) {
-        console.error('Error deleting task from Supabase:', error);
+        console.error('Error soft deleting parent task from Supabase:', error);
         throw error;
       }
       
-      console.log('Task deleted from Supabase:', data );
-      return null;
+      console.log('Task and subtasks soft deleted from Supabase:', data);
+      return data as Task;
     },
     onSuccess: (_, variables) => {
       toast.success('Task deleted successfully!');
@@ -432,10 +467,10 @@ export const useDeleteTask = () => {
       } else {
         queryClient.invalidateQueries({ queryKey: [TASKS_QUERY_KEY_PREFIX] });
       }
-      console.log(`Invalidated queries for tasks after deleting task ID: ${variables.id}`);
+      console.log(`Invalidated queries for tasks after soft deleting task ID: ${variables.id}`);
     },
     onError: (error: Error, variables) => {
-      console.error(`Error deleting task ID ${variables.id}:`, error);
+      console.error(`Error soft deleting task ID ${variables.id}:`, error);
       toast.error('Failed to delete task', 'Please try again.');
     },
   });

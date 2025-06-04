@@ -1,39 +1,28 @@
 import React from 'react';
+import { TextField } from '@radix-ui/themes';
 import { clsx } from 'clsx';
-import { useTaskViewStore } from '@/stores/useTaskViewStore';
+import { getFocusClasses } from '@/utils/focusStates';
 
-export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {}
+export interface InputProps extends React.ComponentProps<typeof TextField.Root> {
+  error?: boolean;
+}
 
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, onFocus:_onFocus, onBlur: _onBlur, ...props }, ref) => {
-    const setInputFocusState = useTaskViewStore((state) => state.setInputFocusState);
-
-    const handleFocus = (event: React.FocusEvent<HTMLInputElement>) => {
-      setInputFocusState(true);
-      if (_onFocus) {
-        _onFocus(event);
-      }
-    };
-
-    const handleBlur = (event: React.FocusEvent<HTMLInputElement>) => {
-      setInputFocusState(false);
-      if (_onBlur) {
-        _onBlur(event);
-      }
-    };
-
+  ({ className, error, color, ...props }, ref) => {
     return (
-      <input
+      <TextField.Root
         ref={ref}
+        color={error ? 'red' : color}
         className={clsx(
-          'block w-full rounded-md border border-ui-border px-3 py-2 text-text-primary shadow-sm focus:border-brand-primary focus:ring-brand-primary focus:outline-none',
+          // Override Radix focus styles with our global focus system
+          '[&]:focus-within:outline-none [&_input]:focus:outline-none [&_input]:focus-visible:outline-none',
+          getFocusClasses(),
           className
         )}
-        onFocus={handleFocus}
-        onBlur={handleBlur}
         {...props}
       />
     );
   }
 );
+
 Input.displayName = 'Input'; 
