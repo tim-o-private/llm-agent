@@ -1,10 +1,10 @@
 """Unified Email Digest Service for both scheduled and on-demand execution."""
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone
 from src.core.agent_loader_db import load_agent_executor_db
-from chatServer.database.connection import get_database_manager
+from chatServer.services.email_digest_storage_service import get_email_digest_storage_service
 
 logger = logging.getLogger(__name__)
 
@@ -21,12 +21,14 @@ class EmailDigestService:
         """
         self.user_id = user_id
         self.context = context
+        self.storage_service = get_email_digest_storage_service()
     
     async def generate_digest(
         self, 
         hours_back: int = 24, 
         include_read: bool = False,
-        custom_prompt: Optional[str] = None
+        custom_prompt: Optional[str] = None,
+        store_result: bool = True
     ) -> Dict[str, Any]:
         """
         Unified entry point for email digest generation.
@@ -36,10 +38,13 @@ class EmailDigestService:
             hours_back: Hours to look back for emails
             include_read: Whether to include read emails
             custom_prompt: Optional custom prompt to override default
+            store_result: Whether to store the result in database (default: True)
             
         Returns:
             Dict with success status, digest content, and metadata
         """
+        generated_at = datetime.now(timezone.utc)
+        
         try:
             logger.info(f"Generating email digest for user {self.user_id} (context: {self.context}, hours_back: {hours_back})")
             
@@ -49,7 +54,7 @@ class EmailDigestService:
                 agent_executor = load_agent_executor_db(
                     agent_name="email_digest_agent",
                     user_id=self.user_id,
-                    session_id=f"email_digest_{self.context}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                    session_id=f"email_digest_{self.context}_{generated_at.strftime('%Y%m%d_%H%M%S')}"
                 )
                 
                 logger.info(f"Successfully loaded email_digest_agent for user {self.user_id}")
@@ -84,76 +89,120 @@ class EmailDigestService:
                 logger.warning(f"email_digest_agent returned empty response for user {self.user_id}")
                 digest_content = "No email digest could be generated at this time."
             
-            # Store result for scheduled digests
-            if self.context == "scheduled":
-                await self._store_digest_result({
+            # Extract email count from digest content if possible
+            email_count = self._extract_email_count(digest_content)
+            
+            # Prepare result data
+            result_data = {
+                "success": True,
+                "digest": digest_content,
+                "generated_at": generated_at.isoformat(),
+                "hours_back": hours_back,
+                "include_read": include_read,
+                "context": self.context,
+                "email_count": email_count
+            }
+            
+            # Store result if requested
+            if store_result:
+                storage_success = await self._store_digest_result({
                     "user_id": self.user_id,
-                    "generated_at": datetime.now(timezone.utc),
+                    "generated_at": generated_at,
                     "hours_back": hours_back,
                     "include_read": include_read,
                     "digest_content": digest_content,
-                    "status": "success"
+                    "status": "success",
+                    "context": self.context,
+                    "email_count": email_count
                 })
+                
+                if not storage_success:
+                    logger.warning(f"Failed to store digest result for user {self.user_id}, but digest generation succeeded")
             
             logger.info(f"Successfully generated email digest for user {self.user_id} (context: {self.context})")
-            
-            return {
-                "success": True,
-                "digest": digest_content,
-                "generated_at": datetime.now(timezone.utc).isoformat(),
-                "hours_back": hours_back,
-                "include_read": include_read,
-                "context": self.context
-            }
+            return result_data
             
         except Exception as e:
             logger.error(f"Email digest generation failed for user {self.user_id}: {e}", exc_info=True)
             
             error_message = f"Failed to generate email digest: {str(e)}"
             
-            # Store error result for scheduled digests
-            if self.context == "scheduled":
-                await self._store_digest_result({
-                    "user_id": self.user_id,
-                    "generated_at": datetime.now(timezone.utc),
-                    "hours_back": hours_back,
-                    "include_read": include_read,
-                    "digest_content": error_message,
-                    "status": "error"
-                })
-            
-            return {
+            # Prepare error result data
+            error_result = {
                 "success": False,
                 "error": str(e),
                 "digest": error_message,
-                "generated_at": datetime.now(timezone.utc).isoformat(),
-                "context": self.context
+                "generated_at": generated_at.isoformat(),
+                "context": self.context,
+                "hours_back": hours_back,
+                "include_read": include_read
             }
+            
+            # Store error result if requested
+            if store_result:
+                await self._store_digest_result({
+                    "user_id": self.user_id,
+                    "generated_at": generated_at,
+                    "hours_back": hours_back,
+                    "include_read": include_read,
+                    "digest_content": error_message,
+                    "status": "error",
+                    "context": self.context,
+                    "email_count": None
+                })
+            
+            return error_result
     
-    async def _store_digest_result(self, digest_data: Dict[str, Any]) -> None:
-        """Store digest result in the email_digests table for scheduled executions."""
+    def _extract_email_count(self, digest_content: str) -> Optional[int]:
+        """Extract email count from digest content if possible."""
         try:
-            db_manager = get_database_manager()
-            async with db_manager.pool.connection() as conn:
-                async with conn.cursor() as cur:
-                    await cur.execute("""
-                        INSERT INTO email_digests 
-                        (user_id, generated_at, hours_back, include_read, digest_content, status)
-                        VALUES (%s, %s, %s, %s, %s, %s)
-                    """, (
-                        digest_data["user_id"],
-                        digest_data["generated_at"],
-                        digest_data["hours_back"],
-                        digest_data["include_read"],
-                        digest_data["digest_content"],
-                        digest_data["status"]
-                    ))
-                    
-            logger.info(f"Stored digest result for user {digest_data['user_id']} with status {digest_data['status']}")
+            # Look for patterns like "20 unread emails found" or "Summary: 15 emails"
+            import re
+            
+            patterns = [
+                r'(\d+)\s+(?:unread\s+)?emails?\s+found',
+                r'Summary:\s*(\d+)\s+(?:unread\s+)?emails?',
+                r'(\d+)\s+(?:read\s+and\s+unread\s+)?emails?\s+found',
+                r'total\s+of\s+(\d+)\s+(?:unread\s+)?emails?'
+            ]
+            
+            for pattern in patterns:
+                match = re.search(pattern, digest_content, re.IGNORECASE)
+                if match:
+                    count = int(match.group(1))
+                    logger.debug(f"Extracted email count {count} from digest content")
+                    return count
+            
+            logger.debug("Could not extract email count from digest content")
+            return None
             
         except Exception as e:
-            logger.error(f"Failed to store digest result for user {digest_data['user_id']}: {e}")
-            # Don't re-raise - storage failure shouldn't break digest generation
+            logger.warning(f"Failed to extract email count from digest: {e}")
+            return None
+    
+    async def _store_digest_result(self, digest_data: Dict[str, Any]) -> bool:
+        """Store digest result using the dedicated storage service."""
+        try:
+            return await self.storage_service.store_digest(digest_data)
+        except Exception as e:
+            logger.error(f"Failed to store digest result for user {digest_data.get('user_id', 'unknown')}: {e}")
+            return False
+    
+    async def get_recent_digests(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get recent digests for this user."""
+        try:
+            return await self.storage_service.get_recent_digests(self.user_id, limit)
+        except Exception as e:
+            logger.error(f"Failed to get recent digests for user {self.user_id}: {e}")
+            return []
+    
+    async def get_digest_stats(self) -> Dict[str, Any]:
+        """Get digest statistics for this user."""
+        try:
+            return await self.storage_service.get_digest_stats(self.user_id)
+        except Exception as e:
+            logger.error(f"Failed to get digest stats for user {self.user_id}: {e}")
+            return {}
 
 
 # Factory function for creating service instances

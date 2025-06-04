@@ -126,10 +126,12 @@ async def lifespan(app: FastAPI):
         from .database.connection import get_database_manager
         from .database.supabase_client import get_supabase_manager
         from .services.background_tasks import get_background_task_service
+        from .services.tool_cache_service import initialize_tool_cache, shutdown_tool_cache
     except ImportError:
         from database.connection import get_database_manager
         from database.supabase_client import get_supabase_manager
         from services.background_tasks import get_background_task_service
+        from services.tool_cache_service import initialize_tool_cache, shutdown_tool_cache
     
     global AGENT_EXECUTOR_CACHE
     logger.info("Application startup: Initializing resources...")
@@ -145,6 +147,13 @@ async def lifespan(app: FastAPI):
     supabase_manager = get_supabase_manager()
     await supabase_manager.initialize()
 
+    # Initialize tool cache service
+    try:
+        await initialize_tool_cache()
+        logger.info("Tool cache service initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize tool cache service: {e}", exc_info=True)
+
     # Initialize and start background tasks
     background_service = get_background_task_service()
     background_service.set_agent_executor_cache(AGENT_EXECUTOR_CACHE)
@@ -156,6 +165,13 @@ async def lifespan(app: FastAPI):
     
     # Stop background tasks
     await background_service.stop_background_tasks()
+    
+    # Stop tool cache service
+    try:
+        await shutdown_tool_cache()
+        logger.info("Tool cache service stopped successfully")
+    except Exception as e:
+        logger.error(f"Failed to stop tool cache service: {e}", exc_info=True)
     
     # Close database manager
     await db_manager.close()

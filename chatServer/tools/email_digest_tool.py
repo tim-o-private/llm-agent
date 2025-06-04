@@ -5,11 +5,6 @@ from typing import Type, Optional
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
-try:
-    from ..services.email_digest_service import EmailDigestService
-except ImportError:
-    from chatServer.services.email_digest_service import EmailDigestService
-
 logger = logging.getLogger(__name__)
 
 
@@ -79,6 +74,12 @@ class EmailDigestTool(BaseTool):
         """
         try:
             logger.info(f"Generating email digest for user {self.user_id}: {hours_back}h back, include_read={include_read}")
+            
+            # Lazy import to avoid circular dependency
+            try:
+                from ..services.email_digest_service import EmailDigestService
+            except ImportError:
+                from chatServer.services.email_digest_service import EmailDigestService
             
             # Create EmailDigestService for on-demand execution
             service = EmailDigestService(self.user_id, context="on-demand")

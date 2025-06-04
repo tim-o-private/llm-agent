@@ -378,6 +378,7 @@ def load_agent_executor_db(
     supabase_key: Optional[str] = None,
     log_level: int = logging.INFO,
     explicit_custom_instructions: Optional[Dict[str, Any]] = None,
+    use_cache: bool = True,  # Default to using cache for better performance
 ) -> CustomizableAgentExecutor:
     """
     Loads an agent's configuration and its associated tools from the database,
@@ -401,6 +402,7 @@ def load_agent_executor_db(
         log_level: Desired logging level for the logger instance used by the executor.
         explicit_custom_instructions: Optional dictionary of custom instructions to override
                                       or supplement any loaded from context or defaults.
+        use_cache: Whether to use the tool cache service for improved performance. Defaults to True.
 
     Returns:
         An initialized `CustomizableAgentExecutor` instance.
@@ -411,7 +413,6 @@ def load_agent_executor_db(
     """
     logger.setLevel(log_level)
     
-    # Use pure database-driven agent loading - no specialized agent classes needed
     effective_supabase_url = supabase_url or os.getenv("VITE_SUPABASE_URL")
     effective_supabase_key = supabase_key or os.getenv("SUPABASE_SERVICE_KEY")
     if not effective_supabase_url or not effective_supabase_key:
@@ -419,120 +420,151 @@ def load_agent_executor_db(
     
     db: SupabaseClient = create_client(effective_supabase_url, effective_supabase_key)
 
-    logger.info(f"Loading agent executor for agent_name='{agent_name}', user_id='{user_id}' using database-driven agent loading.")
-    # 3. Fetch agent config
+    cache_status = "cached" if use_cache else "non-cached"
+    logger.info(f"Loading agent executor for agent_name='{agent_name}', user_id='{user_id}' using {cache_status} database-driven agent loading.")
+    
+    # 1. Fetch agent config (not cached as it's infrequent and small)
     agent_resp = db.table("agent_configurations").select("*, id").eq("agent_name", agent_name).single().execute()
     if not agent_resp.data:
         raise ValueError(f"Agent configuration for '{agent_name}' not found in 'agent_configurations' table.")
     
     agent_db_config = agent_resp.data
-    agent_id = agent_db_config.get("id") # Get the UUID of the agent_configurations row
+    agent_id = agent_db_config.get("id")
     if not agent_id:
         raise ValueError(f"Agent '{agent_name}' found, but its ID (UUID from agent_configurations table) is missing. This is unexpected.")
     logger.info(f"Loaded agent config for '{agent_name}' (ID: {agent_id}) from DB.")
 
-    # 4. Fetch tools for this agent using normalized schema (agent_tools -> tools join)
-    # Use PostgreSQL connection pool for proper JOIN support
-    async def get_agent_tools():
-        async for conn in get_db_connection():
-            async with conn.cursor() as cursor:
-                await cursor.execute("""
-                    SELECT 
-                        at.id as assignment_id,
-                        at.config_override,
-                        at.is_active as assignment_active,
-                        t.id as tool_id,
-                        t.name,
-                        t.type,
-                        t.description,
-                        t.config,
-                        t.is_active as tool_active
-                    FROM agent_tools at
-                    JOIN tools t ON at.tool_id = t.id
-                    WHERE at.agent_id = %s 
-                    AND at.is_active = true 
-                    AND at.is_deleted = false
-                    AND t.is_active = true 
-                    AND t.is_deleted = false
-                """, (str(agent_id),))
-                
-                rows = await cursor.fetchall()
-                columns = [desc[0] for desc in cursor.description]
-                return [dict(zip(columns, row)) for row in rows]
+    # 2. Fetch tools - use cache if requested and available
+    tools_data_from_db = []
     
-    # Since this is a sync function, we need to run the async query
-    import asyncio
-    try:
-        tools_data_from_db = asyncio.run(get_agent_tools())
-    except Exception as e:
-        logger.error(f"Failed to fetch tools using connection pool: {e}")
-        # Fallback to Supabase client with separate queries
-        logger.info("Falling back to Supabase client with separate queries")
-        
-        # First get agent tool assignments
-        assignments_resp = db.table("agent_tools").select("*").eq("agent_id", str(agent_id)).eq("is_active", True).eq("is_deleted", False).execute()
-        assignments = assignments_resp.data or []
-        
-        # Then get tool details for each assignment
-        tools_data_from_db = []
-        for assignment in assignments:
-            tool_resp = db.table("tools").select("*").eq("id", assignment["tool_id"]).eq("is_active", True).eq("is_deleted", False).single().execute()
-            if tool_resp.data:
-                tool_data = tool_resp.data
-                # Merge assignment and tool data
-                merged_data = {
-                    "assignment_id": assignment["id"],
-                    "config_override": assignment.get("config_override", {}),
-                    "assignment_active": assignment["is_active"],
-                    "tool_id": tool_data["id"],
-                    "name": tool_data["name"],
-                    "type": tool_data["type"],
-                    "description": tool_data.get("description", ""),
-                    "config": tool_data.get("config", {}),
-                    "tool_active": tool_data["is_active"]
+    if use_cache:
+        try:
+            # Try to use cache service
+            from chatServer.services.tool_cache_service import get_cached_tools_for_agent
+            import asyncio
+            
+            cached_tools_data = asyncio.run(get_cached_tools_for_agent(str(agent_id)))
+            logger.info(f"Retrieved {len(cached_tools_data)} tools for agent '{agent_name}' from cache")
+            
+            # Transform cached tool data to match expected format
+            for tool_config in cached_tools_data:
+                transformed_tool = {
+                    "name": tool_config["name"],
+                    "type": tool_config.get("type", "CRUDTool"),
+                    "description": tool_config.get("description", ""),
+                    "config": tool_config.get("config", {}),
+                    "is_active": tool_config.get("is_active", True)
                 }
-                tools_data_from_db.append(merged_data)
+                tools_data_from_db.append(transformed_tool)
+                
+        except ImportError:
+            logger.warning("Tool cache service not available, falling back to direct database query")
+            use_cache = False
+        except Exception as e:
+            logger.error(f"Failed to get tools from cache for agent '{agent_name}': {e}")
+            logger.info("Falling back to direct database query")
+            use_cache = False
     
-    logger.info(f"Found {len(tools_data_from_db)} active tools linked to agent '{agent_name}' (agent_id: {agent_id}) via normalized schema.")
-
-    # 5. Transform the joined data to match the expected format for load_tools_from_db
-    # Merge tool config with config_override from agent_tools
-    transformed_tools_data = []
-    for tool_data in tools_data_from_db:
-        # Start with the base tool config
-        merged_config = tool_data.get("config", {})
+    if not use_cache:
+        # Fallback to direct database query using normalized schema
+        async def get_agent_tools():
+            async for conn in get_db_connection():
+                async with conn.cursor() as cursor:
+                    await cursor.execute("""
+                        SELECT 
+                            at.id as assignment_id,
+                            at.config_override,
+                            at.is_active as assignment_active,
+                            t.id as tool_id,
+                            t.name,
+                            t.type,
+                            t.description,
+                            t.config,
+                            t.is_active as tool_active
+                        FROM agent_tools at
+                        JOIN tools t ON at.tool_id = t.id
+                        WHERE at.agent_id = %s 
+                        AND at.is_active = true 
+                        AND at.is_deleted = false
+                        AND t.is_active = true 
+                        AND t.is_deleted = false
+                    """, (str(agent_id),))
+                    
+                    rows = await cursor.fetchall()
+                    columns = [desc[0] for desc in cursor.description]
+                    return [dict(zip(columns, row)) for row in rows]
         
-        # Apply agent-specific config overrides
-        config_override = tool_data.get("config_override", {})
-        if config_override:
-            if isinstance(merged_config, dict) and isinstance(config_override, dict):
-                merged_config.update(config_override)
-            else:
-                # If either is not a dict, use override as the config
-                merged_config = config_override
+        # Since this is a sync function, we need to run the async query
+        import asyncio
+        try:
+            raw_tools_data = asyncio.run(get_agent_tools())
+        except Exception as e:
+            logger.error(f"Failed to fetch tools using connection pool: {e}")
+            # Fallback to Supabase client with separate queries
+            logger.info("Falling back to Supabase client with separate queries")
+            
+            # First get agent tool assignments
+            assignments_resp = db.table("agent_tools").select("*").eq("agent_id", str(agent_id)).eq("is_active", True).eq("is_deleted", False).execute()
+            assignments = assignments_resp.data or []
+            
+            # Then get tool details for each assignment
+            raw_tools_data = []
+            for assignment in assignments:
+                tool_resp = db.table("tools").select("*").eq("id", assignment["tool_id"]).eq("is_active", True).eq("is_deleted", False).single().execute()
+                if tool_resp.data:
+                    tool_data = tool_resp.data
+                    # Merge assignment and tool data
+                    merged_data = {
+                        "assignment_id": assignment["id"],
+                        "config_override": assignment.get("config_override", {}),
+                        "assignment_active": assignment["is_active"],
+                        "tool_id": tool_data["id"],
+                        "name": tool_data["name"],
+                        "type": tool_data["type"],
+                        "description": tool_data.get("description", ""),
+                        "config": tool_data.get("config", {}),
+                        "tool_active": tool_data["is_active"]
+                    }
+                    raw_tools_data.append(merged_data)
         
-        # Create the expected tool data structure
-        transformed_tool = {
-            "id": tool_data["assignment_id"],  # Use assignment ID for uniqueness
-            "name": tool_data["name"],
-            "type": tool_data["type"],
-            "description": tool_data.get("description", ""),
-            "config": merged_config,
-            "is_active": tool_data["assignment_active"]
-        }
-        transformed_tools_data.append(transformed_tool)
+        logger.info(f"Found {len(raw_tools_data)} active tools linked to agent '{agent_name}' (agent_id: {agent_id}) via normalized schema.")
 
-    # 6. Instantiate tools using the helper function
-    # Pass the agent_name from the agent_configurations table, as it's the canonical one.
+        # Transform the joined data to match the expected format for load_tools_from_db
+        # Merge tool config with config_override from agent_tools
+        for tool_data in raw_tools_data:
+            # Start with the base tool config
+            merged_config = tool_data.get("config", {})
+            
+            # Apply agent-specific config overrides
+            config_override = tool_data.get("config_override", {})
+            if config_override:
+                if isinstance(merged_config, dict) and isinstance(config_override, dict):
+                    merged_config.update(config_override)
+                else:
+                    # If either is not a dict, use override as the config
+                    merged_config = config_override
+            
+            # Create the expected tool data structure
+            transformed_tool = {
+                "id": tool_data["assignment_id"],  # Use assignment ID for uniqueness
+                "name": tool_data["name"],
+                "type": tool_data["type"],
+                "description": tool_data.get("description", ""),
+                "config": merged_config,
+                "is_active": tool_data["assignment_active"]
+            }
+            tools_data_from_db.append(transformed_tool)
+
+    # 3. Instantiate tools using the helper function
     instantiated_tools = load_tools_from_db(
-        tools_data=transformed_tools_data,
+        tools_data=tools_data_from_db,
         user_id=user_id,
-        agent_name=agent_db_config["agent_name"], # Use agent_name from agent_configurations
+        agent_name=agent_db_config["agent_name"],
         supabase_url=effective_supabase_url,
         supabase_key=effective_supabase_key,
     )
 
-    # 7. Prepare LLM config and system prompt from the agent's DB configuration
+    # 4. Prepare LLM config and system prompt from the agent's DB configuration
     llm_config_from_db = agent_db_config.get("llm_config")
     system_prompt_from_db = agent_db_config.get("system_prompt")
 
@@ -541,26 +573,25 @@ def load_agent_executor_db(
     if not system_prompt_from_db:
         logger.warning(f"Agent '{agent_name}' is missing 'system_prompt' in its DB configuration. Using a default or empty prompt.")
 
-    # This dictionary is passed to CustomizableAgentExecutor.from_agent_config
     agent_config_for_executor = {
         "agent_name": agent_db_config["agent_name"],
-        "llm": llm_config_from_db or {}, # Default to empty dict if missing
-        "system_prompt": system_prompt_from_db or "", # Default to empty string if missing
+        "llm": llm_config_from_db or {},
+        "system_prompt": system_prompt_from_db or "",
     }
 
-    # 8. Create and return the executor
+    # 5. Create and return the executor
     try:
         agent_executor = CustomizableAgentExecutor.from_agent_config(
             agent_config_dict=agent_config_for_executor,
             tools=instantiated_tools,
             user_id=user_id,
             session_id=session_id,
-            ltm_notes_content=None,  # LTM is now a regular tool, not special-cased here
+            ltm_notes_content=None,
             explicit_custom_instructions_dict=explicit_custom_instructions,
-            logger_instance=logger # Pass the configured logger instance
+            logger_instance=logger
         )
-        logger.info(f"Successfully created CustomizableAgentExecutor for agent '{agent_db_config['agent_name']}' using normalized DB schema.")
+        logger.info(f"Successfully created CustomizableAgentExecutor for agent '{agent_db_config['agent_name']}' using {cache_status} DB data.")
         return agent_executor
     except Exception as e:
         logger.error(f"Failed to create CustomizableAgentExecutor for agent '{agent_db_config['agent_name']}': {e}", exc_info=True)
-        raise # Re-raise the exception after logging
+        raise

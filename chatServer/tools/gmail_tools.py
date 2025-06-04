@@ -45,47 +45,95 @@ class GmailToolProvider:
         """Get Google OAuth2 credentials from Vault."""
         if self._credentials is None:
             try:
-                # Get database connection
-                async for db_conn in get_db_connection():
-                    # Create VaultTokenService with appropriate context
-                    vault_service = VaultTokenService(db_conn, context=self.context)
-                    
-                    # Get tokens from vault
-                    access_token, refresh_token = await vault_service.get_tokens(self.user_id, "gmail")
-                    
-                    # Get Google OAuth client credentials from environment
-                    client_id = os.getenv('GOOGLE_CLIENT_ID')
-                    client_secret = os.getenv('GOOGLE_CLIENT_SECRET')
-                    
-                    if not client_id or not client_secret:
-                        raise RuntimeError(
-                            "Google OAuth configuration missing. Please contact support - "
-                            "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables required"
-                        )
-                    
-                    # Create Google credentials object
-                    self._credentials = Credentials(
-                        token=access_token,
-                        refresh_token=refresh_token,
-                        token_uri="https://oauth2.googleapis.com/token",
-                        client_id=client_id,
-                        client_secret=client_secret,
-                        scopes=['https://www.googleapis.com/auth/gmail.readonly']
+                # Use Supabase client instead of connection pool for better compatibility
+                from supabase import create_client
+                import os
+                
+                supabase_url = os.getenv("VITE_SUPABASE_URL")
+                supabase_key = os.getenv("SUPABASE_SERVICE_KEY")
+                
+                if not supabase_url or not supabase_key:
+                    raise RuntimeError("Supabase configuration missing. Please contact support.")
+                
+                supabase = create_client(supabase_url, supabase_key)
+                
+                # Get tokens using Supabase RPC function directly
+                if self.context == "scheduler":
+                    # Scheduler context - use scheduler-specific function
+                    result = supabase.rpc("get_oauth_tokens_for_scheduler", {
+                        "p_user_id": self.user_id,
+                        "p_service_name": "gmail"
+                    }).execute()
+                else:
+                    # User context - use scheduler function as well since we're calling from service context
+                    # The regular get_oauth_tokens requires user authentication context which we don't have
+                    result = supabase.rpc("get_oauth_tokens_for_scheduler", {
+                        "p_user_id": self.user_id,
+                        "p_service_name": "gmail"
+                    }).execute()
+                
+                if not result.data:
+                    # Provide clear user guidance
+                    raise ValueError(
+                        "Gmail not connected. Please connect your Gmail account:\n"
+                        "1. Go to Settings > Integrations\n"
+                        "2. Click 'Connect Gmail'\n"
+                        "3. Complete the OAuth authorization flow\n"
+                        "4. Try your request again"
                     )
-                    
-                    logger.info(f"Successfully created Google credentials for user {self.user_id} (context: {self.context})")
-                    break
+                
+                token_data = result.data
+                access_token = token_data.get('access_token')
+                refresh_token = token_data.get('refresh_token')
+                
+                if not access_token:
+                    raise ValueError(
+                        "Gmail connection expired. Please reconnect your Gmail account:\n"
+                        "1. Go to Settings > Integrations\n"
+                        "2. Disconnect and reconnect Gmail\n"
+                        "3. Complete the OAuth authorization flow\n"
+                        "4. Try your request again"
+                    )
+                
+                # Get Google OAuth client credentials from environment
+                client_id = os.getenv('GOOGLE_CLIENT_ID')
+                client_secret = os.getenv('GOOGLE_CLIENT_SECRET')
+                
+                if not client_id or not client_secret:
+                    raise RuntimeError(
+                        "Google OAuth configuration missing. Please contact support - "
+                        "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables required"
+                    )
+                
+                # Create Google credentials object
+                self._credentials = Credentials(
+                    token=access_token,
+                    refresh_token=refresh_token,
+                    token_uri="https://oauth2.googleapis.com/token",
+                    client_id=client_id,
+                    client_secret=client_secret,
+                    scopes=['https://www.googleapis.com/auth/gmail.readonly']
+                )
+                
+                logger.info(f"Successfully created Google credentials for user {self.user_id} (context: {self.context})")
                     
             except ValueError as e:
-                # User hasn't completed OAuth flow
+                # User-friendly OAuth guidance
                 logger.warning(f"Gmail OAuth not configured for user {self.user_id}: {e}")
-                raise RuntimeError(
-                    "Gmail not connected. Please connect your Gmail account in Settings > Integrations. "
-                    "You'll need to complete the OAuth flow to allow access to your Gmail."
-                )
+                raise RuntimeError(str(e))
             except Exception as e:
                 logger.error(f"Failed to create Google credentials for user {self.user_id}: {e}")
-                raise RuntimeError(f"Gmail authentication failed: {e}")
+                # Check if it's an authentication error from Supabase
+                if "Authentication required" in str(e) or "P0001" in str(e):
+                    raise RuntimeError(
+                        "Gmail not connected. Please connect your Gmail account:\n"
+                        "1. Go to Settings > Integrations\n"
+                        "2. Click 'Connect Gmail'\n"
+                        "3. Complete the OAuth authorization flow\n"
+                        "4. Try your request again"
+                    )
+                else:
+                    raise RuntimeError(f"Gmail authentication failed: {e}")
         
         return self._credentials
     
@@ -98,14 +146,33 @@ class GmailToolProvider:
                 # Get credentials from Vault
                 credentials = await self._get_google_credentials()
                 
-                # Create LangChain Gmail toolkit directly
-                self._toolkit = GmailToolkit(credentials=credentials)
+                # Create Gmail API resource using LangChain's build_resource_service
+                # This is the proper way according to LangChain documentation
+                try:
+                    from langchain_google_community.gmail.utils import build_resource_service
+                    
+                    # Build the Gmail API resource with our OAuth2 credentials
+                    api_resource = build_resource_service(credentials=credentials)
+                    
+                    # Create LangChain Gmail toolkit with the API resource
+                    self._toolkit = GmailToolkit(api_resource=api_resource)
+                    
+                except ImportError:
+                    # Fallback: try direct Google API client creation
+                    logger.warning("LangChain Gmail utils not available, using direct Google API client")
+                    from googleapiclient.discovery import build
+                    
+                    # Build Gmail service directly
+                    api_resource = build('gmail', 'v1', credentials=credentials)
+                    
+                    # Create toolkit with the service
+                    self._toolkit = GmailToolkit(api_resource=api_resource)
                 
                 logger.info(f"Successfully initialized Gmail toolkit for user {self.user_id} (context: {self.context})")
                 
             except Exception as e:
                 logger.error(f"Failed to initialize Gmail toolkit for user {self.user_id}: {e}")
-                raise
+                raise RuntimeError(f"Gmail toolkit initialization failed: {e}")
         
         return self._toolkit.get_tools()
 
@@ -149,6 +216,14 @@ class GmailSearchTool(BaseGmailTool):
     )
     args_schema: Type[BaseModel] = GmailSearchInput
     
+    def _run(self, query: str, max_results: int = 10) -> str:
+        """Synchronous run method (not used in async context)."""
+        return (
+            f"Gmail search tool requires async execution. "
+            f"Parameters: query='{query}', max_results={max_results}. "
+            f"Please use the async version (_arun) for proper execution."
+        )
+    
     async def _arun(self, query: str, max_results: int = 10) -> str:
         """Search Gmail messages."""
         try:
@@ -191,6 +266,14 @@ class GmailGetMessageTool(BaseGmailTool):
         "Retrieves full message content including body, headers, and attachments info."
     )
     args_schema: Type[BaseModel] = GmailGetMessageInput
+    
+    def _run(self, message_id: str) -> str:
+        """Synchronous run method (not used in async context)."""
+        return (
+            f"Gmail get message tool requires async execution. "
+            f"Parameters: message_id='{message_id}'. "
+            f"Please use the async version (_arun) for proper execution."
+        )
     
     async def _arun(self, message_id: str) -> str:
         """Get Gmail message by ID."""
@@ -237,6 +320,14 @@ class GmailDigestTool(BaseGmailTool):
     )
     args_schema: Type[BaseModel] = GmailDigestInput
     
+    def _run(self, hours_back: int = 24, include_read: bool = False, max_emails: int = 20) -> str:
+        """Synchronous run method (not used in async context)."""
+        return (
+            f"Gmail digest tool requires async execution. "
+            f"Parameters: hours_back={hours_back}, include_read={include_read}, max_emails={max_emails}. "
+            f"Please use the async version (_arun) for proper execution."
+        )
+    
     async def _arun(self, hours_back: int = 24, include_read: bool = False, max_emails: int = 20) -> str:
         """Generate Gmail digest."""
         try:
@@ -279,29 +370,62 @@ class GmailDigestTool(BaseGmailTool):
     def _create_digest_summary(self, search_results: str, hours_back: int, include_read: bool) -> str:
         """Create a human-readable digest summary from search results."""
         try:
-            # Parse search results to extract email information
-            lines = search_results.split('\n') if search_results else []
-            
-            # Count emails and extract key information
-            email_count = 0
-            subjects = []
-            senders = []
-            
-            for line in lines:
-                line = line.strip()
-                if not line:
-                    continue
+            # Handle structured data from LangChain Gmail toolkit
+            if isinstance(search_results, list):
+                # LangChain Gmail toolkit returns list of dictionaries
+                emails = search_results
+                email_count = len(emails)
                 
-                # Look for subject lines
-                if 'Subject:' in line:
-                    subject = line.split('Subject:')[1].strip()
-                    subjects.append(subject)
-                    email_count += 1
+                # Extract information from structured data
+                subjects = []
+                senders = []
+                snippets = []
                 
-                # Look for sender information
-                elif 'From:' in line:
-                    sender = line.split('From:')[1].strip()
-                    senders.append(sender)
+                for email in emails:
+                    if isinstance(email, dict):
+                        # Extract subject
+                        subject = email.get('subject', 'No Subject')
+                        subjects.append(subject)
+                        
+                        # Extract sender
+                        sender = email.get('sender', 'Unknown Sender')
+                        senders.append(sender)
+                        
+                        # Extract snippet for preview
+                        snippet = email.get('snippet', '')
+                        if snippet:
+                            # Truncate snippet to reasonable length
+                            snippet = snippet[:100] + '...' if len(snippet) > 100 else snippet
+                            snippets.append(snippet)
+                
+            else:
+                # Fallback: try to parse as text (legacy format)
+                lines = search_results.split('\n') if search_results else []
+                
+                # Count emails and extract key information
+                email_count = 0
+                subjects = []
+                senders = []
+                
+                for line in lines:
+                    line = str(line).strip()
+                    if not line:
+                        continue
+                    
+                    # Look for subject lines
+                    if 'Subject:' in line:
+                        subject = line.split('Subject:')[1].strip()
+                        subjects.append(subject)
+                        email_count += 1
+                    
+                    # Look for sender information
+                    elif 'From:' in line:
+                        sender = line.split('From:')[1].strip()
+                        senders.append(sender)
+                
+                # If no structured data found, count the lines as emails
+                if email_count == 0 and lines:
+                    email_count = len([line for line in lines if line.strip()])
             
             # Create digest summary
             read_status = "read and unread" if include_read else "unread"
@@ -327,8 +451,18 @@ class GmailDigestTool(BaseGmailTool):
                 
                 if len(unique_senders) > 5:
                     digest += f"• ... and {len(unique_senders) - 5} more senders\n"
+                digest += "\n"
             
-            digest += f"\n🔍 **Search Query:** {hours_back}h back, {read_status} emails"
+            # Add email previews if available
+            if 'snippets' in locals() and snippets:
+                digest += "📝 **Email Previews:**\n"
+                for i, snippet in enumerate(snippets[:3], 1):  # Show up to 3 previews
+                    digest += f"{i}. {snippet}\n"
+                if len(snippets) > 3:
+                    digest += f"... and {len(snippets) - 3} more emails\n"
+                digest += "\n"
+            
+            digest += f"🔍 **Search Query:** {hours_back}h back, {read_status} emails"
             
             return digest
             
