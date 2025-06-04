@@ -73,26 +73,6 @@ BEGIN
 END;
 $$;
 
--- Step 4: Create view for easy access to decrypted tokens with proper security
-ALTER VIEW public.user_api_tokens 
-WITH (security_invoker = true) AS
-SELECT 
-    c.id,
-    c.user_id,
-    c.service_name,
-    c.service_user_id,
-    c.service_user_email,
-    c.scopes,
-    c.token_expires_at,
-    c.is_active,
-    c.created_at,
-    c.updated_at,
-    at_secret.decrypted_secret as access_token,
-    rt_secret.decrypted_secret as refresh_token
-FROM public.external_api_connections c
-LEFT JOIN vault.decrypted_secrets at_secret ON c.access_token_secret_id = at_secret.id
-LEFT JOIN vault.decrypted_secrets rt_secret ON c.refresh_token_secret_id = rt_secret.id;
-
 -- Step 5: Grant necessary permissions (views inherit RLS from underlying tables)
 GRANT SELECT ON public.user_api_tokens TO authenticated;
 

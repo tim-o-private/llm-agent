@@ -143,5 +143,3 @@ USING (
 GRANT USAGE ON SCHEMA public TO supabase_auth_admin; -- Or your specific roles
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.agent_sessions TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.agent_chat_messages TO authenticated;
-GRANT USAGE, SELECT ON SEQUENCE agent_sessions_session_id_seq TO authenticated; -- If using serial PKs, not needed for UUIDs
-GRANT USAGE, SELECT ON SEQUENCE agent_chat_messages_message_id_seq TO authenticated; -- If using serial PKs, not needed for UUIDs 
