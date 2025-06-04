@@ -17,4 +17,6 @@ __all__ = [
     "PROMPT_CUSTOMIZATIONS_TAG",
     "CHAT_MESSAGE_HISTORY_TABLE_NAME",
     "DEFAULT_LOG_LEVEL",
-] 
+]
+
+# Configuration package for Clarity v2 
