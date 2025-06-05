@@ -41,7 +41,8 @@ class RouterProxiedTool(BaseTool):
                     "Content-Type": "application/json",
                     "X-User-ID": self.user_id,
                     "X-Client-Info": "clarity-v2-tools"
-                }
+                },
+                follow_redirects=True
             )
         return self._client
     
@@ -53,7 +54,7 @@ class RouterProxiedTool(BaseTool):
         params: Optional[Dict[str, str]] = None
     ) -> Dict[str, Any]:
         """
-        Make a router-proxied call
+        Make a router-proxied HTTP call
         
         Args:
             method: HTTP method (GET, POST, PATCH, DELETE)
@@ -68,6 +69,7 @@ class RouterProxiedTool(BaseTool):
         try:
             logger.debug(f"Making {method} request to {endpoint}")
             
+            # Make HTTP request using httpx
             if method.upper() == "GET":
                 response = await self.client.get(endpoint, params=params)
             elif method.upper() == "POST":
@@ -79,12 +81,12 @@ class RouterProxiedTool(BaseTool):
             else:
                 raise ValueError(f"Unsupported HTTP method: {method}")
             
+            # Check for HTTP errors
             response.raise_for_status()
+            
+            # Parse JSON response
             return response.json()
             
-        except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error in router call: {e.response.status_code} - {e.response.text}")
-            raise RuntimeError(f"Router call failed: {e.response.status_code}")
         except Exception as e:
             logger.error(f"Error in router call: {e}")
             raise RuntimeError(f"Router call failed: {str(e)}")
@@ -106,7 +108,7 @@ class CreateTaskTool(RouterProxiedTool):
     class CreateTaskInput(BaseModel):
         title: str = Field(..., description="Task title")
         description: Optional[str] = Field(None, description="Task description")
-        priority: str = Field(default="medium", description="Task priority (low, medium, high, urgent)")
+        priority: int = Field(default=0, description="Task priority (0=low, 1=medium, 2=high, 3=urgent)")
         due_date: Optional[str] = Field(None, description="Due date in ISO format")
     
     args_schema: Type[BaseModel] = CreateTaskInput
@@ -115,7 +117,7 @@ class CreateTaskTool(RouterProxiedTool):
         self,
         title: str,
         description: Optional[str] = None,
-        priority: str = "medium",
+        priority: int = 0,
         due_date: Optional[str] = None
     ) -> str:
         """Create a task via router-proxied PostgREST call"""
@@ -136,7 +138,12 @@ class CreateTaskTool(RouterProxiedTool):
             # Make router-proxied call
             result = await self._make_router_call("POST", "/api/tasks", data=task_data)
             
-            return f"Created task: {result.get('title', title)} (ID: {result.get('id', 'unknown')})"
+            # PostgREST returns a list, get the first item
+            if isinstance(result, list) and len(result) > 0:
+                task = result[0]
+                return f"Created task: {task.get('title', title)} (ID: {task.get('id', 'unknown')})"
+            else:
+                return f"Created task: {title} (response format unexpected)"
             
         except Exception as e:
             logger.error(f"Failed to create task: {e}")
@@ -286,7 +293,23 @@ class ToolRegistry:
             async def _arun(self, **kwargs) -> str:
                 try:
                     result = await self._make_router_call(method, endpoint, data=kwargs)
-                    return f"Operation completed: {result}"
+                    
+                    # Handle PostgREST array responses
+                    if isinstance(result, list):
+                        if len(result) > 0:
+                            # For single item operations, return info about the first item
+                            if len(result) == 1:
+                                item = result[0]
+                                return f"Operation completed: {item}"
+                            else:
+                                # For multiple items, return count and summary
+                                return f"Operation completed: {len(result)} items processed"
+                        else:
+                            return "Operation completed: No items returned"
+                    else:
+                        # Handle non-array responses (shouldn't happen with PostgREST but just in case)
+                        return f"Operation completed: {result}"
+                        
                 except Exception as e:
                     return f"Operation failed: {str(e)}"
         

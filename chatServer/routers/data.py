@@ -119,11 +119,18 @@ async def postgrest_proxy(
                     response_cache.pop(key, None)
                 logger.debug(f"Invalidated cache for table {table}")
             
-            # Return PostgREST response
+            # Filter out problematic headers that can conflict with FastAPI's response handling
+            filtered_headers = {}
+            for key, value in response.headers.items():
+                # Skip headers that FastAPI will set automatically or that cause conflicts
+                if key.lower() not in ['content-length', 'transfer-encoding', 'content-encoding', 'connection', 'server']:
+                    filtered_headers[key] = value
+            
+            # Return PostgREST response with filtered headers
             return Response(
                 content=response.content,
                 status_code=response.status_code,
-                headers=dict(response.headers)
+                headers=filtered_headers
             )
             
     except httpx.TimeoutException:
