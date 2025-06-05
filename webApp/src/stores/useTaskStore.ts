@@ -36,6 +36,14 @@ export interface TaskStore {
   deleteTask: (id: string) => void;
   syncWithServer: () => Promise<void>;
   reorderTasks: (oldIndex: number, newIndex: number) => void;
+  reorderSubtasks: (parentId: string, oldIndex: number, newIndex: number) => void;
+  _reorderWithFractionalPositioning: (
+    oldIndex: number, 
+    newIndex: number, 
+    positionField: 'position' | 'subtask_position',
+    filterFn: (task: Task) => boolean,
+    sortFallback?: (a: Task, b: Task) => number
+  ) => void;
   
   // Selectors
   getTaskById: (id: string) => Task | undefined;
@@ -202,14 +210,11 @@ export const useTaskStore = create<TaskStore>()(
        * Update a task locally with optimistic UI
        */
       updateTask: (id, updates) => {
-        console.log(`[useTaskStore] updateTask called for ID: ${id}, Updates:`, JSON.stringify(updates, null, 2));
         set(state => {
           // Only update if the task exists
           if (!state.tasks[id]) {
-            console.warn(`[useTaskStore] Task with ID: ${id} not found for update.`);
             return;
           }
-          const oldTask = JSON.parse(JSON.stringify(state.tasks[id])); // Deep copy for logging
           
           // Apply updates to local state
           state.tasks[id] = {
@@ -217,7 +222,6 @@ export const useTaskStore = create<TaskStore>()(
             ...updates,
             updated_at: new Date().toISOString()
           };
-          console.log(`[useTaskStore] Task ID: ${id} - Before:`, oldTask, 'After:', JSON.parse(JSON.stringify(state.tasks[id])));
           
           // Add or update in pending changes
           state.pendingChanges[id] = {
@@ -231,10 +235,10 @@ export const useTaskStore = create<TaskStore>()(
           };
         });
         
-        // Schedule a sync after update
+        // Schedule a sync after update (longer delay for batching)
         setTimeout(() => {
           get().syncWithServer();
-        }, 800);
+        }, 2000);
       },
       
       /**
@@ -264,14 +268,15 @@ export const useTaskStore = create<TaskStore>()(
         
         toast.success('Task deleted');
         
-        // Schedule a sync
+        // Schedule a sync (longer delay for batching)
         setTimeout(() => {
           get().syncWithServer();
-        }, 800);
+        }, 2000);
       },
       
       /**
-       * Sync pending changes with the server
+       * Sync pending changes with the server using unified caching strategy
+       * Batches operations and preserves optimistic state during sync
        */
       syncWithServer: async () => {
         const pendingChanges = get().pendingChanges;
@@ -291,16 +296,19 @@ export const useTaskStore = create<TaskStore>()(
         set({ isSyncing: true });
         
         try {
-          // Process each pending change
+          // Group changes by type for batch processing
+          const creates: Array<{ tempId: string; data: NewTaskData }> = [];
+          const updates: Array<{ id: string; data: UpdateTaskData }> = [];
+          const deletes: Array<string> = [];
+          
+          // Categorize pending changes
           for (const id of pendingIds) {
             const change = pendingChanges[id];
             
-            if (change.action === 'create') {
-              // For create, we need to remove the temp ID and let the DB generate a real one
+            if (change.action === 'create' && id.startsWith('temp_')) {
               const taskData = { ...change.data };
               delete taskData.id; // Remove temp ID
               
-              // Need to convert to NewTaskData format
               const newTaskData: NewTaskData = {
                 user_id: userId,
                 title: taskData.title || '',
@@ -315,52 +323,69 @@ export const useTaskStore = create<TaskStore>()(
                 subtask_position: taskData.subtask_position,
               };
               
-              // Router-proxied PostgREST call
-              const data = await apiClient.insert<Task>('tasks', newTaskData);
+              creates.push({ tempId: id, data: newTaskData });
+            } 
+            else if (change.action === 'update' && !id.startsWith('temp_')) {
+              updates.push({ id, data: { ...change.data } });
+            } 
+            else if (change.action === 'delete' && !id.startsWith('temp_')) {
+              deletes.push(id);
+            }
+          }
+          
+          // Process creates
+          for (const { tempId, data } of creates) {
+            try {
+              const createdTask = await apiClient.insert<Task>('tasks', data);
               
-              if (data) {
+              if (createdTask) {
                 set(state => {
                   // Remove the temp task
-                  delete state.tasks[id];
-                  // Add the real task
-                  state.tasks[data.id] = data;
+                  delete state.tasks[tempId];
+                  // Add the real task with server-generated ID
+                  state.tasks[createdTask.id] = createdTask;
                   // Remove from pending changes
-                  delete state.pendingChanges[id];
+                  delete state.pendingChanges[tempId];
                 });
               }
-            } 
-            else if (change.action === 'update') {
-              if (id.startsWith('temp_')) {
-                continue; 
-              }
-              
-              const updateData: UpdateTaskData = { ...change.data };
-              
-              // Router-proxied PostgREST call
-              const updatedTask = await apiClient.update<Task>('tasks', id, updateData);
-              
-              set(state => {
-                if (updatedTask) {
-                  // Update the local task with the confirmed data from the server
-                  state.tasks[id] = updatedTask;
-                }
-                // Remove from pending changes on success
-                delete state.pendingChanges[id];
-              });
-            } 
-            else if (change.action === 'delete') {
-              // For delete, we need the real ID (not temp)
-              if (id.startsWith('temp_')) {
-                continue; // Skip deletes for temp tasks that haven't been created yet
-              }
-              
-              // Router-proxied PostgREST call (soft delete)
+            } catch (error) {
+              console.error(`Failed to create task ${tempId}:`, error);
+              // Keep in pending changes for retry
+            }
+          }
+          
+          // Process updates in batch (preserve optimistic state)
+          const successfulUpdates: string[] = [];
+          for (const { id, data } of updates) {
+            try {
+              // Send update to server but don't overwrite optimistic state immediately
+              await apiClient.update<Task>('tasks', id, data);
+              successfulUpdates.push(id);
+            } catch (error) {
+              console.error(`Failed to update task ${id}:`, error);
+              // Keep in pending changes for retry
+            }
+          }
+          
+          // Only remove successfully synced updates from pending changes
+          // Keep optimistic state intact - don't overwrite with server response
+          set(state => {
+            successfulUpdates.forEach(id => {
+              delete state.pendingChanges[id];
+            });
+          });
+          
+          // Process deletes
+          for (const id of deletes) {
+            try {
               await apiClient.update<Task>('tasks', id, { deleted: true });
               
-              // Remove from pending changes on success
               set(state => {
                 delete state.pendingChanges[id];
               });
+            } catch (error) {
+              console.error(`Failed to delete task ${id}:`, error);
+              // Keep in pending changes for retry
             }
           }
           
@@ -369,6 +394,12 @@ export const useTaskStore = create<TaskStore>()(
             isSyncing: false,
             lastSyncTime: Date.now()
           });
+          
+          // Show success message if there were changes synced
+          const totalChanges = creates.length + successfulUpdates.length + deletes.length;
+          if (totalChanges > 0) {
+            console.log(`Successfully synced ${totalChanges} task changes`);
+          }
           
         } catch (error) {
           console.error('Sync error:', error);
@@ -441,54 +472,135 @@ export const useTaskStore = create<TaskStore>()(
       },
       
       /**
-       * Reorder tasks with optimistic updates for drag and drop
+       * Helper function for fractional positioning logic shared by both tasks and subtasks
        */
-      reorderTasks: (oldIndex: number, newIndex: number) => {
+      _reorderWithFractionalPositioning: (
+        oldIndex: number, 
+        newIndex: number, 
+        positionField: 'position' | 'subtask_position',
+        filterFn: (task: Task) => boolean,
+        sortFallback?: (a: Task, b: Task) => number
+      ) => {
+        if (oldIndex === newIndex) return;
+        
         set(state => {
-          // Get only top-level tasks for reordering
-          const topLevelTasks = Object.values(state.tasks).filter(task => !task.parent_task_id);
-          const otherTasks = Object.values(state.tasks).filter(task => task.parent_task_id);
+          // Get sorted tasks based on filter
+          const tasks = Object.values(state.tasks)
+            .filter(filterFn)
+            .sort((a, b) => {
+              const posA = a[positionField] !== undefined ? a[positionField] : null;
+              const posB = b[positionField] !== undefined ? b[positionField] : null;
+              
+              if (posA !== null && posB !== null) {
+                return posA - posB;
+              }
+              // Use custom fallback or default to created_at
+              return sortFallback ? sortFallback(a, b) : 
+                new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+            });
           
-          // Sort by current position for consistent ordering
-          topLevelTasks.sort((a, b) => {
-            const posA = a.position !== undefined ? a.position : null;
-            const posB = b.position !== undefined ? b.position : null;
+          if (oldIndex >= tasks.length || newIndex >= tasks.length) {
+            return; // Invalid indices
+          }
+          
+          const movedTask = tasks[oldIndex];
+          let newPosition: number;
+          
+          if (newIndex === 0) {
+            // Moving to first position
+            const firstTask = tasks[0];
+            const firstPos = firstTask[positionField] || 0;
+            newPosition = firstPos - 1000; // Use larger gaps for better precision
+          } else if (newIndex >= tasks.length - 1) {
+            // Moving to last position
+            const lastTask = tasks[tasks.length - 1];
+            const lastPos = lastTask[positionField] || 0;
+            newPosition = lastPos + 1000; // Use larger gaps
+          } else {
+            // Moving between two tasks - use fractional positioning
+            const targetIndex = newIndex > oldIndex ? newIndex : newIndex;
+            const prevTask = tasks[targetIndex - 1];
+            const nextTask = tasks[targetIndex];
             
-            if (posA !== null && posB !== null) {
-              return posA - posB;
-            }
-            // Fallback to priority then created_at
-            if (a.priority !== b.priority) {
-              return b.priority - a.priority;
-            }
-            return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-          });
-          
-          // Perform the reorder
-          const [removedTask] = topLevelTasks.splice(oldIndex, 1);
-          topLevelTasks.splice(newIndex, 0, removedTask);
-          
-          // Update positions and store back in the record
-          const updatedTasks = { ...state.tasks };
-          topLevelTasks.forEach((task, index) => {
-            const updatedTask = { ...task, position: index };
-            updatedTasks[task.id] = updatedTask;
+            const prevPos = prevTask[positionField] || 0;
+            const nextPos = nextTask[positionField] || 0;
             
-            // Add to pending changes for sync
-            state.pendingChanges[task.id] = {
-              action: 'update',
-              data: { position: index },
-              timestamp: Date.now()
-            };
-          });
+            // Calculate midpoint with precision check
+            const gap = nextPos - prevPos;
+            
+            if (gap > 0.001) {
+              // Sufficient gap - use midpoint
+              newPosition = prevPos + (gap / 2);
+            } else {
+              // Gap too small - trigger position normalization
+              console.log(`${positionField} gap too small, using offset positioning`);
+              newPosition = prevPos + 0.5;
+              
+              // TODO: Consider implementing position normalization here
+              // to reset all positions to larger intervals (1000, 2000, 3000...)
+            }
+          }
           
-          state.tasks = updatedTasks;
+          // Update only the moved task
+          const updatedTask = { 
+            ...movedTask, 
+            [positionField]: newPosition,
+            updated_at: new Date().toISOString()
+          };
+          
+          state.tasks[movedTask.id] = updatedTask;
+          
+          // Add only this task to pending changes
+          state.pendingChanges[movedTask.id] = {
+            action: 'update',
+            data: { [positionField]: newPosition },
+            timestamp: Date.now()
+          };
         });
         
-        // Schedule background sync
+        // Schedule sync with shorter delay since it's just one update
         setTimeout(() => {
           get().syncWithServer();
-        }, 1000); // Slightly longer delay for reorder operations
+        }, 500);
+      },
+
+      /**
+       * Reorder top-level tasks using fractional positioning (only updates the moved task)
+       * 
+       * EFFICIENCY: This approach only updates 1 task instead of N tasks:
+       * - Old approach: Move task 3 to position 1 → Update positions of tasks 1,2,3,4,5... (N updates)
+       * - New approach: Move task 3 to position 1 → Set task 3 position = 0.5 (1 update)
+       */
+      reorderTasks: (oldIndex: number, newIndex: number) => {
+        get()._reorderWithFractionalPositioning(
+          oldIndex,
+          newIndex,
+          'position',
+          (task) => !task.parent_task_id && !task.deleted,
+          // Custom sort fallback for top-level tasks (priority then created_at)
+          (a, b) => {
+            if (a.priority !== b.priority) {
+              return b.priority - a.priority; // Higher priority first
+            }
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime(); // Newer first
+          }
+        );
+      },
+      
+      /**
+       * Reorder subtasks using fractional positioning (only updates the moved subtask)
+       * 
+       * EFFICIENCY: Same algorithm as reorderTasks but for subtasks within a parent.
+       * Uses subtask_position field and filters by parent_task_id.
+       */
+      reorderSubtasks: (parentId: string, oldIndex: number, newIndex: number) => {
+        get()._reorderWithFractionalPositioning(
+          oldIndex,
+          newIndex,
+          'subtask_position',
+          (task) => task.parent_task_id === parentId && !task.deleted
+          // Uses default sort fallback (created_at) for subtasks
+        );
       }
     })),
     { name: 'taskStore' }

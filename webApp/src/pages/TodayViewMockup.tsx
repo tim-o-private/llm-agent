@@ -19,7 +19,7 @@ import TaskListGroup from '@/components/tasks/TaskListGroup';
 import { FastTaskInput } from '@/components/features/TodayView/FastTaskInput';
 import { TaskDetailView } from '@/components/features/TaskDetail/TaskDetailView';
 import { PrioritizeViewModal } from '@/components/features/PrioritizeView/PrioritizeViewModal';
-import { ChatPanelV2 } from '@/components/ChatPanelV2';
+import { ChatPanel } from '@/components/ChatPanel';
 import { NotesPane } from '@/components/features/NotesPane/NotesPane';
 import { PlusIcon, ChatBubbleIcon, CalendarIcon, TargetIcon } from '@radix-ui/react-icons';
 import { Button } from '@/components/ui/Button';
@@ -548,7 +548,7 @@ const TodayViewMockup: React.FC = () => {
               </h2>
             </div>
             <div className="flex-1 overflow-hidden px-6">
-              <ChatPanelV2 agentId="assistant" />
+              <ChatPanel agentId="assistant" />
             </div>
           </div>
         );
