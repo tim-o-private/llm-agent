@@ -9,11 +9,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 try:
-    from ..dependencies.auth import get_current_user
+    from ..dependencies.auth import get_current_user_id
     from ..agents.email_digest_agent import EmailDigestAgent
     from ..config.constants import DEFAULT_LOG_LEVEL
 except ImportError:
-    from chatServer.dependencies.auth import get_current_user
+    from chatServer.dependencies.auth import get_current_user_id
     from chatServer.agents.email_digest_agent import EmailDigestAgent
     from chatServer.config.constants import DEFAULT_LOG_LEVEL
 
@@ -62,7 +62,7 @@ class EmailAgentResponse(BaseModel):
 
 
 # Dependency to get Email Digest Agent
-async def get_email_agent(user_id: str = Depends(get_current_user)) -> EmailDigestAgent:
+async def get_email_agent(user_id: str = Depends(get_current_user_id)) -> EmailDigestAgent:
     """Get Email Digest Agent instance for the current user.
     
     Args:

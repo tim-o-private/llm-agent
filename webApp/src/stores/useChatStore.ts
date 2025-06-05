@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { supabase } from '@/lib/supabaseClient';
+import { apiClient } from '@/lib/apiClient';
 import { useAuthStore } from '@/features/auth/useAuthStore';
 import { generateNewChatId } from '@/api/hooks/useChatSessionHooks';
 import { useEffect } from 'react';
@@ -19,7 +19,6 @@ export interface ChatMessage {
 
 interface ChatStore {
   messages: ChatMessage[];
-  isChatPanelOpen: boolean;
   activeChatId: string | null;
   currentSessionInstanceId: string | null;
   currentAgentName: string | null; // Renamed from currentAgentId
@@ -27,8 +26,6 @@ interface ChatStore {
   sendHeartbeatAsync: () => Promise<void>;
 
   addMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>, senderType?: 'user' | 'ai' | 'tool') => Promise<void>;
-  toggleChatPanel: () => void;
-  setChatPanelOpen: (isOpen: boolean) => void;
   initializeSessionAsync: (agentName: string) => Promise<void>; // Renamed and made async
   clearCurrentSessionAsync: () => Promise<void>;
   setCurrentAgentName: (agentName: string | null) => void; // Renamed
@@ -41,7 +38,6 @@ const CHAT_ID_LOCAL_STORAGE_PREFIX = 'chatUI_activeChatId';
 export const useChatStore = create<ChatStore>((set, get) => ({
   messages: [], // Messages will be primarily managed by backend history; client might only hold current view if needed.
                 // For now, we keep it, but it might not be populated from DB on init if backend handles full history.
-  isChatPanelOpen: false,
   activeChatId: null,
   currentSessionInstanceId: null,
   currentAgentName: null,
@@ -66,11 +62,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const user = useAuthStore.getState().user;
     if (currentSessionInstanceId && user) {
       try {
-        await supabase
-          .from('chat_sessions')
-          .update({ updated_at: new Date().toISOString(), is_active: true })
-          .eq('id', currentSessionInstanceId)
-          .eq('user_id', user.id); // Ensure user owns it
+        // Router-proxied PostgREST call
+        await apiClient.update('chat_sessions', currentSessionInstanceId, { 
+          updated_at: new Date().toISOString(), 
+          is_active: true 
+        });
         // console.log('Heartbeat: Session instance updated', currentSessionInstanceId);
       } catch (error) {
         console.error('Error sending heartbeat update:', error);
@@ -79,9 +75,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
   },
 
-  toggleChatPanel: () =>
-    set((state) => ({ isChatPanelOpen: !state.isChatPanelOpen })),
-  setChatPanelOpen: (isOpen) => set({ isChatPanelOpen: isOpen }),
+
   setCurrentAgentName: (agentName) => set({ currentAgentName: agentName }),
 
   initializeSessionAsync: async (agentName: string) => {
@@ -92,6 +86,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     set({ isInitializingSession: true });
 
     const user = useAuthStore.getState().user;
+    console.log('[ChatStore] Current user state:', user);
     if (!user) {
       console.warn("User not authenticated, cannot initialize session.");
       set({ activeChatId: null, currentSessionInstanceId: null, currentAgentName: null, messages: [] });
@@ -116,33 +111,27 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     if (!chatIdToUse) {
       console.log("Attempting to fetch latest Chat ID from DB...");
       // Try active sessions first
-      const { data: activeSessions, error: activeError } = await supabase
-        .from('chat_sessions')
-        .select('chat_id')
-        .eq('user_id', user.id)
-        .eq('agent_name', agentName)
-        .eq('is_active', true)
-        .order('updated_at', { ascending: false })
-        .limit(1);
+      try {
+        const query = `user_id=eq.${user.id}&agent_name=eq.${agentName}&is_active=eq.true&order=updated_at.desc&limit=1&select=chat_id`;
+        console.log(`[ChatStore] Fetching active sessions with query: ${query}`);
+        const activeSessions = await apiClient.select<{chat_id: string}>('chat_sessions', query);
+        console.log(`[ChatStore] Active sessions response:`, activeSessions);
 
-      if (activeError) console.error('Error fetching active chat_id for init:', activeError);
-      
-      if (activeSessions && activeSessions.length > 0 && activeSessions[0].chat_id) {
-        chatIdToUse = activeSessions[0].chat_id;
-      } else {
-        // If no active, try most recent inactive
-        const { data: inactiveSessions, error: inactiveError } = await supabase
-          .from('chat_sessions')
-          .select('chat_id')
-          .eq('user_id', user.id)
-          .eq('agent_name', agentName)
-          .order('updated_at', { ascending: false })
-          .limit(1);
-        if (inactiveError) console.error('Error fetching inactive chat_id for init:', inactiveError);
-        if (inactiveSessions && inactiveSessions.length > 0 && inactiveSessions[0].chat_id) {
-          chatIdToUse = inactiveSessions[0].chat_id;
+        if (activeSessions && activeSessions.length > 0 && activeSessions[0].chat_id) {
+          chatIdToUse = activeSessions[0].chat_id;
+        } else {
+          // If no active, try most recent inactive
+          const inactiveQuery = `user_id=eq.${user.id}&agent_name=eq.${agentName}&order=updated_at.desc&limit=1&select=chat_id`;
+          const inactiveSessions = await apiClient.select<{chat_id: string}>('chat_sessions', inactiveQuery);
+          
+          if (inactiveSessions && inactiveSessions.length > 0 && inactiveSessions[0].chat_id) {
+            chatIdToUse = inactiveSessions[0].chat_id;
+          }
         }
+      } catch (error) {
+        console.error('Error fetching chat_id for init:', error);
       }
+      
       if (chatIdToUse) {
         console.log(`Fetched existing Chat ID from DB: ${chatIdToUse}`);
         localStorage.setItem(localStorageKey, chatIdToUse);
@@ -166,24 +155,39 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         updated_at: new Date().toISOString(),
         // created_at is by DB default
       };
-      const { data: newInstance, error: instanceError } = await supabase
-        .from('chat_sessions')
-        .insert(newSessionInstancePayload)
-        .select('id') // Only need the ID of the new row
-        .single();
-
-      if (instanceError) throw instanceError;
-      if (!newInstance || !newInstance.id) throw new Error('Failed to create session instance or get its ID.');
+      
+      // Router-proxied PostgREST call
+      console.log(`[ChatStore] Creating session instance with payload:`, newSessionInstancePayload);
+      const response = await apiClient.insert<{id: string} | {id: string}[]>('chat_sessions', newSessionInstancePayload);
+      console.log(`[ChatStore] Session creation response:`, response);
+      
+      // PostgREST returns an array even for single inserts
+      const newInstance = Array.isArray(response) ? response[0] : response;
+      console.log(`[ChatStore] Extracted instance:`, newInstance);
+      
+      if (!newInstance || !newInstance.id) {
+        console.error('Insert response:', response);
+        throw new Error('Failed to create session instance or get its ID.');
+      }
       
       newSessionInstanceId = newInstance.id;
       console.log(`Successfully created new session instance in DB. ID: ${newSessionInstanceId}, Chat ID: ${chatIdToUse}`);
       
+      console.log(`[ChatStore] About to update store state with:`, {
+        activeChatId: chatIdToUse,
+        currentSessionInstanceId: newSessionInstanceId,
+        currentAgentName: agentName,
+        messages: []
+      });
+      
       set({
         activeChatId: chatIdToUse,
         currentSessionInstanceId: newSessionInstanceId,
-      currentAgentName: agentName,
+        currentAgentName: agentName,
         messages: [], // Messages are loaded from backend via PostgresChatMessageHistory, keyed by activeChatId
-    });
+      });
+      
+      console.log(`[ChatStore] Store state after update:`, get());
       console.log(`Chat store initialized. Agent: ${agentName}, Active Chat ID: ${chatIdToUse}, Session Instance ID: ${newSessionInstanceId}`);
 
     } catch (error) {
@@ -198,7 +202,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         messages: [],
       });
     } finally {
+      console.log(`[ChatStore] Finally block: resetting isInitializingSession to false`);
       set({ isInitializingSession: false }); // ADDED: Reset the flag in finally block
+      console.log(`[ChatStore] Final store state:`, get());
     }
   },
 
@@ -209,11 +215,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     if (currentSessionInstanceId && user) {
       try {
         console.log(`Deactivating session instance: ${currentSessionInstanceId}`);
-        await supabase
-          .from('chat_sessions')
-          .update({ is_active: false, updated_at: new Date().toISOString() })
-          .eq('id', currentSessionInstanceId)
-          .eq('user_id', user.id);
+        await apiClient.update('chat_sessions', currentSessionInstanceId, { 
+          is_active: false, 
+          updated_at: new Date().toISOString() 
+        });
       } catch (error) {
         console.error('Error deactivating session instance in DB:', error);
         // Proceed to clear local state anyway
@@ -243,11 +248,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     if (currentSessionInstanceId && user) {
       try {
         // console.log('Sending explicit heartbeat for session instance:', currentSessionInstanceId);
-        await supabase
-          .from('chat_sessions')
-          .update({ updated_at: new Date().toISOString(), is_active: true })
-          .eq('id', currentSessionInstanceId)
-          .eq('user_id', user.id);
+        await apiClient.update('chat_sessions', currentSessionInstanceId, { 
+          updated_at: new Date().toISOString(), 
+          is_active: true 
+        });
       } catch (error) {
         console.error('Error sending explicit heartbeat:', error);
       }

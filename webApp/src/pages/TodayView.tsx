@@ -49,10 +49,7 @@ const TodayView: React.FC = () => {
   // Subscribe to the actual task data
   const topLevelTasksFromStore = useTaskStore(state => state.getTopLevelTasks());
 
-  // Log topLevelTasksFromStore and taskDataSignature when they change
-  useEffect(() => {
-    console.log('[TodayView] topLevelTasksFromStore updated:', JSON.stringify(topLevelTasksFromStore.map(t => ({id: t.id, title: t.title, completed: t.completed, status: t.status})), null, 2));
-  }, [topLevelTasksFromStore]);
+
 
   const { mutate: createFocusSession } = useCreateFocusSession();
   const { mutate: updateTaskOrderMutation } = useUpdateTaskOrder();
@@ -195,7 +192,6 @@ const TodayView: React.FC = () => {
 
   // --- Derived Data (View Models for TaskCards) ---
   const displayTasksWithSubtasks = useMemo(() => {
-    console.log('[TodayView] Recalculating displayTasksWithSubtasks...'); // Log when this recalculates
     if (!initialized) return [];
     if (!topLevelTasksFromStore || topLevelTasksFromStore.length === 0) return [];
 
@@ -275,8 +271,9 @@ const TodayView: React.FC = () => {
     })
   );
 
-  function handleDragEnd(event: DragEndEvent) {
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
+    console.log('[TodayView] Drag ended', { activeId: active.id, overId: over?.id });
 
     if (active.id !== over?.id && over) {
       const currentTasks = topLevelTasksFromStore;
@@ -288,42 +285,14 @@ const TodayView: React.FC = () => {
         return;
       }
 
-      // 1. Create the new optimistic order
-      const optimisticallyReorderedTasks = arrayMove(currentTasks, oldIndex, newIndex);
-
-      // 2. Optimistically update the Zustand store IMMEDIATELY
-      // This ensures that topLevelTasksFromStore selector will return the new order quickly.
-      optimisticallyReorderedTasks.forEach((task, index) => {
-        if (task.position !== index) { // Check if position actually changed
-          // Call the existing updateTask which handles local state and pendingChanges for sync
-          useTaskStore.getState().updateTask(task.id, { position: index });
-        }
-      });
-
-      // 3. Prepare updates for the backend batch operation
-      const taskOrderUpdatesForBackend: Array<{ id: string; position: number }> = optimisticallyReorderedTasks.map((task, index) => ({
-        id: task.id,
-        position: index,
-      }));
+      console.log(`[TodayView] Reordering task from index ${oldIndex} to ${newIndex}`);
       
-      // 4. Call the mutation to update backend
-      if (taskOrderUpdatesForBackend.length > 0) {
-        console.log('[TodayView] Calling updateTaskOrderMutation with:', taskOrderUpdatesForBackend);
-        updateTaskOrderMutation(taskOrderUpdatesForBackend, {
-          onSuccess: () => {
-            console.log('[TodayView] updateTaskOrderMutation successful. Query invalidation should refresh the store from server.');
-            // Query invalidation is handled by the useUpdateTaskOrder hook.
-          },
-          onError: (error) => {
-            console.error('[TodayView] updateTaskOrderMutation failed:', error);
-            toast.error("Failed to reorder tasks. Please try again.");
-            // Consider a strategy to revert optimistic updates if backend fails, 
-            // e.g., by refetching or rolling back store changes if the hook doesn't handle it.
-          }
-        });
-      }
+      // Use the new optimistic reorderTasks method - no DB in hot path!
+      useTaskStore.getState().reorderTasks(oldIndex, newIndex);
+      
+      toast.success('Task order updated');
     }
-  }
+  }, [topLevelTasksFromStore]);
 
   if (isLoadingTasks) {
     return (

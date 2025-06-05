@@ -2,6 +2,7 @@ import React from 'react';
 import { UserMenu } from '@/components/UserMenu';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import { Button } from '@/components/ui/Button';
+import { useChatUIStore } from '@/stores/useChatUIStore';
 
 const TopBar: React.FC = () => {
   const currentDate = new Date().toLocaleDateString(undefined, {
@@ -11,7 +12,7 @@ const TopBar: React.FC = () => {
     day: 'numeric'
   });
 
-  const [isChatPanelOpen, setIsChatPanelOpen] = React.useState(false);
+  const { toggleChatPanel } = useChatUIStore();
 
   return (
     <div className="flex-1 px-4 flex justify-between items-center h-full">
@@ -54,7 +55,7 @@ const TopBar: React.FC = () => {
         {/* REMOVING CHAT TOGGLE BUTTON FROM TOPBAR - Now handled in TodayView */}
         <Button 
           variant="soft" 
-          onClick={() => setIsChatPanelOpen(!isChatPanelOpen)}
+          onClick={toggleChatPanel}
           className="lg:hidden"
         >
           ��

@@ -1,6 +1,6 @@
 import React from 'react';
 import { create } from 'zustand';
-import { supabase } from '@/lib/supabaseClient';
+import { apiClient } from '@/lib/apiClient';
 import { useAuthStore } from '@/features/auth/useAuthStore';
 import { Note, NewNoteData, UpdateNoteData } from '@/api/types';
 import { toast } from '@/components/ui/toast';
@@ -55,13 +55,8 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
         user_id: user.id,
       };
 
-      const { data, error } = await supabase
-        .from('notes')
-        .insert(newNote)
-        .select()
-        .single();
-
-      if (error) throw error;
+      // Router-proxied PostgREST call
+      const data = await apiClient.insert<Note>('notes', newNote);
 
       // Update local state
       const currentNotes = get().notes;
@@ -102,15 +97,8 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       );
       set({ notes: optimisticNotes });
 
-      const { data, error } = await supabase
-        .from('notes')
-        .update(updates)
-        .eq('id', noteId)
-        .eq('user_id', user.id)
-        .select()
-        .single();
-
-      if (error) throw error;
+      // Router-proxied PostgREST call
+      const data = await apiClient.update<Note>('notes', noteId, updates);
 
       // Update with server response
       const serverNotes = currentNotes.map(note =>
@@ -142,14 +130,8 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     set({ isSaving: true });
 
     try {
-      // Soft delete
-      const { error } = await supabase
-        .from('notes')
-        .update({ deleted: true })
-        .eq('id', noteId)
-        .eq('user_id', user.id);
-
-      if (error) throw error;
+      // Router-proxied PostgREST call - soft delete
+      await apiClient.update<Note>('notes', noteId, { deleted: true });
 
       // Remove from local state
       const currentNotes = get().notes;
@@ -179,14 +161,9 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     set({ isLoading: true });
 
     try {
-      const { data, error } = await supabase
-        .from('notes')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('deleted', false)
-        .order('updated_at', { ascending: false });
-
-      if (error) throw error;
+      // Router-proxied PostgREST call
+      const query = `user_id=eq.${user.id}&deleted=eq.false&order=updated_at.desc&limit=50`;
+      const data = await apiClient.select<Note>('notes', query);
 
       set({ 
         notes: data || [],

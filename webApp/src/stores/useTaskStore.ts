@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { useAuthStore } from '@/features/auth/useAuthStore';
-import { supabase } from '@/lib/supabaseClient';
+import { apiClient } from '@/lib/apiClient';
 import { toast } from '@/components/ui/toast';
 import { Task, NewTaskData, UpdateTaskData, TaskStatus } from '@/api/types';
 import { useEffect } from 'react';
@@ -35,6 +35,7 @@ export interface TaskStore {
   updateTask: (id: string, updates: Partial<Task>) => void;
   deleteTask: (id: string) => void;
   syncWithServer: () => Promise<void>;
+  reorderTasks: (oldIndex: number, newIndex: number) => void;
   
   // Selectors
   getTaskById: (id: string) => Task | undefined;
@@ -94,26 +95,16 @@ export const useTaskStore = create<TaskStore>()(
           return Promise.reject(new Error('User not authenticated'));
         }
         
-        console.log('[useTaskStore] Fetching tasks for user:', userId);
+        console.log('[useTaskStore] Fetching tasks via router for user:', userId);
         set({ isLoading: true });
         
         try {
-          console.log('[useTaskStore] Calling supabase.from("tasks").select()');
-          const { data, error } = await supabase
-            .from('tasks')
-            .select('*')
-            .eq('user_id', userId)
-            .eq('deleted', false)
-            .order('position', { ascending: true, nullsFirst: true })
-            .order('priority', { ascending: false })
-            .order('created_at', { ascending: false });
-            
-          if (error) {
-            console.error('[useTaskStore] Supabase error:', error);
-            throw error;
-          }
+          // Router-proxied PostgREST call
+          const query = `user_id=eq.${userId}&deleted=eq.false&order=position.asc.nullsfirst,priority.desc,created_at.desc&limit=100`;
+          console.log('[useTaskStore] Calling apiClient.select with query:', query);
           
-          console.log(`[useTaskStore] Supabase returned ${data?.length || 0} tasks`);
+          const data = await apiClient.select<Task>('tasks', query);
+          console.log(`[useTaskStore] Router returned ${data?.length || 0} tasks`);
           
           // Normalize the data into a record
           const normalizedTasks: Record<string, Task> = {};
@@ -122,6 +113,10 @@ export const useTaskStore = create<TaskStore>()(
           });
           
           console.log('[useTaskStore] Updating store with tasks');
+          console.log('[useTaskStore] Raw data length:', data?.length || 0);
+          console.log('[useTaskStore] Normalized tasks count:', Object.keys(normalizedTasks).length);
+          console.log('[useTaskStore] Sample task:', data?.[0]);
+          
           set({ 
             tasks: normalizedTasks, 
             isLoading: false,
@@ -130,6 +125,10 @@ export const useTaskStore = create<TaskStore>()(
           });
           
           console.log('[useTaskStore] Store updated, tasks count:', Object.keys(normalizedTasks).length);
+          
+          // Debug: Check top-level tasks after store update
+          const topLevelCount = Object.values(normalizedTasks).filter(task => !task.parent_task_id && !task.deleted).length;
+          console.log('[useTaskStore] Top-level tasks count:', topLevelCount);
           return Promise.resolve();
         } catch (error) {
           console.error('[useTaskStore] Error fetching tasks:', error);
@@ -316,13 +315,8 @@ export const useTaskStore = create<TaskStore>()(
                 subtask_position: taskData.subtask_position,
               };
               
-              const { data, error } = await supabase
-                .from('tasks')
-                .insert([newTaskData])
-                .select()
-                .single();
-                
-              if (error) throw error;
+              // Router-proxied PostgREST call
+              const data = await apiClient.insert<Task>('tasks', newTaskData);
               
               if (data) {
                 set(state => {
@@ -342,21 +336,13 @@ export const useTaskStore = create<TaskStore>()(
               
               const updateData: UpdateTaskData = { ...change.data };
               
-              // Get the updated row back by adding .select().single()
-              const { data: updatedTaskFromServer, error } = await supabase
-                .from('tasks')
-                .update(updateData)
-                .eq('id', id)
-                .eq('user_id', userId)
-                .select()
-                .single(); // Assuming we expect one row back
-                
-              if (error) throw error;
+              // Router-proxied PostgREST call
+              const updatedTask = await apiClient.update<Task>('tasks', id, updateData);
               
               set(state => {
-                if (updatedTaskFromServer) {
+                if (updatedTask) {
                   // Update the local task with the confirmed data from the server
-                  state.tasks[id] = updatedTaskFromServer;
+                  state.tasks[id] = updatedTask;
                 }
                 // Remove from pending changes on success
                 delete state.pendingChanges[id];
@@ -368,13 +354,8 @@ export const useTaskStore = create<TaskStore>()(
                 continue; // Skip deletes for temp tasks that haven't been created yet
               }
               
-              const { error } = await supabase
-                .from('tasks')
-                .update({ deleted: true })
-                .eq('id', id)
-                .eq('user_id', userId);
-                
-              if (error) throw error;
+              // Router-proxied PostgREST call (soft delete)
+              await apiClient.update<Task>('tasks', id, { deleted: true });
               
               // Remove from pending changes on success
               set(state => {
@@ -457,6 +438,57 @@ export const useTaskStore = create<TaskStore>()(
           // Then by created_at (newer first)
           return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         });
+      },
+      
+      /**
+       * Reorder tasks with optimistic updates for drag and drop
+       */
+      reorderTasks: (oldIndex: number, newIndex: number) => {
+        set(state => {
+          // Get only top-level tasks for reordering
+          const topLevelTasks = Object.values(state.tasks).filter(task => !task.parent_task_id);
+          const otherTasks = Object.values(state.tasks).filter(task => task.parent_task_id);
+          
+          // Sort by current position for consistent ordering
+          topLevelTasks.sort((a, b) => {
+            const posA = a.position !== undefined ? a.position : null;
+            const posB = b.position !== undefined ? b.position : null;
+            
+            if (posA !== null && posB !== null) {
+              return posA - posB;
+            }
+            // Fallback to priority then created_at
+            if (a.priority !== b.priority) {
+              return b.priority - a.priority;
+            }
+            return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+          });
+          
+          // Perform the reorder
+          const [removedTask] = topLevelTasks.splice(oldIndex, 1);
+          topLevelTasks.splice(newIndex, 0, removedTask);
+          
+          // Update positions and store back in the record
+          const updatedTasks = { ...state.tasks };
+          topLevelTasks.forEach((task, index) => {
+            const updatedTask = { ...task, position: index };
+            updatedTasks[task.id] = updatedTask;
+            
+            // Add to pending changes for sync
+            state.pendingChanges[task.id] = {
+              action: 'update',
+              data: { position: index },
+              timestamp: Date.now()
+            };
+          });
+          
+          state.tasks = updatedTasks;
+        });
+        
+        // Schedule background sync
+        setTimeout(() => {
+          get().syncWithServer();
+        }, 1000); // Slightly longer delay for reorder operations
       }
     })),
     { name: 'taskStore' }

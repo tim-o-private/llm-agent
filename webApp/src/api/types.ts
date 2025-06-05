@@ -13,11 +13,12 @@ export interface Task {
   status: TaskStatus;
   priority: TaskPriority;
   due_date?: string | null;
+  time_period?: string | null;
   category?: string | null;
   subtask_position?: number | null;
   position?: number | null;
   created_at: string;
-  updated_at: string;
+  updated_at: string | null;
   completed: boolean; // Derived from status for easier filtering, ensure it's kept in sync
   completed_at?: string | null;
   deleted: boolean; // Soft delete flag

@@ -8,14 +8,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 import psycopg
 
 try:
-    from ..dependencies.auth import get_current_user
+    from ..dependencies.auth import get_current_user_id
     from ..database.connection import get_db_connection
     from ..models.external_api import (
         ExternalAPIConnectionCreate, ExternalAPIConnectionUpdate, 
         ExternalAPIConnectionResponse
     )
 except ImportError:
-    from chatServer.dependencies.auth import get_current_user
+    from chatServer.dependencies.auth import get_current_user_id
     from chatServer.database.connection import get_db_connection
     from chatServer.models.external_api import (
         ExternalAPIConnectionCreate, ExternalAPIConnectionUpdate,
@@ -32,7 +32,7 @@ router = APIRouter(prefix="/api/external", tags=["external-api"])
 @router.post("/connections", response_model=ExternalAPIConnectionResponse)
 async def create_api_connection(
     connection_data: ExternalAPIConnectionCreate,
-    user_id: str = Depends(get_current_user),
+    user_id: str = Depends(get_current_user_id),
     db_conn: psycopg.AsyncConnection = Depends(get_db_connection)
 ):
     """Create a new external API connection.
@@ -101,7 +101,7 @@ async def create_api_connection(
 
 @router.get("/connections", response_model=List[ExternalAPIConnectionResponse])
 async def get_api_connections(
-    user_id: str = Depends(get_current_user),
+    user_id: str = Depends(get_current_user_id),
     db_conn: psycopg.AsyncConnection = Depends(get_db_connection)
 ):
     """Get all API connections for the current user.
@@ -144,7 +144,7 @@ async def get_api_connections(
 @router.get("/connections/{service_name}", response_model=ExternalAPIConnectionResponse)
 async def get_api_connection(
     service_name: str,
-    user_id: str = Depends(get_current_user),
+    user_id: str = Depends(get_current_user_id),
     db_conn: psycopg.AsyncConnection = Depends(get_db_connection)
 ):
     """Get a specific API connection for the current user.
@@ -194,7 +194,7 @@ async def get_api_connection(
 @router.get("/connections/{service_name}/status")
 async def get_connection_status(
     service_name: str,
-    user_id: str = Depends(get_current_user),
+    user_id: str = Depends(get_current_user_id),
     db_conn: psycopg.AsyncConnection = Depends(get_db_connection)
 ):
     """Get connection status for a specific service.
@@ -231,7 +231,7 @@ async def get_connection_status(
 async def update_api_connection(
     service_name: str,
     connection_update: ExternalAPIConnectionUpdate,
-    user_id: str = Depends(get_current_user),
+    user_id: str = Depends(get_current_user_id),
     db_conn: psycopg.AsyncConnection = Depends(get_db_connection)
 ):
     """Update an existing API connection.
@@ -304,7 +304,7 @@ async def update_api_connection(
 @router.delete("/connections/{service_name}")
 async def delete_api_connection(
     service_name: str,
-    user_id: str = Depends(get_current_user),
+    user_id: str = Depends(get_current_user_id),
     db_conn: psycopg.AsyncConnection = Depends(get_db_connection)
 ):
     """Delete (deactivate) an API connection.

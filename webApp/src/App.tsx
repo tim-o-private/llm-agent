@@ -14,7 +14,7 @@ const Home = lazy(() => import('@/pages/Home'));
 const Login = lazy(() => import('@/pages/Login'));
 const AuthCallback = lazy(() => import('@/pages/AuthCallback').then(module => ({ default: module.AuthCallback })));
 
-const TodayView = lazy(() => import('@/pages/TodayView.tsx'));
+const TodayView = lazy(() => import('@/pages/TodayView'));
 const TodayViewMockup = lazy(() => import('@/pages/TodayViewMockup'));
 const CoachPage = lazy(() => import('@/pages/CoachPage'));
 const CoachPageV2 = lazy(() => import('@/pages/CoachPageV2'));

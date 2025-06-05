@@ -5,7 +5,7 @@ export interface ChatRequest {
   message: string;
   session_id?: string;
   agent_name?: string;
-  context?: Record<string, any>;
+  context?: Record<string, unknown>;
 }
 
 export interface ChatResponse {
@@ -13,15 +13,15 @@ export interface ChatResponse {
   session_id: string;
   agent_name: string;
   actions?: AgentAction[];
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   timestamp: string;
 }
 
 export interface AgentAction {
   type: string;
-  data: Record<string, any>;
+  data: Record<string, unknown>;
   status: 'pending' | 'in_progress' | 'completed' | 'failed';
-  result?: any;
+  result?: unknown;
   error?: string;
 }
 
@@ -46,14 +46,14 @@ export interface ChatMessage {
 export interface ToolCall {
   id: string;
   name: string;
-  arguments: Record<string, any>;
+  arguments: Record<string, unknown>;
 }
 
 export interface ToolResult {
   id: string;
-  result: any;
+  result: unknown;
   error?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 // Chat state types for Zustand store

@@ -15,14 +15,20 @@ export default defineConfig({
       '@styles': path.resolve(__dirname, './src/styles'),
     },
   },
+  build: {
+    sourcemap: false, // Disable source maps in production to avoid warnings
+  },
   server: {
     port: 3000,
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: 'http://localhost:8000', // Chat server runs on 8000
         changeOrigin: true,
       },
     },
+  },
+  optimizeDeps: {
+    exclude: ['@radix-ui/react-*'], // Exclude problematic dependencies from pre-bundling
   },
   test: {
     globals: true,

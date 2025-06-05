@@ -26,7 +26,7 @@ async function sendMessageApi(payload: SendMessagePayload): Promise<string> {
     throw new Error("Active Chat ID (for history) is missing. Cannot send message.");
   }
 
-  const apiUrl = `${import.meta.env.VITE_API_BASE_URL || ''}/api/chat`;
+  const apiUrl = `/api/chat`;
   const { data: { session } } = await supabase.auth.getSession();
   const accessToken = session?.access_token;
 

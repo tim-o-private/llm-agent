@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChatPanelV2 } from './ChatPanelV2';
+import { ChatPanelV1 } from './ChatPanelV1';
 
 interface ChatPanelProps {
   agentId?: string;
@@ -10,7 +10,7 @@ interface ChatPanelProps {
  * This provides enhanced functionality, better accessibility, and improved maintainability.
  */
 export const ChatPanel: React.FC<ChatPanelProps> = ({ agentId }) => {
-  return <ChatPanelV2 agentId={agentId} />;
+  return <ChatPanelV1 agentId={agentId} />;
 };
 
 // Re-export for backward compatibility

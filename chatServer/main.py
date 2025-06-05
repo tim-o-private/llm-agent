@@ -31,12 +31,13 @@ try:
     )
     from .database.connection import get_db_connection
     from .database.supabase_client import get_supabase_client
-    from .dependencies.auth import get_current_user
+    from .dependencies.auth import get_current_user_id
     from .dependencies.agent_loader import get_agent_loader
     from .services.chat import get_chat_service
     from .services.prompt_customization import get_prompt_customization_service
     from .routers.external_api_router import router as external_api_router
     from .routers.email_agent_router import router as email_agent_router
+    from .routers.data import router as data_router
 except ImportError:
     # Fall back to absolute imports (when run directly)
     from models.chat import ChatRequest, ChatResponse
@@ -48,12 +49,13 @@ except ImportError:
     )
     from database.connection import get_db_connection
     from database.supabase_client import get_supabase_client
-    from dependencies.auth import get_current_user
+    from dependencies.auth import get_current_user_id
     from dependencies.agent_loader import get_agent_loader
     from services.chat import get_chat_service
     from services.prompt_customization import get_prompt_customization_service
     from routers.external_api_router import router as external_api_router
     from routers.email_agent_router import router as email_agent_router
+    from routers.data import router as data_router
 
 # Correctly import ConfigLoader
 from utils.config_loader import ConfigLoader
@@ -202,7 +204,7 @@ logger = get_logger(__name__)
 async def chat_endpoint(
     chat_input: ChatRequest, 
     request: Request, 
-    user_id: str = Depends(get_current_user),
+    user_id: str = Depends(get_current_user_id),
     pg_connection: psycopg.AsyncConnection = Depends(get_db_connection),
     agent_loader_module = Depends(get_agent_loader),
 ):
@@ -234,7 +236,7 @@ async def chat_endpoint(
 @app.post("/api/agent/prompt_customizations/", response_model=PromptCustomization, tags=[PROMPT_CUSTOMIZATIONS_TAG])
 async def create_prompt_customization(
     customization_data: PromptCustomizationCreate,
-    user_id: str = Depends(get_current_user),
+    user_id: str = Depends(get_current_user_id),
     db = Depends(get_supabase_client) # This still uses supabase-py client
 ):
     """Create a new prompt customization."""
@@ -248,7 +250,7 @@ async def create_prompt_customization(
 @app.get("/api/agent/prompt_customizations/{agent_name}", response_model=List[PromptCustomization], tags=[PROMPT_CUSTOMIZATIONS_TAG])
 async def get_prompt_customizations_for_agent(
     agent_name: str,
-    user_id: str = Depends(get_current_user),
+    user_id: str = Depends(get_current_user_id),
     db = Depends(get_supabase_client) # This still uses supabase-py client
 ):
     """Get prompt customizations for a specific agent."""
@@ -263,7 +265,7 @@ async def get_prompt_customizations_for_agent(
 async def update_prompt_customization(
     customization_id: str,
     customization_data: PromptCustomizationCreate, # Re-use create model, user_id is fixed by RLS
-    user_id: str = Depends(get_current_user), # Ensures user owns the record via RLS
+    user_id: str = Depends(get_current_user_id), # Ensures user owns the record via RLS
     db = Depends(get_supabase_client) # This still uses supabase-py client
 ):
     """Update an existing prompt customization."""

@@ -21,7 +21,19 @@ router = APIRouter()
 # In production, this could be Redis or similar
 response_cache = TTLCache(maxsize=1000, ttl=300)  # 5 minute TTL
 
+# Clear cache on startup to ensure no stale entries with unfiltered headers
+response_cache.clear()
+
 settings = get_settings()
+
+def filter_response_headers(headers: dict) -> dict:
+    """Filter out problematic headers that can conflict with FastAPI's response handling"""
+    filtered_headers = {}
+    for key, value in headers.items():
+        # Skip headers that FastAPI will set automatically or that cause conflicts
+        if key.lower() not in ['content-length', 'transfer-encoding', 'content-encoding', 'connection', 'server']:
+            filtered_headers[key] = value
+    return filtered_headers
 
 @router.api_route("/{table:path}", methods=["GET", "POST", "PATCH", "DELETE"])
 async def postgrest_proxy(
@@ -63,7 +75,7 @@ async def postgrest_proxy(
             return Response(
                 content=cached_response["content"],
                 status_code=cached_response["status_code"],
-                headers=cached_response["headers"]
+                headers=filter_response_headers(cached_response["headers"])
             )
     
     # Prepare headers for PostgREST
@@ -102,12 +114,15 @@ async def postgrest_proxy(
             else:
                 raise HTTPException(status_code=405, detail="Method not allowed")
             
-            # Cache successful GET responses
+            # Filter out problematic headers that can conflict with FastAPI's response handling
+            filtered_headers = filter_response_headers(dict(response.headers))
+            
+            # Cache successful GET responses with filtered headers
             if request.method == "GET" and response.status_code == 200 and cache_key:
                 response_cache[cache_key] = {
                     "content": response.content,
                     "status_code": response.status_code,
-                    "headers": dict(response.headers)
+                    "headers": filtered_headers
                 }
                 logger.debug(f"Cached response for {cache_key}")
             
@@ -118,13 +133,6 @@ async def postgrest_proxy(
                 for key in keys_to_remove:
                     response_cache.pop(key, None)
                 logger.debug(f"Invalidated cache for table {table}")
-            
-            # Filter out problematic headers that can conflict with FastAPI's response handling
-            filtered_headers = {}
-            for key, value in response.headers.items():
-                # Skip headers that FastAPI will set automatically or that cause conflicts
-                if key.lower() not in ['content-length', 'transfer-encoding', 'content-encoding', 'connection', 'server']:
-                    filtered_headers[key] = value
             
             # Return PostgREST response with filtered headers
             return Response(

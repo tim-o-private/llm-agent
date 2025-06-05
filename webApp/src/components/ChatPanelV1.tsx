@@ -12,8 +12,12 @@ interface ChatPanelV1Props {
 export const ChatPanelV1: React.FC<ChatPanelV1Props> = ({ agentId: agentIdProp }) => {
   const agentId = agentIdProp || import.meta.env.VITE_DEFAULT_CHAT_AGENT_ID || "assistant";
 
-  const { messages, addMessage, activeChatId, currentSessionInstanceId, sendHeartbeatAsync, clearCurrentSessionAsync } = useChatStore(); 
-  
+  const messages = useChatStore((state) => state.messages);
+  const addMessage = useChatStore((state) => state.addMessage);
+  const activeChatId = useChatStore((state) => state.activeChatId);
+  const currentSessionInstanceId = useChatStore((state) => state.currentSessionInstanceId);
+  const sendHeartbeatAsync = useChatStore((state) => state.sendHeartbeatAsync);
+  const clearCurrentSessionAsync = useChatStore((state) => state.clearCurrentSessionAsync);
   useInitializeChatStore(agentId);
 
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
@@ -95,6 +99,11 @@ export const ChatPanelV1: React.FC<ChatPanelV1Props> = ({ agentId: agentIdProp }
         statusColor={sendMessageMutation.isPending ? 'yellow' : 'green'}
       />
       <div className="flex-grow p-4 overflow-y-auto space-y-1">
+        {messages.length === 0 && (
+          <div className="text-center text-gray-500 mt-8">
+            <p>Welcome! Start a conversation with your AI coach.</p>
+          </div>
+        )}
         {messages.map((msg) => (
           <MessageBubble
             key={msg.id} 

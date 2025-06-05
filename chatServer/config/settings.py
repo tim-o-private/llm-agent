@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     
     # CORS configuration
     ALLOWED_ORIGINS: List[str] = Field(
-        default=["http://localhost:3000", "http://localhost:5173"],
+        default=["http://localhost:3000", "http://localhost:3001", "http://localhost:5173"],
         env="CORS_ORIGINS",
         description="Allowed CORS origins"
     )
@@ -104,6 +104,13 @@ class Settings(BaseSettings):
         default=True,
         env="DEVELOPMENT_MODE",
         description="Enable development mode features"
+    )
+    
+    # Docker environment detection
+    running_in_docker: bool = Field(
+        default=False,
+        env="RUNNING_IN_DOCKER",
+        description="Whether the application is running in Docker"
     )
     
     class Config:
