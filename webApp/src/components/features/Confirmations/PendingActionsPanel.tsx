@@ -1,0 +1,161 @@
+/**
+ * PendingActionsPanel component for displaying and managing pending actions.
+ */
+
+import React, { useState } from 'react';
+import { Card } from '../../ui/Card';
+import { Badge } from '../../ui/Badge';
+import { AlertTriangle, CheckCircle, History, RefreshCw, Loader2 } from 'lucide-react';
+import { Button } from '../../ui/Button';
+import { ActionCard } from './ActionCard';
+import {
+  usePendingActions,
+  usePendingCount,
+  useApproveAction,
+  useRejectAction,
+} from '@/api/hooks/useActionsHooks';
+
+interface PendingActionsPanelProps {
+  className?: string;
+  compact?: boolean;
+}
+
+export const PendingActionsPanel: React.FC<PendingActionsPanelProps> = ({
+  className = '',
+  compact = false,
+}) => {
+  const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+
+  const {
+    data: actions,
+    isLoading,
+    error,
+    refetch,
+  } = usePendingActions();
+
+  const { data: countData } = usePendingCount();
+
+  const approveAction = useApproveAction();
+  const rejectAction = useRejectAction();
+
+  const handleApprove = async (actionId: string) => {
+    setApprovingId(actionId);
+    try {
+      await approveAction.mutateAsync(actionId);
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
+  const handleReject = async (actionId: string) => {
+    setRejectingId(actionId);
+    try {
+      await rejectAction.mutateAsync({ actionId });
+    } finally {
+      setRejectingId(null);
+    }
+  };
+
+  const pendingCount = countData?.count || 0;
+  const pendingActions = actions || [];
+
+  if (compact) {
+    if (pendingCount === 0) return null;
+
+    return (
+      <Badge className="flex items-center gap-1 bg-amber-100 text-amber-800 cursor-pointer hover:bg-amber-200">
+        <AlertTriangle className="h-3 w-3" />
+        {pendingCount} pending
+      </Badge>
+    );
+  }
+
+  return (
+    <Card className={`p-4 ${className}`}>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="h-5 w-5 text-amber-500" />
+          <h3 className="text-lg font-semibold">Pending Actions</h3>
+          {pendingCount > 0 && (
+            <Badge className="bg-amber-100 text-amber-800">
+              {pendingCount}
+            </Badge>
+          )}
+        </div>
+        <Button
+          size="1"
+          variant="ghost"
+          onClick={() => refetch()}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4" />
+          )}
+        </Button>
+      </div>
+
+      {isLoading && pendingActions.length === 0 ? (
+        <div className="flex items-center justify-center py-8 text-gray-500">
+          <Loader2 className="h-6 w-6 animate-spin mr-2" />
+          Loading actions...
+        </div>
+      ) : error ? (
+        <div className="text-red-500 py-4 text-center">
+          Failed to load pending actions: {error.message}
+        </div>
+      ) : pendingActions.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-8 text-gray-500">
+          <CheckCircle className="h-12 w-12 text-green-400 mb-2" />
+          <p className="font-medium">No pending actions</p>
+          <p className="text-sm">All actions have been reviewed</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {pendingActions.map((action) => (
+            <ActionCard
+              key={action.id}
+              action={action}
+              onApprove={handleApprove}
+              onReject={handleReject}
+              isApproving={approvingId === action.id}
+              isRejecting={rejectingId === action.id}
+            />
+          ))}
+        </div>
+      )}
+
+      {pendingActions.length > 0 && (
+        <div className="mt-4 pt-4 border-t border-gray-100">
+          <Button
+            size="1"
+            variant="ghost"
+            className="w-full text-gray-500 hover:text-gray-700"
+          >
+            <History className="h-4 w-4 mr-2" />
+            View Action History
+          </Button>
+        </div>
+      )}
+    </Card>
+  );
+};
+
+export const PendingActionsBadge: React.FC<{ onClick?: () => void }> = ({ onClick }) => {
+  const { data: countData, isLoading } = usePendingCount();
+  const count = countData?.count || 0;
+
+  if (isLoading || count === 0) return null;
+
+  return (
+    <button
+      onClick={onClick}
+      className="relative inline-flex items-center px-2 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-medium hover:bg-amber-200 transition-colors"
+    >
+      <AlertTriangle className="h-3 w-3 mr-1" />
+      {count} pending
+    </button>
+  );
+};

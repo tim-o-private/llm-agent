@@ -2,6 +2,7 @@ import React from 'react';
 import { UserMenu } from '@/components/UserMenu';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import { Button } from '@/components/ui/Button';
+import { PendingActionsBadge } from '@/components/features/Confirmations';
 
 const TopBar: React.FC = () => {
   const currentDate = new Date().toLocaleDateString(undefined, {
@@ -49,7 +50,8 @@ const TopBar: React.FC = () => {
           {/* TODO: Add streak icon/progress bar */}
         </div>
         
-        <ThemeToggle /> {/* Added ThemeToggle */}
+        <PendingActionsBadge />
+        <ThemeToggle />
 
         {/* REMOVING CHAT TOGGLE BUTTON FROM TOPBAR - Now handled in TodayView */}
         <Button 

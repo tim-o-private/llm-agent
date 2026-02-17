@@ -37,13 +37,14 @@ try:
     from .services.prompt_customization import get_prompt_customization_service
     from .routers.external_api_router import router as external_api_router
     from .routers.email_agent_router import router as email_agent_router
+    from .routers.actions import router as actions_router
 except ImportError:
     # Fall back to absolute imports (when run directly)
     from models.chat import ChatRequest, ChatResponse
     from models.prompt_customization import PromptCustomization, PromptCustomizationCreate
     from models.webhook import SupabasePayload
     from config.settings import get_settings
-    from config.constants import (  
+    from config.constants import (
         PROMPT_CUSTOMIZATIONS_TAG
     )
     from database.connection import get_db_connection
@@ -54,6 +55,7 @@ except ImportError:
     from services.prompt_customization import get_prompt_customization_service
     from routers.external_api_router import router as external_api_router
     from routers.email_agent_router import router as email_agent_router
+    from routers.actions import router as actions_router
 
 # Correctly import ConfigLoader
 from utils.config_loader import ConfigLoader
@@ -191,6 +193,7 @@ app.add_middleware(
 # Include routers
 app.include_router(external_api_router)
 app.include_router(email_agent_router)
+app.include_router(actions_router)
 
 # --- Logger setup ---
 # Ensure logger is available if not already globally configured

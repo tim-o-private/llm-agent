@@ -1,6 +1,7 @@
 description: "A helpful general-purpose AI assistant."
 llm:
-  model: gemini-2.5-flash-preview-04-17
+  provider: claude
+  model: claude-haiku-4-5-20251001
   temperature: 0.75
 
 memory_type: supabase_buffer

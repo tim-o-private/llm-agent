@@ -57,17 +57,31 @@ class CustomizableAgentExecutor(AgentExecutor):
         if not llm_config_dict or not llm_config_dict.get('model'):
             raise ValueError("LLM model configuration is missing or incomplete in agent_config_dict.")
         
-        from langchain_google_genai import ChatGoogleGenerativeAI # Ensure this is imported
-        google_api_key = os.getenv("GOOGLE_API_KEY") 
-        if not google_api_key:
-            raise ValueError("GOOGLE_API_KEY not found for ChatGoogleGenerativeAI.")
-        
-        llm_instance = ChatGoogleGenerativeAI(
-            model=llm_config_dict.get('model', 'gemini-pro'),
-            google_api_key=google_api_key,
-            temperature=float(llm_config_dict.get("temperature", 0.7)),
-        )
-        current_logger.info(f"LLM instance created for CustomizableAgentExecutor: {llm_config_dict.get('model')}")
+        provider = llm_config_dict.get('provider', 'gemini').lower()
+        model_name = llm_config_dict.get('model', 'gemini-pro')
+        temperature = float(llm_config_dict.get("temperature", 0.7))
+
+        if provider == 'claude':
+            from langchain_anthropic import ChatAnthropic
+            anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
+            if not anthropic_api_key:
+                raise ValueError("ANTHROPIC_API_KEY not found for ChatAnthropic.")
+            llm_instance = ChatAnthropic(
+                model=model_name,
+                anthropic_api_key=anthropic_api_key,
+                temperature=temperature,
+            )
+        else:
+            from langchain_google_genai import ChatGoogleGenerativeAI
+            google_api_key = os.getenv("GOOGLE_API_KEY")
+            if not google_api_key:
+                raise ValueError("GOOGLE_API_KEY not found for ChatGoogleGenerativeAI.")
+            llm_instance = ChatGoogleGenerativeAI(
+                model=model_name,
+                google_api_key=google_api_key,
+                temperature=temperature,
+            )
+        current_logger.info(f"LLM instance created ({provider}): {model_name}")
 
         base_prompt_str = agent_config_dict.get('system_prompt')
         if not base_prompt_str:

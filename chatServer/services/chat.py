@@ -13,11 +13,19 @@ try:
     from ..config.constants import CHAT_MESSAGE_HISTORY_TABLE_NAME, DEFAULT_LOG_LEVEL
     from ..dependencies.auth import get_jwt_from_request_context
     from ..protocols.agent_executor import AgentExecutorProtocol
+    from ..security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
+    from ..services.audit_service import AuditService
+    from ..services.pending_actions import PendingActionsService
+    from ..database.supabase_client import get_supabase_client
 except ImportError:
     from chatServer.models.chat import ChatRequest, ChatResponse
     from chatServer.config.constants import CHAT_MESSAGE_HISTORY_TABLE_NAME, DEFAULT_LOG_LEVEL
     from chatServer.dependencies.auth import get_jwt_from_request_context
     from chatServer.protocols.agent_executor import AgentExecutorProtocol
+    from chatServer.security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
+    from chatServer.services.audit_service import AuditService
+    from chatServer.services.pending_actions import PendingActionsService
+    from chatServer.database.supabase_client import get_supabase_client
 
 from langchain_postgres import PostgresChatMessageHistory
 from langchain.memory import ConversationBufferWindowMemory
@@ -214,10 +222,39 @@ class ChatService:
                 memory=agent_short_term_memory
             )
 
+            # Wrap tools with approval checking
+            try:
+                supabase_client = await get_supabase_client()
+                audit_service = AuditService(supabase_client)
+                pending_actions_service = PendingActionsService(
+                    db_client=supabase_client,
+                    audit_service=audit_service,
+                )
+                approval_context = ApprovalContext(
+                    user_id=user_id,
+                    session_id=session_id_for_history,
+                    agent_name=agent_name,
+                    db_client=supabase_client,
+                    pending_actions_service=pending_actions_service,
+                    audit_service=audit_service,
+                )
+                if hasattr(agent_executor, 'tools') and agent_executor.tools:
+                    wrap_tools_with_approval(agent_executor.tools, approval_context)
+                    logger.info(f"Wrapped {len(agent_executor.tools)} tools with approval for user {user_id}")
+            except Exception as e:
+                logger.warning(f"Failed to wrap tools with approval (non-fatal): {e}")
+
             try:
                 # Execute the agent
                 response_data = await agent_executor.ainvoke({"input": chat_input.message})
                 ai_response_content = response_data.get("output", "No output from agent.")
+
+                # Handle content block lists from newer langchain-anthropic versions
+                if isinstance(ai_response_content, list):
+                    ai_response_content = "".join(
+                        block.get("text", "") for block in ai_response_content
+                        if isinstance(block, dict) and block.get("type") == "text"
+                    ) or "No text content in response."
 
                 # Extract tool information
                 invoked_tool_name, invoked_tool_input = self.extract_tool_info(response_data)
