@@ -8,6 +8,16 @@ COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 ERRORS=""
 
+# Detect if the command targets a worktree via `git -C <path>`
+# Use that path for branch checks instead of PROJECT_DIR
+GIT_DIR="$PROJECT_DIR"
+if echo "$COMMAND" | grep -qoP 'git\s+-C\s+\S+'; then
+  EXTRACTED_DIR=$(echo "$COMMAND" | grep -oP '(?<=git\s-C\s)\S+' | head -1)
+  if [ -d "$EXTRACTED_DIR" ]; then
+    GIT_DIR="$EXTRACTED_DIR"
+  fi
+fi
+
 # Block destructive git operations
 if echo "$COMMAND" | grep -qE 'git\s+push\s+.*(-f|--force)'; then
   echo "BLOCKED: git push --force is not allowed. Use regular push or ask the user." >&2
@@ -36,7 +46,7 @@ fi
 
 # Block push to main branch
 if echo "$COMMAND" | grep -qE 'git\s+push'; then
-  CURRENT_BRANCH=$(git -C "$PROJECT_DIR" branch --show-current 2>/dev/null)
+  CURRENT_BRANCH=$(git -C "$GIT_DIR" branch --show-current 2>/dev/null)
   if [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRANCH" = "master" ]; then
     echo "BLOCKED: Cannot push directly to ${CURRENT_BRANCH}. Create a feature branch and PR instead." >&2
     exit 2
@@ -49,13 +59,13 @@ if ! echo "$COMMAND" | grep -qE 'git\s+commit'; then
 fi
 
 # Check 1: No .env files in staging area
-if git -C "$PROJECT_DIR" diff --cached --name-only 2>/dev/null | grep -qE '\.env'; then
+if git -C "$GIT_DIR" diff --cached --name-only 2>/dev/null | grep -qE '\.env'; then
   ERRORS="${ERRORS}BLOCKED: .env file detected in staging area. Remove with: git reset HEAD <file>\n"
 fi
 
 # Get list of staged files for targeted lint checks
-STAGED_PY=$(git -C "$PROJECT_DIR" diff --cached --name-only --diff-filter=d 2>/dev/null | grep -E '\.py$' || true)
-STAGED_TS=$(git -C "$PROJECT_DIR" diff --cached --name-only --diff-filter=d 2>/dev/null | grep -E '\.(ts|tsx)$' || true)
+STAGED_PY=$(git -C "$GIT_DIR" diff --cached --name-only --diff-filter=d 2>/dev/null | grep -E '\.py$' || true)
+STAGED_TS=$(git -C "$GIT_DIR" diff --cached --name-only --diff-filter=d 2>/dev/null | grep -E '\.(ts|tsx)$' || true)
 
 # Check 2: Python linting with ruff (only staged .py files)
 if [ -n "$STAGED_PY" ]; then
