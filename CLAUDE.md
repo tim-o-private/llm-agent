@@ -173,16 +173,38 @@ The project uses an agent-based SDLC for spec execution. See `.claude/skills/sdl
 ### Overview
 
 ```
-Spec -> Orchestrator (team lead) -> Implementer + Reviewer (teammates) -> PR -> UAT -> Merge
+Spec -> Orchestrator (team lead) -> Domain Agents + Reviewer (teammates) -> PR -> UAT -> Merge
 ```
+
+Cross-domain dependency flow: `database-dev → backend-dev → frontend-dev`
 
 ### Agent Team
 
-| Agent | Role | Mode |
-|-------|------|------|
-| `.claude/agents/orchestrator.md` | Team lead — reads specs, creates tasks, manages worktrees | Delegate (no code) |
-| `.claude/agents/implementer.md` | Writes code, tests, commits, creates PRs | Full capability |
-| `.claude/agents/reviewer.md` | Reviews diffs, checks patterns/tests/docs | Read-only |
+| Agent | Role | Scope | Mode |
+|-------|------|-------|------|
+| `.claude/agents/orchestrator.md` | Team lead — reads specs, creates tasks, writes contracts | All (read-only) | Delegate (no code) |
+| `.claude/agents/database-dev.md` | SQL migrations, RLS, indexes | `supabase/migrations/`, `chatServer/database/` | Full capability |
+| `.claude/agents/backend-dev.md` | Services, routers, models, API | `chatServer/`, `src/` | Full capability |
+| `.claude/agents/frontend-dev.md` | Components, hooks, pages, stores | `webApp/src/` | Full capability |
+| `.claude/agents/deployment-dev.md` | Docker, Fly.io, CI/CD, env config | Dockerfiles, fly.toml, CI/CD | Full capability |
+| `.claude/agents/reviewer.md` | Reviews diffs, checks scope + patterns + tests | All (read-only) | Read-only |
+
+### Cross-Team Contract Format
+
+When one domain agent hands off to another, the orchestrator includes a contract in the task description:
+
+```markdown
+## Contract: [source-agent] -> [target-agent]
+
+### Schema / API / Config provided:
+- [concrete details: table DDL, endpoint paths, env var names]
+
+### What [target] must implement:
+- [specific deliverables]
+
+### Assumptions [target] can make:
+- [things already done and tested by the upstream agent]
+```
 
 ### Git Conventions
 

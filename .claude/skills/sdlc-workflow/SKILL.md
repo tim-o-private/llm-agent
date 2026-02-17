@@ -8,6 +8,32 @@ Specs live in `docs/sdlc/specs/SPEC-NNN-<name>.md`. See [TEMPLATE](../../docs/sd
 
 Required sections: Goal, Acceptance Criteria, Scope, Technical Approach, Testing Requirements, Edge Cases, Functional Units.
 
+## Domain Agent Team
+
+| Agent | Scope | Handles |
+|-------|-------|---------|
+| **database-dev** | `supabase/migrations/`, `chatServer/database/` | Schema, RLS, indexes |
+| **backend-dev** | `chatServer/`, `src/` | Services, routers, API |
+| **frontend-dev** | `webApp/src/` | Components, hooks, pages |
+| **deployment-dev** | Dockerfiles, fly.toml, CI/CD | Docker, deploys, env vars |
+| **reviewer** | All (read-only) | Code review |
+
+Cross-domain flow: `database-dev → backend-dev → frontend-dev`
+
+## Contract Format
+
+When work flows between domains, the orchestrator writes a contract in the task description:
+
+```markdown
+## Contract: [source] -> [target]
+### Schema / API / Config provided:
+- [concrete details]
+### What [target] must implement:
+- [deliverables]
+### Assumptions [target] can make:
+- [what's already done]
+```
+
 ## Branch Naming
 
 ```
@@ -29,10 +55,9 @@ Commit frequently — after each logical unit of work.
 ## PR Per Functional Unit
 
 Each self-contained piece gets its own PR:
-- Database migration + RLS
-- Service layer
-- API endpoint + tests
-- Frontend component + hook + tests
+- Database migration + RLS (database-dev)
+- Service layer + API (backend-dev)
+- Frontend component + hook + tests (frontend-dev)
 
 ## Testing Requirements
 
@@ -44,8 +69,9 @@ Each self-contained piece gets its own PR:
 
 ## Review Process
 
-Reviewer checks: scope compliance, pattern compliance, test coverage, documentation, security.
+Reviewer checks: **scope boundary**, contract compliance, pattern compliance, test coverage, documentation, security.
 
+- Scope boundary violation = **BLOCKER**
 - Missing tests = **BLOCKER**
 - Missing documentation = **BLOCKER**
 - Out-of-scope changes = **BLOCKER**
@@ -63,7 +89,10 @@ When an agent makes a mistake, log it in `docs/sdlc/DEVIATIONS.md` with: what ha
 | `docs/sdlc/specs/` | Spec files |
 | `docs/sdlc/DEVIATIONS.md` | Agent error log |
 | `.claude/agents/orchestrator.md` | Team lead definition |
-| `.claude/agents/implementer.md` | Implementer definition |
+| `.claude/agents/database-dev.md` | Database agent |
+| `.claude/agents/backend-dev.md` | Backend agent |
+| `.claude/agents/frontend-dev.md` | Frontend agent |
+| `.claude/agents/deployment-dev.md` | Deployment agent |
 | `.claude/agents/reviewer.md` | Reviewer definition |
 
 ## Full Reference

@@ -11,11 +11,11 @@ Prioritized task queue. Items move to specs when ready for implementation.
 
 ## Active Specs
 
-| Priority | ID | Title | Status | Owner |
-|----------|----|-------|--------|-------|
-| P1 | SPEC-001 | [Notification System](specs/SPEC-001-notification-system.md) | Impl done, tests missing | — |
-| P1 | SPEC-002 | [Telegram Integration](specs/SPEC-002-telegram-integration.md) | Impl done, tests missing | — |
-| P1 | SPEC-003 | [Scheduled Agent Execution](specs/SPEC-003-scheduled-execution.md) | Impl done, tests missing | — |
+| Priority | ID | Title | Status | Outstanding Work |
+|----------|----|-------|--------|------------------|
+| P1 | SPEC-001 | [Notification System](specs/SPEC-001-notification-system.md) | Tests outstanding | backend-dev: API tests, frontend-dev: component tests |
+| P1 | SPEC-002 | [Telegram Integration](specs/SPEC-002-telegram-integration.md) | Tests outstanding | backend-dev: service + API tests, frontend-dev: component tests |
+| P1 | SPEC-003 | [Scheduled Agent Execution](specs/SPEC-003-scheduled-execution.md) | Tests outstanding | backend-dev: service + integration tests |
 
 ## Backlog Items (Not Yet Specced)
 

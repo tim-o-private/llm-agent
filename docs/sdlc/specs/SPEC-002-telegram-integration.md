@@ -125,10 +125,10 @@ Enable users to link their Telegram account and receive notifications, approve/r
 
 ## Functional Units
 
-1. **Unit 1:** Migration — user_channels + channel_linking_tokens (`feat/SPEC-002-migration`) — DONE
-2. **Unit 2:** Telegram bot service + linking service (`feat/SPEC-002-telegram-service`) — DONE
-3. **Unit 3:** API endpoints + tests (`feat/SPEC-002-telegram-api`) — DONE (endpoints), NOT STARTED (tests)
-4. **Unit 4:** Frontend TelegramLink component + hooks + tests (`feat/SPEC-002-telegram-ui`) — DONE (component + hooks), NOT STARTED (tests)
+1. **Unit 1:** Migration — user_channels + channel_linking_tokens (`feat/SPEC-002-migration`) — DONE (**database-dev**)
+2. **Unit 2:** Telegram bot service + linking service (`feat/SPEC-002-telegram-service`) — DONE (**backend-dev**)
+3. **Unit 3:** API endpoint tests (`feat/SPEC-002-telegram-api`) — TODO (**backend-dev**)
+4. **Unit 4:** Frontend TelegramLink component tests (`feat/SPEC-002-telegram-ui`) — TODO (**frontend-dev**)
 
 ## Outstanding Work
 

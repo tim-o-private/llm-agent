@@ -116,10 +116,10 @@ Deliver a notification system that routes agent results, heartbeats, and approva
 
 ## Functional Units
 
-1. **Unit 1:** Migration + RLS (`feat/SPEC-001-migration`) — DONE
-2. **Unit 2:** NotificationService (`feat/SPEC-001-notification-service`) — DONE
-3. **Unit 3:** API endpoints + tests (`feat/SPEC-001-notification-api`) — DONE (endpoints), NOT STARTED (tests)
-4. **Unit 4:** Frontend hooks + NotificationBadge + tests (`feat/SPEC-001-notification-ui`) — DONE (hooks + component), NOT STARTED (tests)
+1. **Unit 1:** Migration + RLS (`feat/SPEC-001-migration`) — DONE (**database-dev**)
+2. **Unit 2:** NotificationService (`feat/SPEC-001-notification-service`) — DONE (**backend-dev**)
+3. **Unit 3:** API endpoint tests (`feat/SPEC-001-notification-api`) — TODO (**backend-dev**)
+4. **Unit 4:** Frontend component tests (`feat/SPEC-001-notification-ui`) — TODO (**frontend-dev**)
 
 ## Outstanding Work
 

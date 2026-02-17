@@ -109,10 +109,10 @@ Enable any agent to run on a schedule (cron-based), with results stored in a ded
 
 ## Functional Units
 
-1. **Unit 1:** Migration — agent_execution_results table (`feat/SPEC-003-migration`) — DONE
-2. **Unit 2:** ScheduledExecutionService + tests (`feat/SPEC-003-execution-service`) — DONE (service), NOT STARTED (tests)
-3. **Unit 3:** Orchestrator agent config migration (`feat/SPEC-003-orchestrator-config`) — DONE
-4. **Unit 4:** BackgroundTaskService integration (`feat/SPEC-003-background-integration`) — DONE
+1. **Unit 1:** Migration — agent_execution_results table (`feat/SPEC-003-migration`) — DONE (**database-dev**)
+2. **Unit 2:** ScheduledExecutionService tests (`feat/SPEC-003-execution-service`) — TODO (**backend-dev**)
+3. **Unit 3:** Orchestrator agent config migration (`feat/SPEC-003-orchestrator-config`) — DONE (**database-dev**)
+4. **Unit 4:** BackgroundTaskService integration (`feat/SPEC-003-background-integration`) — DONE (**backend-dev**)
 
 ## Outstanding Work
 
