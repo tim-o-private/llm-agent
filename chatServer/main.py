@@ -35,6 +35,7 @@ try:
     from .routers.actions import router as actions_router
     from .routers.email_agent_router import router as email_agent_router
     from .routers.external_api_router import router as external_api_router
+    from .routers.chat_history_router import router as chat_history_router
     from .routers.notifications_router import router as notifications_router
     from .routers.telegram_router import router as telegram_router
     from .services.chat import get_chat_service
@@ -53,6 +54,7 @@ except ImportError:
     from routers.actions import router as actions_router
     from routers.email_agent_router import router as email_agent_router
     from routers.external_api_router import router as external_api_router
+    from routers.chat_history_router import router as chat_history_router
     from routers.notifications_router import router as notifications_router
     from routers.telegram_router import router as telegram_router
     from services.chat import get_chat_service
@@ -223,6 +225,7 @@ app.add_middleware(
 app.include_router(external_api_router)
 app.include_router(email_agent_router)
 app.include_router(actions_router)
+app.include_router(chat_history_router)
 app.include_router(notifications_router)
 app.include_router(telegram_router)
 
