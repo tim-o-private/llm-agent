@@ -14,15 +14,17 @@ def mock_db_manager():
     mock_conn = MagicMock()
     mock_cursor = MagicMock()
 
-    # Mock the async context managers properly
+    # Mock the async generator for get_connection
     async def mock_get_connection():
         yield mock_conn
 
-    async def mock_cursor_context():
-        yield mock_cursor
+    # Mock the async context manager for cursor()
+    mock_cursor_cm = MagicMock()
+    mock_cursor_cm.__aenter__ = AsyncMock(return_value=mock_cursor)
+    mock_cursor_cm.__aexit__ = AsyncMock(return_value=None)
 
     mock_manager.get_connection = mock_get_connection
-    mock_conn.cursor = mock_cursor_context
+    mock_conn.cursor.return_value = mock_cursor_cm
 
     return mock_manager, mock_cursor
 
@@ -42,10 +44,10 @@ async def test_get_tools_for_agent(mock_db_manager):
     """Test getting tools for a specific agent."""
     mock_manager, mock_cursor = mock_db_manager
 
-    # Mock database response
+    # Mock database response: (agent_id, tool_name, description, type, config, is_active)
     mock_cursor.fetchall = AsyncMock(return_value=[
-        ("agent1", "gmail_search", "Search Gmail", "GmailSearchTool", {"query": "test"}, {"query": {"type": "str"}}, True),
-        ("agent1", "gmail_digest", "Gmail Digest", "GmailDigestTool", {"hours": 24}, {"hours": {"type": "int"}}, True)
+        ("agent1", "gmail_search", "Search Gmail", "GmailSearchTool", {"query": "test"}, True),
+        ("agent1", "gmail_digest", "Gmail Digest", "GmailDigestTool", {"hours": 24}, True)
     ])
     mock_cursor.execute = AsyncMock()
 
@@ -58,9 +60,9 @@ async def test_get_tools_for_agent(mock_db_manager):
 
         assert len(tools) == 2
         assert tools[0]["name"] == "gmail_search"
-        assert tools[0]["tool_class"] == "GmailSearchTool"
+        assert tools[0]["type"] == "GmailSearchTool"
         assert tools[1]["name"] == "gmail_digest"
-        assert tools[1]["tool_class"] == "GmailDigestTool"
+        assert tools[1]["type"] == "GmailDigestTool"
 
         await service.stop()
 
@@ -70,11 +72,11 @@ async def test_fetch_all_tools(mock_db_manager):
     """Test fetching all tools grouped by agent."""
     mock_manager, mock_cursor = mock_db_manager
 
-    # Mock database response with multiple agents
+    # Mock database response: (agent_id, tool_name, description, type, config, is_active)
     mock_cursor.fetchall = AsyncMock(return_value=[
-        ("agent1", "gmail_search", "Search Gmail", "GmailSearchTool", {"query": "test"}, {"query": {"type": "str"}}, True),
-        ("agent1", "gmail_digest", "Gmail Digest", "GmailDigestTool", {"hours": 24}, {"hours": {"type": "int"}}, True),
-        ("agent2", "crud_tool", "CRUD Tool", "CRUDTool", {"table": "tasks"}, {"data": {"type": "dict"}}, True)
+        ("agent1", "gmail_search", "Search Gmail", "GmailSearchTool", {"query": "test"}, True),
+        ("agent1", "gmail_digest", "Gmail Digest", "GmailDigestTool", {"hours": 24}, True),
+        ("agent2", "crud_tool", "CRUD Tool", "CRUDTool", {"table": "tasks"}, True)
     ])
     mock_cursor.execute = AsyncMock()
 
@@ -93,9 +95,9 @@ async def test_fetch_all_tools(mock_db_manager):
         # Check tool structure
         agent1_tools = result["agent1"]
         assert agent1_tools[0]["name"] == "gmail_search"
-        assert agent1_tools[0]["tool_class"] == "GmailSearchTool"
+        assert agent1_tools[0]["type"] == "GmailSearchTool"
         assert agent1_tools[1]["name"] == "gmail_digest"
-        assert agent1_tools[1]["tool_class"] == "GmailDigestTool"
+        assert agent1_tools[1]["type"] == "GmailDigestTool"
 
 
 @pytest.mark.asyncio
@@ -103,10 +105,10 @@ async def test_fetch_tools_for_agent(mock_db_manager):
     """Test fetching tools for a specific agent."""
     mock_manager, mock_cursor = mock_db_manager
 
-    # Mock database response for specific agent
+    # Mock database response for specific agent: (tool_name, description, type, config, is_active)
     mock_cursor.fetchall = AsyncMock(return_value=[
-        ("gmail_search", "Search Gmail", "GmailSearchTool", {"query": "test"}, {"query": {"type": "str"}}, True),
-        ("gmail_digest", "Gmail Digest", "GmailDigestTool", {"hours": 24}, {"hours": {"type": "int"}}, True)
+        ("gmail_search", "Search Gmail", "GmailSearchTool", {"query": "test"}, True),
+        ("gmail_digest", "Gmail Digest", "GmailDigestTool", {"hours": 24}, True)
     ])
     mock_cursor.execute = AsyncMock()
 
@@ -118,9 +120,9 @@ async def test_fetch_tools_for_agent(mock_db_manager):
 
         assert len(result) == 2
         assert result[0]["name"] == "gmail_search"
-        assert result[0]["tool_class"] == "GmailSearchTool"
+        assert result[0]["type"] == "GmailSearchTool"
         assert result[1]["name"] == "gmail_digest"
-        assert result[1]["tool_class"] == "GmailDigestTool"
+        assert result[1]["type"] == "GmailDigestTool"
 
 
 @pytest.mark.asyncio
@@ -152,25 +154,27 @@ async def test_cache_warming():
     mock_conn = MagicMock()
     mock_cursor = MagicMock()
 
-    # Setup async context managers properly
+    # Setup async generator for get_connection
     async def mock_get_connection():
         yield mock_conn
 
-    async def mock_cursor_context():
-        yield mock_cursor
+    # Setup async context manager for cursor()
+    mock_cursor_cm = MagicMock()
+    mock_cursor_cm.__aenter__ = AsyncMock(return_value=mock_cursor)
+    mock_cursor_cm.__aexit__ = AsyncMock(return_value=None)
 
     mock_manager.get_connection = mock_get_connection
-    mock_conn.cursor = mock_cursor_context
+    mock_conn.cursor.return_value = mock_cursor_cm
 
-    # Mock database responses for different agents
+    # Mock database responses for different agents: (tool_name, description, type, config, is_active)
     call_count = 0
     async def mock_fetchall():
         nonlocal call_count
         call_count += 1
         if call_count == 1:
-            return [("tool1", "Tool 1", "TestTool", {}, {}, True)]
+            return [("tool1", "Tool 1", "TestTool", {}, True)]
         elif call_count == 2:
-            return [("tool2", "Tool 2", "TestTool", {}, {}, True)]
+            return [("tool2", "Tool 2", "TestTool", {}, True)]
         return []
 
     mock_cursor.fetchall = mock_fetchall

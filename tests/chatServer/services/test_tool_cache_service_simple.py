@@ -29,7 +29,7 @@ async def test_cache_invalidation():
     }
 
     # Test specific invalidation
-    await service.invalidate_cache("agent1")
+    await service.invalidate_cache(agent_id="agent1")
     assert "agent1" not in service.cache_service._cache
     assert "agent2" in service.cache_service._cache
 

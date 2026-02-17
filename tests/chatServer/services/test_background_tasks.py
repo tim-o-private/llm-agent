@@ -35,17 +35,20 @@ class TestBackgroundTaskService(unittest.TestCase):
         """Test starting background tasks."""
         with patch('asyncio.create_task') as mock_create_task:
             # Mock the async methods to avoid "coroutine was never awaited" warnings
-            with patch.object(self.service, 'deactivate_stale_chat_session_instances', new_callable=AsyncMock) as mock_deactivate:
-                with patch.object(self.service, 'evict_inactive_executors', new_callable=AsyncMock) as mock_evict:
-                    mock_task1 = MagicMock()
-                    mock_task2 = MagicMock()
-                    mock_create_task.side_effect = [mock_task1, mock_task2]
+            with patch.object(self.service, 'deactivate_stale_chat_session_instances', new_callable=AsyncMock):
+                with patch.object(self.service, 'evict_inactive_executors', new_callable=AsyncMock):
+                    with patch.object(self.service, 'run_scheduled_agents', new_callable=AsyncMock):
+                        mock_task1 = MagicMock()
+                        mock_task2 = MagicMock()
+                        mock_task3 = MagicMock()
+                        mock_create_task.side_effect = [mock_task1, mock_task2, mock_task3]
 
-                    self.service.start_background_tasks()
+                        self.service.start_background_tasks()
 
-                    self.assertEqual(mock_create_task.call_count, 2)
-                    self.assertEqual(self.service.deactivate_task, mock_task1)
-                    self.assertEqual(self.service.evict_task, mock_task2)
+                        self.assertEqual(mock_create_task.call_count, 3)
+                        self.assertEqual(self.service.deactivate_task, mock_task1)
+                        self.assertEqual(self.service.evict_task, mock_task2)
+                        self.assertEqual(self.service.scheduled_agents_task, mock_task3)
 
 
 class TestBackgroundTaskServiceGlobal(unittest.TestCase):
@@ -146,15 +149,18 @@ class TestBackgroundTaskServiceAsync:
             # Mock the async methods to avoid "coroutine was never awaited" warnings
             with patch.object(service, 'deactivate_stale_chat_session_instances', new_callable=AsyncMock):
                 with patch.object(service, 'evict_inactive_executors', new_callable=AsyncMock):
-                    mock_task1 = MagicMock()
-                    mock_task2 = MagicMock()
-                    mock_create_task.side_effect = [mock_task1, mock_task2]
+                    with patch.object(service, 'run_scheduled_agents', new_callable=AsyncMock):
+                        mock_task1 = MagicMock()
+                        mock_task2 = MagicMock()
+                        mock_task3 = MagicMock()
+                        mock_create_task.side_effect = [mock_task1, mock_task2, mock_task3]
 
-                    service.start_background_tasks()
+                        service.start_background_tasks()
 
-                    assert mock_create_task.call_count == 2
-                    assert service.deactivate_task == mock_task1
-                    assert service.evict_task == mock_task2
+                        assert mock_create_task.call_count == 3
+                        assert service.deactivate_task == mock_task1
+                        assert service.evict_task == mock_task2
+                        assert service.scheduled_agents_task == mock_task3
 
 
 if __name__ == "__main__":

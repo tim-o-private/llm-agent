@@ -294,10 +294,8 @@ class TestLoadAgentExecutorDb(unittest.TestCase):
 
         mock_tools_response = MagicMock()
         mock_tools_response.data = self.mock_tools_data # Initially no tools
-        # More complex chaining if needed, but direct assignment for now
-        # This covers .table("agent_tools").select("*").eq("agent_id", ...).eq("is_active", True).order("order").execute()
-        # We might need to make it more specific if table names change or queries become more complex
-        self.db_instance_mock.table.return_value.select.return_value.eq.return_value.eq.return_value.order.return_value.execute.return_value = mock_tools_response
+        # The code chains: .table("agent_tools").select("*").eq("agent_id", ...).eq("is_active", True).eq("is_deleted", False).execute()
+        self.db_instance_mock.table.return_value.select.return_value.eq.return_value.eq.return_value.eq.return_value.execute.return_value = mock_tools_response
 
         # Register SampleNonCRUDTool for tests that might use it
         self.original_tool_registry = TOOL_REGISTRY.copy()
@@ -312,42 +310,95 @@ class TestLoadAgentExecutorDb(unittest.TestCase):
         TOOL_REGISTRY.update(self.original_tool_registry)
 
     def configure_db_responses(self, agent_data, tools_data_list):
+        """Configure mock Supabase responses for agent loading.
+
+        Args:
+            agent_data: Agent config dict or None
+            tools_data_list: List of tool dicts. Each must have 'name', 'type', 'description', 'config'.
+                            Will be split into agent_tools assignments and tools records.
+        """
         # Agent config response
         agent_resp_mock = MagicMock()
         agent_resp_mock.data = agent_data
-        # Tools response
-        tools_resp_mock = MagicMock()
-        tools_resp_mock.data = tools_data_list
 
-        # This setup assumes the call order or uses different mocks if needed
-        # For simplicity, let's assume table('agent_configurations') is called first
-        self.db_instance_mock.table.side_effect = lambda table_name: {
-            'agent_configurations': MagicMock(
-                select=MagicMock(return_value=MagicMock(
-                    eq=MagicMock(return_value=MagicMock(
-                        single=MagicMock(return_value=MagicMock(
-                            execute=MagicMock(return_value=agent_resp_mock)
-                        ))
-                    ))
-                ))
-            ),
-            'agent_tools': MagicMock(
-                select=MagicMock(return_value=MagicMock(
-                    eq=MagicMock(return_value=MagicMock(
+        # Build assignment and tool records from tools_data_list
+        # The new code queries agent_tools for assignments, then tools for each tool
+        assignments = []
+        tool_records = {}
+        for i, tool in enumerate(tools_data_list or []):
+            tool_id = f"tool-uuid-{i}"
+            assignments.append({
+                "id": f"assignment-uuid-{i}",
+                "agent_id": tool.get("agent_id", "agent-uuid-123"),
+                "tool_id": tool_id,
+                "config_override": {},
+                "is_active": True,
+                "is_deleted": False,
+            })
+            tool_records[tool_id] = {
+                "id": tool_id,
+                "name": tool["name"],
+                "type": tool.get("type", "CRUDTool"),
+                "description": tool.get("description", ""),
+                "config": tool.get("config", {}),
+                "is_active": True,
+                "is_deleted": False,
+            }
+
+        assignments_resp_mock = MagicMock()
+        assignments_resp_mock.data = assignments
+
+        def make_table_mock(table_name):
+            if table_name == 'agent_configurations':
+                return MagicMock(
+                    select=MagicMock(return_value=MagicMock(
                         eq=MagicMock(return_value=MagicMock(
-                            order=MagicMock(return_value=MagicMock(
-                                execute=MagicMock(return_value=tools_resp_mock)
+                            single=MagicMock(return_value=MagicMock(
+                                execute=MagicMock(return_value=agent_resp_mock)
                             ))
                         ))
                     ))
-                ))
-            )
-        }[table_name]
+                )
+            elif table_name == 'agent_tools':
+                # .select("*").eq("agent_id", ...).eq("is_active", True).eq("is_deleted", False).execute()
+                chain = MagicMock()
+                chain.select.return_value = chain
+                chain.eq.return_value = chain
+                chain.execute.return_value = assignments_resp_mock
+                return chain
+            elif table_name == 'tools':
+                # .select("*").eq("id", tool_id).eq("is_active", True).eq("is_deleted", False).single().execute()
+                def make_tool_chain():
+                    tool_chain = MagicMock()
+                    captured_tool_id = [None]
+
+                    def eq_handler(field, value):
+                        if field == "id":
+                            captured_tool_id[0] = value
+                        return tool_chain
+
+                    tool_chain.select.return_value = tool_chain
+                    tool_chain.eq.side_effect = eq_handler
+                    tool_chain.single.return_value = tool_chain
+
+                    def execute_handler():
+                        resp = MagicMock()
+                        resp.data = tool_records.get(captured_tool_id[0])
+                        return resp
+
+                    tool_chain.execute.side_effect = execute_handler
+                    return tool_chain
+
+                return make_tool_chain()
+            else:
+                return MagicMock()
+
+        self.db_instance_mock.table.side_effect = make_table_mock
 
     def test_load_executor_success_no_tools(self):
         self.configure_db_responses(self.mock_agent_config_data, []) # No tools
 
-        executor = load_agent_executor_db(self.agent_name, self.user_id, self.session_id)
+        executor = load_agent_executor_db(self.agent_name, self.user_id, self.session_id, use_cache=False)
 
         self.assertEqual(executor, self.mock_executor)
         self.mock_supabase_client.assert_called_once_with("env_supabase_url", "env_supabase_key")
@@ -377,7 +428,7 @@ class TestLoadAgentExecutorDb(unittest.TestCase):
         ]
         self.configure_db_responses(self.mock_agent_config_data, crud_tool_db_data)
 
-        executor = load_agent_executor_db(self.agent_name, self.user_id, self.session_id)
+        executor = load_agent_executor_db(self.agent_name, self.user_id, self.session_id, use_cache=False)
         self.assertEqual(executor, self.mock_executor)
 
         passed_tools_list = self.mock_from_agent_config.call_args.kwargs["tools"]
@@ -390,14 +441,14 @@ class TestLoadAgentExecutorDb(unittest.TestCase):
     def test_load_executor_failure_agent_not_found(self):
         self.configure_db_responses(None, []) # Simulate agent not found
         with self.assertRaisesRegex(ValueError, f"Agent configuration for '{self.agent_name}' not found"):
-            load_agent_executor_db(self.agent_name, self.user_id, self.session_id)
+            load_agent_executor_db(self.agent_name, self.user_id, self.session_id, use_cache=False)
 
     def test_load_executor_failure_missing_supabase_env_vars(self):
         self.patch_getenv.stop() # Stop the patch to remove env vars
         patch.dict(os.environ, clear=True).start() # Clear os.environ for this test case
 
         with self.assertRaisesRegex(ValueError, "Supabase URL and Service Key must be provided"):
-            load_agent_executor_db(self.agent_name, self.user_id, self.session_id)
+            load_agent_executor_db(self.agent_name, self.user_id, self.session_id, use_cache=False)
 
         # Restore for other tests
         patch.dict(os.environ, {

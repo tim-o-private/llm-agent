@@ -17,6 +17,7 @@ from chatServer.database.user_context import with_user_context
 from chatServer.services.vault_token_service import VaultTokenService
 
 
+@pytest.mark.integration
 class TestVaultTokenServiceIntegration:
     """Integration tests using live database connections."""
 

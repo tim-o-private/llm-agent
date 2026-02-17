@@ -19,7 +19,7 @@ if echo "$COMMAND" | grep -qoP 'git\s+-C\s+\S+'; then
 fi
 
 # Block destructive git operations
-if echo "$COMMAND" | grep -qE 'git\s+push\s+.*(-f|--force)'; then
+if echo "$COMMAND" | grep -qE 'git\s+push\s+(.*\s)?(-f(\s|$)|--force(\s|$))'; then
   echo "BLOCKED: git push --force is not allowed. Use regular push or ask the user." >&2
   exit 2
 fi

@@ -6,6 +6,7 @@ import pytest
 from tests.helpers.gmail_integration_helper import GmailIntegrationTestHelper
 
 
+@pytest.mark.integration
 class TestGmailToolsAgentIntegration:
     """Test Gmail tools integration with agent framework."""
 
