@@ -13,9 +13,11 @@ Prioritized task queue. Items move to specs when ready for implementation.
 
 | Priority | ID | Title | Status | Outstanding Work |
 |----------|----|-------|--------|------------------|
-| P1 | SPEC-001 | [Notification System](specs/SPEC-001-notification-system.md) | Tests outstanding | backend-dev: API tests, frontend-dev: component tests |
-| P1 | SPEC-002 | [Telegram Integration](specs/SPEC-002-telegram-integration.md) | Tests outstanding | backend-dev: service + API tests, frontend-dev: component tests |
-| P1 | SPEC-003 | [Scheduled Agent Execution](specs/SPEC-003-scheduled-execution.md) | Tests outstanding | backend-dev: service + integration tests |
+| P0 | SPEC-004 | [Test Coverage](specs/SPEC-004-test-coverage-existing-specs.md) | Ready | 5 parallel tasks: notification tests, telegram tests, scheduled exec tests, NotificationBadge UI tests, TelegramLink UI tests |
+| P1 | SPEC-005 | [Unified Sessions](specs/SPEC-005-unified-sessions.md) | Ready (blocked by SPEC-004) | Migration, chat history API, telegram sessions, scheduled sessions, frontend history loading |
+| P1 | SPEC-001 | [Notification System](specs/SPEC-001-notification-system.md) | Implementation Complete — Tests Outstanding | Covered by SPEC-004 |
+| P1 | SPEC-002 | [Telegram Integration](specs/SPEC-002-telegram-integration.md) | Implementation Complete — Tests Outstanding | Covered by SPEC-004 |
+| P1 | SPEC-003 | [Scheduled Agent Execution](specs/SPEC-003-scheduled-execution.md) | Implementation Complete — Tests Outstanding | Covered by SPEC-004 |
 
 ## Backlog Items (Not Yet Specced)
 
