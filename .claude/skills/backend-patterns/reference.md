@@ -102,6 +102,56 @@ class TaskService:
 
 **Re-raise HTTPException explicitly. Log unexpected errors. Never bare `except:` with vague messages.**
 
+## 5b. Integration Testing Patterns
+
+Test new API endpoints with `httpx.AsyncClient` against the FastAPI app:
+
+```python
+import pytest
+from httpx import ASGITransport, AsyncClient
+from chatServer.main import app
+
+@pytest.fixture
+async def client():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client
+
+@pytest.mark.asyncio
+async def test_get_notifications_requires_auth(client):
+    response = await client.get("/api/notifications")
+    assert response.status_code == 401
+
+@pytest.mark.asyncio
+async def test_get_notifications_returns_list(client, auth_headers):
+    response = await client.get("/api/notifications", headers=auth_headers)
+    assert response.status_code == 200
+    assert isinstance(response.json(), list)
+```
+
+Test service methods by mocking the database client:
+
+```python
+import pytest
+from unittest.mock import AsyncMock, MagicMock
+
+@pytest.fixture
+def mock_db():
+    db = AsyncMock()
+    db.table.return_value = db
+    db.select.return_value = db
+    db.insert.return_value = db
+    db.eq.return_value = db
+    db.execute.return_value = MagicMock(data=[{"id": "test-id"}])
+    return db
+
+@pytest.mark.asyncio
+async def test_notify_user_stores_notification(mock_db):
+    service = NotificationService(mock_db)
+    result = await service.notify_user("user-1", "Title", "Body")
+    mock_db.table.assert_called_with("notifications")
+```
+
 ## 6. Authentication (ES256 JWT)
 
 Supabase issues **ES256** tokens. `chatServer/dependencies/auth.py` handles both ES256 (JWKS) and HS256 (fallback). The `get_current_user` dependency extracts `sub` from JWT.

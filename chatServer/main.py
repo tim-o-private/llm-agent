@@ -35,6 +35,8 @@ try:
     from .routers.actions import router as actions_router
     from .routers.email_agent_router import router as email_agent_router
     from .routers.external_api_router import router as external_api_router
+    from .routers.notifications_router import router as notifications_router
+    from .routers.telegram_router import router as telegram_router
     from .services.chat import get_chat_service
     from .services.prompt_customization import get_prompt_customization_service
 except ImportError:
@@ -51,6 +53,8 @@ except ImportError:
     from routers.actions import router as actions_router
     from routers.email_agent_router import router as email_agent_router
     from routers.external_api_router import router as external_api_router
+    from routers.notifications_router import router as notifications_router
+    from routers.telegram_router import router as telegram_router
     from services.chat import get_chat_service
     from services.prompt_customization import get_prompt_customization_service
 
@@ -94,6 +98,9 @@ else:
     if os.path.exists(dotenv_path):
         load_dotenv(dotenv_path, override=True)
     add_project_root_to_path_for_local_dev()
+
+# Re-read settings now that .env has been loaded (Settings was created before load_dotenv)
+settings.reload_from_env()
 # --- END Inserted Environment & Path Setup ---
 
 # --- Global Cache and Configuration ---
@@ -158,9 +165,34 @@ async def lifespan(app: FastAPI):
     background_service.set_agent_executor_cache(AGENT_EXECUTOR_CACHE)
     background_service.start_background_tasks()
 
+    # Initialize Telegram bot (optional — only if TELEGRAM_BOT_TOKEN is set)
+    telegram_bot = None
+    if settings.telegram_bot_token:
+        try:
+            from .channels.telegram_bot import initialize_telegram_bot
+        except ImportError:
+            from channels.telegram_bot import initialize_telegram_bot
+
+        telegram_bot = initialize_telegram_bot(settings.telegram_bot_token)
+        # Give the bot access to the database for channel lookups
+        try:
+            telegram_bot.set_db_client(supabase_manager.get_client())
+        except Exception:
+            logger.warning("Supabase client not ready for Telegram bot — linking will fail until reconnected")
+        # Set up webhook if URL is configured
+        if settings.telegram_webhook_url:
+            await telegram_bot.setup_webhook(settings.telegram_webhook_url)
+        logger.info("Telegram bot initialized")
+    else:
+        logger.info("Telegram bot not configured (TELEGRAM_BOT_TOKEN not set)")
+
     yield # Application runs here
 
     logger.info("Application shutdown: Cleaning up resources...")
+
+    # Shut down Telegram bot
+    if telegram_bot:
+        await telegram_bot.shutdown()
 
     # Stop background tasks
     await background_service.stop_background_tasks()
@@ -191,6 +223,8 @@ app.add_middleware(
 app.include_router(external_api_router)
 app.include_router(email_agent_router)
 app.include_router(actions_router)
+app.include_router(notifications_router)
+app.include_router(telegram_router)
 
 # --- Logger setup ---
 # Ensure logger is available if not already globally configured

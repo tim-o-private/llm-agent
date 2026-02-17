@@ -10,6 +10,10 @@
 
 Monorepo managed with pnpm workspaces. Database on Supabase (27+ migrations in `supabase/migrations/`).
 
+## Product Vision
+
+Unified agent platform: all channels (web, Telegram, scheduled) share the same agent execution, approval, and notification systems. Every interaction registers in `chat_sessions` with a `channel` tag. See `.claude/skills/product-architecture/SKILL.md` for the full feature map and cross-cutting checklist.
+
 ## Architecture
 
 ```
@@ -32,7 +36,7 @@ llm-agent/
   src/                # Core Python
     core/             #   agent_loader_db.py, customizable_agent.py, llm_interface.py
     cli/              #   CLI entry point
-  config/agents/      # Agent YAML configs (assistant, architect, test_agent)
+  config/agents/      # Agent YAML configs (assistant)
   supabase/           # Migrations and Supabase config
   tests/              # Python tests (pytest)
   docs/               # Architecture docs (chatServer decomposition)
@@ -166,6 +170,75 @@ When you fix a bug or resolve a problem:
 | Bug could have been caught automatically | New or tightened hook |
 | Critical file not listed | CLAUDE.md → Critical Files |
 
+## SDLC Workflow
+
+The project uses an agent-based SDLC for spec execution. See `.claude/skills/sdlc-workflow/SKILL.md` for the quick reference.
+
+### Overview
+
+```
+Spec -> Orchestrator (team lead) -> Domain Agents + Reviewer (teammates) -> PR -> UAT -> Merge
+```
+
+Cross-domain dependency flow: `database-dev → backend-dev → frontend-dev`
+
+### Agent Team
+
+| Agent | Role | Scope | Mode |
+|-------|------|-------|------|
+| `.claude/agents/orchestrator.md` | Team lead — reads specs, creates tasks, writes contracts | All (read-only) | Delegate (no code) |
+| `.claude/agents/database-dev.md` | SQL migrations, RLS, indexes | `supabase/migrations/`, `chatServer/database/` | Full capability |
+| `.claude/agents/backend-dev.md` | Services, routers, models, API | `chatServer/`, `src/` | Full capability |
+| `.claude/agents/frontend-dev.md` | Components, hooks, pages, stores | `webApp/src/` | Full capability |
+| `.claude/agents/deployment-dev.md` | Docker, Fly.io, CI/CD, env config | Dockerfiles, fly.toml, CI/CD | Full capability |
+| `.claude/agents/reviewer.md` | Reviews diffs, checks scope + patterns + tests | All (read-only) | Read-only |
+
+### Cross-Team Contract Format
+
+When one domain agent hands off to another, the orchestrator includes a contract in the task description:
+
+```markdown
+## Contract: [source-agent] -> [target-agent]
+
+### Schema / API / Config provided:
+- [concrete details: table DDL, endpoint paths, env var names]
+
+### What [target] must implement:
+- [specific deliverables]
+
+### Assumptions [target] can make:
+- [things already done and tested by the upstream agent]
+```
+
+### Git Conventions
+
+- **Branch naming:** `feat/SPEC-NNN-short-description`
+- **Commit format:** `SPEC-NNN: <imperative description>` + Co-Authored-By tag
+- **PR-per-functional-unit:** Each self-contained piece (migration, service, API, UI) gets its own branch + PR
+- **Worktrees:** Parallel implementers use `git worktree` for isolated working directories
+
+### Testing Requirements
+
+Every spec must include tests. Every new function gets a test. Missing tests are a BLOCKER in review.
+
+- Python: `pytest tests/` mirroring source structure
+- Frontend: Vitest with `@testing-library/react`
+- Integration: `httpx.AsyncClient` for API, `msw` for frontend API mocking
+
+### Feedback Loop
+
+Agent mistakes are logged in `docs/sdlc/DEVIATIONS.md` with root cause and correction. Corrections update skills, hooks, agent definitions, or CLAUDE.md. See "Resolving Bugs and Problems" below for the pattern.
+
+### Key SDLC Files
+
+| File | Purpose |
+|------|---------|
+| `docs/sdlc/ROADMAP.md` | Milestones and goals |
+| `docs/sdlc/BACKLOG.md` | Prioritized task queue |
+| `docs/sdlc/specs/` | Spec files for autonomous execution |
+| `docs/sdlc/DEVIATIONS.md` | Agent error log and corrections |
+| `.claude/skills/sdlc-workflow/` | Workflow skill (quick ref + full reference) |
+
 ## Known Gotchas
 
 1. **ES256 tokens** — Supabase issues ES256, not HS256. Don't revert auth.py to HS256-only.
@@ -178,3 +251,4 @@ When you fix a bug or resolve a problem:
 8. **Color validation disabled** — `webApp/scripts/validate-colors.js` and `validate:colors` script exist but are removed from the build. The validation rules and tests (`validate:colors`, `validate:focus`) need review — they may not reflect the correct approach for semantic color enforcement with Tailwind. Revisit before re-enabling.
 9. **Gmail tool factory functions** — `chatServer/tools/gmail_tools.py` does NOT export `create_gmail_digest_tool` or `create_gmail_search_tool`. A previous agent hallucinated these. The actual factories are `create_gmail_tool_provider()` and `get_gmail_tools_for_user()`.
 10. **`.gitignore` `lib/` rule** — The root `.gitignore` contains `lib/` (Python packaging). `webApp/src/lib/` is negated with `!webApp/src/lib/`. If you add new `lib/` directories elsewhere, you may need similar negations.
+11. **Settings created before `load_dotenv()`** — `chatServer/main.py` creates the `Settings` singleton at import time, but `load_dotenv()` runs later. Call `settings.reload_from_env()` after `load_dotenv()` so env vars from `.env` are picked up. Without this, any env var only present in `.env` (not shell env) will be `None`.
