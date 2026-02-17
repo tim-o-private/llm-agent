@@ -92,7 +92,7 @@ export function useSubtaskManagement(taskId: string | null): SubtaskManagementHo
 
   // Apply all pending changes to the database
   const applyPendingSubtaskChanges = useCallback(
-    async (currentTaskId: string) => {
+    async (_currentTaskId: string) => {
       if (!optimisticState.isDirty) return;
 
       const { createTask, updateTask, deleteTask } = useTaskStore.getState();

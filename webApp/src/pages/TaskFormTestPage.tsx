@@ -16,11 +16,6 @@ const TaskFormTestPage: React.FC = () => {
     setShowForm(false);
   };
 
-  const handleDeleteSuccess = () => {
-    console.log('Delete success!');
-    setShowForm(false);
-  };
-
   const handleDirtyStateChange = (isDirty: boolean) => {
     console.log('Form dirty state:', isDirty);
   };
@@ -56,7 +51,6 @@ const TaskFormTestPage: React.FC = () => {
             taskId={taskId}
             onSaveSuccess={handleSaveSuccess}
             onCancel={handleCancel}
-            onDeleteSuccess={handleDeleteSuccess}
             onDirtyStateChange={handleDirtyStateChange}
           />
         </div>

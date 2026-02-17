@@ -1,6 +1,6 @@
 import { renderHook, act } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { useTaskModalManagement, ModalType } from '../useTaskModalManagement';
+import { useTaskModalManagement } from '../useTaskModalManagement';
 import { useTaskViewStore } from '@/stores/useTaskViewStore';
 
 // Mock the store

@@ -48,7 +48,7 @@ const TaskForm = React.forwardRef<TaskFormRef, TaskFormProps>(
   ({ taskId, parentTaskId, onSaveSuccess, onCancel, onDirtyStateChange }, ref) => {
     log.debug('Render', { taskId });
 
-    const storeActions = useTaskStore.getState();
+    // useTaskStore.getState() accessed directly in callbacks below
 
     // Transform task to form data
     const transformToForm = React.useCallback(

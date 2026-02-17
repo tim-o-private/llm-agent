@@ -55,7 +55,7 @@ export const AuthCallback: React.FC = () => {
         }));
 
         // First, let Supabase handle the OAuth callback
-        const { data, error } = await supabase.auth.getSession();
+        const { error } = await supabase.auth.getSession();
 
         if (error) {
           throw new Error(`Session error: ${error.message}`);

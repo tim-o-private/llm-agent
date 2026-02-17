@@ -25,7 +25,6 @@ const ColorSwatch: React.FC<ColorSwatchProps> = ({ name, className, cssVariable,
 
   // Check if this is a status-based style that should show text content
   const isStatusStyle = className.includes('min-h-[80px]') || className.includes('flex items-center justify-center');
-  const isTextStyle = className.includes('text-') && className.includes('flex items-center justify-center');
   const isPriorityIndicator = className.includes('w-8 h-8 rounded-full');
 
   return (

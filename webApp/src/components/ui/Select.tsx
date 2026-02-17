@@ -67,7 +67,7 @@ export const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
       size = '2',
       variant = 'surface',
       color,
-      radius,
+      radius: _radius,
 
       // Layout props
       className,

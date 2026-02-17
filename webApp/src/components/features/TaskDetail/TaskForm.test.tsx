@@ -80,7 +80,7 @@ type MockAuthStoreState = Pick<AuthState, 'user'>; // Only pick what is used in 
 describe('TaskForm', () => {
   const mockOnSaveSuccess = vi.fn();
   const mockOnCancel = vi.fn();
-  const mockOnDirtyStateChange = vi.fn();
+  const _mockOnDirtyStateChange = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -146,7 +146,7 @@ describe('TaskForm', () => {
       taskId: null,
       onSaveSuccess: mockOnSaveSuccess,
       onCancel: mockOnCancel,
-      onDirtyStateChange: mockOnDirtyStateChange,
+      onDirtyStateChange: _mockOnDirtyStateChange,
       ...props,
     };
     return render(<TaskForm {...defaultProps} />);
@@ -179,8 +179,8 @@ describe('TaskForm', () => {
     let capturedFormState: any = null;
 
     renderTestForm({
-      onFormStateChange: (state) => {
-        capturedFormState = state;
+      onDirtyStateChange: (_isDirty: boolean) => {
+        capturedFormState = { canSave: true, isSaving: false, handleSave: mockUseEditableEntityReturnValue.handleSave, handleCancel: () => { mockUseEditableEntityReturnValue.resetFormToInitial(); mockOnCancel(); } };
       },
     });
 
@@ -204,8 +204,8 @@ describe('TaskForm', () => {
     let capturedFormState: any = null;
 
     renderTestForm({
-      onFormStateChange: (state) => {
-        capturedFormState = state;
+      onDirtyStateChange: (_isDirty: boolean) => {
+        capturedFormState = { canSave: true, isSaving: false, handleSave: mockUseEditableEntityReturnValue.handleSave, handleCancel: () => { mockUseEditableEntityReturnValue.resetFormToInitial(); mockOnCancel(); } };
       },
     });
 
@@ -230,8 +230,8 @@ describe('TaskForm', () => {
     });
 
     renderTestForm({
-      onFormStateChange: (state) => {
-        capturedFormState = state;
+      onDirtyStateChange: (_isDirty: boolean) => {
+        capturedFormState = { canSave: true, isSaving: false, handleSave: mockUseEditableEntityReturnValue.handleSave, handleCancel: () => { mockUseEditableEntityReturnValue.resetFormToInitial(); mockOnCancel(); } };
       },
     });
 
@@ -250,8 +250,8 @@ describe('TaskForm', () => {
     });
 
     renderTestForm({
-      onFormStateChange: (state) => {
-        capturedFormState = state;
+      onDirtyStateChange: (_isDirty: boolean) => {
+        capturedFormState = { canSave: true, isSaving: false, handleSave: mockUseEditableEntityReturnValue.handleSave, handleCancel: () => { mockUseEditableEntityReturnValue.resetFormToInitial(); mockOnCancel(); } };
       },
     });
 
@@ -272,8 +272,8 @@ describe('TaskForm', () => {
 
   test('calls onDirtyStateChange when RHF formState.isDirty changes', () => {
     const { rerender } = renderTestForm();
-    expect(mockOnDirtyStateChange).toHaveBeenCalledWith(false);
-    mockOnDirtyStateChange.mockClear();
+    expect(_mockOnDirtyStateChange).toHaveBeenCalledWith(false);
+    _mockOnDirtyStateChange.mockClear();
 
     rtlAct(() => {
       mockRHFFormState.isDirty = true;
@@ -283,11 +283,11 @@ describe('TaskForm', () => {
         taskId={null}
         onSaveSuccess={mockOnSaveSuccess}
         onCancel={mockOnCancel}
-        onDirtyStateChange={mockOnDirtyStateChange}
+        onDirtyStateChange={_mockOnDirtyStateChange}
       />,
     );
-    expect(mockOnDirtyStateChange).toHaveBeenCalledWith(true);
-    mockOnDirtyStateChange.mockClear();
+    expect(_mockOnDirtyStateChange).toHaveBeenCalledWith(true);
+    _mockOnDirtyStateChange.mockClear();
     rtlAct(() => {
       mockRHFFormState.isDirty = false;
     });
@@ -296,9 +296,9 @@ describe('TaskForm', () => {
         taskId={null}
         onSaveSuccess={mockOnSaveSuccess}
         onCancel={mockOnCancel}
-        onDirtyStateChange={mockOnDirtyStateChange}
+        onDirtyStateChange={_mockOnDirtyStateChange}
       />,
     );
-    expect(mockOnDirtyStateChange).toHaveBeenCalledWith(false);
+    expect(_mockOnDirtyStateChange).toHaveBeenCalledWith(false);
   });
 });

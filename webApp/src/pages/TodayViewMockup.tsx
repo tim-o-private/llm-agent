@@ -353,8 +353,8 @@ const TodayViewMockup: React.FC = () => {
   }));
 
   const topLevelTasksFromStore = useTaskStore((state) => state.getTopLevelTasks());
-  const { mutate: createFocusSession } = useCreateFocusSession();
-  const { mutate: updateTaskOrderMutation } = useUpdateTaskOrder();
+  const { mutate: _createFocusSession } = useCreateFocusSession();
+  const { mutate: _updateTaskOrderMutation } = useUpdateTaskOrder();
 
   // Card system state
   const availablePanes: PaneType[] = ['tasks', 'chat', 'calendar', 'focus', 'notes'];

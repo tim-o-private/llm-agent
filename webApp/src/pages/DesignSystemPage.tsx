@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 
 const DesignSystemPage: React.FC = () => {
-  const [selectedCard, setSelectedCard] = useState<string | null>(null);
-  const [focusedCard, setFocusedCard] = useState<string | null>(null);
+  const [_selectedCard, _setSelectedCard] = useState<string | null>(null);
+  const [_focusedCard, _setFocusedCard] = useState<string | null>(null);
 
   // Component State Examples
   const ComponentStateExample: React.FC<{

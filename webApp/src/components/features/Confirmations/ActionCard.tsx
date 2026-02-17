@@ -106,7 +106,7 @@ export const ActionCard: React.FC<ActionCardProps> = ({
               {isExpiringSoon && <AlertTriangle className="h-3 w-3" />}
               {formatTimeUntilExpiry(action.expires_at)}
             </span>
-            {action.context.agent_name && <span>Agent: {action.context.agent_name as string}</span>}
+            {action.context.agent_name ? <span>Agent: {String(action.context.agent_name)}</span> : null}
           </div>
         </div>
 
