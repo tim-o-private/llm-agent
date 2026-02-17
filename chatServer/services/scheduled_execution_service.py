@@ -1,0 +1,257 @@
+"""
+Generalized scheduled agent execution service.
+
+Loads any agent from the database, wraps tools with the approval system,
+invokes the agent, and stores the result. Replaces the special-cased
+execution logic in BackgroundTaskService._execute_scheduled_agent.
+
+Pattern mirrors chatServer/services/chat.py:225-258 for approval wrapping.
+"""
+
+import logging
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional
+
+from src.core.agent_loader_db import load_agent_executor_db
+
+try:
+    from ..database.supabase_client import get_supabase_client
+    from ..security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
+    from ..services.audit_service import AuditService
+    from ..services.pending_actions import PendingActionsService
+except ImportError:
+    from chatServer.database.supabase_client import get_supabase_client
+    from chatServer.security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
+    from chatServer.services.audit_service import AuditService
+    from chatServer.services.pending_actions import PendingActionsService
+
+logger = logging.getLogger(__name__)
+
+
+class ScheduledExecutionService:
+    """
+    Executes scheduled agent runs with proper agent loading, approval wrapping,
+    and result storage.
+
+    Unlike the previous approach in BackgroundTaskService, this service:
+    - Always loads agents from DB (never relies on executor cache)
+    - Wraps all tools with the approval system
+    - Stores results in agent_execution_results
+    - Triggers notifications (via NotificationService, when available)
+    """
+
+    async def execute(self, schedule: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Execute a scheduled agent run.
+
+        Args:
+            schedule: Dict with keys: id, user_id, agent_name, prompt, config
+
+        Returns:
+            Dict with success status, output content, and metadata
+        """
+        user_id = schedule["user_id"]
+        agent_name = schedule["agent_name"]
+        prompt = schedule["prompt"]
+        config = schedule.get("config", {})
+        schedule_id = schedule.get("id")
+
+        session_id = f"scheduled_{agent_name}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+        start_time = datetime.now(timezone.utc)
+
+        try:
+            logger.info(f"Executing scheduled agent '{agent_name}' for user {user_id} (schedule {schedule_id})")
+
+            # 1. Load agent from DB — always fresh, never rely on cache
+            agent_executor = load_agent_executor_db(
+                agent_name=agent_name,
+                user_id=user_id,
+                session_id=session_id,
+            )
+
+            # 2. Wrap tools with approval system (mirrors chat.py:225-245)
+            supabase_client = await get_supabase_client()
+            audit_service = AuditService(supabase_client)
+            pending_actions_service = PendingActionsService(
+                db_client=supabase_client,
+                audit_service=audit_service,
+            )
+            approval_context = ApprovalContext(
+                user_id=user_id,
+                session_id=session_id,
+                agent_name=agent_name,
+                db_client=supabase_client,
+                pending_actions_service=pending_actions_service,
+                audit_service=audit_service,
+            )
+            if hasattr(agent_executor, "tools") and agent_executor.tools:
+                wrap_tools_with_approval(agent_executor.tools, approval_context)
+                logger.info(
+                    f"Wrapped {len(agent_executor.tools)} tools with approval for scheduled run of '{agent_name}'"
+                )
+
+            # 3. Invoke the agent
+            response = await agent_executor.ainvoke(
+                {
+                    "input": prompt,
+                    "chat_history": [],  # Fresh context for scheduled runs
+                }
+            )
+
+            # 4. Normalize output (handle content block lists from newer langchain-anthropic)
+            output = response.get("output", "")
+            if isinstance(output, list):
+                output = (
+                    "".join(
+                        block.get("text", "")
+                        for block in output
+                        if isinstance(block, dict) and block.get("type") == "text"
+                    )
+                    or "No text content in response."
+                )
+
+            # 5. Count pending actions created during this run
+            pending_count = await pending_actions_service.get_pending_count(user_id)
+
+            # 6. Store result
+            duration_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+            await self._store_result(
+                supabase_client=supabase_client,
+                user_id=user_id,
+                schedule_id=schedule_id,
+                agent_name=agent_name,
+                prompt=prompt,
+                result_content=output,
+                status="success",
+                pending_actions_created=pending_count,
+                duration_ms=duration_ms,
+            )
+
+            # 7. Notify user
+            await self._notify_user(
+                supabase_client=supabase_client,
+                user_id=user_id,
+                agent_name=agent_name,
+                result_content=output,
+                pending_count=pending_count,
+                config=config,
+            )
+
+            logger.info(
+                f"Scheduled agent '{agent_name}' completed for user {user_id} "
+                f"({duration_ms}ms, {pending_count} pending actions)"
+            )
+
+            return {
+                "success": True,
+                "output": output,
+                "pending_actions_created": pending_count,
+                "duration_ms": duration_ms,
+            }
+
+        except Exception as e:
+            duration_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+            logger.error(
+                f"Scheduled agent '{agent_name}' failed for user {user_id}: {e}",
+                exc_info=True,
+            )
+
+            # Store error result
+            try:
+                supabase_client = await get_supabase_client()
+                await self._store_result(
+                    supabase_client=supabase_client,
+                    user_id=user_id,
+                    schedule_id=schedule_id,
+                    agent_name=agent_name,
+                    prompt=prompt,
+                    result_content=str(e),
+                    status="error",
+                    pending_actions_created=0,
+                    duration_ms=duration_ms,
+                )
+            except Exception as store_err:
+                logger.error(f"Failed to store error result: {store_err}")
+
+            return {
+                "success": False,
+                "error": str(e),
+                "duration_ms": duration_ms,
+            }
+
+    async def _store_result(
+        self,
+        supabase_client,
+        user_id: str,
+        schedule_id: Optional[str],
+        agent_name: str,
+        prompt: str,
+        result_content: str,
+        status: str,
+        pending_actions_created: int,
+        duration_ms: int,
+    ) -> None:
+        """Store execution result in agent_execution_results table."""
+        try:
+            data = {
+                "user_id": user_id,
+                "agent_name": agent_name,
+                "prompt": prompt,
+                "result_content": result_content[:50000] if result_content else None,  # Truncate very long results
+                "status": status,
+                "pending_actions_created": pending_actions_created,
+                "execution_duration_ms": duration_ms,
+                "metadata": {},
+            }
+            if schedule_id:
+                data["schedule_id"] = str(schedule_id)
+
+            await supabase_client.table("agent_execution_results").insert(data).execute()
+            logger.debug(f"Stored execution result for '{agent_name}' (status: {status})")
+
+        except Exception as e:
+            logger.error(f"Failed to store execution result: {e}", exc_info=True)
+
+    async def _notify_user(
+        self,
+        supabase_client,
+        user_id: str,
+        agent_name: str,
+        result_content: str,
+        pending_count: int,
+        config: Dict[str, Any],
+    ) -> None:
+        """Notify the user about the execution result via NotificationService."""
+        try:
+            from chatServer.services.notification_service import NotificationService
+
+            notification_service = NotificationService(supabase_client)
+            channels = config.get("notify_channels")  # e.g., ["telegram", "web"] or None
+
+            # Truncate result for notification body
+            body = result_content[:2000] if result_content else "Agent completed with no output."
+            if pending_count > 0:
+                body += f"\n\n_{pending_count} action{'s' if pending_count != 1 else ''} pending your approval._"
+
+            schedule_type = config.get("schedule_type", "scheduled")
+            category = "heartbeat" if schedule_type == "heartbeat" else "agent_result"
+
+            await notification_service.notify_user(
+                user_id=user_id,
+                title=f"{agent_name} run completed",
+                body=body,
+                category=category,
+                metadata={"agent_name": agent_name, "pending_actions": pending_count},
+                channels=channels,
+            )
+
+            # Also send a separate approval notification if there are pending actions
+            if pending_count > 0:
+                await notification_service.notify_pending_actions(
+                    user_id=user_id,
+                    pending_count=pending_count,
+                    agent_name=agent_name,
+                )
+
+        except Exception as e:
+            logger.warning(f"Failed to send notification (non-fatal): {e}")

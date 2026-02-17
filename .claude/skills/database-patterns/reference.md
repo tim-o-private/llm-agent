@@ -153,3 +153,56 @@ IS 'Ensures unique tool names per user/agent combination';
 ```
 
 **Document every table, non-obvious column, and constraint.**
+
+## 10. Migration and RLS Testing
+
+### Testing Migrations Apply Cleanly
+
+```bash
+# Reset and re-apply all migrations (test environment only)
+supabase db reset
+
+# Verify a specific migration
+supabase migration up --include-all
+```
+
+### Testing RLS Policies
+
+Test that RLS correctly restricts access by simulating different users:
+
+```sql
+-- Test as authenticated user (owner)
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claims', '{"sub":"user-uuid-1", "role":"authenticated"}', true);
+INSERT INTO notifications (user_id, title, body, category)
+VALUES ('user-uuid-1', 'Test', 'Body', 'info');
+-- Should succeed (owner)
+
+-- Verify owner can read their own rows
+SELECT * FROM notifications;
+-- Should return only user-uuid-1's rows
+
+-- Test as different user (non-owner)
+SELECT set_config('request.jwt.claims', '{"sub":"user-uuid-2", "role":"authenticated"}', true);
+SELECT * FROM notifications;
+-- Should return empty (not owner)
+
+-- Test UPDATE restriction
+UPDATE notifications SET read = true WHERE user_id = 'user-uuid-1';
+-- Should affect 0 rows (non-owner)
+```
+
+### Testing RLS in Python
+
+```python
+@pytest.mark.asyncio
+async def test_rls_restricts_to_owner(supabase_client_user1, supabase_client_user2):
+    # User 1 creates a notification
+    await supabase_client_user1.table("notifications").insert({
+        "user_id": "user-1", "title": "Test", "body": "Body", "category": "info"
+    }).execute()
+
+    # User 2 should not see it
+    result = await supabase_client_user2.table("notifications").select("*").execute()
+    assert len(result.data) == 0
+```

@@ -185,22 +185,31 @@ class BackgroundTaskService:
             return False
 
     async def _execute_scheduled_agent(self, schedule: Dict) -> None:
-        """Execute a single scheduled agent."""
+        """Execute a single scheduled agent.
+
+        Email digest schedules use EmailDigestService for backward compatibility.
+        All other schedules use ScheduledExecutionService which properly loads
+        agents from DB and wraps tools with the approval system.
+        """
         schedule_id = schedule.get('id')
         user_id = schedule.get('user_id')
         agent_name = schedule.get('agent_name')
-        prompt = schedule.get('prompt')
+        prompt = schedule.get('prompt', '')
         config = schedule.get('config', {})
 
         try:
             logger.info(f"Executing scheduled agent {agent_name} for user {user_id} (schedule {schedule_id})")
 
-            # Import EmailDigestService here to avoid circular imports
-            from ..services.email_digest_service import EmailDigestService
+            # Email digest schedules use the dedicated EmailDigestService
+            # for backward compatibility (it has its own storage table and extraction logic)
+            is_email_digest = (
+                'email digest' in prompt.lower()
+                and config.get('schedule_type') != 'heartbeat'
+            )
 
-            # Check if this is an email digest schedule
-            if 'email digest' in prompt.lower() or config.get('context') == 'scheduled':
-                # Use EmailDigestService for email digest execution
+            if is_email_digest:
+                from ..services.email_digest_service import EmailDigestService
+
                 service = EmailDigestService(user_id, context="scheduled")
                 result = await service.generate_digest(
                     hours_back=config.get('hours_back', 24),
@@ -213,26 +222,22 @@ class BackgroundTaskService:
                 else:
                     logger.error(f"Scheduled email digest failed for user {user_id}: {result.get('error')}")
             else:
-                # For other types of scheduled agents, use the agent executor cache
-                if self._agent_executor_cache is not None:
-                    executor_key = (user_id, agent_name)
-                    executor = self._agent_executor_cache.get(executor_key)
+                # All other schedules use ScheduledExecutionService
+                from ..services.scheduled_execution_service import ScheduledExecutionService
 
-                    if executor is None:
-                        # Create new executor if not cached
-                        # This would require importing and using the agent creation logic
-                        logger.warning(f"No cached executor for {executor_key}, skipping scheduled execution")
-                        return
+                service = ScheduledExecutionService()
+                result = await service.execute(schedule)
 
-                    # Execute with schedule-specific input
-                    await executor.ainvoke({
-                        "input": prompt,
-                        "chat_history": []  # Fresh context for scheduled runs
-                    })
-
-                    logger.info(f"Scheduled agent {agent_name} completed for user {user_id}")
+                if result.get("success"):
+                    logger.info(
+                        f"Scheduled agent {agent_name} completed for user {user_id} "
+                        f"({result.get('duration_ms', 0)}ms)"
+                    )
                 else:
-                    logger.warning("Agent executor cache not available, skipping scheduled execution")
+                    logger.error(
+                        f"Scheduled agent {agent_name} failed for user {user_id}: "
+                        f"{result.get('error')}"
+                    )
 
         except Exception as e:
             logger.error(f"Scheduled agent execution failed for schedule {schedule_id}: {e}", exc_info=True)

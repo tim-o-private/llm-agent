@@ -1,6 +1,7 @@
 import React from 'react';
 import { Card } from '../../components/ui/Card';
 import { GmailConnection } from '../../components/features/GmailConnection/GmailConnection';
+import { TelegramLink } from '../../components/features/TelegramLink';
 
 export const IntegrationsPage: React.FC = () => {
   return (
@@ -17,6 +18,9 @@ export const IntegrationsPage: React.FC = () => {
             console.log('Gmail connection status:', isConnected);
           }}
         />
+
+        {/* Telegram Integration */}
+        <TelegramLink />
 
         {/* Future integrations can be added here */}
         <Card className="p-6 opacity-50">

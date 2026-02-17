@@ -35,6 +35,23 @@ All colors come from semantic tokens in `tailwind.config.js`, which map to Radix
 <div style={{ backgroundColor: '#3b82f6' }}>
 ```
 
+**Common token names — use these, not invented ones:**
+
+| Purpose | Token | Resolves to |
+|---|---|---|
+| Panel/dropdown background | `bg-ui-element-bg` | `var(--color-panel-solid)` |
+| Subtle highlight (unread) | `bg-ui-bg-alt` | `var(--gray-2)` |
+| Hover state | `bg-ui-interactive-bg` | `var(--gray-3)` |
+| Standard border | `border-ui-border` | `var(--gray-6)` |
+| Dividers | `divide-ui-border` | `var(--gray-6)` |
+| Primary text | `text-text-primary` | `var(--gray-12)` |
+| Secondary text (legible) | `text-text-secondary` | `var(--gray-11)` |
+| Muted text (low contrast) | `text-text-muted` | `var(--gray-9)` — avoid in dark mode panels |
+
+**Warning:** Do NOT invent token names like `bg-surface-primary`, `border-border-primary`, etc. Tailwind silently ignores unknown tokens and generates no CSS. Always verify token names against `tailwind.config.js`.
+
+**`text-text-muted` vs `text-text-secondary`:** Use `text-text-secondary` (`--gray-11`) for body text in dropdowns and panels. `text-text-muted` (`--gray-9`) has insufficient contrast on dark backgrounds. Reserve `text-text-muted` for disabled/placeholder states on light surfaces only.
+
 For CSS files, use raw Radix variables:
 ```css
 .my-component {
@@ -231,3 +248,61 @@ import { supabase } from '../../../lib/supabaseClient';
 ```
 
 `@/` → `src/`, `@components/` → `src/components/`
+
+## 13. Component and Hook Testing
+
+Test components with `@testing-library/react` and user interactions with `@testing-library/user-event`:
+
+```tsx
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { NotificationBadge } from './NotificationBadge';
+
+// Wrap with providers
+function renderWithProviders(ui: React.ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+  );
+}
+
+test('shows unread count badge when count > 0', async () => {
+  // Mock the API response
+  vi.spyOn(global, 'fetch').mockResolvedValueOnce({
+    ok: true,
+    json: () => Promise.resolve({ count: 3 }),
+  } as Response);
+
+  renderWithProviders(<NotificationBadge />);
+  await waitFor(() => {
+    expect(screen.getByText('3')).toBeInTheDocument();
+  });
+});
+
+test('opens dropdown on click', async () => {
+  const user = userEvent.setup();
+  renderWithProviders(<NotificationBadge />);
+
+  await user.click(screen.getByRole('button', { name: /notifications/i }));
+  expect(screen.getByText('Notifications')).toBeInTheDocument();
+});
+```
+
+Test hooks with `msw` (Mock Service Worker) for API mocking:
+
+```tsx
+import { renderHook, waitFor } from '@testing-library/react';
+import { useNotifications } from './useNotificationHooks';
+
+test('fetches notifications when user is authenticated', async () => {
+  // Setup msw handler for /api/notifications
+  const { result } = renderHook(() => useNotifications(), { wrapper });
+  await waitFor(() => expect(result.current.isSuccess).toBe(true));
+  expect(result.current.data).toHaveLength(2);
+});
+```
+
+**Test file naming:** Place test files alongside the component: `NotificationBadge.test.tsx` next to `NotificationBadge.tsx`.
