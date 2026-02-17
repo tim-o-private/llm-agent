@@ -43,13 +43,14 @@ RUN npm install -g pnpm
 RUN pnpm install --frozen-lockfile
 COPY webApp/ ./webApp/
 
-# Secrets mounted at build time (not ARGs, not ENV)
-RUN --mount=type=secret,id=VITE_API_BASE_URL \
-    --mount=type=secret,id=VITE_SUPABASE_ANON_KEY \
-    --mount=type=secret,id=VITE_SUPABASE_URL \
-    VITE_API_BASE_URL="$(cat /run/secrets/VITE_API_BASE_URL)" \
-    VITE_SUPABASE_URL="$(cat /run/secrets/VITE_SUPABASE_URL)" \
-    VITE_SUPABASE_ANON_KEY="$(cat /run/secrets/VITE_SUPABASE_ANON_KEY)" \
+# Build-time ARGs provided by fly.toml [build.args] from Fly secrets
+ARG VITE_API_BASE_URL
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+
+RUN VITE_API_BASE_URL="${VITE_API_BASE_URL}" \
+    VITE_SUPABASE_URL="${VITE_SUPABASE_URL}" \
+    VITE_SUPABASE_ANON_KEY="${VITE_SUPABASE_ANON_KEY}" \
     pnpm --filter clarity-frontend build
 
 # Stage 2: Serve
@@ -62,7 +63,8 @@ CMD ["nginx", "-g", "daemon off;"]
 
 Key points:
 - VITE_ vars are build-time only (baked into JS bundle by Vite)
-- Uses `--mount=type=secret` instead of ARGs for security
+- Uses Docker `ARG` + fly.toml `[build.args]` which resolves `$VAR_NAME` from Fly secrets
+- These are public values (anon key, URLs) visible in the JS bundle anyway
 - Requires `webApp/nginx.conf` for SPA routing (all paths → index.html)
 - `pnpm --filter clarity-frontend build` targets the webApp workspace
 

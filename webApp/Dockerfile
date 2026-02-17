@@ -20,15 +20,17 @@ RUN pnpm install --frozen-lockfile
 # Copy the rest of the webApp source code
 COPY webApp/ ./webApp/
 
+# Build-time args for Vite (provided by fly.toml [build.args] from Fly secrets)
+# These are public values baked into the JS bundle — not truly secret.
+ARG VITE_API_BASE_URL
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+
 # Build the webApp (clarity-frontend)
-# Ensure the package name 'clarity-frontend' matches what's in webApp/package.json
-RUN --mount=type=secret,id=VITE_API_BASE_URL \
---mount=type=secret,id=VITE_SUPABASE_ANON_KEY \
---mount=type=secret,id=VITE_SUPABASE_URL \
-VITE_API_BASE_URL="$(cat /run/secrets/VITE_API_BASE_URL)" \
-VITE_SUPABASE_URL="$(cat /run/secrets/VITE_SUPABASE_URL)" \
-VITE_SUPABASE_ANON_KEY="$(cat /run/secrets/VITE_SUPABASE_ANON_KEY)" \
-pnpm --filter clarity-frontend build
+RUN VITE_API_BASE_URL="${VITE_API_BASE_URL}" \
+    VITE_SUPABASE_URL="${VITE_SUPABASE_URL}" \
+    VITE_SUPABASE_ANON_KEY="${VITE_SUPABASE_ANON_KEY}" \
+    pnpm --filter clarity-frontend build
 
 # Stage 2: Serve the static files with Nginx
 FROM nginx:stable-alpine

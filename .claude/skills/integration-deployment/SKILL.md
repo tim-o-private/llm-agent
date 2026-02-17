@@ -67,14 +67,14 @@ flyctl logs -a clarity-webapp
 | `LLM_AGENT_SRC_PATH` | `src` (set in fly.toml) |
 | `RUNNING_IN_DOCKER` | `true` (set in Dockerfile) |
 
-### webApp (build-time secrets via Docker mount)
+### webApp (build-time ARGs via fly.toml)
 | Variable | Description |
 |----------|-------------|
 | `VITE_SUPABASE_URL` | Supabase project URL (public) |
 | `VITE_SUPABASE_ANON_KEY` | Supabase anon key (public) |
 | `VITE_API_BASE_URL` | chatServer URL (e.g., `https://clarity-chatserver.fly.dev`) |
 
-**webApp secrets are injected at build time** via `--mount=type=secret` in the Dockerfile, NOT as runtime env vars.
+**webApp vars are injected at build time** via Docker `ARG` + fly.toml `[build.args]`. Fly resolves `$VAR_NAME` from runtime secrets. These are NOT truly secret — they're baked into the JS bundle.
 
 ## Detailed Reference
 
