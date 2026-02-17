@@ -7,7 +7,7 @@ app = 'clarity-webapp'
 primary_region = 'iad'
 
 [build]
-  dockerfile = 'Dockerfile'
+  dockerfile = 'webApp/Dockerfile'
 
   [build.args]
     VITE_SUPABASE_ANON_KEY = '$VITE_SUPABASE_ANON_KEY'

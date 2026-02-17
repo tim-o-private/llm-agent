@@ -138,6 +138,34 @@ The `get_current_user` dependency extracts `sub` from the JWT payload.
 | `webApp/tailwind.config.js` | Semantic color tokens |
 | `supabase/migrations/` | Database schema history |
 
+## Resolving Bugs and Problems
+
+**Every bug fix or problem resolution MUST update project documentation.** Code fixes alone are insufficient — the root cause and solution must be captured so the same problem never recurs.
+
+When you fix a bug or resolve a problem:
+
+1. **Determine which documentation to update** (at least one is required):
+   - **CLAUDE.md** — Add to "Known Gotchas" if it's a project-wide footgun or misconception
+   - **Skills** (`.claude/skills/`) — Update the relevant pattern checklist or reference if the fix reveals a pattern violation or a missing pattern
+   - **Hooks** (`.claude/hooks/`, `.claude/settings.json`) — Add or tighten a validation hook if the bug could have been caught automatically
+   - **CLAUDE.md "Critical Files"** — Add the file if it was central to the bug and not already listed
+
+2. **Write it down before closing the task.** The documentation update is part of the fix, not a follow-up.
+
+3. **If the bug reveals a missing pattern**, create or update a skill. Patterns are only useful if they're discoverable.
+
+4. **If the bug could have been caught by a hook**, add the hook. Prevention beats detection.
+
+### What goes where
+
+| Discovery | Update target |
+|-----------|--------------|
+| Misconception about how something works (e.g., ES256 vs HS256) | CLAUDE.md → Known Gotchas |
+| Code written wrong way despite existing pattern | Skill checklist (make the rule more prominent) |
+| No pattern existed for this scenario | New pattern in the relevant skill's reference.md |
+| Bug could have been caught automatically | New or tightened hook |
+| Critical file not listed | CLAUDE.md → Critical Files |
+
 ## Known Gotchas
 
 1. **ES256 tokens** — Supabase issues ES256, not HS256. Don't revert auth.py to HS256-only.
@@ -146,3 +174,4 @@ The `get_current_user` dependency extracts `sub` from the JWT payload.
 4. **Duplicate .env keys** — The root `.env` uses `export` prefix. If a key appears twice, the last one wins with `load_dotenv(override=True)`.
 5. **Supabase client timing** — The Supabase client may not be initialized when agent tools are first wrapped. The approval wrapping logs a non-fatal warning.
 6. **CORS** — Configured in `chatServer/main.py` via `settings.cors_origins`. Both frontend ports must be listed.
+7. **Fly deploy from repo root** — `fly.toml` files live in `chatServer/` and `webApp/`, not the repo root. Use `flyctl deploy --config <app>/fly.toml --dockerfile <app>/Dockerfile` from root. Both Dockerfiles `COPY` paths are relative to the repo root.

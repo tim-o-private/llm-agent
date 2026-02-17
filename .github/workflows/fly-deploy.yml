@@ -5,14 +5,26 @@ on:
   push:
     branches:
       - main
+
 jobs:
-  deploy:
-    name: Deploy app
+  deploy-chatserver:
+    name: Deploy chatServer
     runs-on: ubuntu-latest
-    concurrency: deploy-group    # optional: ensure only one action runs at a time
+    concurrency: deploy-chatserver
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl deploy --remote-only
+      - run: flyctl deploy --remote-only --config chatServer/fly.toml --dockerfile chatServer/Dockerfile
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+  deploy-webapp:
+    name: Deploy webApp
+    runs-on: ubuntu-latest
+    concurrency: deploy-webapp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl deploy --remote-only --config webApp/fly.toml --dockerfile webApp/Dockerfile
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

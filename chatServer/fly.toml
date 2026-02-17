@@ -7,7 +7,7 @@ app = 'clarity-chatserver'
 primary_region = 'iad'
 
 [build]
-  dockerfile = 'Dockerfile'
+  dockerfile = 'chatServer/Dockerfile'
 
 [env]
   PORT = '3001'
