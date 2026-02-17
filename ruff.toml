@@ -1,0 +1,16 @@
+# Ruff configuration for llm-agent Python code
+target-version = "py312"
+line-length = 120
+exclude = [
+    ".venv",
+    ".archive",
+    "node_modules",
+    "build",
+    "dist",
+]
+
+[lint]
+select = ["E", "F", "W", "I"]  # pycodestyle errors/warnings, pyflakes, isort
+
+[lint.isort]
+known-first-party = ["chatServer", "src"]
