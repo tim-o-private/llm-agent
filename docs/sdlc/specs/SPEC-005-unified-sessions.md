@@ -1,6 +1,6 @@
 # SPEC-005: Unified Sessions
 
-> **Status:** Ready
+> **Status:** In Progress
 > **Author:** Tim
 > **Created:** 2026-02-17
 > **Updated:** 2026-02-17

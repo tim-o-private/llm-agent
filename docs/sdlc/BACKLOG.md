@@ -13,18 +13,14 @@ Prioritized task queue. Items move to specs when ready for implementation.
 
 | Priority | ID | Title | Status | Outstanding Work |
 |----------|----|-------|--------|------------------|
-| P0 | SPEC-004 | [Test Coverage](specs/SPEC-004-test-coverage-existing-specs.md) | Ready | 5 parallel tasks: notification tests, telegram tests, scheduled exec tests, NotificationBadge UI tests, TelegramLink UI tests |
-| P1 | SPEC-005 | [Unified Sessions](specs/SPEC-005-unified-sessions.md) | Ready (blocked by SPEC-004) | Migration, chat history API, telegram sessions, scheduled sessions, frontend history loading |
-| P1 | SPEC-001 | [Notification System](specs/SPEC-001-notification-system.md) | Implementation Complete — Tests Outstanding | Covered by SPEC-004 |
-| P1 | SPEC-002 | [Telegram Integration](specs/SPEC-002-telegram-integration.md) | Implementation Complete — Tests Outstanding | Covered by SPEC-004 |
-| P1 | SPEC-003 | [Scheduled Agent Execution](specs/SPEC-003-scheduled-execution.md) | Implementation Complete — Tests Outstanding | Covered by SPEC-004 |
+| P0 | SPEC-005 | [Unified Sessions](specs/SPEC-005-unified-sessions.md) | Ready | Migration, chat history API, telegram sessions, scheduled sessions, frontend history loading |
 
 ## Backlog Items (Not Yet Specced)
 
 | Priority | Title | Notes |
 |----------|-------|-------|
 | P1 | Notification preferences UI | Settings page for per-category channel routing |
-| P1 | Set Telegram env vars on Fly.io | Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_URL` as Fly secrets on `clarity-chatserver` before deploy |
+| ~~P1~~ | ~~Set Telegram env vars on Fly.io~~ | Done — secrets set on `clarity-chatserver` |
 | P2 | Execution results dashboard | View past scheduled runs in webApp |
 | P2 | Agent schedule management UI | CRUD for agent_schedules in webApp |
 | P3 | Slack channel integration | Similar to Telegram pattern via user_channels |
@@ -34,4 +30,7 @@ Prioritized task queue. Items move to specs when ready for implementation.
 
 | ID | Title | Merged |
 |----|-------|--------|
-| — | — | — |
+| SPEC-001 | Notification System | Pre-SDLC |
+| SPEC-002 | Telegram Integration | Pre-SDLC |
+| SPEC-003 | Scheduled Agent Execution | Pre-SDLC |
+| SPEC-004 | Test Coverage for SPEC-001/002/003 | PRs #14-19 |
