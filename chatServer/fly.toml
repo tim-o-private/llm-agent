@@ -6,9 +6,6 @@
 app = 'clarity-chatserver'
 primary_region = 'iad'
 
-[build]
-  dockerfile = 'chatServer/Dockerfile'
-
 [env]
   PORT = '3001'
   LLM_AGENT_SRC_PATH = 'src'
