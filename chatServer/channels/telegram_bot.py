@@ -275,6 +275,18 @@ async def handle_message(message: types.Message) -> None:
 
         session_id = f"telegram_{chat_id}"
 
+        # Upsert chat_sessions row for this Telegram conversation
+        await bot_service._db_client.table("chat_sessions").upsert(
+            {
+                "user_id": user_id,
+                "session_id": session_id,
+                "channel": "telegram",
+                "agent_name": "assistant",
+                "is_active": True,
+            },
+            on_conflict="session_id",
+        ).execute()
+
         agent_executor = load_agent_executor_db(
             agent_name="assistant",
             user_id=user_id,
