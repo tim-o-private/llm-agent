@@ -33,7 +33,10 @@ class TelegramBotService:
     def __init__(self, token: str):
         self.bot = Bot(token=token)
         self.dp = Dispatcher()
-        self.dp.include_router(router)
+        # Guard against re-attaching a module-level router that's already attached
+        # (can happen in tests or if multiple instances are created)
+        if not router.parent_router:
+            self.dp.include_router(router)
         self._db_client = None  # Set after initialization
 
     def set_db_client(self, db_client) -> None:

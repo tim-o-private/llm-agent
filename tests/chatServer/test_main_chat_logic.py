@@ -84,6 +84,37 @@ class TestChatEndpoint(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.stack = AsyncExitStack()
 
+        # Mock lifespan dependencies to avoid real DB/Telegram/cache initialization
+        self._lifespan_patches = []
+
+        # Mock database manager
+        mock_db_manager = AsyncMock()
+        p1 = patch('chatServer.database.connection.get_database_manager', return_value=mock_db_manager)
+
+        # Mock supabase manager
+        mock_supabase_manager = AsyncMock()
+        mock_supabase_manager.get_client.return_value = MagicMock()
+        p2 = patch('chatServer.database.supabase_client.get_supabase_manager', return_value=mock_supabase_manager)
+
+        # Mock tool cache
+        p3 = patch('chatServer.services.tool_cache_service.initialize_tool_cache', new_callable=AsyncMock)
+        p4 = patch('chatServer.services.tool_cache_service.shutdown_tool_cache', new_callable=AsyncMock)
+
+        # Mock background task service
+        mock_bg_service = MagicMock()
+        mock_bg_service.stop_background_tasks = AsyncMock()
+        p5 = patch('chatServer.services.background_tasks.get_background_task_service', return_value=mock_bg_service)
+
+        for p in [p1, p2, p3, p4, p5]:
+            self._lifespan_patches.append(p)
+            p.start()
+
+        # Ensure telegram_bot_token is None so telegram init is skipped
+        from chatServer.config.settings import get_settings
+        self._settings = get_settings()
+        self._orig_telegram_token = self._settings.telegram_bot_token
+        self._settings.telegram_bot_token = None
+
         self.app_lifespan_context = await self.stack.enter_async_context(app.router.lifespan_context(app))
 
         self.patcher_os_environ = patch.dict(os.environ, {
@@ -145,6 +176,13 @@ class TestChatEndpoint(unittest.IsolatedAsyncioTestCase):
         app.dependency_overrides.pop(get_agent_loader, None)
 
         await self.stack.aclose()
+
+        # Stop lifespan patches
+        for p in self._lifespan_patches:
+            p.stop()
+
+        # Restore telegram token
+        self._settings.telegram_bot_token = self._orig_telegram_token
 
     # Test methods remain synchronous as TestClient makes synchronous calls
     def test_chat_new_session_cache_miss(self):

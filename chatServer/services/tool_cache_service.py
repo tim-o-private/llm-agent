@@ -62,7 +62,7 @@ class ToolCacheService:
         """
         return await self.cache_service.get(agent_id)
 
-    @handle_cache_errors("get_cached_tools_for_agent", fallback=lambda agent_id: [])
+    @handle_cache_errors("get_cached_tools_for_agent", fallback=lambda: [])
     async def get_cached_tools_for_agent(self, agent_id: str) -> List[Dict[str, Any]]:
         """
         Get tools for a specific agent from cache.
@@ -82,25 +82,31 @@ class ToolCacheService:
             raise
 
     @handle_cache_errors("invalidate_cache")
-    async def invalidate_cache(self) -> None:
-        """Invalidate the tool cache."""
+    async def invalidate_cache(self, agent_id: Optional[str] = None) -> None:
+        """Invalidate the tool cache.
+
+        Args:
+            agent_id: Specific agent to invalidate, or None for all
+        """
         try:
-            await self.cache_service.invalidate_cache()
-            logger.info("Tool cache invalidated")
+            await self.cache_service.invalidate(agent_id)
+            logger.info(f"Tool cache invalidated{f' for agent {agent_id}' if agent_id else ''}")
         except Exception as e:
             logger.error(f"Failed to invalidate tool cache: {e}")
-            # Error handler will manage this
             raise
 
     @handle_cache_errors("warm_cache")
-    async def warm_cache(self) -> None:
-        """Warm the tool cache by fetching fresh data."""
+    async def warm_cache(self, agent_ids: Optional[List[str]] = None) -> None:
+        """Warm the tool cache by fetching fresh data.
+
+        Args:
+            agent_ids: List of agent IDs to warm, or None for all
+        """
         try:
-            await self.cache_service.warm_cache()
+            await self.cache_service.warm_cache(agent_ids or [])
             logger.info("Tool cache warmed")
         except Exception as e:
             logger.error(f"Failed to warm tool cache: {e}")
-            # Error handler will manage this
             raise
 
     def get_cache_stats(self) -> Dict[str, Any]:
@@ -163,7 +169,7 @@ class ToolCacheService:
             # Error handler will manage this and apply fallback
             raise
 
-    @handle_database_errors("fetch_tools_for_agent", fallback=lambda agent_id: [])
+    @handle_database_errors("fetch_tools_for_agent", fallback=lambda: [])
     async def _fetch_tools_for_agent(self, agent_id: str) -> List[Dict[str, Any]]:
         """
         Fetch tools for a specific agent.

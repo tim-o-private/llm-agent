@@ -156,8 +156,13 @@ class TestVaultToLangChainCredentialAdapter:
             (sample_tokens['refresh_token'],)
         ]
 
-        with pytest.raises(RuntimeError, match="Google OAuth configuration missing"):
-            await adapter.create_google_credentials('user123', 'gmail')
+        # Explicitly clear env vars (load_dotenv from other tests may have set them)
+        env_overrides = {k: '' for k in ('GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET') if k in os.environ}
+        with patch.dict(os.environ, env_overrides, clear=False):
+            for k in ('GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'):
+                os.environ.pop(k, None)
+            with pytest.raises(RuntimeError, match="Google OAuth configuration missing"):
+                await adapter.create_google_credentials('user123', 'gmail')
 
     @pytest.mark.asyncio
     async def test_create_google_credentials_expired_with_refresh(self, adapter, mock_db_connection, sample_tokens, mock_env_vars):
