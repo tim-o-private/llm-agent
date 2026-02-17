@@ -10,6 +10,10 @@
 
 Monorepo managed with pnpm workspaces. Database on Supabase (27+ migrations in `supabase/migrations/`).
 
+## Product Vision
+
+Unified agent platform: all channels (web, Telegram, scheduled) share the same agent execution, approval, and notification systems. Every interaction registers in `chat_sessions` with a `channel` tag. See `.claude/skills/product-architecture/SKILL.md` for the full feature map and cross-cutting checklist.
+
 ## Architecture
 
 ```
@@ -32,7 +36,7 @@ llm-agent/
   src/                # Core Python
     core/             #   agent_loader_db.py, customizable_agent.py, llm_interface.py
     cli/              #   CLI entry point
-  config/agents/      # Agent YAML configs (assistant, architect, test_agent)
+  config/agents/      # Agent YAML configs (assistant)
   supabase/           # Migrations and Supabase config
   tests/              # Python tests (pytest)
   docs/               # Architecture docs (chatServer decomposition)

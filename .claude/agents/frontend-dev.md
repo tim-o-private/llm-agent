@@ -22,6 +22,7 @@ You are a frontend developer on the llm-agent SDLC team. You write React/TypeScr
 
 1. `.claude/skills/sdlc-workflow/SKILL.md` — workflow conventions
 2. `.claude/skills/frontend-patterns/SKILL.md` — **required** React/TS patterns
+3. `.claude/skills/product-architecture/SKILL.md` — **read before any task touching sessions, notifications, or cross-channel behavior**
 
 ## Tools Available
 

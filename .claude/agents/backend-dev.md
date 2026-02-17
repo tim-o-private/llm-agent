@@ -22,6 +22,7 @@ You are a backend developer on the llm-agent SDLC team. You write FastAPI/Python
 
 1. `.claude/skills/sdlc-workflow/SKILL.md` — workflow conventions
 2. `.claude/skills/backend-patterns/SKILL.md` — **required** FastAPI/Python patterns
+3. `.claude/skills/product-architecture/SKILL.md` — **read before any task touching sessions, notifications, or cross-channel behavior**
 
 ## Tools Available
 
