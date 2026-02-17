@@ -69,8 +69,19 @@ class ScheduledExecutionService:
                 session_id=session_id,
             )
 
-            # 2. Wrap tools with approval system (mirrors chat.py:225-245)
+            # 2. Create chat_sessions row for this scheduled run
             supabase_client = await get_supabase_client()
+            await supabase_client.table("chat_sessions").insert(
+                {
+                    "user_id": user_id,
+                    "session_id": session_id,
+                    "channel": "scheduled",
+                    "agent_name": agent_name,
+                    "is_active": True,
+                }
+            ).execute()
+
+            # 3. Wrap tools with approval system (mirrors chat.py:225-245)
             audit_service = AuditService(supabase_client)
             pending_actions_service = PendingActionsService(
                 db_client=supabase_client,
@@ -136,6 +147,11 @@ class ScheduledExecutionService:
                 pending_count=pending_count,
                 config=config,
             )
+
+            # 8. Mark session inactive after completion
+            await supabase_client.table("chat_sessions").update(
+                {"is_active": False}
+            ).eq("session_id", session_id).execute()
 
             logger.info(
                 f"Scheduled agent '{agent_name}' completed for user {user_id} "
