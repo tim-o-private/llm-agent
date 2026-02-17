@@ -8,14 +8,23 @@
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 ERRORS=""
 
+# Detect worktree: if CWD is inside a worktree, use CWD for git checks
+# This handles agents working in git worktrees where CLAUDE_PROJECT_DIR
+# points to the main repo but the agent is on a feature branch
+GIT_DIR="$PROJECT_DIR"
+CURRENT_CWD=$(pwd 2>/dev/null)
+if [ -n "$CURRENT_CWD" ] && [ -d "$CURRENT_CWD/.git" ] || git -C "$CURRENT_CWD" rev-parse --is-inside-work-tree &>/dev/null; then
+  GIT_DIR="$CURRENT_CWD"
+fi
+
 # Check 1: Not on main branch
-CURRENT_BRANCH=$(git -C "$PROJECT_DIR" branch --show-current 2>/dev/null)
+CURRENT_BRANCH=$(git -C "$GIT_DIR" branch --show-current 2>/dev/null)
 if [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRANCH" = "master" ]; then
   ERRORS="${ERRORS}BLOCKED: You are on the '${CURRENT_BRANCH}' branch. Tasks should be completed on feature branches.\n"
 fi
 
 # Check 2: No uncommitted changes
-UNCOMMITTED=$(git -C "$PROJECT_DIR" status --porcelain 2>/dev/null)
+UNCOMMITTED=$(git -C "$GIT_DIR" status --porcelain 2>/dev/null)
 if [ -n "$UNCOMMITTED" ]; then
   ERRORS="${ERRORS}WARNING: Uncommitted changes detected. Commit your work before completing the task.\n"
 fi
