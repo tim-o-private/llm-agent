@@ -1,9 +1,9 @@
-import sys
 import os
+import tempfile
 
 import pytest
-import tempfile
 import yaml
+
 from core.file_parser import read_markdown, read_yaml
 
 # --- Test Data ---
@@ -11,8 +11,8 @@ from core.file_parser import read_markdown, read_yaml
 MARKDOWN_CONTENT = "# Title\n\nThis is *markdown*."
 YAML_CONTENT = "key: value\nlist:\n  - item1\n  - item2\ndict:\n  nested_key: nested_value"
 YAML_DATA = {
-    'key': 'value', 
-    'list': ['item1', 'item2'], 
+    'key': 'value',
+    'list': ['item1', 'item2'],
     'dict': {'nested_key': 'nested_value'}
 }
 INVALID_YAML_CONTENT = "key: value\nlist: [item1, item2"
@@ -77,4 +77,4 @@ def test_read_yaml_invalid(temp_invalid_yaml_file):
 def test_read_yaml_empty(temp_empty_yaml_file):
     """Test that reading an empty YAML file returns an empty dict."""
     data = read_yaml(temp_empty_yaml_file)
-    assert data == {} 
+    assert data == {}

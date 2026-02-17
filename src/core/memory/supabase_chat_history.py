@@ -1,8 +1,9 @@
-from typing import List, Optional, Any
+from typing import List
+
 from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_core.messages import BaseMessage, messages_from_dict, messages_to_dict
-from supabase import AsyncClient, PostgrestAPIResponse
-import json
+
+from supabase import AsyncClient
 from utils.logging_utils import get_logger
 
 # Get a logger for this module
@@ -37,7 +38,7 @@ class SupabaseChatMessageHistory(BaseChatMessageHistory):
                 .eq(self.session_id_column, self.session_id)\
                 .order(self.message_idx_column, desc=False)\
                 .execute()
-            
+
             logger.debug(f"Supabase select response for messages: {response}")
 
             if response.data:
@@ -55,7 +56,7 @@ class SupabaseChatMessageHistory(BaseChatMessageHistory):
                     if m_data["role"].lower() == "tool" and "name" in additional_kwargs:
                          message_dict["data"]["name"] = additional_kwargs["name"]
                     items.append(message_dict)
-                
+
                 loaded_messages = messages_from_dict(items)
                 logger.info(f"Successfully retrieved and parsed {len(loaded_messages)} messages for session_id: {self.session_id}")
                 return loaded_messages
@@ -68,15 +69,15 @@ class SupabaseChatMessageHistory(BaseChatMessageHistory):
 
     async def add_message(self, message: BaseMessage) -> None:
         """Append the message to the record in Supabase"""
-        
+
         # Determine the next message index by fetching current messages asynchronously
         current_messages = await self.aget_messages() # Use the new async method
         next_idx = len(current_messages)
         logger.debug(f"Current message count for session {self.session_id} is {next_idx}. Adding new message at this index.")
 
         message_dict = messages_to_dict([message])[0]
-        
-        role = message_dict["type"] 
+
+        role = message_dict["type"]
         content = message_dict["data"]["content"]
         additional_kwargs = message_dict["data"].get("additional_kwargs", {})
 
@@ -88,7 +89,7 @@ class SupabaseChatMessageHistory(BaseChatMessageHistory):
             self.message_idx_column: next_idx,
             "role": role,
             "content": content,
-            "additional_kwargs": additional_kwargs if additional_kwargs else None, 
+            "additional_kwargs": additional_kwargs if additional_kwargs else None,
         }
 
         try:
@@ -113,5 +114,5 @@ class SupabaseChatMessageHistory(BaseChatMessageHistory):
         #         self.session_id_column, self.session_id
         #     ).execute() # This would need await
         # except Exception as e:
-        #     # print(f"Error clearing messages: {e}") 
-        #     pass 
+        #     # print(f"Error clearing messages: {e}")
+        #     pass

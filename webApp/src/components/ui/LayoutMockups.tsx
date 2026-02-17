@@ -14,7 +14,7 @@ import {
   ListBulletIcon,
   MagnifyingGlassIcon,
   PlusIcon,
-  ArrowTopRightIcon
+  ArrowTopRightIcon,
 } from '@radix-ui/react-icons';
 
 // Mock data for demonstrations
@@ -31,7 +31,7 @@ const mockTasks: Task[] = [
     updated_at: new Date().toISOString(),
   },
   {
-    id: '2', 
+    id: '2',
     user_id: 'demo',
     title: 'Implement pane navigation',
     status: 'pending',
@@ -43,7 +43,7 @@ const mockTasks: Task[] = [
   },
   {
     id: '3',
-    user_id: 'demo', 
+    user_id: 'demo',
     title: 'Create widget dashboard',
     status: 'planning',
     priority: 1,
@@ -51,7 +51,7 @@ const mockTasks: Task[] = [
     deleted: false,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
-  }
+  },
 ];
 
 type LayoutMode = 'traditional' | 'panes' | 'widgets' | 'hybrid';
@@ -60,33 +60,33 @@ type PaneType = 'tasks' | 'chat' | 'calendar' | 'focus';
 export const LayoutMockups: React.FC = () => {
   const [layoutMode, setLayoutMode] = useState<LayoutMode>('traditional');
   const [paneOrder] = useState<PaneType[]>(['tasks', 'chat', 'calendar', 'focus']);
-  
+
   // New state for primary/secondary pane system
   const [primaryPane, setPrimaryPane] = useState<PaneType>('tasks');
   const [secondaryPane, setSecondaryPane] = useState<PaneType>('chat');
   const [focusedPane, setFocusedPane] = useState<'primary' | 'secondary'>('primary');
-  
+
   // State for exit animations
   const [exitingPrimaryPane, setExitingPrimaryPane] = useState<PaneType | null>(null);
   const [exitingSecondaryPane, setExitingSecondaryPane] = useState<PaneType | null>(null);
-  
+
   // Functions to handle pane switching with exit animations
   const switchPrimaryPane = (newPane: PaneType) => {
     if (newPane === primaryPane) return;
-    
+
     setExitingPrimaryPane(primaryPane);
     setPrimaryPane(newPane);
-    
+
     // Clear exit state after animation
     setTimeout(() => setExitingPrimaryPane(null), 500);
   };
-  
+
   const switchSecondaryPane = (newPane: PaneType) => {
     if (newPane === secondaryPane) return;
-    
+
     setExitingSecondaryPane(secondaryPane);
     setSecondaryPane(newPane);
-    
+
     // Clear exit state after animation
     setTimeout(() => setExitingSecondaryPane(null), 500);
   };
@@ -95,7 +95,7 @@ export const LayoutMockups: React.FC = () => {
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (layoutMode !== 'panes') return;
-      
+
       // Cmd/Ctrl + 1-4 for quick pane switching
       if ((e.metaKey || e.ctrlKey) && e.key >= '1' && e.key <= '4') {
         e.preventDefault();
@@ -109,26 +109,26 @@ export const LayoutMockups: React.FC = () => {
           }
         }
       }
-      
+
       // Tab to switch focus between primary/secondary
       if (e.key === 'Tab' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
         e.preventDefault();
         setFocusedPane(focusedPane === 'primary' ? 'secondary' : 'primary');
       }
-      
+
       // Arrow keys to cycle through panes in focused area
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
         e.preventDefault();
         const currentPane = focusedPane === 'primary' ? primaryPane : secondaryPane;
         const currentIndex = paneOrder.indexOf(currentPane);
         let nextIndex;
-        
+
         if (e.key === 'ArrowRight') {
           nextIndex = currentIndex < paneOrder.length - 1 ? currentIndex + 1 : 0;
         } else {
           nextIndex = currentIndex > 0 ? currentIndex - 1 : paneOrder.length - 1;
         }
-        
+
         const nextPane = paneOrder[nextIndex];
         if (focusedPane === 'primary') {
           switchPrimaryPane(nextPane);
@@ -142,7 +142,14 @@ export const LayoutMockups: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [layoutMode, focusedPane, primaryPane, secondaryPane, paneOrder]);
 
-  const renderPane = (paneType: PaneType, _isActive: boolean = true, isPrimary?: boolean, isFocused?: boolean, stackDepth: number = 0, isExiting: boolean = false) => {
+  const renderPane = (
+    paneType: PaneType,
+    _isActive: boolean = true,
+    isPrimary?: boolean,
+    isFocused?: boolean,
+    stackDepth: number = 0,
+    isExiting: boolean = false,
+  ) => {
     const baseClasses = clsx(
       'rounded-xl border transition-all duration-500 ease-out h-full relative',
       'shadow-elevated',
@@ -155,14 +162,14 @@ export const LayoutMockups: React.FC = () => {
       stackDepth > 0 && 'bg-ui-surface border-ui-border/40',
       stackDepth > 1 && 'bg-ui-surface/80 border-ui-border/30',
       // Exit animation styles
-      isExiting && 'opacity-0'
+      isExiting && 'opacity-0',
     );
 
     // Calculate transform for stacking effect with horizontal offset
     // Primary pane: stack to the left, Secondary pane: stack to the right
     let horizontalOffset = 0;
     let verticalOffset = 0;
-    
+
     if (isExiting) {
       // Exit animation: fly out to the side and fade
       horizontalOffset = isPrimary ? -200 : 200;
@@ -171,11 +178,12 @@ export const LayoutMockups: React.FC = () => {
       horizontalOffset = isPrimary ? -stackDepth * 20 : stackDepth * 20;
       verticalOffset = stackDepth * 8;
     }
-    
-    const transform = (stackDepth > 0 || isExiting) ? 
-      `translateX(${horizontalOffset}px) translateY(${verticalOffset}px) translateZ(-${stackDepth * 10}px) scale(${isExiting ? 0.8 : 1 - stackDepth * 0.05})` : 
-      'translateX(0px) translateY(0px) translateZ(0px) scale(1)';
-    
+
+    const transform =
+      stackDepth > 0 || isExiting
+        ? `translateX(${horizontalOffset}px) translateY(${verticalOffset}px) translateZ(-${stackDepth * 10}px) scale(${isExiting ? 0.8 : 1 - stackDepth * 0.05})`
+        : 'translateX(0px) translateY(0px) translateZ(0px) scale(1)';
+
     const style = {
       transform,
       zIndex: 10 - stackDepth,
@@ -189,8 +197,12 @@ export const LayoutMockups: React.FC = () => {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center space-x-2">
                 <h3 className="text-lg font-semibold text-text-primary">Tasks</h3>
-                {isPrimary && <span className="text-xs bg-brand-primary/20 text-brand-primary px-2 py-1 rounded-full">Primary</span>}
-                {!isPrimary && <span className="text-xs bg-ui-border/50 text-text-muted px-2 py-1 rounded-full">Secondary</span>}
+                {isPrimary && (
+                  <span className="text-xs bg-brand-primary/20 text-brand-primary px-2 py-1 rounded-full">Primary</span>
+                )}
+                {!isPrimary && (
+                  <span className="text-xs bg-ui-border/50 text-text-muted px-2 py-1 rounded-full">Secondary</span>
+                )}
               </div>
               <ListBulletIcon className="h-5 w-5 text-text-muted" />
             </div>
@@ -200,7 +212,7 @@ export const LayoutMockups: React.FC = () => {
               </div>
             )}
             <div className="space-y-3">
-              {mockTasks.slice(0, 3).map(task => (
+              {mockTasks.slice(0, 3).map((task) => (
                 <div key={task.id} className="scale-90 origin-left">
                   <TaskCard
                     {...task}
@@ -226,8 +238,12 @@ export const LayoutMockups: React.FC = () => {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center space-x-2">
                 <h3 className="text-lg font-semibold text-text-primary">AI Assistant</h3>
-                {isPrimary && <span className="text-xs bg-brand-primary/20 text-brand-primary px-2 py-1 rounded-full">Primary</span>}
-                {!isPrimary && <span className="text-xs bg-ui-border/50 text-text-muted px-2 py-1 rounded-full">Secondary</span>}
+                {isPrimary && (
+                  <span className="text-xs bg-brand-primary/20 text-brand-primary px-2 py-1 rounded-full">Primary</span>
+                )}
+                {!isPrimary && (
+                  <span className="text-xs bg-ui-border/50 text-text-muted px-2 py-1 rounded-full">Secondary</span>
+                )}
               </div>
               <ChatBubbleIcon className="h-5 w-5 text-text-muted" />
             </div>
@@ -238,13 +254,19 @@ export const LayoutMockups: React.FC = () => {
             )}
             <div className="space-y-3">
               <div className="bg-ui-surface/60 rounded-lg p-3">
-                <p className="text-sm text-text-secondary">I can help you organize your tasks, set priorities, or switch your workspace layout. What would you like to focus on?</p>
+                <p className="text-sm text-text-secondary">
+                  I can help you organize your tasks, set priorities, or switch your workspace layout. What would you
+                  like to focus on?
+                </p>
               </div>
               <div className="bg-brand-surface/60 rounded-lg p-3 ml-8">
                 <p className="text-sm text-brand-primary">Show me my high priority tasks in the primary pane</p>
               </div>
               <div className="bg-ui-surface/60 rounded-lg p-3">
-                <p className="text-sm text-text-secondary">✨ I've switched your primary pane to show high-priority tasks. Would you like me to open your calendar in the secondary pane to see upcoming deadlines?</p>
+                <p className="text-sm text-text-secondary">
+                  ✨ I've switched your primary pane to show high-priority tasks. Would you like me to open your
+                  calendar in the secondary pane to see upcoming deadlines?
+                </p>
               </div>
             </div>
             {!isPrimary && (
@@ -263,15 +285,20 @@ export const LayoutMockups: React.FC = () => {
               <CalendarIcon className="h-5 w-5 text-text-muted" />
             </div>
             <div className="grid grid-cols-7 gap-1 text-xs">
-              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(day => (
-                <div key={day} className="text-center p-2 text-text-muted font-medium">{day}</div>
+              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day) => (
+                <div key={day} className="text-center p-2 text-text-muted font-medium">
+                  {day}
+                </div>
               ))}
-              {Array.from({length: 35}, (_, i) => (
-                <div key={i} className={clsx(
-                  'text-center p-2 rounded',
-                  i === 15 && 'bg-brand-primary text-white',
-                  i > 7 && i < 28 && 'text-text-primary hover:bg-ui-interactive-bg-hover'
-                )}>
+              {Array.from({ length: 35 }, (_, i) => (
+                <div
+                  key={i}
+                  className={clsx(
+                    'text-center p-2 rounded',
+                    i === 15 && 'bg-brand-primary text-white',
+                    i > 7 && i < 28 && 'text-text-primary hover:bg-ui-interactive-bg-hover',
+                  )}
+                >
                   {i > 7 && i < 28 ? i - 7 : ''}
                 </div>
               ))}
@@ -312,7 +339,7 @@ export const LayoutMockups: React.FC = () => {
           <Button variant="soft">Settings</Button>
         </div>
       </div>
-      
+
       <div className="flex-1 flex">
         {/* Sidebar */}
         <div className="w-64 bg-ui-element-bg border-r border-ui-border p-4">
@@ -331,11 +358,9 @@ export const LayoutMockups: React.FC = () => {
             </Button>
           </div>
         </div>
-        
+
         {/* Main Content */}
-        <div className="flex-1 p-6">
-          {renderPane('tasks')}
-        </div>
+        <div className="flex-1 p-6">{renderPane('tasks')}</div>
       </div>
     </div>
   );
@@ -346,7 +371,7 @@ export const LayoutMockups: React.FC = () => {
       <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-20">
         <div className="bg-ui-element-bg/40 backdrop-blur-glass rounded-lg border border-ui-border-glow/30 px-4 py-2 shadow-glow">
           <div className="text-xs text-text-muted text-center">
-            <span className="font-medium text-brand-primary">Primary/Secondary Workspace</span> • 
+            <span className="font-medium text-brand-primary">Primary/Secondary Workspace</span> •
             <span className="ml-1">Tab: Switch focus • ⌘1-4: Quick switch • ←→: Navigate</span>
           </div>
         </div>
@@ -366,9 +391,9 @@ export const LayoutMockups: React.FC = () => {
                   className={clsx(
                     'px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-300',
                     'backdrop-blur-sm border',
-                    primaryPane === pane 
-                      ? 'bg-brand-primary/80 text-white shadow-glow border-brand-primary/50' 
-                      : 'bg-ui-element-bg/30 text-text-muted hover:text-text-primary hover:bg-ui-interactive-bg-hover/50 border-ui-border/30'
+                    primaryPane === pane
+                      ? 'bg-brand-primary/80 text-white shadow-glow border-brand-primary/50'
+                      : 'bg-ui-element-bg/30 text-text-muted hover:text-text-primary hover:bg-ui-interactive-bg-hover/50 border-ui-border/30',
                   )}
                 >
                   {pane.charAt(0).toUpperCase() + pane.slice(1)}
@@ -388,9 +413,9 @@ export const LayoutMockups: React.FC = () => {
                   className={clsx(
                     'px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-300',
                     'backdrop-blur-sm border',
-                    secondaryPane === pane 
-                      ? 'bg-ui-border/60 text-text-primary shadow-glow border-ui-border/50' 
-                      : 'bg-ui-element-bg/20 text-text-muted hover:text-text-primary hover:bg-ui-interactive-bg-hover/30 border-ui-border/20'
+                    secondaryPane === pane
+                      ? 'bg-ui-border/60 text-text-primary shadow-glow border-ui-border/50'
+                      : 'bg-ui-element-bg/20 text-text-muted hover:text-text-primary hover:bg-ui-interactive-bg-hover/30 border-ui-border/20',
                   )}
                 >
                   {pane.charAt(0).toUpperCase() + pane.slice(1)}
@@ -404,10 +429,10 @@ export const LayoutMockups: React.FC = () => {
       {/* Split Screen Layout */}
       <div className="h-full flex pt-32 pb-8 px-8 space-x-4 overflow-visible" style={{ perspective: '1000px' }}>
         {/* Primary Pane Stack - Left Side (60% width) with left padding for stack visibility */}
-        <div 
+        <div
           className={clsx(
             'relative transition-all duration-300 cursor-pointer overflow-visible',
-            focusedPane === 'primary' && 'ring-2 ring-brand-primary/20 rounded-xl'
+            focusedPane === 'primary' && 'ring-2 ring-brand-primary/20 rounded-xl',
           )}
           onClick={() => setFocusedPane('primary')}
           style={{ flexBasis: '60%', transformStyle: 'preserve-3d', paddingLeft: '48px' }}
@@ -415,32 +440,33 @@ export const LayoutMockups: React.FC = () => {
           {/* Render active pane and up to 2 stacked panes, plus exiting pane */}
           {(() => {
             const panesToRender = [];
-            
+
             // Add regular panes (active + stacked)
             paneOrder.forEach((pane) => {
               const isActive = pane === primaryPane;
-              
+
               if (isActive) {
                 panesToRender.push({ pane, isActive: true, isExiting: false, stackDepth: 0 });
               } else {
                 const activeIndex = paneOrder.indexOf(primaryPane);
                 const paneIndex = paneOrder.indexOf(pane);
-                const stackDepth = paneIndex > activeIndex ? 
-                  Math.min(paneIndex - activeIndex, 2) : 
-                  Math.min(paneOrder.length - activeIndex + paneIndex, 2);
-                
+                const stackDepth =
+                  paneIndex > activeIndex
+                    ? Math.min(paneIndex - activeIndex, 2)
+                    : Math.min(paneOrder.length - activeIndex + paneIndex, 2);
+
                 // Only add if within stack limit
                 if (stackDepth <= 2) {
                   panesToRender.push({ pane, isActive: false, isExiting: false, stackDepth });
                 }
               }
             });
-            
+
             // Add exiting pane if it exists and is different from current panes
             if (exitingPrimaryPane && exitingPrimaryPane !== primaryPane) {
               panesToRender.push({ pane: exitingPrimaryPane, isActive: false, isExiting: true, stackDepth: 0 });
             }
-            
+
             return panesToRender.map(({ pane, isActive, isExiting, stackDepth }) => (
               <div
                 key={`primary-${pane}-${isExiting ? 'exiting' : 'normal'}`}
@@ -449,11 +475,11 @@ export const LayoutMockups: React.FC = () => {
                   // Active card: positioned away from left edge to show stacked cards
                   isActive && 'left-8 right-0 top-0 bottom-0',
                   // Stacked and exiting cards: can extend into left padding area
-                  (!isActive || isExiting) && 'left-0 right-0 top-0 bottom-0'
+                  (!isActive || isExiting) && 'left-0 right-0 top-0 bottom-0',
                 )}
-                style={{ 
+                style={{
                   zIndex: isActive ? 10 : isExiting ? 15 : 10 - stackDepth,
-                  pointerEvents: isActive ? 'auto' : 'none'
+                  pointerEvents: isActive ? 'auto' : 'none',
                 }}
               >
                 {renderPane(pane, isActive, true, focusedPane === 'primary' && isActive, stackDepth, isExiting)}
@@ -463,10 +489,10 @@ export const LayoutMockups: React.FC = () => {
         </div>
 
         {/* Secondary Pane Stack - Right Side (40% width) with right padding for stack visibility */}
-        <div 
+        <div
           className={clsx(
             'relative transition-all duration-300 cursor-pointer overflow-visible',
-            focusedPane === 'secondary' && 'ring-2 ring-ui-border/30 rounded-xl'
+            focusedPane === 'secondary' && 'ring-2 ring-ui-border/30 rounded-xl',
           )}
           onClick={() => setFocusedPane('secondary')}
           style={{ flexBasis: '40%', transformStyle: 'preserve-3d', paddingRight: '48px' }}
@@ -474,32 +500,33 @@ export const LayoutMockups: React.FC = () => {
           {/* Render active pane and up to 2 stacked panes, plus exiting pane */}
           {(() => {
             const panesToRender = [];
-            
+
             // Add regular panes (active + stacked)
             paneOrder.forEach((pane) => {
               const isActive = pane === secondaryPane;
-              
+
               if (isActive) {
                 panesToRender.push({ pane, isActive: true, isExiting: false, stackDepth: 0 });
               } else {
                 const activeIndex = paneOrder.indexOf(secondaryPane);
                 const paneIndex = paneOrder.indexOf(pane);
-                const stackDepth = paneIndex > activeIndex ? 
-                  Math.min(paneIndex - activeIndex, 2) : 
-                  Math.min(paneOrder.length - activeIndex + paneIndex, 2);
-                
+                const stackDepth =
+                  paneIndex > activeIndex
+                    ? Math.min(paneIndex - activeIndex, 2)
+                    : Math.min(paneOrder.length - activeIndex + paneIndex, 2);
+
                 // Only add if within stack limit
                 if (stackDepth <= 2) {
                   panesToRender.push({ pane, isActive: false, isExiting: false, stackDepth });
                 }
               }
             });
-            
+
             // Add exiting pane if it exists and is different from current panes
             if (exitingSecondaryPane && exitingSecondaryPane !== secondaryPane) {
               panesToRender.push({ pane: exitingSecondaryPane, isActive: false, isExiting: true, stackDepth: 0 });
             }
-            
+
             return panesToRender.map(({ pane, isActive, isExiting, stackDepth }) => (
               <div
                 key={`secondary-${pane}-${isExiting ? 'exiting' : 'normal'}`}
@@ -508,11 +535,11 @@ export const LayoutMockups: React.FC = () => {
                   // Active card: positioned away from right edge to show stacked cards
                   isActive && 'left-0 right-8 top-0 bottom-0',
                   // Stacked and exiting cards: can extend into right padding area
-                  (!isActive || isExiting) && 'left-0 right-0 top-0 bottom-0'
+                  (!isActive || isExiting) && 'left-0 right-0 top-0 bottom-0',
                 )}
-                style={{ 
+                style={{
                   zIndex: isActive ? 10 : isExiting ? 15 : 10 - stackDepth,
-                  pointerEvents: isActive ? 'auto' : 'none'
+                  pointerEvents: isActive ? 'auto' : 'none',
                 }}
               >
                 {renderPane(pane, isActive, false, focusedPane === 'secondary' && isActive, stackDepth, isExiting)}
@@ -526,7 +553,7 @@ export const LayoutMockups: React.FC = () => {
       <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-20">
         <div className="bg-ui-element-bg/40 backdrop-blur-glass rounded-lg border border-ui-border-glow/30 px-4 py-2 shadow-glow">
           <div className="text-xs text-text-muted flex items-center space-x-2">
-            <span className="font-medium text-brand-primary">{primaryPane}</span> 
+            <span className="font-medium text-brand-primary">{primaryPane}</span>
             <span className="text-ui-border">+</span>
             <span className="font-medium">{secondaryPane}</span>
             {focusedPane === 'primary' && <span className="text-brand-primary">← Primary stack focused</span>}
@@ -553,18 +580,12 @@ export const LayoutMockups: React.FC = () => {
           </Button>
         </div>
       </div>
-      
+
       {/* Grid Layout */}
       <div className="grid grid-cols-3 gap-4 h-full">
-        <div className="col-span-2 row-span-3">
-          {renderPane('tasks')}
-        </div>
-        <div className="row-span-2">
-          {renderPane('chat')}
-        </div>
-        <div className="row-span-1">
-          {renderPane('calendar')}
-        </div>
+        <div className="col-span-2 row-span-3">{renderPane('tasks')}</div>
+        <div className="row-span-2">{renderPane('chat')}</div>
+        <div className="row-span-1">{renderPane('calendar')}</div>
       </div>
     </div>
   );
@@ -595,7 +616,7 @@ export const LayoutMockups: React.FC = () => {
             </button>
           </div>
         </div>
-        
+
         <div className="grid grid-cols-2 gap-4 h-1/3">
           <div className="relative">
             {renderPane('chat')}
@@ -623,9 +644,9 @@ export const LayoutMockups: React.FC = () => {
             onClick={() => setLayoutMode('traditional')}
             className={clsx(
               'p-2 rounded-md transition-all duration-200',
-              layoutMode === 'traditional' 
-                ? 'bg-brand-primary text-white' 
-                : 'text-text-muted hover:text-text-primary hover:bg-ui-interactive-bg-hover'
+              layoutMode === 'traditional'
+                ? 'bg-brand-primary text-white'
+                : 'text-text-muted hover:text-text-primary hover:bg-ui-interactive-bg-hover',
             )}
             title="Traditional Layout"
           >
@@ -635,9 +656,9 @@ export const LayoutMockups: React.FC = () => {
             onClick={() => setLayoutMode('panes')}
             className={clsx(
               'p-2 rounded-md transition-all duration-200',
-              layoutMode === 'panes' 
-                ? 'bg-brand-primary text-white' 
-                : 'text-text-muted hover:text-text-primary hover:bg-ui-interactive-bg-hover'
+              layoutMode === 'panes'
+                ? 'bg-brand-primary text-white'
+                : 'text-text-muted hover:text-text-primary hover:bg-ui-interactive-bg-hover',
             )}
             title="Sliding Panes"
           >
@@ -647,9 +668,9 @@ export const LayoutMockups: React.FC = () => {
             onClick={() => setLayoutMode('widgets')}
             className={clsx(
               'p-2 rounded-md transition-all duration-200',
-              layoutMode === 'widgets' 
-                ? 'bg-brand-primary text-white' 
-                : 'text-text-muted hover:text-text-primary hover:bg-ui-interactive-bg-hover'
+              layoutMode === 'widgets'
+                ? 'bg-brand-primary text-white'
+                : 'text-text-muted hover:text-text-primary hover:bg-ui-interactive-bg-hover',
             )}
             title="Widget Dashboard"
           >
@@ -659,9 +680,9 @@ export const LayoutMockups: React.FC = () => {
             onClick={() => setLayoutMode('hybrid')}
             className={clsx(
               'p-2 rounded-md transition-all duration-200',
-              layoutMode === 'hybrid' 
-                ? 'bg-brand-primary text-white' 
-                : 'text-text-muted hover:text-text-primary hover:bg-ui-interactive-bg-hover'
+              layoutMode === 'hybrid'
+                ? 'bg-brand-primary text-white'
+                : 'text-text-muted hover:text-text-primary hover:bg-ui-interactive-bg-hover',
             )}
             title="Hybrid Layout"
           >
@@ -677,4 +698,4 @@ export const LayoutMockups: React.FC = () => {
       {layoutMode === 'hybrid' && renderHybridLayout()}
     </div>
   );
-}; 
+};

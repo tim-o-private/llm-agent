@@ -1,50 +1,50 @@
 /**
  * Global Logging Manager
- * 
+ *
  * This module provides a centralized logging system with configurable log levels.
- * 
+ *
  * ## Usage:
- * 
+ *
  * ### Component Logging:
  * ```typescript
  * import { createComponentLogger } from '@/utils/logger';
- * 
+ *
  * const log = createComponentLogger('MyComponent');
- * 
+ *
  * log.debug('Debug message', { data: 'value' });
  * log.info('Info message');
  * log.warn('Warning message');
  * log.error('Error message', error);
  * ```
- * 
+ *
  * ### Global Logger:
  * ```typescript
  * import { logger } from '@/utils/logger';
- * 
+ *
  * logger.debug('ComponentName', 'Debug message', { data: 'value' });
  * ```
- * 
+ *
  * ### Runtime Control:
  * ```typescript
  * import { setLogLevel, getLogLevel } from '@/utils/logger';
- * 
+ *
  * setLogLevel('debug'); // Enable all logs
  * setLogLevel('warn');  // Only warnings and errors
  * setLogLevel('silent'); // Disable all logs
  * ```
- * 
+ *
  * ### Browser Console Control:
  * ```javascript
  * // In browser console:
  * __logger.setLevel('debug');
  * __logger.getLevel();
  * ```
- * 
+ *
  * ## Environment Configuration:
  * Set `VITE_LOG_LEVEL` environment variable to control default log level:
  * - Development default: 'debug'
  * - Production default: 'warn'
- * 
+ *
  * ## Log Levels (in order):
  * - debug: Detailed debugging information
  * - info: General information
@@ -77,7 +77,7 @@ class Logger {
       // Check environment variables for log level
       const envLogLevel = import.meta.env.VITE_LOG_LEVEL as LogLevel;
       const isDev = import.meta.env.DEV;
-      
+
       // Default to 'debug' in development, 'warn' in production
       const defaultLevel: LogLevel = isDev ? 'debug' : 'warn';
       const level = envLogLevel || defaultLevel;
@@ -99,7 +99,7 @@ class Logger {
     const levels: LogLevel[] = ['debug', 'info', 'warn', 'error', 'silent'];
     const currentLevelIndex = levels.indexOf(this.config.level);
     const messageLevelIndex = levels.indexOf(level);
-    
+
     if (this.config.level === 'silent') return false;
     return messageLevelIndex >= currentLevelIndex;
   }
@@ -108,14 +108,10 @@ class Logger {
     const timestamp = this.config.enableTimestamp ? new Date().toISOString().slice(11, 23) : '';
     const prefix = this.config.prefix ? `[${this.config.prefix}]` : '';
     const levelStr = level.toUpperCase().padEnd(5);
-    
-    const formattedMessage = [
-      timestamp && `[${timestamp}]`,
-      prefix,
-      `[${levelStr}]`,
-      `[${component}]`,
-      message
-    ].filter(Boolean).join(' ');
+
+    const formattedMessage = [timestamp && `[${timestamp}]`, prefix, `[${levelStr}]`, `[${component}]`, message]
+      .filter(Boolean)
+      .join(' ');
 
     return [formattedMessage, ...args];
   }
@@ -167,4 +163,4 @@ if (typeof window !== 'undefined') {
     getLevel: getLogLevel,
     instance: logger,
   };
-} 
+}

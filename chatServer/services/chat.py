@@ -4,54 +4,54 @@
 # @examples memory-bank/patterns/api-patterns.md#pattern-4-dependency-injection-pattern
 
 import logging
-from typing import Dict, Any, List, Optional, Tuple, Callable
-from fastapi import HTTPException, Request
+from typing import Any, Dict, List, Optional, Tuple
+
 import psycopg
+from fastapi import HTTPException, Request
 
 try:
-    from ..models.chat import ChatRequest, ChatResponse
     from ..config.constants import CHAT_MESSAGE_HISTORY_TABLE_NAME, DEFAULT_LOG_LEVEL
+    from ..database.supabase_client import get_supabase_client
     from ..dependencies.auth import get_jwt_from_request_context
+    from ..models.chat import ChatRequest, ChatResponse
     from ..protocols.agent_executor import AgentExecutorProtocol
     from ..security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
     from ..services.audit_service import AuditService
     from ..services.pending_actions import PendingActionsService
-    from ..database.supabase_client import get_supabase_client
 except ImportError:
-    from chatServer.models.chat import ChatRequest, ChatResponse
     from chatServer.config.constants import CHAT_MESSAGE_HISTORY_TABLE_NAME, DEFAULT_LOG_LEVEL
-    from chatServer.dependencies.auth import get_jwt_from_request_context
+    from chatServer.database.supabase_client import get_supabase_client
+    from chatServer.models.chat import ChatRequest, ChatResponse
     from chatServer.protocols.agent_executor import AgentExecutorProtocol
     from chatServer.security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
     from chatServer.services.audit_service import AuditService
     from chatServer.services.pending_actions import PendingActionsService
-    from chatServer.database.supabase_client import get_supabase_client
 
-from langchain_postgres import PostgresChatMessageHistory
 from langchain.memory import ConversationBufferWindowMemory
 from langchain_core.messages import BaseMessage
+from langchain_postgres import PostgresChatMessageHistory
 
 logger = logging.getLogger(__name__)
 
 
 class AsyncConversationBufferWindowMemory(ConversationBufferWindowMemory):
     """Properly implemented async version of ConversationBufferWindowMemory.
-    
+
     This fixes the default implementation which uses run_in_executor to run
     the synchronous load_memory_variables method, causing it to try to access
     chat_memory.messages synchronously.
     """
-    
+
     async def aload_memory_variables(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Properly async implementation that directly calls aget_messages."""
         messages = await self.chat_memory.aget_messages()
-        
+
         # Apply window just like buffer_as_messages does, but asynchronously
         if self.k > 0:
             messages = messages[-self.k * 2:]
-        
+
         return {self.memory_key: messages if self.return_messages else self.messages_to_string(messages)}
-    
+
     def messages_to_string(self, messages: List[BaseMessage]) -> str:
         """Convert messages to string format, similar to buffer_as_str."""
         from langchain.schema import get_buffer_string
@@ -64,22 +64,22 @@ class AsyncConversationBufferWindowMemory(ConversationBufferWindowMemory):
 
 class ChatService:
     """Service for handling chat processing logic."""
-    
+
     def __init__(self, agent_executor_cache: Dict[Tuple[str, str], Any]):
         """Initialize the chat service with an agent executor cache.
-        
+
         Args:
             agent_executor_cache: Cache for storing agent executors by (user_id, agent_name)
         """
         self.agent_executor_cache = agent_executor_cache
-    
+
     def create_chat_memory(self, session_id: str, pg_connection: psycopg.AsyncConnection) -> AsyncConversationBufferWindowMemory:
         """Create chat memory for a session.
-        
+
         Args:
             session_id: The session ID for chat history
             pg_connection: PostgreSQL connection for chat history
-            
+
         Returns:
             Configured async conversation buffer window memory
         """
@@ -98,9 +98,9 @@ class ChatService:
             memory_key="chat_history",  # Must match the input variable in the agent's prompt
             input_key="input"  # Must match the key for the user's input message
         )
-        
+
         return agent_short_term_memory
-    
+
     def get_or_load_agent_executor(
         self,
         user_id: str,
@@ -110,22 +110,22 @@ class ChatService:
         memory: AsyncConversationBufferWindowMemory
     ) -> AgentExecutorProtocol:
         """Get agent executor from cache or load a new one.
-        
+
         Args:
             user_id: User ID
             agent_name: Name of the agent
             session_id: Session ID for history
             agent_loader_module: Agent loader module
             memory: Chat memory for the session
-            
+
         Returns:
             Agent executor instance
-            
+
         Raises:
             HTTPException: If agent loading fails or executor is invalid
         """
         cache_key = (user_id, agent_name)
-        
+
         if cache_key in self.agent_executor_cache:
             agent_executor = self.agent_executor_cache[cache_key]
             logger.debug(f"Cache HIT for agent executor: key={cache_key}")
@@ -142,7 +142,7 @@ class ChatService:
             except Exception as e:
                 logger.error(f"Error loading agent executor for agent {agent_name}: {e}", exc_info=True)
                 raise HTTPException(status_code=500, detail=f"Could not load agent: {e}")
-        
+
         # Check if agent_executor implements the required interface
         if not hasattr(agent_executor, 'ainvoke') or not hasattr(agent_executor, 'memory'):
             logger.error(f"Loaded agent does not implement required interface. Type: {type(agent_executor)}")
@@ -150,21 +150,21 @@ class ChatService:
 
         # CRITICAL: Ensure the cached/newly loaded executor uses the correct memory for THIS session
         agent_executor.memory = memory
-        
+
         return agent_executor
-    
+
     def extract_tool_info(self, response_data: Dict[str, Any]) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
         """Extract tool information from agent response data.
-        
+
         Args:
             response_data: Response data from agent execution
-            
+
         Returns:
             Tuple of (tool_name, tool_input) or (None, None) if no tool info
         """
         invoked_tool_name: Optional[str] = None
         invoked_tool_input: Optional[Dict[str, Any]] = None
-        
+
         # Example of how one might extract the last tool call, if needed by client
         if "intermediate_steps" in response_data and response_data["intermediate_steps"]:
             last_step = response_data["intermediate_steps"][-1]
@@ -174,9 +174,9 @@ class ChatService:
                     invoked_tool_name = action.tool
                 if hasattr(action, 'tool_input'):
                     invoked_tool_input = action.tool_input
-        
+
         return invoked_tool_name, invoked_tool_input
-    
+
     async def process_chat(
         self,
         chat_input: ChatRequest,
@@ -186,17 +186,17 @@ class ChatService:
         request: Request
     ) -> ChatResponse:
         """Process a chat request and return a response.
-        
+
         Args:
             chat_input: The chat request
             user_id: User ID
             pg_connection: PostgreSQL connection
             agent_loader_module: Agent loader module
             request: FastAPI request object
-            
+
         Returns:
             Chat response
-            
+
         Raises:
             HTTPException: For various error conditions
         """
@@ -212,7 +212,7 @@ class ChatService:
         try:
             # Create chat memory
             agent_short_term_memory = self.create_chat_memory(session_id_for_history, pg_connection)
-            
+
             # Get or load agent executor
             agent_executor = self.get_or_load_agent_executor(
                 user_id=user_id,
@@ -268,7 +268,7 @@ class ChatService:
                 )
                 logger.info(f"Successfully processed chat. Returning to client: {chat_response_payload.model_dump_json(indent=2)}")
                 return chat_response_payload
-                
+
             except Exception as e:
                 logger.error(f"Error during agent execution for session {session_id_for_history}: {e}", exc_info=True)
                 error_response_payload = ChatResponse(
@@ -278,7 +278,7 @@ class ChatService:
                 )
                 logger.info(f"Error during agent execution. Returning to client: {error_response_payload.model_dump_json(indent=2)}")
                 return error_response_payload
-                
+
         except psycopg.Error as pe:
             logger.error(f"Database error (psycopg.Error) during chat_memory setup for session {session_id_for_history}: {pe}", exc_info=True)
             db_error_payload = ChatResponse(
@@ -288,7 +288,7 @@ class ChatService:
             )
             logger.info(f"Database error. Returning to client: {db_error_payload.model_dump_json(indent=2)}")
             raise HTTPException(status_code=503, detail=f"Database error during chat setup: {pe}")
-            
+
         except Exception as e:
             logger.error(f"Failed to process chat request before agent execution for session {session_id_for_history}: {e}", exc_info=True)
             setup_error_payload = ChatResponse(
@@ -308,14 +308,14 @@ _chat_service: Optional[ChatService] = None
 
 def get_chat_service(agent_executor_cache: Dict[Tuple[str, str], Any]) -> ChatService:
     """Get the global chat service instance.
-    
+
     Args:
         agent_executor_cache: Cache for storing agent executors
-        
+
     Returns:
         Chat service instance
     """
     global _chat_service
     if _chat_service is None:
         _chat_service = ChatService(agent_executor_cache)
-    return _chat_service 
+    return _chat_service

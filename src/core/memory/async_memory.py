@@ -1,7 +1,8 @@
 from typing import Any, Dict, List
-from langchain_core.messages import BaseMessage, get_buffer_string
+
 from langchain.memory import ConversationBufferWindowMemory
-from langchain_postgres import PostgresChatMessageHistory # Assuming this is the correct import path
+from langchain_core.messages import BaseMessage, get_buffer_string
+from langchain_postgres import PostgresChatMessageHistory  # Assuming this is the correct import path
 
 
 class AsyncPostgresBufferedWindowMemory(ConversationBufferWindowMemory):
@@ -64,20 +65,20 @@ class AsyncPostgresBufferedWindowMemory(ConversationBufferWindowMemory):
         # Adapted from BaseChatMemory.save_context and ConversationBufferMemory.save_context
         input_val = self._get_input_output(inputs, outputs)[self.input_key]
         output_val = self._get_input_output(inputs, outputs)[self.output_key]
-        
+
         # Create BaseMessage instances for input and output.
         # LangChain typically has helper functions for this, e.g.,
         # from langchain_core.messages import HumanMessage, AIMessage
         # For now, constructing them based on typical structure.
         # This part might need adjustment based on how your agent
         # structures input/output messages before they reach memory.
-        
+
         # Assuming self.chat_memory.aadd_messages expects a List[BaseMessage]
         # We need to construct these messages.
         # The ConversationBufferMemory typically uses _get_input_output and then
         # constructs HumanMessage and AIMessage. Let's ensure we have a way to make these.
         # If this runs into issues, it means we need more precise message construction.
-        
+
         # messages_to_add: List[BaseMessage] = []
         # # This part is tricky; _get_prompt_input_key is protected.
         # # The original save_context in ConversationBufferMemory does:
@@ -91,13 +92,13 @@ class AsyncPostgresBufferedWindowMemory(ConversationBufferWindowMemory):
 
         # Let's use the simpler HumanMessage/AIMessage construction as a starting point,
         # which is common for direct chat history manipulation.
-        from langchain_core.messages import HumanMessage, AIMessage # Ensure these are available
+        from langchain_core.messages import AIMessage, HumanMessage  # Ensure these are available
 
         messages_to_add = [
             HumanMessage(content=input_val),
             AIMessage(content=output_val)
         ]
-        
+
         await self.chat_memory.aadd_messages(messages_to_add)
 
         # Prune buffer if it exceeds k value (if k is positive)
@@ -148,4 +149,4 @@ class AsyncPostgresBufferedWindowMemory(ConversationBufferWindowMemory):
             # else:
             #     self.chat_memory.clear() # Or raise error if async clear is vital
             # Making it explicit for this version:
-            await self.chat_memory.aclear() # Relying on PostgresChatMessageHistory to have aclear 
+            await self.chat_memory.aclear() # Relying on PostgresChatMessageHistory to have aclear

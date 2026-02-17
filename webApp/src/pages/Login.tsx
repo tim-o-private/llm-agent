@@ -3,10 +3,10 @@ import { useEffect } from 'react';
 
 export function AuthLogger() {
   useEffect(() => {
-    console.log("Landed on:", window.location.href);
+    console.log('Landed on:', window.location.href);
   }, []);
   return null;
-} 
+}
 
 export default function Login() {
   return (

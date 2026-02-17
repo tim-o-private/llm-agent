@@ -11,17 +11,9 @@ interface NotesPaneProps {
 }
 
 export const NotesPane: React.FC<NotesPaneProps> = ({ className }) => {
-  const user = useAuthStore(state => state.user);
-  const {
-    notes,
-    currentNoteId,
-    isLoading,
-    isSaving,
-    setCurrentNote,
-    createNote,
-    updateNote,
-    deleteNote
-  } = useNotesStore();
+  const user = useAuthStore((state) => state.user);
+  const { notes, currentNoteId, isLoading, isSaving, setCurrentNote, createNote, updateNote, deleteNote } =
+    useNotesStore();
 
   // Initialize notes store
   useInitializeNotesStore();
@@ -33,7 +25,7 @@ export const NotesPane: React.FC<NotesPaneProps> = ({ className }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Get current note
-  const currentNote = notes.find(note => note.id === currentNoteId);
+  const currentNote = notes.find((note) => note.id === currentNoteId);
 
   // Auto-save functionality (debounced)
   useEffect(() => {
@@ -44,7 +36,7 @@ export const NotesPane: React.FC<NotesPaneProps> = ({ className }) => {
       if (currentNote) {
         await updateNote(currentNote.id, {
           content: editContent,
-          title: editTitle || null
+          title: editTitle || null,
         });
       }
     }, 2000); // Auto-save after 2 seconds of inactivity
@@ -72,7 +64,7 @@ export const NotesPane: React.FC<NotesPaneProps> = ({ className }) => {
 
     const newNote = await createNote({
       content: '',
-      title: null
+      title: null,
     });
 
     if (newNote) {
@@ -87,7 +79,7 @@ export const NotesPane: React.FC<NotesPaneProps> = ({ className }) => {
 
     await updateNote(currentNote.id, {
       content: editContent,
-      title: editTitle || null
+      title: editTitle || null,
     });
     setIsEditing(false);
     toast.success('Note saved');
@@ -101,24 +93,30 @@ export const NotesPane: React.FC<NotesPaneProps> = ({ className }) => {
     }
   }, [currentNote, deleteNote]);
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      setIsEditing(false);
-      // Revert to saved content
-      if (currentNote) {
-        setEditContent(currentNote.content);
-        setEditTitle(currentNote.title || '');
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsEditing(false);
+        // Revert to saved content
+        if (currentNote) {
+          setEditContent(currentNote.content);
+          setEditTitle(currentNote.title || '');
+        }
+      } else if (e.key === 's' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        handleSave();
       }
-    } else if (e.key === 's' && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault();
-      handleSave();
-    }
-  }, [handleSave, currentNote]);
+    },
+    [handleSave, currentNote],
+  );
 
-  const handleNoteSelect = useCallback((noteId: string) => {
-    setCurrentNote(noteId);
-    setIsEditing(false);
-  }, [setCurrentNote]);
+  const handleNoteSelect = useCallback(
+    (noteId: string) => {
+      setCurrentNote(noteId);
+      setIsEditing(false);
+    },
+    [setCurrentNote],
+  );
 
   if (!user) {
     return (
@@ -155,28 +153,14 @@ export const NotesPane: React.FC<NotesPaneProps> = ({ className }) => {
           Notes
         </h2>
         <div className="flex items-center space-x-2">
-          {isSaving && (
-            <span className="text-xs text-text-muted">
-              Saving...
-            </span>
-          )}
-          <Button
-            variant="outline"
-            size="1"
-            onClick={handleCreateNote}
-            disabled={isSaving}
-          >
+          {isSaving && <span className="text-xs text-text-muted">Saving...</span>}
+          <Button variant="outline" size="1" onClick={handleCreateNote} disabled={isSaving}>
             <PlusIcon className="mr-1 h-4 w-4" />
             New
           </Button>
           {currentNote && (
             <>
-              <Button
-                variant="outline"
-                size="1"
-                onClick={handleSave}
-                disabled={!isEditing || isSaving}
-              >
+              <Button variant="outline" size="1" onClick={handleSave} disabled={!isEditing || isSaving}>
                 <CheckIcon className="mr-1 h-4 w-4" />
                 Save
               </Button>
@@ -206,20 +190,14 @@ export const NotesPane: React.FC<NotesPaneProps> = ({ className }) => {
                   className={clsx(
                     'p-3 rounded-lg cursor-pointer transition-colors',
                     'hover:bg-ui-element-bg',
-                    currentNoteId === note.id 
-                      ? 'bg-brand-primary/10 border border-brand-primary/30' 
-                      : 'bg-ui-surface border border-ui-border'
+                    currentNoteId === note.id
+                      ? 'bg-brand-primary/10 border border-brand-primary/30'
+                      : 'bg-ui-surface border border-ui-border',
                   )}
                 >
-                  <div className="text-sm font-medium text-text-primary truncate">
-                    {note.title || 'Untitled'}
-                  </div>
-                  <div className="text-xs text-text-muted mt-1 line-clamp-2">
-                    {note.content || 'Empty note'}
-                  </div>
-                  <div className="text-xs text-text-muted mt-2">
-                    {new Date(note.updated_at).toLocaleDateString()}
-                  </div>
+                  <div className="text-sm font-medium text-text-primary truncate">{note.title || 'Untitled'}</div>
+                  <div className="text-xs text-text-muted mt-1 line-clamp-2">{note.content || 'Empty note'}</div>
+                  <div className="text-xs text-text-muted mt-2">{new Date(note.updated_at).toLocaleDateString()}</div>
                 </div>
               ))}
             </div>
@@ -227,18 +205,13 @@ export const NotesPane: React.FC<NotesPaneProps> = ({ className }) => {
         )}
 
         {/* Notes Content */}
-        <div className={clsx(
-          'flex-1',
-          notes.length > 0 ? 'pl-4' : ''
-        )}>
+        <div className={clsx('flex-1', notes.length > 0 ? 'pl-4' : '')}>
           {!currentNote ? (
             // Empty state
             <div className="h-full flex items-center justify-center text-text-muted">
               <div className="text-center">
                 <Pencil1Icon className="h-16 w-16 mb-4 opacity-50 mx-auto" />
-                <p className="text-lg">
-                  {notes.length === 0 ? 'Start taking notes' : 'Select a note to edit'}
-                </p>
+                <p className="text-lg">{notes.length === 0 ? 'Start taking notes' : 'Select a note to edit'}</p>
                 <p className="text-sm">
                   {notes.length === 0 ? 'Click "New" to create your first note' : 'Choose from the list on the left'}
                 </p>
@@ -267,16 +240,14 @@ export const NotesPane: React.FC<NotesPaneProps> = ({ className }) => {
                 placeholder="Start typing your note here..."
                 className="flex-1 w-full p-4 bg-ui-element-bg border border-ui-border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary text-text-primary placeholder-text-muted"
               />
-              
+
               {isEditing && (
                 <div className="mt-4 flex justify-between items-center text-xs text-text-muted">
                   <div className="space-x-4">
                     <span>⌘S to save</span>
                     <span>Esc to cancel</span>
                   </div>
-                  <div>
-                    {editContent.length} characters
-                  </div>
+                  <div>{editContent.length} characters</div>
                 </div>
               )}
             </div>
@@ -285,4 +256,4 @@ export const NotesPane: React.FC<NotesPaneProps> = ({ className }) => {
       </div>
     </div>
   );
-}; 
+};

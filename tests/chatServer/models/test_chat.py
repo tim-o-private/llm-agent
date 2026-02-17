@@ -1,6 +1,7 @@
 """Unit tests for chat models."""
 
 import unittest
+
 from pydantic import ValidationError
 
 from chatServer.models.chat import ChatRequest, ChatResponse
@@ -17,7 +18,7 @@ class TestChatRequest(unittest.TestCase):
             "session_id": "session-123"
         }
         request = ChatRequest(**data)
-        
+
         self.assertEqual(request.agent_name, "test_agent")
         self.assertEqual(request.message, "Hello, world!")
         self.assertEqual(request.session_id, "session-123")
@@ -27,11 +28,11 @@ class TestChatRequest(unittest.TestCase):
         # Missing agent_name
         with self.assertRaises(ValidationError):
             ChatRequest(message="Hello", session_id="session-123")
-        
+
         # Missing message
         with self.assertRaises(ValidationError):
             ChatRequest(agent_name="test_agent", session_id="session-123")
-        
+
         # Missing session_id
         with self.assertRaises(ValidationError):
             ChatRequest(agent_name="test_agent", message="Hello")
@@ -58,7 +59,7 @@ class TestChatResponse(unittest.TestCase):
             session_id="session-123",
             response="Hello back!"
         )
-        
+
         self.assertEqual(response.session_id, "session-123")
         self.assertEqual(response.response, "Hello back!")
         self.assertIsNone(response.tool_name)
@@ -75,7 +76,7 @@ class TestChatResponse(unittest.TestCase):
             tool_input=tool_input,
             error=None
         )
-        
+
         self.assertEqual(response.session_id, "session-123")
         self.assertEqual(response.response, "Tool executed successfully")
         self.assertEqual(response.tool_name, "test_tool")
@@ -89,7 +90,7 @@ class TestChatResponse(unittest.TestCase):
             response="An error occurred",
             error="Something went wrong"
         )
-        
+
         self.assertEqual(response.session_id, "session-123")
         self.assertEqual(response.response, "An error occurred")
         self.assertEqual(response.error, "Something went wrong")
@@ -101,11 +102,11 @@ class TestChatResponse(unittest.TestCase):
         # Missing session_id
         with self.assertRaises(ValidationError):
             ChatResponse(response="Hello back!")
-        
+
         # Missing response
         with self.assertRaises(ValidationError):
             ChatResponse(session_id="session-123")
 
 
 if __name__ == '__main__':
-    unittest.main() 
+    unittest.main()

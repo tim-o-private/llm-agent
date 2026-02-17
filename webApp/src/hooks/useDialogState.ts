@@ -5,10 +5,10 @@ export interface DialogStateHook {
   // State
   isFormDirty: boolean;
   isSaving: boolean;
-  
+
   // Combined dirty state (form + additional)
   isDirty: boolean;
-  
+
   // Handlers
   setIsFormDirty: (dirty: boolean) => void;
   setIsSaving: (saving: boolean) => void;
@@ -16,7 +16,7 @@ export interface DialogStateHook {
   handleCancel: () => void;
   handleSaveSuccess: () => void;
   wrappedOnOpenChange: (open: boolean) => void;
-  
+
   // Modal state management
   registerModalState: (modalId: string, isOpen: boolean) => void;
 }
@@ -43,20 +43,23 @@ export function useDialogState({
   const isDirty = isFormDirty || additionalDirtyState;
 
   // Handle dirty state confirmation
-  const wrappedOnOpenChange = useCallback((open: boolean) => {
-    if (!open && isDirty) {
-      if (window.confirm("You have unsaved changes. Are you sure you want to discard them?")) {
-        // Reset state when discarding
-        onResetState?.();
-        setIsFormDirty(false);
-        onOpenChange(false);
+  const wrappedOnOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open && isDirty) {
+        if (window.confirm('You have unsaved changes. Are you sure you want to discard them?')) {
+          // Reset state when discarding
+          onResetState?.();
+          setIsFormDirty(false);
+          onOpenChange(false);
+        } else {
+          return; // Prevent closing if user cancels discard
+        }
       } else {
-        return; // Prevent closing if user cancels discard
+        onOpenChange(open);
       }
-    } else {
-      onOpenChange(open);
-    }
-  }, [isDirty, onOpenChange, onResetState]);
+    },
+    [isDirty, onOpenChange, onResetState],
+  );
 
   const handleSave = useCallback(async (saveFunction: () => Promise<void>) => {
     setIsSaving(true);
@@ -81,17 +84,20 @@ export function useDialogState({
     wrappedOnOpenChange(false);
   }, [wrappedOnOpenChange]);
 
-  const registerModalState = useCallback((modalId: string, isOpen: boolean) => {
-    if (setModalOpenState) {
-      setModalOpenState(modalId, isOpen);
-      
-      // Reset state when modal opens to ensure clean state
-      if (isOpen) {
-        onResetState?.();
-        setIsFormDirty(false);
+  const registerModalState = useCallback(
+    (modalId: string, isOpen: boolean) => {
+      if (setModalOpenState) {
+        setModalOpenState(modalId, isOpen);
+
+        // Reset state when modal opens to ensure clean state
+        if (isOpen) {
+          onResetState?.();
+          setIsFormDirty(false);
+        }
       }
-    }
-  }, [setModalOpenState, onResetState]);
+    },
+    [setModalOpenState, onResetState],
+  );
 
   return {
     isFormDirty,
@@ -105,4 +111,4 @@ export function useDialogState({
     wrappedOnOpenChange,
     registerModalState,
   };
-} 
+}

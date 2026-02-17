@@ -1,9 +1,11 @@
-import sys
 import os
 import tempfile
-import yaml
+
 import pytest
+import yaml
+
 from utils.config_loader import ConfigLoader
+
 
 @pytest.fixture
 def temp_settings_file():
@@ -45,4 +47,4 @@ def test_missing_env_and_yaml(monkeypatch):
     monkeypatch.delenv('LLM_MODEL', raising=False)
     monkeypatch.delenv('APP_NAME', raising=False)
     loader = ConfigLoader(settings_rel_path='nonexistent.yaml', dotenv_rel_path='nonexistent.env')
-    assert loader.get('llm.model', default='bar') == 'bar' 
+    assert loader.get('llm.model', default='bar') == 'bar'

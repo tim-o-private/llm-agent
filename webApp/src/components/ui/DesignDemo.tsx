@@ -45,34 +45,40 @@ const DemoTaskCard: React.FC<DemoTaskCardProps> = ({
         // Base card styling with glassy effect
         'relative p-4 rounded-lg border-2 transition-all duration-300 ease-out cursor-pointer',
         'backdrop-blur-sm bg-white/80 dark:bg-gray-800/80',
-        
+
         // Completed tasks are more muted
         status === 'completed' && 'opacity-70',
-        
+
         // Status-based border colors
         statusColors[status],
-        
+
         // Priority ambient effects (subtle, disabled for completed)
         priorityEffects[priority],
-        
+
         // Interaction states - ELEVATION HIERARCHY
         {
           // Default state
           'shadow-sm': !isHovered && !isSelected && !isFocused,
-          
+
           // Hover state - moderate elevation (reduced for completed)
-          'shadow-lg transform -translate-y-1 scale-[1.02]': isHovered && !isSelected && !isFocused && status !== 'completed',
-          'shadow-md transform -translate-y-0.5 scale-[1.01]': isHovered && !isSelected && !isFocused && status === 'completed',
-          
+          'shadow-lg transform -translate-y-1 scale-[1.02]':
+            isHovered && !isSelected && !isFocused && status !== 'completed',
+          'shadow-md transform -translate-y-0.5 scale-[1.01]':
+            isHovered && !isSelected && !isFocused && status === 'completed',
+
           // Selected state - same elevation as hover (keyboard/mouse parity)
-          'shadow-lg transform -translate-y-1 scale-[1.02] ring-2 ring-blue-500/50': isSelected && !isFocused && status !== 'completed',
-          'shadow-md transform -translate-y-0.5 scale-[1.01] ring-2 ring-gray-400/50': isSelected && !isFocused && status === 'completed',
-          
+          'shadow-lg transform -translate-y-1 scale-[1.02] ring-2 ring-blue-500/50':
+            isSelected && !isFocused && status !== 'completed',
+          'shadow-md transform -translate-y-0.5 scale-[1.01] ring-2 ring-gray-400/50':
+            isSelected && !isFocused && status === 'completed',
+
           // Focused state - MORE SUBTLE glow (less translate, slower animation)
-          'shadow-xl transform -translate-y-1 scale-[1.02] ring-3 ring-blue-500/20': isFocused && status !== 'completed',
-          'shadow-lg transform -translate-y-0.5 scale-[1.01] ring-2 ring-gray-400/30': isFocused && status === 'completed',
+          'shadow-xl transform -translate-y-1 scale-[1.02] ring-3 ring-blue-500/20':
+            isFocused && status !== 'completed',
+          'shadow-lg transform -translate-y-0.5 scale-[1.01] ring-2 ring-gray-400/30':
+            isFocused && status === 'completed',
         },
-        
+
         // In-progress glow (the ONE task being worked on) - more subtle pulse
         status === 'in_progress' && isFocused && 'shadow-blue-500/20 animate-pulse',
       )}
@@ -82,48 +88,56 @@ const DemoTaskCard: React.FC<DemoTaskCardProps> = ({
     >
       {/* Glassy overlay for extra depth */}
       <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-white/10 to-transparent pointer-events-none" />
-      
+
       {/* Priority indicator - subtle visual weight, not color bars */}
       {priority > 0 && status !== 'completed' && (
-        <div className={clsx(
-          'absolute top-2 right-2 w-2 h-2 rounded-full',
-          priority === 1 && 'bg-blue-400 dark:bg-blue-500',
-          priority === 2 && 'bg-amber-400 dark:bg-amber-500',
-          priority === 3 && 'bg-red-400 dark:bg-red-500',
-        )} />
+        <div
+          className={clsx(
+            'absolute top-2 right-2 w-2 h-2 rounded-full',
+            priority === 1 && 'bg-blue-400 dark:bg-blue-500',
+            priority === 2 && 'bg-amber-400 dark:bg-amber-500',
+            priority === 3 && 'bg-red-400 dark:bg-red-500',
+          )}
+        />
       )}
-      
+
       {/* Muted priority indicator for completed tasks */}
       {priority > 0 && status === 'completed' && (
         <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-gray-400 dark:bg-gray-600 opacity-50" />
       )}
-      
-      <h3 className={clsx(
-        'font-medium relative z-10',
-        status === 'completed' 
-          ? 'line-through text-gray-500 dark:text-gray-500' // More muted text
-          : 'text-gray-900 dark:text-gray-100'
-      )}>
+
+      <h3
+        className={clsx(
+          'font-medium relative z-10',
+          status === 'completed'
+            ? 'line-through text-gray-500 dark:text-gray-500' // More muted text
+            : 'text-gray-900 dark:text-gray-100',
+        )}
+      >
         {title}
       </h3>
-      
+
       <div className="mt-2 flex items-center justify-between relative z-10">
-        <span className={clsx(
-          'text-xs px-2 py-1 rounded-full font-medium backdrop-blur-sm',
-          status === 'pending' && 'bg-gray-200/80 text-gray-700 dark:bg-gray-700/80 dark:text-gray-300',
-          status === 'in_progress' && 'bg-blue-200/80 text-blue-800 dark:bg-blue-900/80 dark:text-blue-200',
-          status === 'completed' && 'bg-gray-200/60 text-gray-600 dark:bg-gray-700/60 dark:text-gray-400', // More muted
-        )}>
+        <span
+          className={clsx(
+            'text-xs px-2 py-1 rounded-full font-medium backdrop-blur-sm',
+            status === 'pending' && 'bg-gray-200/80 text-gray-700 dark:bg-gray-700/80 dark:text-gray-300',
+            status === 'in_progress' && 'bg-blue-200/80 text-blue-800 dark:bg-blue-900/80 dark:text-blue-200',
+            status === 'completed' && 'bg-gray-200/60 text-gray-600 dark:bg-gray-700/60 dark:text-gray-400', // More muted
+          )}
+        >
           {status.replace('_', ' ')}
         </span>
-        
+
         {priority > 0 && (
-          <span className={clsx(
-            'text-xs',
-            status === 'completed' 
-              ? 'text-gray-400 dark:text-gray-500' // Muted priority text
-              : 'text-gray-500 dark:text-gray-400'
-          )}>
+          <span
+            className={clsx(
+              'text-xs',
+              status === 'completed'
+                ? 'text-gray-400 dark:text-gray-500' // Muted priority text
+                : 'text-gray-500 dark:text-gray-400',
+            )}
+          >
             P{priority}
           </span>
         )}
@@ -155,10 +169,12 @@ export const DesignDemo: React.FC = () => {
               <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                 Refined Animation & Visual Hierarchy Demo
               </h2>
-              
+
               <div className="grid gap-4 max-w-2xl">
                 <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1 backdrop-blur-sm bg-white/50 dark:bg-gray-800/50 p-4 rounded-lg border border-white/30 dark:border-gray-700/30">
-                  <p><strong>Design Updates:</strong></p>
+                  <p>
+                    <strong>Design Updates:</strong>
+                  </p>
                   <p>• Completed tasks: Muted colors, reduced interactions, subtle priority indicators</p>
                   <p>• Focus state: More subtle (less translate, gentler ring, slower animation)</p>
                   <p>• Glassy effects: Backdrop blur, translucent backgrounds, gradient overlays</p>
@@ -186,16 +202,18 @@ export const DesignDemo: React.FC = () => {
             </div>
 
             <div className="mt-8 backdrop-blur-sm bg-white/60 dark:bg-gray-800/60 rounded-lg p-4 max-w-2xl border border-white/30 dark:border-gray-700/30">
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                Interactive Demo Controls:
-              </h3>
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Interactive Demo Controls:</h3>
               <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-                <p>• <strong>Click</strong> cards to select/deselect</p>
-                <p>• <strong>Hover</strong> to see elevation effects</p>
+                <p>
+                  • <strong>Click</strong> cards to select/deselect
+                </p>
+                <p>
+                  • <strong>Hover</strong> to see elevation effects
+                </p>
                 <p>• Card #2 is "focused" (the active work item)</p>
                 <p>• Notice: Completed tasks are muted, focus is more subtle</p>
               </div>
-              
+
               <div className="mt-4 space-x-4">
                 <button
                   onClick={() => setFocusedCard(focusedCard === 1 ? null : 1)}
@@ -216,4 +234,4 @@ export const DesignDemo: React.FC = () => {
       </div>
     </div>
   );
-}; 
+};

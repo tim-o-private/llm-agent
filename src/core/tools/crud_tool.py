@@ -1,9 +1,12 @@
-from typing import Optional, Any, Dict, ClassVar, Type
-from pydantic import BaseModel, Field, ConfigDict, create_model
-from supabase import create_client
+from typing import Any, ClassVar, Dict, Optional, Type
+
 from langchain_core.tools import BaseTool, ToolException
+from pydantic import BaseModel, ConfigDict, Field
+
+from supabase import create_client
 from utils.logging_utils import get_logger
-# Try to import Pydantic v1 specific tool for creating models from dicts, 
+
+# Try to import Pydantic v1 specific tool for creating models from dicts,
 # as a simpler first step than full JSON Schema to Pydantic v2 model.
 logger = get_logger(__name__)
 
@@ -15,11 +18,11 @@ class CRUDToolInput(BaseModel):
     their `runtime_args_schema` configuration.
     """
     data: Optional[Dict[str, Any]] = Field(
-        default=None, 
+        default=None,
         description="Data for 'create' or 'update' operations. The expected structure of this dictionary is defined by the specific tool instance's 'runtime_args_schema' in the database."
     )
     filters: Optional[Dict[str, Any]] = Field(
-        default=None, 
+        default=None,
         description="Filters for 'fetch', 'update', or 'delete' operations. The expected structure of this dictionary is defined by the specific tool instance's 'runtime_args_schema' in the database."
     )
 
@@ -52,49 +55,49 @@ class CRUDTool(BaseTool):
     agent_name: str = Field(description="The name of the agent invoking the tool. Used for logging and potentially for agent-specific data scoping.")
     supabase_url: str = Field(description="The Supabase project URL, injected at instantiation.")
     supabase_key: str = Field(description="The Supabase service key (or anon key if appropriate), injected at instantiation.")
-    
+
     table_name: str = Field(description="The target Supabase table name, specified in the DB tool config.")
     method: str = Field(description="The CRUD method ('create', 'fetch', 'update', 'delete'), specified in the DB tool config.")
     field_map: Dict[str, str] = Field(
-        default_factory=dict, 
+        default_factory=dict,
         description="A mapping from keys in the LLM-provided 'data' argument to actual database column names. Used for 'create' and 'update' methods. Specified in the DB tool config."
     )
     # apply_agent_name_filter: bool = Field(
-    #     default=False, 
+    #     default=False,
     #     description="If true, 'agent_name' will be added as a filter for non-LTM tables. Configured in DB tool config."
     # ) # Re-add if making agent_name filtering fully config-driven
 
     # args_schema is a ClassVar in BaseTool. Specific instances are typically of a dynamically
     # created subclass that has its own args_schema overriding this default.
     # The loader (_create_dynamic_crud_tool_class) sets this on the dynamic subclass.
-    args_schema: ClassVar[Type[BaseModel]] = CRUDToolInput 
-    
+    args_schema: ClassVar[Type[BaseModel]] = CRUDToolInput
+
     _db_client: Any = None # Supabase client instance, initialized in _init_db_client
 
     def __init__(self, **kwargs: Any):
         """
         Initializes the CRUDTool.
-        
-        All Pydantic fields defined on this class (user_id, agent_name, supabase_url, 
-        supabase_key, table_name, method, field_map) are populated by Pydantic 
-        when `super().__init__(**kwargs)` is called, using values passed from the 
-        agent loader. The 'name' and 'description' for the BaseTool are also passed 
+
+        All Pydantic fields defined on this class (user_id, agent_name, supabase_url,
+        supabase_key, table_name, method, field_map) are populated by Pydantic
+        when `super().__init__(**kwargs)` is called, using values passed from the
+        agent loader. The 'name' and 'description' for the BaseTool are also passed
         via kwargs.
 
-        If the agent loader provided a 'runtime_args_schema', it will have created a 
+        If the agent loader provided a 'runtime_args_schema', it will have created a
         dynamic subclass of CRUDTool with a specific `args_schema` set as a class
         variable on that subclass. This instance will therefore be of that dynamic
         subclass.
         """
         super().__init__(**kwargs)
-        
+
         logger.debug(
             f"CRUDTool '{self.name}' (instance of {self.__class__.__name__}) initialized. Method: '{self.method}', Table: '{self.table_name}'. "
             f"Effective args_schema: '{type(self).args_schema.__name__}'. Field map: {self.field_map}"
         )
 
         self._db_client = None # Ensure it's None before attempting initialization
-        try: 
+        try:
             self._init_db_client()
         except Exception as e:
             # Log and allow continuation; _run will check _db_client and raise if still None.
@@ -105,7 +108,7 @@ class CRUDTool(BaseTool):
         if not self.supabase_url or not self.supabase_key:
             logger.error(f"CRUDTool '{self.name}': Supabase URL or key is missing. Cannot initialize Supabase client.")
             # self._db_client remains None
-            return 
+            return
         try:
             self._db_client = create_client(self.supabase_url, self.supabase_key)
             logger.debug(f"CRUDTool '{self.name}': Supabase client initialized successfully for table '{self.table_name}'.")
@@ -169,21 +172,21 @@ class CRUDTool(BaseTool):
                 raise ToolException(f"Agent Error: Input 'data' (a dictionary) is required for '{self.method}' operation using tool '{self.name}'.")
             if not data_dict: # Checks if the dictionary is empty
                 raise ToolException(f"Agent Error: Input 'data' for '{self.method}' operation using tool '{self.name}' cannot be an empty dictionary.")
-    
+
         if self.method in ["update", "delete"]:
             if filters_dict is None or filters_dict.get("id") is None:
                 raise ToolException(
                     f"Agent Error: For '{self.method}' operations with tool '{self.name}', the 'filters' argument must be a dictionary "
                     f"containing an 'id' key to target the specific record for modification or deletion."
                 )
-        
+
         logger.debug(f"CRUDTool '{self.name}': Runtime input validation completed successfully.")
-            
+
     def _apply_mandatory_filters(self, filters: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Applies mandatory filters to the provided filter dictionary.
         Currently, 'user_id' is always added.
-        'agent_name' is added as a filter if the table is NOT 'agent_long_term_memory' 
+        'agent_name' is added as a filter if the table is NOT 'agent_long_term_memory'
         and the tool instance has an agent_name. This table-specific logic is a candidate
         for future refactoring to be configuration-driven.
 
@@ -195,16 +198,16 @@ class CRUDTool(BaseTool):
         """
         final_filters = filters.copy() if filters else {}
         final_filters["user_id"] = self.user_id # Always scope by user_id
-        
+
         # # Original logic: Add agent_name as a filter for tables other than agent_long_term_memory
         # # This is now removed in favor of explicit schema definition if agent_name is needed.
         # if self.table_name != "agent_long_term_memory":
         #     if hasattr(self, 'agent_name') and self.agent_name: # Ensure agent_name exists and is not empty
         #          final_filters["agent_name"] = self.agent_name
-        
+
         logger.debug(f"CRUDTool '{self.name}': Applied mandatory filters. Initial: {filters}, Final: {final_filters}")
         return final_filters
-    
+
     def _apply_mandatory_fields(self, agent_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Conceptually ensures mandatory fields like 'user_id' and 'agent_name' are part of the data
@@ -224,7 +227,7 @@ class CRUDTool(BaseTool):
         # It's kept for potential future use if direct data injection patterns re-emerge.
         prepared_data = agent_data.copy() if agent_data else {}
         # Example: If user_id and agent_name were meant to be part of the main payload directly:
-        # prepared_data["user_id"] = self.user_id 
+        # prepared_data["user_id"] = self.user_id
         # if hasattr(self, 'agent_name') and self.agent_name:
         #     prepared_data["agent_name"] = self.agent_name
         logger.debug(f"CRUDTool '{self.name}': (_apply_mandatory_fields) Conceptual mandatory fields processing. Input: {agent_data}, Output: {prepared_data}")
@@ -235,7 +238,7 @@ class CRUDTool(BaseTool):
         Prepares the final data payload for 'create' or 'update' operations.
         1. Applies the 'field_map' to translate LLM input keys to database column names.
         2. Ensures 'user_id' is in the payload.
-        3. Adds 'agent_name' to the payload if the table is not 'agent_long_term_memory' 
+        3. Adds 'agent_name' to the payload if the table is not 'agent_long_term_memory'
            (and agent_name is available).
         4. Validates that the mapping results in a non-empty set of meaningful fields.
 
@@ -249,34 +252,34 @@ class CRUDTool(BaseTool):
             ToolException: If `agent_data` is empty, or if field mapping results in no usable
                            database fields, or if no meaningful data is left after mapping.
         """
-        if not agent_data: 
+        if not agent_data:
             raise ToolException(f"Internal Error: '_prepare_data_payload' called with empty 'agent_data' for '{self.method}' operation in tool '{self.name}'.")
 
         db_payload: Dict[str, Any]
         if self.field_map:
             db_payload = {
-                self.field_map[k]: v 
-                for k, v in agent_data.items() 
+                self.field_map[k]: v
+                for k, v in agent_data.items()
                 if k in self.field_map
             }
-            if not db_payload and agent_data: 
+            if not db_payload and agent_data:
                 raise ToolException(
                     f"Agent Error: Data provided for tool '{self.name}' (keys: {list(agent_data.keys())}) "
                     f"did not map to any database columns using field_map: {self.field_map}. "
                     f"Ensure input data keys match keys in 'field_map'."
                 )
-        else: 
+        else:
             db_payload = agent_data.copy()
             logger.debug(f"CRUDTool '{self.name}': No field_map provided. Using agent data keys directly for DB payload: {list(db_payload.keys())}")
 
         db_payload["user_id"] = self.user_id
-        
+
         # # Original logic: Add agent_name to payload for tables other than agent_long_term_memory
         # # This is now removed in favor of explicit schema definition if agent_name is needed.
         # if self.table_name != "agent_long_term_memory":
         #     if hasattr(self, 'agent_name') and self.agent_name:
         #         db_payload["agent_name"] = self.agent_name
-        
+
         # Check if there are any meaningful keys in the payload other than user_id/agent_name,
         # UNLESS it's agent_long_term_memory, in which case agent_name itself might be a meaningful field
         # if it were part of the field_map (e.g. if LTMs were per-agent rather than per-user).
@@ -287,7 +290,7 @@ class CRUDTool(BaseTool):
         # If agent_name (or any other field) was in the original data from LLM (via field_map or direct), it's intended.
         # This check now relies on agent_data having the necessary fields if they are not user_id.
         # For example, if 'agent_name' is a required part of the payload, it should have come from agent_data.
-        
+
         # Re-evaluating intended_payload_columns considering agent_name is NOT auto-added here anymore.
         # If agent_name is intended, it must have come from agent_data and been mapped by field_map or used directly.
         raw_keys_from_llm = set(agent_data.keys())
@@ -312,7 +315,7 @@ class CRUDTool(BaseTool):
                 f"results in no updatable/insertable fields beyond automatically added scoping IDs (user_id). "
                 f"Check 'field_map' and input data structure."
             )
-            
+
         logger.debug(f"CRUDTool '{self.name}': Prepared DB payload for '{self.method}': {db_payload}")
         return db_payload
 
@@ -334,7 +337,7 @@ class CRUDTool(BaseTool):
             filters: The 'filters' argument from the LLM, conforming to the tool's (dynamic) args_schema.
 
         Returns:
-            A string summarizing the outcome of the operation (e.g., "Created: [...]", 
+            A string summarizing the outcome of the operation (e.g., "Created: [...]",
             "Fetched X record(s): [...]", or an error message).
 
         Raises:
@@ -347,18 +350,18 @@ class CRUDTool(BaseTool):
 
         data_for_processing = self._ensure_dict_input(data, "data")
         filters_for_processing = self._ensure_dict_input(filters, "filters")
-        
+
         logger.debug(f"CRUDTool '{self.name}' in _run: Processed data_for_processing type: {type(data_for_processing)}, filters_for_processing type: {type(filters_for_processing)}")
 
         try:
             self._validate_runtime_inputs(data_for_processing, filters_for_processing)
-        except ToolException as e: 
+        except ToolException as e:
             logger.info(f"CRUDTool '{self.name}': Input validation failed: {e}") # Log as info, error will be propagated
-            raise 
-        
+            raise
+
         final_filters = self._apply_mandatory_filters(filters_for_processing)
         final_data_payload: Optional[Dict[str, Any]] = None
-        
+
         if self.method in ["create", "update"]:
             try:
                 final_data_payload = self._prepare_data_payload(data_for_processing)
@@ -372,14 +375,14 @@ class CRUDTool(BaseTool):
                 f"\nFinal Data Payload (for create/update): {final_data_payload if self.method in ['create', 'update'] else 'N/A'}"
                 f"\nFinal Filters: {final_filters}"
             )
-            
+
             table = self._db_client.table(self.table_name)
             query_response = None # Stores the result of .execute()
-            DEFAULT_FETCH_LIMIT = 25 
-            
+            DEFAULT_FETCH_LIMIT = 25
+
             if self.method == "create":
                 query_response = table.insert(final_data_payload).execute()
-            
+
             elif self.method == "fetch":
                 query_builder = table.select("*")
                 # _apply_filters_to_supabase_query was reverted by user, applying manually
@@ -390,7 +393,7 @@ class CRUDTool(BaseTool):
 
             elif self.method == "update":
                 query_builder = table.update(final_data_payload)
-                for k, v_val in final_filters.items(): 
+                for k, v_val in final_filters.items():
                     query_builder = query_builder.eq(k, v_val)
                 query_response = query_builder.execute()
 
@@ -399,15 +402,15 @@ class CRUDTool(BaseTool):
                 for k, v_val in final_filters.items():
                     query_builder = query_builder.eq(k, v_val)
                 query_response = query_builder.execute()
-            
-            else: 
+
+            else:
                 raise ToolException(f"Internal Error: Unhandled method '{self.method}' during execution for tool '{self.name}'. Should be caught by earlier validation if method name is constrained (e.g., Enum).")
 
             response_data = query_response.data
 
             if self.method == "fetch" and not response_data:
                 return f"No records found matching your criteria in table '{self.table_name}'." # More specific table name
-            
+
             action_map = {
                 "create": "Created",
                 "fetch": f"Fetched {len(response_data) if response_data else 0} record(s)",
@@ -415,7 +418,7 @@ class CRUDTool(BaseTool):
                 "delete": "Deleted"
             }
             action_string = action_map.get(self.method, "Processed") # Default if method somehow unexpected
-            
+
             return f"{action_string}: {response_data}"
 
         except Exception as e:
@@ -458,4 +461,4 @@ class CRUDTool(BaseTool):
         # The _ensure_dict_input in _run handles cases where they might still be BaseModels
         # if called directly or through a different path.
         logger.debug(f"CRUDTool '{self.name}': _arun called. Deferring to synchronous _run. Data type: {type(data)}, Filters type: {type(filters)}")
-        return self._run(data=data, filters=filters) 
+        return self._run(data=data, filters=filters)

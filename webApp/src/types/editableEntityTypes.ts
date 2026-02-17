@@ -11,13 +11,10 @@ export type GetEntityDataFn<TEntityData> = (entityId: string | undefined) => TEn
 export type SaveEntityFn<TFormData, TEntityData> = (
   formData: TFormData,
   originalEntityData: TEntityData | undefined, // To help Zustand action with diffing or context
-  entityId?: string | undefined
+  entityId?: string | undefined,
 ) => Promise<void | TEntityData>; // Returns void or the optimistically updated/created entity
 
-export interface UseEditableEntityConfig<
-  TEntityData,
-  TFormData extends FieldValues,
-> {
+export interface UseEditableEntityConfig<TEntityData, TFormData extends FieldValues> {
   entityId: string | null | undefined;
   getEntityDataFn: GetEntityDataFn<TEntityData>;
   saveEntityFn: SaveEntityFn<TFormData, TEntityData>;
@@ -31,10 +28,7 @@ export interface UseEditableEntityConfig<
   isCreatable?: boolean;
 }
 
-export interface UseEditableEntityReturn<
-  TEntityData,
-  TFormData extends FieldValues,
-> {
+export interface UseEditableEntityReturn<TEntityData, TFormData extends FieldValues> {
   formMethods: UseFormReturn<TFormData>;
   isSaving: boolean; // Reflects the state of the saveEntityFn call
   // isLoadingInitialData is now more about whether data is present from getEntityDataFn
@@ -58,4 +52,4 @@ export interface TaskFormData {
   priority: TaskPriority;
   due_date?: string | null;
   // ... other editable fields from Task interface
-} 
+}

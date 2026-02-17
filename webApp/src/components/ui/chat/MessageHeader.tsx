@@ -14,7 +14,8 @@ export const MessageHeader: React.FC<MessageHeaderProps> = ({
   statusColor = 'gray',
   // onClearChat
 }) => {
-  const statusDotColorClasses: Record<string, string> = { // Widened key type for safety
+  const statusDotColorClasses: Record<string, string> = {
+    // Widened key type for safety
     green: 'bg-success-indicator',
     yellow: 'bg-warning-indicator',
     gray: 'bg-neutral-indicator',
@@ -29,7 +30,12 @@ export const MessageHeader: React.FC<MessageHeaderProps> = ({
           <h2 className="text-base font-semibold text-text-primary">{chatTitle}</h2>
           {status && (
             <div className="flex items-center mt-0.5">
-              <span className={clsx("w-2 h-2 rounded-full mr-1.5", statusDotColorClasses[statusColor] || 'bg-neutral-indicator')}></span>
+              <span
+                className={clsx(
+                  'w-2 h-2 rounded-full mr-1.5',
+                  statusDotColorClasses[statusColor] || 'bg-neutral-indicator',
+                )}
+              ></span>
               <p className="text-xs text-text-muted">{status}</p>
             </div>
           )}
@@ -49,4 +55,4 @@ export const MessageHeader: React.FC<MessageHeaderProps> = ({
       </div> */}
     </div>
   );
-}; 
+};

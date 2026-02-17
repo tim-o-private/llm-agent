@@ -8,19 +8,20 @@ Tests the core security properties:
 4. Unknown tools default to REQUIRES_APPROVAL
 """
 
-import pytest
+import sys
 from unittest.mock import AsyncMock, MagicMock
 
-import sys
+import pytest
+
 sys.path.insert(0, 'chatServer')
 
 from chatServer.security.approval_tiers import (
-    ApprovalTier,
     TOOL_APPROVAL_DEFAULTS,
-    get_tool_default_tier,
+    ApprovalTier,
     get_effective_tier,
-    set_user_preference,
+    get_tool_default_tier,
     requires_approval,
+    set_user_preference,
 )
 
 

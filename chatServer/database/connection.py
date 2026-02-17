@@ -1,11 +1,12 @@
 """Database connection management."""
 
-import logging
 import asyncio
-from typing import Optional, AsyncIterator
+import logging
+from typing import AsyncIterator, Optional
+
 import psycopg
-from psycopg_pool import AsyncConnectionPool
 from fastapi import HTTPException
+from psycopg_pool import AsyncConnectionPool
 
 try:
     from ..config.settings import get_settings
@@ -17,29 +18,29 @@ logger = logging.getLogger(__name__)
 
 class DatabaseManager:
     """Manages the database connection pool with auto-initialization."""
-    
+
     def __init__(self):
         self.pool: Optional[AsyncConnectionPool] = None
         self.settings = get_settings()
         self._initialization_lock = asyncio.Lock()
         self._initialization_attempted = False
-    
+
     async def initialize(self) -> None:
         """Initialize the database connection pool."""
         async with self._initialization_lock:
             if self.pool is not None:
                 logger.debug("Database connection pool already initialized")
                 return
-                
+
             try:
                 conn_str = self.settings.database_url
                 logger.info(f"Initializing AsyncConnectionPool with: postgresql://{self.settings.db_user}:[REDACTED]@{self.settings.db_host}:{self.settings.db_port}/{self.settings.db_name}?connect_timeout=10")
-                
+
                 self.pool = AsyncConnectionPool(
-                    conninfo=conn_str, 
-                    open=False, 
-                    min_size=2, 
-                    max_size=10, 
+                    conninfo=conn_str,
+                    open=False,
+                    min_size=2,
+                    max_size=10,
                     check=AsyncConnectionPool.check_connection
                 )
                 await self.pool.open(wait=True, timeout=30)
@@ -50,7 +51,7 @@ class DatabaseManager:
                 self.pool = None
                 self._initialization_attempted = True
                 raise
-    
+
     async def ensure_initialized(self) -> None:
         """Ensure the database connection pool is initialized."""
         if self.pool is None and not self._initialization_attempted:
@@ -63,7 +64,7 @@ class DatabaseManager:
         elif self.pool is None and self._initialization_attempted:
             logger.error("Database pool initialization was attempted but failed")
             raise HTTPException(status_code=503, detail="Database service not available. Pool initialization failed.")
-    
+
     async def close(self) -> None:
         """Close the database connection pool."""
         if self.pool:
@@ -71,15 +72,15 @@ class DatabaseManager:
             logger.info("Database connection pool closed.")
             self.pool = None
             self._initialization_attempted = False
-    
+
     async def get_connection(self) -> AsyncIterator[psycopg.AsyncConnection]:
         """Get a database connection from the pool."""
         await self.ensure_initialized()
-        
+
         if self.pool is None:
             logger.error("Database connection pool is not available after initialization attempt.")
             raise HTTPException(status_code=503, detail="Database service not available. Pool not initialized.")
-        
+
         try:
             async with self.pool.connection() as conn:
                 logger.debug("DB connection acquired from pool.")
@@ -108,4 +109,4 @@ async def get_db_connection() -> AsyncIterator[psycopg.AsyncConnection]:
     """FastAPI dependency to get a database connection."""
     db_manager = get_database_manager()
     async for conn in db_manager.get_connection():
-        yield conn 
+        yield conn

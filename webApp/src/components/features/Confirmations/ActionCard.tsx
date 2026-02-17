@@ -71,11 +71,7 @@ function renderToolArgs(args: Record<string, unknown>): React.ReactNode {
           </dd>
         </div>
       ))}
-      {entries.length > 5 && (
-        <div className="text-gray-400 text-xs italic">
-          +{entries.length - 5} more fields
-        </div>
-      )}
+      {entries.length > 5 && <div className="text-gray-400 text-xs italic">+{entries.length - 5} more fields</div>}
     </dl>
   );
 }
@@ -95,17 +91,11 @@ export const ActionCard: React.FC<ActionCardProps> = ({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2">
             <AlertTriangle className="h-4 w-4 text-amber-500" />
-            <h4 className="font-semibold text-gray-900">
-              {formatToolName(action.tool_name)}
-            </h4>
-            <Badge className="bg-amber-100 text-amber-800 text-xs">
-              Pending Approval
-            </Badge>
+            <h4 className="font-semibold text-gray-900">{formatToolName(action.tool_name)}</h4>
+            <Badge className="bg-amber-100 text-amber-800 text-xs">Pending Approval</Badge>
           </div>
 
-          <div className="bg-gray-50 rounded p-2 mb-2">
-            {renderToolArgs(action.tool_args)}
-          </div>
+          <div className="bg-gray-50 rounded p-2 mb-2">{renderToolArgs(action.tool_args)}</div>
 
           <div className="flex items-center gap-4 text-xs text-gray-500">
             <span className="flex items-center gap-1">
@@ -116,9 +106,7 @@ export const ActionCard: React.FC<ActionCardProps> = ({
               {isExpiringSoon && <AlertTriangle className="h-3 w-3" />}
               {formatTimeUntilExpiry(action.expires_at)}
             </span>
-            {action.context.agent_name && (
-              <span>Agent: {action.context.agent_name as string}</span>
-            )}
+            {action.context.agent_name && <span>Agent: {action.context.agent_name as string}</span>}
           </div>
         </div>
 

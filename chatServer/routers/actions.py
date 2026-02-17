@@ -13,15 +13,15 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 try:
-    from ..dependencies.auth import get_current_user
     from ..database.supabase_client import get_supabase_client
+    from ..dependencies.auth import get_current_user
 except ImportError:
-    from dependencies.auth import get_current_user
     from database.supabase_client import get_supabase_client
+    from dependencies.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -91,8 +91,8 @@ async def get_pending_actions_service():
     """Get or create the pending actions service."""
     global _pending_actions_service
     if _pending_actions_service is None:
-        from chatServer.services.pending_actions import PendingActionsService
         from chatServer.services.audit_service import AuditService
+        from chatServer.services.pending_actions import PendingActionsService
 
         db_client = await get_supabase_client()
         audit_service = AuditService(db_client)
@@ -254,9 +254,9 @@ async def get_tool_preference(
     """Get the current approval preference for a tool."""
     try:
         from chatServer.security.approval_tiers import (
-            get_tool_default_tier,
             ApprovalTier,
             _get_user_preference,
+            get_tool_default_tier,
         )
 
         tier, default = get_tool_default_tier(tool_name)

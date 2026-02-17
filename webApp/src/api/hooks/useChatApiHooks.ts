@@ -19,47 +19,57 @@ interface ChatApiResponse {
 // This function contains the actual API call logic, similar to the original fetchAiResponse
 async function sendMessageApi(payload: SendMessagePayload): Promise<string> {
   const { message, userId, activeChatId } = payload;
-  console.log('sendMessageApi: Sending message to backend API (/api/chat):', message, 'UserId:', userId, 'activeChatId (for history):', activeChatId);
+  console.log(
+    'sendMessageApi: Sending message to backend API (/api/chat):',
+    message,
+    'UserId:',
+    userId,
+    'activeChatId (for history):',
+    activeChatId,
+  );
 
   if (!activeChatId) {
     // This should ideally be caught before calling the mutation, but good to have a safeguard.
-    throw new Error("Active Chat ID (for history) is missing. Cannot send message.");
+    throw new Error('Active Chat ID (for history) is missing. Cannot send message.');
   }
 
   const apiUrl = `${import.meta.env.VITE_API_BASE_URL || ''}/api/chat`;
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   const accessToken = session?.access_token;
 
   if (!accessToken) {
-    throw new Error("User not authenticated. Cannot send message.");
+    throw new Error('User not authenticated. Cannot send message.');
   }
 
-  const agentName = import.meta.env.VITE_DEFAULT_CHAT_AGENT_ID || "assistant";
+  const agentName = import.meta.env.VITE_DEFAULT_CHAT_AGENT_ID || 'assistant';
 
   const requestBody = {
     agent_name: agentName,
     message: message,
     session_id: activeChatId,
   };
-  console.log("sendMessageApi: Request body:", requestBody);
+  console.log('sendMessageApi: Request body:', requestBody);
 
   const httpResponse = await fetch(apiUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${accessToken}`,
+      Authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify(requestBody),
   });
-  console.log("sendMessageApi: Raw HTTP response:", httpResponse);
+  console.log('sendMessageApi: Raw HTTP response:', httpResponse);
 
   if (!httpResponse.ok) {
     // Attempt to parse error JSON, but provide a fallback
-    const errorData = await httpResponse.json().catch(() => ({ 
-      detail: `HTTP error ${httpResponse.status} ${httpResponse.statusText}. No further details from API.` 
+    const errorData = await httpResponse.json().catch(() => ({
+      detail: `HTTP error ${httpResponse.status} ${httpResponse.statusText}. No further details from API.`,
     }));
     // Prioritize 'detail' (FastAPI default), then 'error' (our ChatApiResponse field if it somehow leaks here), then generic message
-    const errorMessage = errorData.detail || errorData.error || `API Error: ${httpResponse.status} ${httpResponse.statusText}`;
+    const errorMessage =
+      errorData.detail || errorData.error || `API Error: ${httpResponse.status} ${httpResponse.statusText}`;
     console.error('sendMessageApi: API Error response data (from !httpResponse.ok block):', errorData);
     throw new Error(errorMessage);
   }
@@ -83,7 +93,7 @@ async function sendMessageApi(payload: SendMessagePayload): Promise<string> {
     console.error('sendMessageApi: Invalid successful response structure from API:', apiData);
     throw new Error('Invalid successful response structure from API. Missing "response" string.');
   }
-  
+
   return apiData.response; // Return the actual agent message string
 }
 
@@ -107,4 +117,4 @@ export const useSendMessageMutation = () => {
 };
 
 // If there was other content in this file, like useArchiveChatMutation, it would remain.
-// For now, assuming this is a new file or only contains this mutation. 
+// For now, assuming this is a new file or only contains this mutation.

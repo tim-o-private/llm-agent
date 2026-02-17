@@ -4,22 +4,25 @@
 
 import logging
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+
 import psycopg
+from fastapi import APIRouter, Depends, HTTPException, status
 
 try:
-    from ..dependencies.auth import get_current_user
     from ..database.connection import get_db_connection
+    from ..dependencies.auth import get_current_user
     from ..models.external_api import (
-        ExternalAPIConnectionCreate, ExternalAPIConnectionUpdate, 
-        ExternalAPIConnectionResponse
+        ExternalAPIConnectionCreate,
+        ExternalAPIConnectionResponse,
+        ExternalAPIConnectionUpdate,
     )
 except ImportError:
-    from chatServer.dependencies.auth import get_current_user
     from chatServer.database.connection import get_db_connection
+    from chatServer.dependencies.auth import get_current_user
     from chatServer.models.external_api import (
-        ExternalAPIConnectionCreate, ExternalAPIConnectionUpdate,
-        ExternalAPIConnectionResponse
+        ExternalAPIConnectionCreate,
+        ExternalAPIConnectionResponse,
+        ExternalAPIConnectionUpdate,
     )
 
 logger = logging.getLogger(__name__)
@@ -36,15 +39,15 @@ async def create_api_connection(
     db_conn: psycopg.AsyncConnection = Depends(get_db_connection)
 ):
     """Create a new external API connection.
-    
+
     Args:
         connection_data: Connection data
         user_id: Current user ID
         db_conn: Database connection
-        
+
     Returns:
         Created connection response
-        
+
     Raises:
         HTTPException: If connection creation fails
     """
@@ -53,8 +56,8 @@ async def create_api_connection(
             # Insert connection (will update if exists due to unique constraint)
             await cur.execute(
                 """
-                INSERT INTO external_api_connections 
-                (user_id, service_name, service_user_email, access_token, refresh_token, 
+                INSERT INTO external_api_connections
+                (user_id, service_name, service_user_email, access_token, refresh_token,
                  token_expires_at, scopes, is_active)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (user_id, service_name) DO UPDATE SET
@@ -78,19 +81,19 @@ async def create_api_connection(
                     True
                 )
             )
-            
+
             result = await cur.fetchone()
             if not result:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail="Failed to create API connection"
                 )
-            
+
             # Convert row to dict
             columns = [desc[0] for desc in cur.description]
             connection_dict = dict(zip(columns, result))
             return ExternalAPIConnectionResponse(**connection_dict)
-        
+
     except Exception as e:
         logger.error(f"Error creating API connection for user {user_id}: {e}")
         raise HTTPException(
@@ -105,11 +108,11 @@ async def get_api_connections(
     db_conn: psycopg.AsyncConnection = Depends(get_db_connection)
 ):
     """Get all API connections for the current user.
-    
+
     Args:
         user_id: Current user ID
         db_conn: Database connection
-        
+
     Returns:
         List of user's API connections
     """
@@ -122,17 +125,17 @@ async def get_api_connections(
                 """,
                 (user_id, True)
             )
-            
+
             results = await cur.fetchall()
             columns = [desc[0] for desc in cur.description]
-            
+
             connections = []
             for row in results:
                 connection_dict = dict(zip(columns, row))
                 connections.append(ExternalAPIConnectionResponse(**connection_dict))
-            
+
             return connections
-        
+
     except Exception as e:
         logger.error(f"Error getting API connections for user {user_id}: {e}")
         raise HTTPException(
@@ -148,15 +151,15 @@ async def get_api_connection(
     db_conn: psycopg.AsyncConnection = Depends(get_db_connection)
 ):
     """Get a specific API connection for the current user.
-    
+
     Args:
         service_name: Name of the service
         user_id: Current user ID
         db_conn: Database connection
-        
+
     Returns:
         API connection response
-        
+
     Raises:
         HTTPException: If connection not found
     """
@@ -169,18 +172,18 @@ async def get_api_connection(
                 """,
                 (user_id, service_name, True)
             )
-            
+
             result = await cur.fetchone()
             if not result:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"No active connection found for service {service_name}"
                 )
-            
+
             columns = [desc[0] for desc in cur.description]
             connection_dict = dict(zip(columns, result))
             return ExternalAPIConnectionResponse(**connection_dict)
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -198,12 +201,12 @@ async def get_connection_status(
     db_conn: psycopg.AsyncConnection = Depends(get_db_connection)
 ):
     """Get connection status for a specific service.
-    
+
     Args:
         service_name: Name of the service (e.g., 'gmail')
         user_id: Current user ID
         db_conn: Database connection
-        
+
     Returns:
         Simple connection status
     """
@@ -216,12 +219,12 @@ async def get_connection_status(
                 """,
                 (user_id, service_name, True)
             )
-            
+
             result = await cur.fetchone()
             is_connected = result[0] > 0 if result else False
-            
+
             return {"connected": is_connected, "service": service_name}
-        
+
     except Exception as e:
         logger.error(f"Error checking connection status for user {user_id}, service {service_name}: {e}")
         return {"connected": False, "service": service_name, "error": "Failed to check status"}
@@ -235,29 +238,29 @@ async def update_api_connection(
     db_conn: psycopg.AsyncConnection = Depends(get_db_connection)
 ):
     """Update an existing API connection.
-    
+
     Args:
         service_name: Name of the service
         connection_update: Connection update data
         user_id: Current user ID
         db_conn: Database connection
-        
+
     Returns:
         Updated connection response
-        
+
     Raises:
         HTTPException: If connection not found or update fails
     """
     try:
         # Only update fields that are provided
         update_data = connection_update.model_dump(exclude_unset=True)
-        
+
         if not update_data:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="No update data provided"
             )
-        
+
         async with db_conn.cursor() as cur:
             # Build dynamic update query
             set_clauses = []
@@ -265,11 +268,11 @@ async def update_api_connection(
             for field, value in update_data.items():
                 set_clauses.append(f"{field} = %s")
                 values.append(value)
-            
+
             # Add updated_at
             set_clauses.append("updated_at = NOW()")
             values.extend([user_id, service_name])
-            
+
             await cur.execute(
                 f"""
                 UPDATE external_api_connections
@@ -279,18 +282,18 @@ async def update_api_connection(
                 """,
                 values
             )
-            
+
             result = await cur.fetchone()
             if not result:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"No connection found for service {service_name}"
                 )
-            
+
             columns = [desc[0] for desc in cur.description]
             connection_dict = dict(zip(columns, result))
             return ExternalAPIConnectionResponse(**connection_dict)
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -308,15 +311,15 @@ async def delete_api_connection(
     db_conn: psycopg.AsyncConnection = Depends(get_db_connection)
 ):
     """Delete (deactivate) an API connection.
-    
+
     Args:
         service_name: Name of the service
         user_id: Current user ID
         db_conn: Database connection
-        
+
     Returns:
         Success message
-        
+
     Raises:
         HTTPException: If connection not found or deletion fails
     """
@@ -332,16 +335,16 @@ async def delete_api_connection(
                 """,
                 (False, user_id, service_name)
             )
-            
+
             result = await cur.fetchone()
             if not result:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"No connection found for service {service_name}"
                 )
-            
+
             return {"message": f"API connection for {service_name} deleted successfully"}
-        
+
     except HTTPException:
         raise
     except Exception as e:

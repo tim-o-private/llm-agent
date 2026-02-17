@@ -18,4 +18,4 @@ export * from './ThemeToggle';
 export * from './ToggleField';
 export * from './chat/MessageBubble';
 export * from './chat/MessageHeader';
-export * from './chat/MessageInput'; 
+export * from './chat/MessageInput';

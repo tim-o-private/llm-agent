@@ -5,4 +5,4 @@ declare global {
   }
 }
 
-export {}; // This makes the file a module 
+export {}; // This makes the file a module

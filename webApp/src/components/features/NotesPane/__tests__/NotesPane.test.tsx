@@ -29,7 +29,7 @@ const mockUseAuthStore = vi.mocked(useAuthStore);
 describe('NotesPane', () => {
   const mockUser = {
     id: 'user-123',
-    email: 'test@example.com'
+    email: 'test@example.com',
   };
 
   const mockNote = {
@@ -39,7 +39,7 @@ describe('NotesPane', () => {
     content: 'Test content',
     created_at: '2025-01-27T10:00:00Z',
     updated_at: '2025-01-27T10:00:00Z',
-    deleted: false
+    deleted: false,
   };
 
   const defaultStoreState = {
@@ -55,10 +55,10 @@ describe('NotesPane', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    
+
     // Mock auth store with authenticated user (component assumes authentication)
     mockUseAuthStore.mockReturnValue({ user: mockUser });
-    
+
     // Mock notes store
     mockUseNotesStore.mockReturnValue(defaultStoreState);
   });
@@ -67,11 +67,11 @@ describe('NotesPane', () => {
     it('should show loading state', () => {
       mockUseNotesStore.mockReturnValue({
         ...defaultStoreState,
-        isLoading: true
+        isLoading: true,
       });
-      
+
       render(<NotesPane />);
-      
+
       expect(screen.getByText('Loading notes...')).toBeInTheDocument();
     });
   });
@@ -79,7 +79,7 @@ describe('NotesPane', () => {
   describe('Empty state', () => {
     it('should show empty state when no notes exist', () => {
       render(<NotesPane />);
-      
+
       expect(screen.getByText('Start taking notes')).toBeInTheDocument();
       expect(screen.getByText('Click "New" to create your first note')).toBeInTheDocument();
     });
@@ -88,11 +88,11 @@ describe('NotesPane', () => {
       mockUseNotesStore.mockReturnValue({
         ...defaultStoreState,
         notes: [mockNote],
-        currentNoteId: null
+        currentNoteId: null,
       });
-      
+
       render(<NotesPane />);
-      
+
       expect(screen.getByText('Select a note to edit')).toBeInTheDocument();
       expect(screen.getByText('Choose from the list on the left')).toBeInTheDocument();
     });
@@ -103,11 +103,11 @@ describe('NotesPane', () => {
       mockUseNotesStore.mockReturnValue({
         ...defaultStoreState,
         notes: [mockNote],
-        currentNoteId: null
+        currentNoteId: null,
       });
-      
+
       render(<NotesPane />);
-      
+
       expect(screen.getByText('Test Note')).toBeInTheDocument();
       expect(screen.getByText('Test content')).toBeInTheDocument();
     });
@@ -116,11 +116,11 @@ describe('NotesPane', () => {
       mockUseNotesStore.mockReturnValue({
         ...defaultStoreState,
         notes: [mockNote],
-        currentNoteId: 'note-1'
+        currentNoteId: 'note-1',
       });
-      
+
       render(<NotesPane />);
-      
+
       // Find the note container div that has the highlighting classes
       const noteContainer = screen.getByText('Test Note').closest('.p-3');
       expect(noteContainer).toHaveClass('bg-brand-primary/10');
@@ -131,11 +131,11 @@ describe('NotesPane', () => {
       mockUseNotesStore.mockReturnValue({
         ...defaultStoreState,
         notes: [noteWithoutTitle],
-        currentNoteId: null
+        currentNoteId: null,
       });
-      
+
       render(<NotesPane />);
-      
+
       expect(screen.getByText('Untitled')).toBeInTheDocument();
     });
 
@@ -144,11 +144,11 @@ describe('NotesPane', () => {
       mockUseNotesStore.mockReturnValue({
         ...defaultStoreState,
         notes: [noteWithoutContent],
-        currentNoteId: null
+        currentNoteId: null,
       });
-      
+
       render(<NotesPane />);
-      
+
       expect(screen.getByText('Empty note')).toBeInTheDocument();
     });
   });
@@ -158,11 +158,11 @@ describe('NotesPane', () => {
       mockUseNotesStore.mockReturnValue({
         ...defaultStoreState,
         notes: [mockNote],
-        currentNoteId: 'note-1'
+        currentNoteId: 'note-1',
       });
-      
+
       render(<NotesPane />);
-      
+
       expect(screen.getByDisplayValue('Test Note')).toBeInTheDocument();
       expect(screen.getByDisplayValue('Test content')).toBeInTheDocument();
     });
@@ -174,11 +174,11 @@ describe('NotesPane', () => {
         ...defaultStoreState,
         notes: [mockNote],
         currentNoteId: 'note-1',
-        isSaving: true
+        isSaving: true,
       });
-      
+
       render(<NotesPane />);
-      
+
       expect(screen.getByText('Saving...')).toBeInTheDocument();
     });
 
@@ -187,18 +187,18 @@ describe('NotesPane', () => {
         ...defaultStoreState,
         notes: [mockNote],
         currentNoteId: 'note-1',
-        isSaving: true
+        isSaving: true,
       });
-      
+
       render(<NotesPane />);
-      
+
       // Find buttons by their role and check disabled state
       const newButton = screen.getByRole('button', { name: /new/i });
       const saveButton = screen.getByRole('button', { name: /save/i });
       // Delete button has no accessible name, so find it by its position
       const buttons = screen.getAllByRole('button');
       const deleteButton = buttons[2]; // Third button is delete
-      
+
       expect(newButton).toBeDisabled();
       expect(saveButton).toBeDisabled();
       expect(deleteButton).toBeDisabled();
@@ -208,8 +208,8 @@ describe('NotesPane', () => {
   describe('Custom className', () => {
     it('should apply custom className', () => {
       const { container } = render(<NotesPane className="custom-class" />);
-      
+
       expect(container.firstChild).toHaveClass('custom-class');
     });
   });
-}); 
+});

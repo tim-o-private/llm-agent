@@ -16,18 +16,16 @@ export interface CheckboxProps {
   // Add any other props you might need
 }
 
-export const Checkbox: React.FC<CheckboxProps> = (
-  {
-    checked,
-    onCheckedChange,
-    id,
-    name,
-    value,
-    disabled = false,
-    srLabel = 'Checkbox',
-    className,
-  }
-) => {
+export const Checkbox: React.FC<CheckboxProps> = ({
+  checked,
+  onCheckedChange,
+  id,
+  name,
+  value,
+  disabled = false,
+  srLabel = 'Checkbox',
+  className,
+}) => {
   return (
     <RadixCheckbox.Root
       id={id}
@@ -45,13 +43,13 @@ export const Checkbox: React.FC<CheckboxProps> = (
         'bg-ui-element-bg border-ui-border', // Unchecked state
         // Use our consistent focus system
         !disabled && getFocusClasses(),
-        className
+        className,
       )}
     >
       <RadixCheckbox.Indicator className="flex items-center justify-center w-full h-full">
-        <CheckIcon 
+        <CheckIcon
           className={clsx(
-              'size-4 fill-white' // Icon is always white, ensure brand-primary is dark enough
+            'size-4 fill-white', // Icon is always white, ensure brand-primary is dark enough
           )}
         />
       </RadixCheckbox.Indicator>
@@ -59,4 +57,4 @@ export const Checkbox: React.FC<CheckboxProps> = (
   );
 };
 
-// Make sure to export it from web/packages/ui/src/index.ts if not already handled by `export *` 
+// Make sure to export it from web/packages/ui/src/index.ts if not already handled by `export *`

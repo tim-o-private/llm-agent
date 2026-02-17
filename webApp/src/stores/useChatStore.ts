@@ -40,7 +40,7 @@ const CHAT_ID_LOCAL_STORAGE_PREFIX = 'chatUI_activeChatId';
 
 export const useChatStore = create<ChatStore>((set, get) => ({
   messages: [], // Messages will be primarily managed by backend history; client might only hold current view if needed.
-                // For now, we keep it, but it might not be populated from DB on init if backend handles full history.
+  // For now, we keep it, but it might not be populated from DB on init if backend handles full history.
   isChatPanelOpen: false,
   activeChatId: null,
   currentSessionInstanceId: null,
@@ -48,15 +48,15 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   isInitializingSession: false, // ADDED: Initial state for the flag
 
   addMessage: async (message, senderTypeFromParam) => {
-    const senderType = senderTypeFromParam || (message.sender || 'ai');
+    const senderType = senderTypeFromParam || message.sender || 'ai';
     set((state) => ({
       messages: [
         ...state.messages,
-        { 
-          id: uuidv4(), 
-          ...message, 
+        {
+          id: uuidv4(),
+          ...message,
           sender: senderType as 'user' | 'ai' | 'tool',
-          timestamp: new Date() 
+          timestamp: new Date(),
         },
       ],
     }));
@@ -79,21 +79,20 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
   },
 
-  toggleChatPanel: () =>
-    set((state) => ({ isChatPanelOpen: !state.isChatPanelOpen })),
+  toggleChatPanel: () => set((state) => ({ isChatPanelOpen: !state.isChatPanelOpen })),
   setChatPanelOpen: (isOpen) => set({ isChatPanelOpen: isOpen }),
   setCurrentAgentName: (agentName) => set({ currentAgentName: agentName }),
 
   initializeSessionAsync: async (agentName: string) => {
     if (get().isInitializingSession) {
-      console.log("Session initialization already in progress. Skipping.");
+      console.log('Session initialization already in progress. Skipping.');
       return;
     }
     set({ isInitializingSession: true });
 
     const user = useAuthStore.getState().user;
     if (!user) {
-      console.warn("User not authenticated, cannot initialize session.");
+      console.warn('User not authenticated, cannot initialize session.');
       set({ activeChatId: null, currentSessionInstanceId: null, currentAgentName: null, messages: [] });
       return;
     }
@@ -114,7 +113,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
     // 2. If not in localStorage, try fetching the latest CHAT_ID from DB ( mimicking useFetchLatestChatId logic)
     if (!chatIdToUse) {
-      console.log("Attempting to fetch latest Chat ID from DB...");
+      console.log('Attempting to fetch latest Chat ID from DB...');
       // Try active sessions first
       const { data: activeSessions, error: activeError } = await supabase
         .from('chat_sessions')
@@ -126,7 +125,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         .limit(1);
 
       if (activeError) console.error('Error fetching active chat_id for init:', activeError);
-      
+
       if (activeSessions && activeSessions.length > 0 && activeSessions[0].chat_id) {
         chatIdToUse = activeSessions[0].chat_id;
       } else {
@@ -159,8 +158,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     // 4. Now, create a NEW SESSION INSTANCE in chat_sessions table for this client engagement
     try {
       const newSessionInstancePayload = {
-          user_id: user.id,
-          agent_name: agentName,
+        user_id: user.id,
+        agent_name: agentName,
         chat_id: chatIdToUse,
         is_active: true,
         updated_at: new Date().toISOString(),
@@ -174,26 +173,29 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
       if (instanceError) throw instanceError;
       if (!newInstance || !newInstance.id) throw new Error('Failed to create session instance or get its ID.');
-      
+
       newSessionInstanceId = newInstance.id;
-      console.log(`Successfully created new session instance in DB. ID: ${newSessionInstanceId}, Chat ID: ${chatIdToUse}`);
-      
+      console.log(
+        `Successfully created new session instance in DB. ID: ${newSessionInstanceId}, Chat ID: ${chatIdToUse}`,
+      );
+
       set({
         activeChatId: chatIdToUse,
         currentSessionInstanceId: newSessionInstanceId,
-      currentAgentName: agentName,
+        currentAgentName: agentName,
         messages: [], // Messages are loaded from backend via PostgresChatMessageHistory, keyed by activeChatId
-    });
-      console.log(`Chat store initialized. Agent: ${agentName}, Active Chat ID: ${chatIdToUse}, Session Instance ID: ${newSessionInstanceId}`);
-
+      });
+      console.log(
+        `Chat store initialized. Agent: ${agentName}, Active Chat ID: ${chatIdToUse}, Session Instance ID: ${newSessionInstanceId}`,
+      );
     } catch (error) {
-      console.error("Error creating new session instance in DB:", error);
+      console.error('Error creating new session instance in DB:', error);
       toast.error('Failed to initialize chat session. Please try again.');
       // Fallback: local session without DB instance, or clear out?
       // For now, if DB interaction fails, we won't have a currentSessionInstanceId.
       set({
         activeChatId: chatIdToUse, // Keep chat_id for message history if possible
-        currentSessionInstanceId: null, 
+        currentSessionInstanceId: null,
         currentAgentName: agentName,
         messages: [],
       });
@@ -221,11 +223,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
 
     if (user && typeof currentAgentName === 'string') {
-
-      // We keep the chat_id in localStorage, as it's persistent. 
+      // We keep the chat_id in localStorage, as it's persistent.
       // We only clear the session instance related things from the store.
       // localStorage.removeItem(localStorageKey); // Do NOT remove chat_id from LS on clear session.
-      console.log(`Chat session instance ${currentSessionInstanceId} marked inactive (if applicable). Local store state clearing.`);
+      console.log(
+        `Chat session instance ${currentSessionInstanceId} marked inactive (if applicable). Local store state clearing.`,
+      );
     }
 
     set({
@@ -234,7 +237,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       currentSessionInstanceId: null,
       // currentAgentName: null, // Keep currentAgentName if user might reopen same agent panel
     });
-    console.log("Current session instance ID cleared. Active chat ID and agent name retained for potential resumption.");
+    console.log(
+      'Current session instance ID cleared. Active chat ID and agent name retained for potential resumption.',
+    );
   },
 
   sendHeartbeatAsync: async () => {
@@ -273,14 +278,17 @@ export const useInitializeChatStore = (agentName: string | null | undefined) => 
         // This check is important to avoid deactivating a session for an agent that's still open in another tab/component if we extend to that.
         // For now, assuming one ChatPanel, if agentName changes, previous session instance should be cleared.
         if (currentStoreSessionInstanceId && currentStoreAgentName && currentStoreAgentName !== agentName) {
-          console.log(`useInitializeChatStore: Agent changed from ${currentStoreAgentName} to ${agentName}. Clearing previous session instance.`);
+          console.log(
+            `useInitializeChatStore: Agent changed from ${currentStoreAgentName} to ${agentName}. Clearing previous session instance.`,
+          );
           clearCurrentSessionAsync(); // Deactivate previous session instance
         }
-        initializeSessionAsync(agentName); 
+        initializeSessionAsync(agentName);
       }
     } else {
-      console.log("useInitializeChatStore: No agentName or user. Clearing current session instance.");
-      if (currentStoreSessionInstanceId) { // Only clear if there was an active instance
+      console.log('useInitializeChatStore: No agentName or user. Clearing current session instance.');
+      if (currentStoreSessionInstanceId) {
+        // Only clear if there was an active instance
         clearCurrentSessionAsync();
       }
     }
@@ -292,7 +300,8 @@ export const useInitializeChatStore = (agentName: string | null | undefined) => 
       // This cleanup will run if the component that uses useInitializeChatStore unmounts.
       // For example, if ChatPanel is conditionally rendered and then removed from UI.
       // We should mark its session as inactive.
-      const stillSameAgentAndUser = useChatStore.getState().currentAgentName === agentName && useAuthStore.getState().user?.id === user?.id;
+      const stillSameAgentAndUser =
+        useChatStore.getState().currentAgentName === agentName && useAuthStore.getState().user?.id === user?.id;
       const activeInstanceId = useChatStore.getState().currentSessionInstanceId;
 
       if (activeInstanceId && stillSameAgentAndUser) {
@@ -301,7 +310,7 @@ export const useInitializeChatStore = (agentName: string | null | undefined) => 
         clearCurrentSessionAsync();
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentName, user?.id, initializeSessionAsync, clearCurrentSessionAsync]); // currentStoreAgentName and currentStoreSessionInstanceId are NOT dependencies here to avoid loops
 };
 
@@ -312,11 +321,11 @@ export const useInitializeChatStore = (agentName: string | null | undefined) => 
 
 // const ChatManager = () => {
 //   const {
-//     sessionId, currentAgentId, messages, 
+//     sessionId, currentAgentId, messages,
 //     lastArchivedMessageCount, isArchiving: storeIsArchivingMarker,
-//     initializeSession, archiveChatSession: triggerStoreArchiveLogic, clearChatSession 
+//     initializeSession, archiveChatSession: triggerStoreArchiveLogic, clearChatSession
 //   } = useChatStore();
-  
+
 //   const archiveMutation = useArchiveChatMutation();
 
 //   // Effect for periodic and visibility-triggered archival
@@ -326,7 +335,7 @@ export const useInitializeChatStore = (agentName: string | null | undefined) => 
 //       if (state.sessionId && state.currentAgentId && (state.messages.length > state.lastArchivedMessageCount || isUnloading)) {
 //         const messagesToArchive = state.messages.slice(state.lastArchivedMessageCount);
 //         const finalMessages = messagesToArchive.length > 0 ? messagesToArchive : (isUnloading && state.messages.length > 0 ? state.messages : []);
-        
+
 //         if (finalMessages.length > 0 && !archiveMutation.isLoading) {
 //           console.log(`ChatManager: Calling archive mutation. Unloading: ${isUnloading}`);
 //           archiveMutation.mutate({
@@ -364,7 +373,7 @@ export const useInitializeChatStore = (agentName: string | null | undefined) => 
 
 //     window.addEventListener('beforeunload', handleBeforeUnload);
 //     document.addEventListener('visibilitychange', handleVisibilityChange);
-    
+
 //     return () => {
 //       window.removeEventListener('beforeunload', handleBeforeUnload);
 //       document.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -383,4 +392,4 @@ export const useInitializeChatStore = (agentName: string | null | undefined) => 
 //   return null; // Manager component
 // };
 
-// export default ChatManager; 
+// export default ChatManager;

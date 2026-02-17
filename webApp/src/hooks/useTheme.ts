@@ -15,7 +15,7 @@ export function useTheme(): [EffectiveTheme, (theme: ThemeAppearance) => void, (
     (newAppearance: ThemeAppearance) => {
       storeSetAppearance(newAppearance);
     },
-    [storeSetAppearance]
+    [storeSetAppearance],
   );
 
   // The toggleTheme function will use the store's toggle logic (light/dark)
@@ -24,4 +24,4 @@ export function useTheme(): [EffectiveTheme, (theme: ThemeAppearance) => void, (
   }, [storeToggleAppearance]);
 
   return [effectiveTheme, setTheme, toggleTheme];
-} 
+}

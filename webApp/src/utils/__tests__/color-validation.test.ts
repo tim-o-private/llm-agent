@@ -1,8 +1,8 @@
-import { 
-  validateSemanticColors, 
-  validateColorClasses, 
+import {
+  validateSemanticColors,
+  validateColorClasses,
   isApprovedColorToken,
-  getAllApprovedTokens 
+  getAllApprovedTokens,
 } from '../color-validation';
 
 describe('Color Validation', () => {
@@ -10,7 +10,7 @@ describe('Color Validation', () => {
     it('should pass for elements with semantic color classes', () => {
       const element = document.createElement('div');
       element.className = 'bg-ui-element-bg text-text-primary border-ui-border';
-      
+
       const result = validateSemanticColors(element);
       expect(result.valid).toBe(true);
       expect(result.violations).toHaveLength(0);
@@ -19,7 +19,7 @@ describe('Color Validation', () => {
     it('should fail for elements with forbidden Tailwind colors', () => {
       const element = document.createElement('div');
       element.className = 'bg-blue-500 text-gray-900 border-red-400';
-      
+
       const result = validateSemanticColors(element);
       expect(result.valid).toBe(false);
       expect(result.violations.length).toBeGreaterThan(0);
@@ -29,7 +29,7 @@ describe('Color Validation', () => {
     it('should fail for elements with hardcoded inline styles', () => {
       const element = document.createElement('div');
       element.setAttribute('style', 'background-color: #3b82f6; color: rgb(255, 255, 255);');
-      
+
       const result = validateSemanticColors(element);
       expect(result.valid).toBe(false);
       expect(result.violations.length).toBeGreaterThan(0);
@@ -39,7 +39,7 @@ describe('Color Validation', () => {
   describe('validateColorClasses', () => {
     it('should identify approved and forbidden classes', () => {
       const className = 'bg-ui-element-bg text-blue-500 border-ui-border';
-      
+
       const result = validateColorClasses(className);
       expect(result.valid).toBe(false);
       expect(result.approvedClasses).toContain('bg-ui-element-bg');
@@ -72,4 +72,4 @@ describe('Color Validation', () => {
       expect(tokens).toContain('text-primary');
     });
   });
-}); 
+});

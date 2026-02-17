@@ -1,6 +1,7 @@
 import logging
-from langchain_community.tools import DuckDuckGoSearchRun
+
 from duckduckgo_search.exceptions import DuckDuckGoSearchException
+from langchain_community.tools import DuckDuckGoSearchRun
 
 logger = logging.getLogger(__name__)
 
@@ -30,4 +31,4 @@ class SafeDuckDuckGoSearchRun(DuckDuckGoSearchRun):
     #         return "DuckDuckGo search failed due to a technical issue (e.g., rate limit or network problem). Please try again later or ask for something else."
     #     except Exception as e:
     #         logger.error(f"An unexpected error occurred in DuckDuckGoSearchRun (async): {e}", exc_info=True)
-    #         return "An unexpected error occurred while trying to search with DuckDuckGo. Please inform the user." 
+    #         return "An unexpected error occurred while trying to search with DuckDuckGo. Please inform the user."

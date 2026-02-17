@@ -15,24 +15,20 @@ export interface CoachCardProps {
 }
 
 export const CoachCard: React.FC<CoachCardProps> = ({
-  title = "AI Coach Suggestion",
+  title = 'AI Coach Suggestion',
   suggestion,
   onAccept,
   onDismiss,
-  acceptLabel = "Accept",
-  dismissLabel = "Dismiss",
+  acceptLabel = 'Accept',
+  dismissLabel = 'Dismiss',
   className,
 }) => {
   return (
-    <Card className={clsx("shadow-lg", className)}>
+    <Card className={clsx('shadow-lg', className)}>
       {/* Card already has padding, so we add content directly */}
       <div className="flex flex-col h-full">
-        <h3 className="text-md font-semibold text-text-primary mb-2">
-          {title}
-        </h3>
-        <div className="text-sm text-text-secondary flex-grow mb-3">
-          {suggestion}
-        </div>
+        <h3 className="text-md font-semibold text-text-primary mb-2">{title}</h3>
+        <div className="text-sm text-text-secondary flex-grow mb-3">{suggestion}</div>
         {(onAccept || onDismiss) && (
           <div className="flex justify-end space-x-2 pt-2 border-t border-ui-border mt-auto">
             <Button variant="soft" onClick={onDismiss}>
@@ -46,4 +42,4 @@ export const CoachCard: React.FC<CoachCardProps> = ({
       </div>
     </Card>
   );
-}; 
+};

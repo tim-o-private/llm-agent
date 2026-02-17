@@ -1,6 +1,7 @@
 """Unit tests for webhook models."""
 
 import unittest
+
 from pydantic import ValidationError
 
 from chatServer.models.webhook import SupabasePayload
@@ -15,7 +16,7 @@ class TestSupabasePayload(unittest.TestCase):
             type="INSERT",
             table="tasks"
         )
-        
+
         self.assertEqual(payload.type, "INSERT")
         self.assertEqual(payload.table, "tasks")
         self.assertIsNone(payload.record)
@@ -26,7 +27,7 @@ class TestSupabasePayload(unittest.TestCase):
         """Test creating a SupabasePayload with all fields."""
         record = {"id": 1, "name": "Test Task", "completed": False}
         old_record = {"id": 1, "name": "Old Task", "completed": True}
-        
+
         payload = SupabasePayload(
             type="UPDATE",
             table="tasks",
@@ -34,7 +35,7 @@ class TestSupabasePayload(unittest.TestCase):
             old_record=old_record,
             webhook_schema="public"
         )
-        
+
         self.assertEqual(payload.type, "UPDATE")
         self.assertEqual(payload.table, "tasks")
         self.assertEqual(payload.record, record)
@@ -44,13 +45,13 @@ class TestSupabasePayload(unittest.TestCase):
     def test_insert_payload(self):
         """Test creating an INSERT payload."""
         record = {"id": 1, "name": "New Task", "completed": False}
-        
+
         payload = SupabasePayload(
             type="INSERT",
             table="tasks",
             record=record
         )
-        
+
         self.assertEqual(payload.type, "INSERT")
         self.assertEqual(payload.table, "tasks")
         self.assertEqual(payload.record, record)
@@ -59,13 +60,13 @@ class TestSupabasePayload(unittest.TestCase):
     def test_delete_payload(self):
         """Test creating a DELETE payload."""
         old_record = {"id": 1, "name": "Deleted Task", "completed": True}
-        
+
         payload = SupabasePayload(
             type="DELETE",
             table="tasks",
             old_record=old_record
         )
-        
+
         self.assertEqual(payload.type, "DELETE")
         self.assertEqual(payload.table, "tasks")
         self.assertEqual(payload.old_record, old_record)
@@ -75,14 +76,14 @@ class TestSupabasePayload(unittest.TestCase):
         """Test creating an UPDATE payload."""
         record = {"id": 1, "name": "Updated Task", "completed": True}
         old_record = {"id": 1, "name": "Old Task", "completed": False}
-        
+
         payload = SupabasePayload(
             type="UPDATE",
             table="tasks",
             record=record,
             old_record=old_record
         )
-        
+
         self.assertEqual(payload.type, "UPDATE")
         self.assertEqual(payload.table, "tasks")
         self.assertEqual(payload.record, record)
@@ -93,7 +94,7 @@ class TestSupabasePayload(unittest.TestCase):
         # Missing type
         with self.assertRaises(ValidationError):
             SupabasePayload(table="tasks")
-        
+
         # Missing table
         with self.assertRaises(ValidationError):
             SupabasePayload(type="INSERT")
@@ -124,17 +125,17 @@ class TestSupabasePayload(unittest.TestCase):
                 "updated_at": "2023-01-02T12:00:00Z"
             }
         }
-        
+
         payload = SupabasePayload(
             type="INSERT",
             table="complex_tasks",
             record=complex_record
         )
-        
+
         self.assertEqual(payload.record, complex_record)
         self.assertEqual(payload.record["metadata"]["tags"], ["urgent", "important"])
         self.assertEqual(payload.record["metadata"]["assignee"]["name"], "John Doe")
 
 
 if __name__ == '__main__':
-    unittest.main() 
+    unittest.main()

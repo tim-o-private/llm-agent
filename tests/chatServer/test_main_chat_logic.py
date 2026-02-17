@@ -1,17 +1,21 @@
-import unittest
-from unittest.mock import patch, MagicMock, AsyncMock
-from fastapi.testclient import TestClient
-import uuid
-import os
 import logging
-from typing import Dict, Any, List, Optional
-from contextlib import AsyncExitStack # Import AsyncExitStack
+import os
+import unittest
+import uuid
+from contextlib import AsyncExitStack  # Import AsyncExitStack
+from typing import Any, Dict, Optional
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from chatServer.main import app, get_db_connection, get_agent_loader # Import get_db_connection for override key and get_agent_loader
-from langchain_postgres import PostgresChatMessageHistory # Import for spec
+from fastapi.testclient import TestClient
+from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.runnables import RunnableConfig  # For type hinting if needed by Fake
+from langchain_postgres import PostgresChatMessageHistory  # Import for spec
 
-from langchain_core.messages import HumanMessage, AIMessage
-from langchain_core.runnables import RunnableConfig # For type hinting if needed by Fake
+from chatServer.main import (  # Import get_db_connection for override key and get_agent_loader
+    app,
+    get_agent_loader,
+    get_db_connection,
+)
 from src.core.agents.customizable_agent import CustomizableAgentExecutor
 
 TEST_USER_ID = "test-user-123"
@@ -25,20 +29,20 @@ def create_mock_jwt(payload: Dict[str, Any] = MOCK_JWT_PAYLOAD, secret: str = MO
 class FakeCustomizableAgentExecutor(CustomizableAgentExecutor):
     # Allow extra fields for our test attributes
     model_config = {"extra": "allow"}
-    
+
     def __init__(self, **kwargs): # Accept any kwargs to be flexible
         # Create a minimal Runnable agent that satisfies Pydantic validation
         from langchain_core.runnables import RunnableLambda
-        
+
         # Create a simple runnable that just returns a mock response
         def mock_agent_function(inputs):
             return {"output": "Mocked agent response"}
-        
+
         mock_agent_runnable = RunnableLambda(mock_agent_function)
-        
+
         # Initialize with the valid runnable agent first
         super().__init__(agent=mock_agent_runnable, tools=[])
-        
+
         # Now set our test-specific attributes using object.__setattr__ to bypass Pydantic
         object.__setattr__(self, 'mock_ainvoke_result', {"output": "Mocked AI response from FakeExecutor"})
         object.__setattr__(self, 'ainvoke_call_history', [])
@@ -48,7 +52,7 @@ class FakeCustomizableAgentExecutor(CustomizableAgentExecutor):
         # But we don't want to actually execute the agent, so we'll intercept before super().ainvoke
         if "chat_history" not in inputs:
             inputs["chat_history"] = []
-        
+
         # Simulate loading existing chat history from memory if the executor has memory
         if hasattr(self, 'memory') and self.memory is not None:
             try:
@@ -60,17 +64,17 @@ class FakeCustomizableAgentExecutor(CustomizableAgentExecutor):
             except Exception:
                 # If memory loading fails, just use empty chat_history
                 pass
-        
+
         # Record the call with the processed inputs (including chat_history)
         self.ainvoke_call_history.append(inputs.copy())
-        
+
         # Simulate the behavior of the actual ainvoke if needed for specific tests
         if hasattr(self, '_custom_ainvoke_side_effect') and self._custom_ainvoke_side_effect:
             if isinstance(self._custom_ainvoke_side_effect, Exception):
                 raise self._custom_ainvoke_side_effect
             return self._custom_ainvoke_side_effect(inputs)
         return self.mock_ainvoke_result
-    
+
     # Add other methods/attributes if main.py checks for them on the agent_executor instance
 
 class TestChatEndpoint(unittest.IsolatedAsyncioTestCase):
@@ -89,16 +93,16 @@ class TestChatEndpoint(unittest.IsolatedAsyncioTestCase):
         self.addAsyncCleanup(self.patcher_os_environ.stop)
 
         # Mock for the database connection instance that will be yielded
-        self.mock_db_conn_instance = AsyncMock() 
+        self.mock_db_conn_instance = AsyncMock()
 
         # Override the get_db_connection dependency
         app.dependency_overrides[get_db_connection] = self.mock_db_connection_generator
-        
+
         # Create a mock agent loader module
         self.mock_agent_loader = MagicMock()
         self.fake_agent_executor_instance = FakeCustomizableAgentExecutor()
         self.mock_agent_loader.load_agent_executor.return_value = self.fake_agent_executor_instance
-        
+
         # Override the get_agent_loader dependency
         app.dependency_overrides[get_agent_loader] = lambda: self.mock_agent_loader
 
@@ -125,11 +129,11 @@ class TestChatEndpoint(unittest.IsolatedAsyncioTestCase):
         from chatServer import main as chat_main_module
         if hasattr(chat_main_module, 'AGENT_EXECUTOR_CACHE'):
             chat_main_module.AGENT_EXECUTOR_CACHE.clear()
-        
+
         # Reset the global chat service instance to ensure fresh state
         import chatServer.services.chat
         chatServer.services.chat._chat_service = None
-        
+
         # Removed the direct patch of get_db_connection, using dependency_overrides instead
 
         self.test_session_id = str(uuid.uuid4())
@@ -139,14 +143,14 @@ class TestChatEndpoint(unittest.IsolatedAsyncioTestCase):
         # Clean up dependency overrides
         app.dependency_overrides.pop(get_db_connection, None)
         app.dependency_overrides.pop(get_agent_loader, None)
-        
+
         await self.stack.aclose()
 
     # Test methods remain synchronous as TestClient makes synchronous calls
     def test_chat_new_session_cache_miss(self):
         agent_name = "test_agent_new"
         message = "Hello, new agent!"
-        
+
         # Reset ainvoke result for this specific test if needed, or set a default in Fake's init
         object.__setattr__(self.fake_agent_executor_instance, 'mock_ainvoke_result', {"output": "Mocked AI response"})
         object.__setattr__(self.fake_agent_executor_instance, 'ainvoke_call_history', [])
@@ -160,7 +164,7 @@ class TestChatEndpoint(unittest.IsolatedAsyncioTestCase):
             headers=self.auth_headers,
             json={"agent_name": agent_name, "message": message, "session_id": self.test_session_id}
         )
-        
+
         self.assertEqual(response.status_code, 200, response.json())
         data = response.json()
         self.assertEqual(data["session_id"], self.test_session_id)
@@ -172,7 +176,7 @@ class TestChatEndpoint(unittest.IsolatedAsyncioTestCase):
             session_id=self.test_session_id,
             log_level=logging.INFO
         )
-        
+
         self.mock_postgres_chat_history_class.assert_called_once()
         args, kwargs = self.mock_postgres_chat_history_class.call_args
         self.assertEqual(args[0], "chat_message_history")
@@ -191,12 +195,12 @@ class TestChatEndpoint(unittest.IsolatedAsyncioTestCase):
         cached_item = chat_main_module.AGENT_EXECUTOR_CACHE.get((TEST_USER_ID, agent_name))
         # The ChatService should have cached the executor after loading it
         self.assertIsNotNone(cached_item, "Agent executor should be cached after first load")
-        
+
         self.assertEqual(len(self.fake_agent_executor_instance.ainvoke_call_history), 1)
         ainvoke_call_args = self.fake_agent_executor_instance.ainvoke_call_history[0]
         self.assertEqual(ainvoke_call_args["input"], message)
         self.assertIn("chat_history", ainvoke_call_args)
-        
+
         # Note: aadd_messages is not called because our FakeCustomizableAgentExecutor
         # doesn't go through the full agent execution path that would trigger memory saving
         # self.mock_chat_history_instance.aadd_messages.assert_called_once()
@@ -210,21 +214,21 @@ class TestChatEndpoint(unittest.IsolatedAsyncioTestCase):
         cached_fake_executor = FakeCustomizableAgentExecutor()
         object.__setattr__(cached_fake_executor, 'mock_ainvoke_result', {"output": "Cached AI response"})
         object.__setattr__(cached_fake_executor, 'ainvoke_call_history', [])
-        
+
         # Set up existing messages that should be loaded from memory
         existing_messages = [
             HumanMessage(content="First message"),
             AIMessage(content="First AI reply")
         ]
-        
+
         # Update the mock to return existing messages for this test
         self.mock_chat_history_instance.aget_messages = AsyncMock(return_value=existing_messages)
-        
+
         # Create a mock memory object that the cached executor will use
         mock_memory = MagicMock()
         mock_memory.chat_memory = self.mock_chat_history_instance
         object.__setattr__(cached_fake_executor, 'memory', mock_memory)
-        
+
         # Pre-populate the cache with our cached executor
         chat_main_module.AGENT_EXECUTOR_CACHE[(TEST_USER_ID, agent_name)] = cached_fake_executor
 
@@ -233,14 +237,14 @@ class TestChatEndpoint(unittest.IsolatedAsyncioTestCase):
             headers=self.auth_headers,
             json={"agent_name": agent_name, "message": message, "session_id": self.test_session_id}
         )
-        
+
         self.assertEqual(response.status_code, 200, response.json())
         data = response.json()
         self.assertEqual(data["response"], "Cached AI response")
 
         # Verify that the agent loader was not called (cache hit)
         self.mock_agent_loader.load_agent_executor.assert_not_called()
-        
+
         # Verify that the cached executor was used
         self.assertEqual(len(cached_fake_executor.ainvoke_call_history), 1)
         ainvoke_call_args = cached_fake_executor.ainvoke_call_history[0]
@@ -261,7 +265,7 @@ class TestChatEndpoint(unittest.IsolatedAsyncioTestCase):
     def test_chat_agent_load_failure(self):
         self.mock_agent_loader.load_agent_executor.side_effect = Exception("Failed to load agent")
         # Reset ainvoke result for this specific test if needed, or set a default in Fake's init
-        self.fake_agent_executor_instance.mock_ainvoke_result = {"output": "Mocked AI response"} 
+        self.fake_agent_executor_instance.mock_ainvoke_result = {"output": "Mocked AI response"}
 
         response = self.client.post(
             "/api/chat",
@@ -289,4 +293,4 @@ class TestChatEndpoint(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Agent execution error", data["error"])
 
 if __name__ == '__main__':
-    unittest.main() 
+    unittest.main()

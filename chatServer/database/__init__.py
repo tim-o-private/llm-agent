@@ -6,6 +6,6 @@ from .supabase_client import SupabaseManager, get_supabase_client
 __all__ = [
     "DatabaseManager",
     "get_db_connection",
-    "SupabaseManager", 
+    "SupabaseManager",
     "get_supabase_client",
-] 
+]

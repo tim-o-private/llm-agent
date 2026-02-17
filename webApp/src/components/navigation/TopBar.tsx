@@ -9,7 +9,7 @@ const TopBar: React.FC = () => {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
-    day: 'numeric'
+    day: 'numeric',
   });
 
   const [isChatPanelOpen, setIsChatPanelOpen] = React.useState(false);
@@ -20,15 +20,13 @@ const TopBar: React.FC = () => {
       <div className="flex items-center">
         {/* Logo or App Name Placeholder - MOVED HERE */}
         <div className="flex items-center flex-shrink-0 px-4 h-full">
-           {/* The h-16 on AppShell for TopBar and border-b from SideNav logo div are now implicitly handled by TopBar's fixed height if needed */}
-           {/* For alignment, ensure TopBar container (in AppShell) has items-center if logo isn't full height */}
+          {/* The h-16 on AppShell for TopBar and border-b from SideNav logo div are now implicitly handled by TopBar's fixed height if needed */}
+          {/* For alignment, ensure TopBar container (in AppShell) has items-center if logo isn't full height */}
           <span className="text-xl font-semibold text-text-primary">Clarity</span>
         </div>
         {/* <button className="md:hidden ..."> Mobile Nav Toggle </button> */}
         {/* Date can be here or moved further right if logo takes precedence */}
-        <span className="text-sm text-text-muted hidden sm:block ml-4">
-          {currentDate}
-        </span>
+        <span className="text-sm text-text-muted hidden sm:block ml-4">{currentDate}</span>
       </div>
 
       {/* Center section - e.g., breadcrumbs or page title - can be empty */}
@@ -43,25 +41,22 @@ const TopBar: React.FC = () => {
       </div>
 
       {/* Right section - Streak, ThemeToggle, UserMenu */}
-      <div className="ml-4 flex items-center md:ml-6 space-x-3"> {/* Added space-x-3 for item spacing */}
+      <div className="ml-4 flex items-center md:ml-6 space-x-3">
+        {' '}
+        {/* Added space-x-3 for item spacing */}
         {/* Streak Progress Placeholder */}
-        <div className="mr-3"> {/* This mr-3 might be redundant due to space-x-3 on parent */}
-          <span className="text-sm font-medium text-text-secondary">Streak:  N/A</span>
+        <div className="mr-3">
+          {' '}
+          {/* This mr-3 might be redundant due to space-x-3 on parent */}
+          <span className="text-sm font-medium text-text-secondary">Streak: N/A</span>
           {/* TODO: Add streak icon/progress bar */}
         </div>
-        
         <PendingActionsBadge />
         <ThemeToggle />
-
         {/* REMOVING CHAT TOGGLE BUTTON FROM TOPBAR - Now handled in TodayView */}
-        <Button 
-          variant="soft" 
-          onClick={() => setIsChatPanelOpen(!isChatPanelOpen)}
-          className="lg:hidden"
-        >
+        <Button variant="soft" onClick={() => setIsChatPanelOpen(!isChatPanelOpen)} className="lg:hidden">
           ��
         </Button>
-
         {/* User Menu Integration */}
         <UserMenu />
       </div>
@@ -69,4 +64,4 @@ const TopBar: React.FC = () => {
   );
 };
 
-export default TopBar; 
+export default TopBar;

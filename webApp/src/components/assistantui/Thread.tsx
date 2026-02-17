@@ -4,8 +4,8 @@ import {
   ComposerPrimitive,
   MessagePrimitive,
   ThreadPrimitive,
-} from "@assistant-ui/react";
-import type { FC } from "react";
+} from '@assistant-ui/react';
+import type { FC } from 'react';
 import {
   ArrowDownIcon,
   CheckIcon,
@@ -15,19 +15,19 @@ import {
   PencilIcon,
   RefreshCwIcon,
   SendHorizontalIcon,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
 
-import { Button } from "@/components/ui/Button";
-import { MarkdownText } from "@/components/assistantui/MarkdownText";
-import { TooltipIconButton } from "@/components/assistantui/TooltipIconButton";
+import { Button } from '@/components/ui/Button';
+import { MarkdownText } from '@/components/assistantui/MarkdownText';
+import { TooltipIconButton } from '@/components/assistantui/TooltipIconButton';
 
 export const Thread: FC = () => {
   return (
     <ThreadPrimitive.Root
       className="aui-root aui-thread-root"
       style={{
-        ["--thread-max-width" as string]: "42rem",
+        ['--thread-max-width' as string]: '42rem',
       }}
     >
       <ThreadPrimitive.Viewport className="aui-thread-viewport">
@@ -57,11 +57,7 @@ export const Thread: FC = () => {
 const ThreadScrollToBottom: FC = () => {
   return (
     <ThreadPrimitive.ScrollToBottom asChild>
-      <TooltipIconButton
-        tooltip="Scroll to bottom"
-        variant="soft"
-        className="aui-thread-scroll-to-bottom"
-      >
+      <TooltipIconButton tooltip="Scroll to bottom" variant="soft" className="aui-thread-scroll-to-bottom">
         <ArrowDownIcon />
       </TooltipIconButton>
     </ThreadPrimitive.ScrollToBottom>
@@ -73,9 +69,7 @@ const ThreadWelcome: FC = () => {
     <ThreadPrimitive.Empty>
       <div className="aui-thread-welcome-root">
         <div className="aui-thread-welcome-center">
-          <p className="aui-thread-welcome-message">
-            How can I help you today?
-          </p>
+          <p className="aui-thread-welcome-message">How can I help you today?</p>
         </div>
         <ThreadWelcomeSuggestions />
       </div>
@@ -92,9 +86,7 @@ const ThreadWelcomeSuggestions: FC = () => {
         method="replace"
         autoSend
       >
-        <span className="aui-thread-welcome-suggestion-text">
-          What can you help me with?
-        </span>
+        <span className="aui-thread-welcome-suggestion-text">What can you help me with?</span>
       </ThreadPrimitive.Suggestion>
       <ThreadPrimitive.Suggestion
         className="aui-thread-welcome-suggestion"
@@ -102,9 +94,7 @@ const ThreadWelcomeSuggestions: FC = () => {
         method="replace"
         autoSend
       >
-        <span className="aui-thread-welcome-suggestion-text">
-          Tell me about this project
-        </span>
+        <span className="aui-thread-welcome-suggestion-text">Tell me about this project</span>
       </ThreadPrimitive.Suggestion>
     </div>
   );
@@ -113,12 +103,7 @@ const ThreadWelcomeSuggestions: FC = () => {
 const Composer: FC = () => {
   return (
     <ComposerPrimitive.Root className="aui-composer-root">
-      <ComposerPrimitive.Input
-        rows={1}
-        autoFocus
-        placeholder="Write a message..."
-        className="aui-composer-input"
-      />
+      <ComposerPrimitive.Input rows={1} autoFocus placeholder="Write a message..." className="aui-composer-input" />
       <ComposerAction />
     </ComposerPrimitive.Root>
   );
@@ -129,22 +114,14 @@ const ComposerAction: FC = () => {
     <>
       <ThreadPrimitive.If running={false}>
         <ComposerPrimitive.Send asChild>
-          <TooltipIconButton
-            tooltip="Send"
-            variant="solid"
-            className="aui-composer-send"
-          >
+          <TooltipIconButton tooltip="Send" variant="solid" className="aui-composer-send">
             <SendHorizontalIcon />
           </TooltipIconButton>
         </ComposerPrimitive.Send>
       </ThreadPrimitive.If>
       <ThreadPrimitive.If running>
         <ComposerPrimitive.Cancel asChild>
-          <TooltipIconButton
-            tooltip="Cancel"
-            variant="soft"
-            className="aui-composer-cancel"
-          >
+          <TooltipIconButton tooltip="Cancel" variant="soft" className="aui-composer-cancel">
             <CircleStopIcon />
           </TooltipIconButton>
         </ComposerPrimitive.Cancel>
@@ -169,11 +146,7 @@ const UserMessage: FC = () => {
 
 const UserActionBar: FC = () => {
   return (
-    <ActionBarPrimitive.Root
-      hideWhenRunning
-      autohide="not-last"
-      className="aui-user-action-bar-root"
-    >
+    <ActionBarPrimitive.Root hideWhenRunning autohide="not-last" className="aui-user-action-bar-root">
       <ActionBarPrimitive.Edit asChild>
         <TooltipIconButton tooltip="Edit">
           <PencilIcon />
@@ -241,16 +214,9 @@ const AssistantActionBar: FC = () => {
   );
 };
 
-const BranchPicker: FC<BranchPickerPrimitive.Root.Props> = ({
-  className,
-  ...rest
-}) => {
+const BranchPicker: FC<BranchPickerPrimitive.Root.Props> = ({ className, ...rest }) => {
   return (
-    <BranchPickerPrimitive.Root
-      hideWhenSingleBranch
-      className={cn("aui-branch-picker-root", className)}
-      {...rest}
-    >
+    <BranchPickerPrimitive.Root hideWhenSingleBranch className={cn('aui-branch-picker-root', className)} {...rest}>
       <BranchPickerPrimitive.Previous asChild>
         <TooltipIconButton tooltip="Previous">
           <ChevronLeftIcon />
@@ -270,14 +236,8 @@ const BranchPicker: FC<BranchPickerPrimitive.Root.Props> = ({
 
 const CircleStopIcon = () => {
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 16 16"
-      fill="currentColor"
-      width="16"
-      height="16"
-    >
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" width="16" height="16">
       <rect width="10" height="10" x="3" y="3" rx="2" />
     </svg>
   );
-}; 
+};

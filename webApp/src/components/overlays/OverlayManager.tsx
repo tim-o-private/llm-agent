@@ -44,9 +44,5 @@ export const OverlayManager: React.FC = () => {
     }
   };
 
-  return (
-    <React.Suspense fallback={<OverlayLoadingFallback />}>
-      {renderOverlay()}
-    </React.Suspense>
-  );
-}; 
+  return <React.Suspense fallback={<OverlayLoadingFallback />}>{renderOverlay()}</React.Suspense>;
+};

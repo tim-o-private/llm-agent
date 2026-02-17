@@ -16,7 +16,7 @@ describe('useTaskModalManagement', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    
+
     // Mock the store selector
     mockUseTaskViewStore.mockImplementation((selector: any) => {
       return selector(mockStoreState);
@@ -95,9 +95,7 @@ describe('useTaskModalManagement', () => {
     });
 
     it('should not sync with store when syncWithStore is false', () => {
-      const { result } = renderHook(() => 
-        useTaskModalManagement({ syncWithStore: false })
-      );
+      const { result } = renderHook(() => useTaskModalManagement({ syncWithStore: false }));
 
       act(() => {
         result.current.openModal('detail', 'task-1');
@@ -291,4 +289,4 @@ describe('useTaskModalManagement', () => {
       expect(result.current.detailModal.taskId).toBe('task-2');
     });
   });
-}); 
+});

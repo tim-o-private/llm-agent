@@ -4,4 +4,4 @@ export function useToggle(initial = false): [boolean, () => void, (value: boolea
   const [state, setState] = useState(initial);
   const toggle = useCallback(() => setState((v) => !v), []);
   return [state, toggle, setState];
-} 
+}

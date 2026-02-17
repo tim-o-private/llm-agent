@@ -1,26 +1,26 @@
 """Unit tests for chat service."""
 
 import unittest
-import asyncio
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from fastapi import HTTPException, Request
+from fastapi import HTTPException
 from langchain_core.chat_history import BaseChatMessageHistory
 
-from chatServer.services.chat import ChatService, AsyncConversationBufferWindowMemory, get_chat_service
 from chatServer.models.chat import ChatRequest, ChatResponse
+from chatServer.services.chat import AsyncConversationBufferWindowMemory, ChatService, get_chat_service
 
 
 class MockChatMessageHistory(BaseChatMessageHistory):
     """Mock chat message history for testing."""
-    
+
     def __init__(self):
         self.messages = []
         self.aget_messages = AsyncMock(return_value=[])
-    
+
     def add_message(self, message):
         self.messages.append(message)
-    
+
     def clear(self):
         self.messages.clear()
 
@@ -37,12 +37,12 @@ async def test_async_memory_aload_memory_variables_with_messages():
         memory_key="chat_history",
         input_key="input"
     )
-    
+
     mock_messages = [MagicMock(), MagicMock(), MagicMock()]
     mock_chat_memory.aget_messages = AsyncMock(return_value=mock_messages)
-    
+
     result = await memory.aload_memory_variables({})
-    
+
     assert result["chat_history"] == mock_messages
     mock_chat_memory.aget_messages.assert_called_once()
 
@@ -58,14 +58,14 @@ async def test_async_memory_aload_memory_variables_with_window_limit():
         memory_key="chat_history",
         input_key="input"
     )
-    
+
     # Create 12 messages (6 pairs)
     mock_messages = [MagicMock() for _ in range(12)]
     mock_chat_memory.aget_messages = AsyncMock(return_value=mock_messages)
-    
+
     # k=5 means last 10 messages (5*2)
     result = await memory.aload_memory_variables({})
-    
+
     # Should get last 10 messages
     assert len(result["chat_history"]) == 10
     assert result["chat_history"] == mock_messages[-10:]
@@ -88,12 +88,12 @@ class TestAsyncConversationBufferWindowMemory(unittest.TestCase):
     def test_messages_to_string(self):
         """Test converting messages to string format."""
         mock_messages = [MagicMock(), MagicMock()]
-        
+
         with patch('langchain.schema.get_buffer_string') as mock_get_buffer:
             mock_get_buffer.return_value = "formatted string"
-            
+
             result = self.memory.messages_to_string(mock_messages)
-            
+
             self.assertEqual(result, "formatted string")
             mock_get_buffer.assert_called_once_with(
                 mock_messages,
@@ -123,9 +123,9 @@ class TestChatService(unittest.TestCase):
         mock_memory = MagicMock()
         mock_history_class.return_value = mock_history
         mock_memory_class.return_value = mock_memory
-        
+
         result = self.service.create_chat_memory("session123", mock_pg_connection)
-        
+
         mock_history_class.assert_called_once_with(
             "chat_message_history",  # CHAT_MESSAGE_HISTORY_TABLE_NAME
             "session123",
@@ -146,10 +146,10 @@ class TestChatService(unittest.TestCase):
         mock_executor.ainvoke = MagicMock()
         mock_executor.memory = MagicMock()
         mock_memory = MagicMock()
-        
+
         cache_key = ("user123", "agent1")
         self.mock_cache[cache_key] = mock_executor
-        
+
         result = self.service.get_or_load_agent_executor(
             user_id="user123",
             agent_name="agent1",
@@ -157,7 +157,7 @@ class TestChatService(unittest.TestCase):
             agent_loader_module=MagicMock(),
             memory=mock_memory
         )
-        
+
         self.assertEqual(result, mock_executor)
         self.assertEqual(mock_executor.memory, mock_memory)
 
@@ -169,7 +169,7 @@ class TestChatService(unittest.TestCase):
         mock_memory = MagicMock()
         mock_loader = MagicMock()
         mock_loader.load_agent_executor.return_value = mock_executor
-        
+
         result = self.service.get_or_load_agent_executor(
             user_id="user123",
             agent_name="agent1",
@@ -177,7 +177,7 @@ class TestChatService(unittest.TestCase):
             agent_loader_module=mock_loader,
             memory=mock_memory
         )
-        
+
         self.assertEqual(result, mock_executor)
         self.assertEqual(mock_executor.memory, mock_memory)
         self.assertIn(("user123", "agent1"), self.mock_cache)
@@ -190,7 +190,7 @@ class TestChatService(unittest.TestCase):
         del mock_executor.ainvoke
         mock_loader = MagicMock()
         mock_loader.load_agent_executor.return_value = mock_executor
-        
+
         with self.assertRaises(HTTPException) as context:
             self.service.get_or_load_agent_executor(
                 user_id="user123",
@@ -199,7 +199,7 @@ class TestChatService(unittest.TestCase):
                 agent_loader_module=mock_loader,
                 memory=MagicMock()
             )
-        
+
         self.assertEqual(context.exception.status_code, 500)
         self.assertIn("Agent loading failed", context.exception.detail)
 
@@ -207,7 +207,7 @@ class TestChatService(unittest.TestCase):
         """Test error during agent loading."""
         mock_loader = MagicMock()
         mock_loader.load_agent_executor.side_effect = Exception("Loading failed")
-        
+
         with self.assertRaises(HTTPException) as context:
             self.service.get_or_load_agent_executor(
                 user_id="user123",
@@ -216,16 +216,16 @@ class TestChatService(unittest.TestCase):
                 agent_loader_module=mock_loader,
                 memory=MagicMock()
             )
-        
+
         self.assertEqual(context.exception.status_code, 500)
         self.assertIn("Could not load agent", context.exception.detail)
 
     def test_extract_tool_info_no_steps(self):
         """Test extracting tool info when no intermediate steps."""
         response_data = {"output": "response"}
-        
+
         tool_name, tool_input = self.service.extract_tool_info(response_data)
-        
+
         self.assertIsNone(tool_name)
         self.assertIsNone(tool_input)
 
@@ -235,14 +235,14 @@ class TestChatService(unittest.TestCase):
         mock_action.tool = "web_search"
         mock_action.tool_input = {"query": "test"}
         mock_observation = "observation"
-        
+
         response_data = {
             "output": "response",
             "intermediate_steps": [(mock_action, mock_observation)]
         }
-        
+
         tool_name, tool_input = self.service.extract_tool_info(response_data)
-        
+
         self.assertEqual(tool_name, "web_search")
         self.assertEqual(tool_input, {"query": "test"})
 
@@ -252,9 +252,9 @@ class TestChatService(unittest.TestCase):
             "output": "response",
             "intermediate_steps": ["invalid_step"]
         }
-        
+
         tool_name, tool_input = self.service.extract_tool_info(response_data)
-        
+
         self.assertIsNone(tool_name)
         self.assertIsNone(tool_input)
 
@@ -275,7 +275,7 @@ class TestChatServiceAsync:
             message="Hello",
             session_id=""
         )
-        
+
         with pytest.raises(HTTPException) as exc_info:
             await self.service.process_chat(
                 chat_input=chat_input,
@@ -284,7 +284,7 @@ class TestChatServiceAsync:
                 agent_loader_module=MagicMock(),
                 request=MagicMock()
             )
-        
+
         assert exc_info.value.status_code == 400
         assert "session_id is required" in exc_info.value.detail
 
@@ -298,14 +298,14 @@ class TestChatServiceAsync:
             message="Hello",
             session_id="session123"
         )
-        
+
         mock_memory = MagicMock()
         mock_executor = MagicMock()
         mock_executor.ainvoke = AsyncMock(return_value={"output": "Hello back!"})
-        
+
         mock_create_memory.return_value = mock_memory
         mock_get_executor.return_value = mock_executor
-        
+
         result = await self.service.process_chat(
             chat_input=chat_input,
             user_id="user123",
@@ -313,7 +313,7 @@ class TestChatServiceAsync:
             agent_loader_module=MagicMock(),
             request=MagicMock()
         )
-        
+
         assert isinstance(result, ChatResponse)
         assert result.session_id == "session123"
         assert result.response == "Hello back!"
@@ -329,14 +329,14 @@ class TestChatServiceAsync:
             message="Hello",
             session_id="session123"
         )
-        
+
         mock_memory = MagicMock()
         mock_executor = MagicMock()
         mock_executor.ainvoke = AsyncMock(side_effect=Exception("Agent failed"))
-        
+
         mock_create_memory.return_value = mock_memory
         mock_get_executor.return_value = mock_executor
-        
+
         result = await self.service.process_chat(
             chat_input=chat_input,
             user_id="user123",
@@ -344,7 +344,7 @@ class TestChatServiceAsync:
             agent_loader_module=MagicMock(),
             request=MagicMock()
         )
-        
+
         assert isinstance(result, ChatResponse)
         assert result.session_id == "session123"
         assert "error occurred processing" in result.response
@@ -376,4 +376,4 @@ class TestChatServiceGlobal(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main() 
+    unittest.main()

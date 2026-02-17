@@ -3,9 +3,10 @@
 # @rules memory-bank/rules/api-rules.json#api-005
 
 from datetime import datetime
-from typing import List, Optional
-from pydantic import BaseModel, Field, validator
 from enum import Enum
+from typing import List, Optional
+
+from pydantic import BaseModel, Field, validator
 
 
 class ServiceName(str, Enum):
@@ -24,7 +25,7 @@ class ExternalAPIConnectionCreate(BaseModel):
     scopes: List[str] = Field(default_factory=list)
     service_user_id: Optional[str] = None
     service_user_email: Optional[str] = None
-    
+
     @validator('access_token')
     def access_token_must_not_be_empty(cls, v):
         if not v.strip():
@@ -41,7 +42,7 @@ class ExternalAPIConnectionUpdate(BaseModel):
     service_user_id: Optional[str] = None
     service_user_email: Optional[str] = None
     is_active: Optional[bool] = None
-    
+
     @validator('access_token')
     def access_token_must_not_be_empty(cls, v):
         if v is not None and not v.strip():
@@ -61,7 +62,7 @@ class ExternalAPIConnectionResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     is_active: bool
-    
+
     # Note: access_token and refresh_token are intentionally excluded from responses
     # for security reasons
 
@@ -95,7 +96,7 @@ class EmailDigestRequest(BaseModel):
     hours_back: int = Field(default=24, ge=1, le=168)  # 1 hour to 1 week
     max_threads: int = Field(default=20, ge=1, le=100)
     include_read: bool = Field(default=False)
-    
+
     @validator('hours_back')
     def validate_hours_back(cls, v):
         if v < 1 or v > 168:  # 1 week max
@@ -110,4 +111,4 @@ class EmailDigestResponse(BaseModel):
     unread_count: int
     important_threads: List[EmailThread]
     generated_at: datetime
-    time_period_hours: int 
+    time_period_hours: int

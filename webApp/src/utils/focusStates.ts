@@ -14,7 +14,7 @@ export const getFocusRing = (state: FocusState = 'default') => {
     error: 'ring-2 ring-border-destructive/20', // Error state - red
     disabled: '', // No ring when disabled
   };
-  
+
   return rings[state];
 };
 
@@ -25,14 +25,14 @@ export const getInteractiveBorder = (state: InteractionState = 'default', hasErr
   if (hasError) {
     return 'border-border-destructive';
   }
-  
+
   const borders = {
     default: 'border-ui-border',
     hover: 'border-ui-border-hover',
     active: 'border-ui-border-focus',
     disabled: 'border-ui-border',
   };
-  
+
   return borders[state];
 };
 
@@ -46,7 +46,7 @@ export const getInteractiveBackground = (state: InteractionState = 'default') =>
     active: 'bg-ui-interactive-bg-active',
     disabled: 'bg-ui-element-bg/50',
   };
-  
+
   return backgrounds[state];
 };
 
@@ -60,7 +60,7 @@ export const getInteractiveText = (state: InteractionState = 'default') => {
     active: 'text-text-primary',
     disabled: 'text-text-disabled',
   };
-  
+
   return textColors[state];
 };
 
@@ -75,7 +75,7 @@ export const getFocusTransform = (state: FocusState = 'default') => {
     error: '',
     disabled: '',
   };
-  
+
   return transforms[state];
 };
 
@@ -93,16 +93,16 @@ export const getInteractiveStyles = ({
   focusState = 'default',
   interactionState = 'default',
   hasError = false,
-  variant = 'card'
+  variant = 'card',
 }: InteractiveElementProps) => {
   const baseStyles = 'transition-all duration-200 outline-none focus:outline-none';
-  
+
   const variantStyles = {
     card: 'rounded-xl border-2 cursor-pointer',
     button: 'rounded-lg border font-medium cursor-pointer',
     input: 'rounded-lg border',
   };
-  
+
   return clsx(
     baseStyles,
     variantStyles[variant],
@@ -112,7 +112,7 @@ export const getInteractiveStyles = ({
     getFocusRing(focusState),
     getFocusTransform(focusState),
     // Disabled state overrides
-    interactionState === 'disabled' && 'cursor-not-allowed opacity-50'
+    interactionState === 'disabled' && 'cursor-not-allowed opacity-50',
   );
 };
 
@@ -125,7 +125,7 @@ export const getHoverClasses = (variant: 'card' | 'button' | 'input' = 'card') =
     button: 'hover:bg-ui-element-bg-hover hover:border-ui-border-hover hover:shadow-md',
     input: 'hover:border-ui-border-hover',
   };
-  
+
   return hoverClasses[variant];
 };
 
@@ -143,13 +143,13 @@ export const getCompleteInteractiveClasses = ({
   focusState = 'default',
   interactionState = 'default',
   hasError = false,
-  variant = 'card'
+  variant = 'card',
 }: InteractiveElementProps) => {
   return clsx(
     getInteractiveStyles({ focusState, interactionState, hasError, variant }),
     // Add hover classes only if not disabled
     interactionState !== 'disabled' && getHoverClasses(variant),
     // Add focus classes only if not disabled
-    interactionState !== 'disabled' && getFocusClasses()
+    interactionState !== 'disabled' && getFocusClasses(),
   );
-}; 
+};

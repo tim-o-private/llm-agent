@@ -6,7 +6,7 @@ import { PrioritizeViewModal } from '@/components/features/PrioritizeView/Priori
 
 /**
  * Test page for manually testing the modal management hook
- * 
+ *
  * To use this page:
  * 1. Add it to your router
  * 2. Navigate to /modal-test
@@ -14,7 +14,7 @@ import { PrioritizeViewModal } from '@/components/features/PrioritizeView/Priori
  */
 const ModalTestPage: React.FC = () => {
   const modalManagement = useTaskModalManagement({
-    syncWithStore: true
+    syncWithStore: true,
   });
 
   const testTaskId = 'test-task-123';
@@ -32,49 +32,47 @@ const ModalTestPage: React.FC = () => {
   return (
     <div className="p-8 max-w-4xl mx-auto">
       <h1 className="text-3xl font-bold mb-8">Modal Management Hook Test</h1>
-      
+
       {/* Current State Display */}
       <div className="bg-gray-100 p-4 rounded-lg mb-8">
         <h2 className="text-xl font-semibold mb-4">Current Modal State</h2>
         <div className="space-y-2">
-          <p><strong>Type:</strong> {modalManagement.modalState.type || 'None'}</p>
-          <p><strong>Task ID:</strong> {modalManagement.modalState.taskId || 'None'}</p>
-          <p><strong>Is Open:</strong> {modalManagement.modalState.isOpen ? 'Yes' : 'No'}</p>
-          <p><strong>Detail Modal Open:</strong> {modalManagement.detailModal.isOpen ? 'Yes' : 'No'}</p>
-          <p><strong>Prioritize Modal Open:</strong> {modalManagement.prioritizeModal.isOpen ? 'Yes' : 'No'}</p>
+          <p>
+            <strong>Type:</strong> {modalManagement.modalState.type || 'None'}
+          </p>
+          <p>
+            <strong>Task ID:</strong> {modalManagement.modalState.taskId || 'None'}
+          </p>
+          <p>
+            <strong>Is Open:</strong> {modalManagement.modalState.isOpen ? 'Yes' : 'No'}
+          </p>
+          <p>
+            <strong>Detail Modal Open:</strong> {modalManagement.detailModal.isOpen ? 'Yes' : 'No'}
+          </p>
+          <p>
+            <strong>Prioritize Modal Open:</strong> {modalManagement.prioritizeModal.isOpen ? 'Yes' : 'No'}
+          </p>
         </div>
       </div>
 
       {/* Test Buttons */}
       <div className="space-y-4 mb-8">
         <h2 className="text-xl font-semibold">Test Actions</h2>
-        
+
         <div className="flex flex-wrap gap-4">
-          <Button 
-            onClick={() => modalManagement.detailModal.open(testTaskId)}
-            variant="solid"
-          >
+          <Button onClick={() => modalManagement.detailModal.open(testTaskId)} variant="solid">
             Open Detail Modal
           </Button>
-          
-          <Button 
-            onClick={() => modalManagement.prioritizeModal.open(testTaskId)}
-            variant="solid"
-          >
+
+          <Button onClick={() => modalManagement.prioritizeModal.open(testTaskId)} variant="solid">
             Open Prioritize Modal
           </Button>
-          
-          <Button 
-            onClick={() => modalManagement.openModal('detail', 'different-task-456')}
-            variant="outline"
-          >
+
+          <Button onClick={() => modalManagement.openModal('detail', 'different-task-456')} variant="outline">
             Open Detail for Different Task
           </Button>
-          
-          <Button 
-            onClick={() => modalManagement.closeModal()}
-            variant="soft"
-          >
+
+          <Button onClick={() => modalManagement.closeModal()} variant="soft">
             Close Modal
           </Button>
         </div>
@@ -84,10 +82,19 @@ const ModalTestPage: React.FC = () => {
       <div className="bg-blue-50 p-4 rounded-lg mb-8">
         <h2 className="text-xl font-semibold mb-4">Query Results</h2>
         <div className="space-y-2">
-          <p><strong>Is Detail Modal Open:</strong> {modalManagement.isModalOpen('detail') ? 'Yes' : 'No'}</p>
-          <p><strong>Is Prioritize Modal Open:</strong> {modalManagement.isModalOpen('prioritize') ? 'Yes' : 'No'}</p>
-          <p><strong>Is Modal Open for Test Task:</strong> {modalManagement.isModalOpenForTask(testTaskId) ? 'Yes' : 'No'}</p>
-          <p><strong>Current Task ID:</strong> {modalManagement.currentTaskId || 'None'}</p>
+          <p>
+            <strong>Is Detail Modal Open:</strong> {modalManagement.isModalOpen('detail') ? 'Yes' : 'No'}
+          </p>
+          <p>
+            <strong>Is Prioritize Modal Open:</strong> {modalManagement.isModalOpen('prioritize') ? 'Yes' : 'No'}
+          </p>
+          <p>
+            <strong>Is Modal Open for Test Task:</strong>{' '}
+            {modalManagement.isModalOpenForTask(testTaskId) ? 'Yes' : 'No'}
+          </p>
+          <p>
+            <strong>Current Task ID:</strong> {modalManagement.currentTaskId || 'None'}
+          </p>
         </div>
       </div>
 
@@ -128,4 +135,4 @@ const ModalTestPage: React.FC = () => {
   );
 };
 
-export default ModalTestPage; 
+export default ModalTestPage;

@@ -18,14 +18,14 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
         className={clsx(
           // Make it square for icons
           'aspect-square',
-          className
+          className,
         )}
         {...props}
       >
         {children}
       </Button>
     );
-  }
+  },
 );
 
-IconButton.displayName = 'IconButton'; 
+IconButton.displayName = 'IconButton';

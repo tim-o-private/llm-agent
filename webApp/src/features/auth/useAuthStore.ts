@@ -32,9 +32,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
   signInWithProvider: async (provider, includeGmail = false) => {
     set({ loading: true, error: null });
-    
+
     const options: any = { redirectTo };
-    
+
     // If including Gmail, add Gmail scopes and redirect to Gmail callback
     if (includeGmail && provider === 'google') {
       options.scopes = 'https://www.googleapis.com/auth/gmail.readonly';
@@ -44,7 +44,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       };
       options.redirectTo = `${window.location.origin}/auth/callback?service=gmail`;
     }
-    
+
     const { error } = await supabase.auth.signInWithOAuth({ provider, options });
     if (error) set({ error: error.message });
     set({ loading: false });

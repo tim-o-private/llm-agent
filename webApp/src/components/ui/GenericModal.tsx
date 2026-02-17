@@ -9,19 +9,19 @@ interface GenericModalProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   children: React.ReactNode;
-  
+
   // Content props
   title?: string;
   description?: string;
-  
+
   // Behavior props
   isDirty?: boolean;
   modalId?: string; // For focus management
-  
+
   // Styling props
   size?: 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
-  
+
   // Loading/error states
   isLoading?: boolean;
   error?: string | Error | null;
@@ -30,7 +30,7 @@ interface GenericModalProps {
 
 const sizeClasses = {
   sm: 'max-w-md',
-  md: 'max-w-lg', 
+  md: 'max-w-lg',
   lg: 'max-w-2xl',
   xl: 'max-w-4xl',
 };
@@ -52,17 +52,20 @@ export const GenericModal: React.FC<GenericModalProps> = ({
   const setModalOpenState = useTaskViewStore((state) => state.setModalOpenState);
 
   // Handle dirty state confirmation
-  const wrappedOnOpenChange = useCallback((open: boolean) => {
-    if (!open && isDirty) {
-      if (window.confirm("You have unsaved changes. Are you sure you want to discard them?")) {
-        onOpenChange(false);
+  const wrappedOnOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open && isDirty) {
+        if (window.confirm('You have unsaved changes. Are you sure you want to discard them?')) {
+          onOpenChange(false);
+        } else {
+          return; // Prevent closing if user cancels discard
+        }
       } else {
-        return; // Prevent closing if user cancels discard
+        onOpenChange(open);
       }
-    } else {
-      onOpenChange(open);
-    }
-  }, [isDirty, onOpenChange]);
+    },
+    [isDirty, onOpenChange],
+  );
 
   // Register modal state for keyboard shortcut management
   useEffect(() => {
@@ -76,28 +79,22 @@ export const GenericModal: React.FC<GenericModalProps> = ({
     <Dialog.Root open={isOpen} onOpenChange={wrappedOnOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/50 data-[state=open]:animate-overlayShow" />
-        <Dialog.Content 
+        <Dialog.Content
           className={clsx(
-            "fixed top-1/2 left-1/2 w-[90vw] max-h-[85vh] -translate-x-1/2 -translate-y-1/2",
-            "rounded-lg bg-ui-modal-bg p-6 shadow-lg",
-            "data-[state=open]:animate-contentShow focus:outline-none",
-            "flex flex-col",
+            'fixed top-1/2 left-1/2 w-[90vw] max-h-[85vh] -translate-x-1/2 -translate-y-1/2',
+            'rounded-lg bg-ui-modal-bg p-6 shadow-lg',
+            'data-[state=open]:animate-contentShow focus:outline-none',
+            'flex flex-col',
             sizeClasses[size],
-            className
+            className,
           )}
         >
           {/* Header */}
           {(title || description) && (
             <div className="mb-4">
-              {title && (
-                <Dialog.Title className="text-xl font-semibold text-text-primary mb-1">
-                  {title}
-                </Dialog.Title>
-              )}
+              {title && <Dialog.Title className="text-xl font-semibold text-text-primary mb-1">{title}</Dialog.Title>}
               {description && (
-                <Dialog.Description className="text-sm text-text-muted">
-                  {description}
-                </Dialog.Description>
+                <Dialog.Description className="text-sm text-text-muted">{description}</Dialog.Description>
               )}
             </div>
           )}
@@ -134,4 +131,4 @@ export const GenericModal: React.FC<GenericModalProps> = ({
   );
 };
 
-export default GenericModal; 
+export default GenericModal;

@@ -47,52 +47,55 @@ export interface FocusSession {
   notes?: string | null; // Notes taken during/after the session
   outcome?: FocusSessionOutcome | null;
   created_at: string; // ISO timestamp string
-  motivation?: string | null; 
-  completion_note?: string | null; 
+  motivation?: string | null;
+  completion_note?: string | null;
 }
 
-export type NewTaskData = Omit<Task, 'id' | 'created_at' | 'updated_at' | 'completed' | 'deleted' | 'subtasks'> & { user_id: string };
+export type NewTaskData = Omit<Task, 'id' | 'created_at' | 'updated_at' | 'completed' | 'deleted' | 'subtasks'> & {
+  user_id: string;
+};
 export type UpdateTaskData = Partial<Omit<Task, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'subtasks'>>;
 
 export type TaskCreatePayload = NewTaskData;
 export type TaskUpdatePayload = UpdateTaskData;
 
-export type NewFocusSessionData = Pick<FocusSession, 'user_id' | 'task_id' | 'planned_duration_minutes'> & Partial<Omit<FocusSession, 'id' | 'created_at' | 'user_id' | 'task_id' | 'start_time' | 'planned_duration_minutes'>>;
+export type NewFocusSessionData = Pick<FocusSession, 'user_id' | 'task_id' | 'planned_duration_minutes'> &
+  Partial<Omit<FocusSession, 'id' | 'created_at' | 'user_id' | 'task_id' | 'start_time' | 'planned_duration_minutes'>>;
 export type UpdateFocusSessionData = Partial<Omit<FocusSession, 'id' | 'user_id' | 'task_id' | 'created_at'>>;
 
 export interface Streak {
-    id: string;
-    user_id: string;
-    start_date: string; 
-    end_date?: string | null; 
-    current_length_days: number;
-    longest_length_days: number;
+  id: string;
+  user_id: string;
+  start_date: string;
+  end_date?: string | null;
+  current_length_days: number;
+  longest_length_days: number;
 }
 
 export interface Reflection {
-    id: string;
-    user_id: string;
-    date: string; 
-    content: string;
-    created_at: string;
+  id: string;
+  user_id: string;
+  date: string;
+  content: string;
+  created_at: string;
 }
 
 export interface ScratchPadEntry {
-    id: string;
-    user_id: string;
-    content: string;
-    created_at: string;
-    updated_at: string;
+  id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Note {
-    id: string;
-    user_id: string;
-    title?: string | null;
-    content: string;
-    created_at: string;
-    updated_at: string;
-    deleted: boolean; // Soft delete flag
+  id: string;
+  user_id: string;
+  title?: string | null;
+  content: string;
+  created_at: string;
+  updated_at: string;
+  deleted: boolean; // Soft delete flag
 }
 
 export type NewNoteData = Omit<Note, 'id' | 'created_at' | 'updated_at' | 'deleted'> & { user_id: string };

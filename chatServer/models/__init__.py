@@ -2,9 +2,9 @@
 
 from .chat import ChatRequest, ChatResponse
 from .prompt_customization import (
+    PromptCustomization,
     PromptCustomizationBase,
     PromptCustomizationCreate,
-    PromptCustomization,
 )
 from .webhook import SupabasePayload
 
@@ -15,4 +15,4 @@ __all__ = [
     "PromptCustomizationCreate",
     "PromptCustomization",
     "SupabasePayload",
-] 
+]

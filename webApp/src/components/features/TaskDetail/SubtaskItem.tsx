@@ -6,11 +6,7 @@ import { DragHandleDots2Icon, Cross2Icon, Pencil1Icon, CheckIcon } from '@radix-
 import { Task } from '@/api/types';
 import { Input } from '@/components/ui/Input';
 import { Checkbox } from '@/components/ui/Checkbox';
-import { 
-  getStatusContainerStyles, 
-  getStatusTextStyles, 
-  getStatusButtonStyles 
-} from '@/utils/statusStyles';
+import { getStatusContainerStyles, getStatusTextStyles, getStatusButtonStyles } from '@/utils/statusStyles';
 import clsx from 'clsx';
 // import { useTaskStore } from '@/stores/useTaskStore'; // Remove direct store usage
 
@@ -26,21 +22,14 @@ export const SubtaskItem: React.FC<SubtaskItemProps> = ({ subtask, onUpdate, onR
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(subtask.title);
   const inputRef = useRef<HTMLInputElement>(null);
-  
+
   // Get actions from the task store - REMOVE
   // const { updateTask, deleteTask } = useTaskStore(state => ({
   //   updateTask: state.updateTask,
   //   deleteTask: state.deleteTask
   // }));
 
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging
-  } = useSortable({ id: subtask.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: subtask.id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -56,16 +45,16 @@ export const SubtaskItem: React.FC<SubtaskItemProps> = ({ subtask, onUpdate, onR
 
   const handleToggleComplete = () => {
     const newStatus = subtask.status === 'completed' ? 'pending' : 'completed';
-    // updateTask(subtask.id, { 
+    // updateTask(subtask.id, {
     //   status: newStatus,
     //   completed: newStatus === 'completed'
     // });
-    onUpdate(subtask.id, { 
+    onUpdate(subtask.id, {
       status: newStatus,
       completed: newStatus === 'completed',
-      completed_at: newStatus === 'completed' ? new Date().toISOString() : null 
+      completed_at: newStatus === 'completed' ? new Date().toISOString() : null,
     });
-    
+
     // if (onSubtaskUpdate) { // Remove
     //   onSubtaskUpdate();
     // }
@@ -74,7 +63,7 @@ export const SubtaskItem: React.FC<SubtaskItemProps> = ({ subtask, onUpdate, onR
   const handleDelete = () => {
     // deleteTask(subtask.id); // Remove
     onRemove(subtask.id);
-    
+
     // if (onSubtaskUpdate) { // Remove
     //   onSubtaskUpdate();
     // }
@@ -89,7 +78,7 @@ export const SubtaskItem: React.FC<SubtaskItemProps> = ({ subtask, onUpdate, onR
     if (editValue.trim() !== subtask.title) {
       // updateTask(subtask.id, { title: editValue.trim() }); // Remove
       onUpdate(subtask.id, { title: editValue.trim() });
-      
+
       // if (onSubtaskUpdate) { // Remove
       //   onSubtaskUpdate();
       // }
@@ -113,11 +102,7 @@ export const SubtaskItem: React.FC<SubtaskItemProps> = ({ subtask, onUpdate, onR
   };
 
   return (
-    <div 
-      ref={setNodeRef}
-      style={style}
-      className="subtask-item-container"
-    >
+    <div ref={setNodeRef} style={style} className="subtask-item-container">
       <Card
         variant={getCardVariant()}
         size="1"
@@ -129,8 +114,8 @@ export const SubtaskItem: React.FC<SubtaskItemProps> = ({ subtask, onUpdate, onR
           getStatusContainerStyles({
             completed: subtask.status === 'completed',
             status: subtask.status,
-            variant: 'item'
-          })
+            variant: 'item',
+          }),
         )}
       >
         <div className="flex items-center p-2">
@@ -139,19 +124,15 @@ export const SubtaskItem: React.FC<SubtaskItemProps> = ({ subtask, onUpdate, onR
             {...attributes}
             className={clsx(
               getStatusButtonStyles({ completed: subtask.status === 'completed' }),
-              "mr-2 cursor-grab active:cursor-grabbing"
+              'mr-2 cursor-grab active:cursor-grabbing',
             )}
             aria-label="Drag to reorder"
           >
             <DragHandleDots2Icon />
           </button>
-          
-          <Checkbox
-            checked={subtask.status === 'completed'}
-            onCheckedChange={handleToggleComplete}
-            className="mr-3"
-          />
-          
+
+          <Checkbox checked={subtask.status === 'completed'} onCheckedChange={handleToggleComplete} className="mr-3" />
+
           {isEditing ? (
             <Input
               ref={inputRef}
@@ -163,16 +144,11 @@ export const SubtaskItem: React.FC<SubtaskItemProps> = ({ subtask, onUpdate, onR
               className="flex-grow"
             />
           ) : (
-            <span 
-              className={clsx(
-                'flex-grow',
-                getStatusTextStyles({ completed: subtask.status === 'completed' })
-              )}
-            >
+            <span className={clsx('flex-grow', getStatusTextStyles({ completed: subtask.status === 'completed' }))}>
               {subtask.title}
             </span>
           )}
-          
+
           <div className="flex space-x-1 ml-2">
             {isEditing ? (
               <button
@@ -191,7 +167,7 @@ export const SubtaskItem: React.FC<SubtaskItemProps> = ({ subtask, onUpdate, onR
                 <Pencil1Icon />
               </button>
             )}
-            
+
             <button
               onClick={handleDelete}
               className="p-1 rounded-md hover:bg-destructive-subtle text-destructive"
@@ -204,4 +180,4 @@ export const SubtaskItem: React.FC<SubtaskItemProps> = ({ subtask, onUpdate, onR
       </Card>
     </div>
   );
-}; 
+};

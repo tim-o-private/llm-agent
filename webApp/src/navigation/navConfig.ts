@@ -13,4 +13,4 @@ export const navItems: NavItem[] = [
   { path: '/focus', label: 'Focus', icon: '[F]' },
   { path: '/coach', label: 'Coach', icon: '[C]' },
   { path: '/settings', label: 'Settings', icon: '[S]' },
-]; 
+];

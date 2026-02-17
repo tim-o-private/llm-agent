@@ -65,15 +65,15 @@ describe('TodayView Modal Integration', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    
+
     mockUseTaskStore.mockImplementation((selector: any) => {
       return selector(mockTaskStore);
     });
-    
+
     mockUseTaskViewStore.mockImplementation((selector: any) => {
       return selector(mockTaskViewStore);
     });
-    
+
     mockUseTaskStoreInitializer.mockReturnValue({
       isLoading: false,
       error: null,
@@ -83,23 +83,23 @@ describe('TodayView Modal Integration', () => {
 
   it('should render without modal open initially', () => {
     render(<TodayView />);
-    
+
     expect(screen.getByText('Today')).toBeInTheDocument();
     expect(screen.getByText('Test Task 1')).toBeInTheDocument();
     expect(screen.getByText('Test Task 2')).toBeInTheDocument();
-    
+
     // No modals should be visible
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('should open detail modal when task is clicked', async () => {
     render(<TodayView />);
-    
+
     // Find and click a task card (this would trigger the detail modal)
     const taskCard = screen.getByText('Test Task 1').closest('[role="button"]');
     if (taskCard) {
       fireEvent.click(taskCard);
-      
+
       // Wait for modal to appear
       await waitFor(() => {
         expect(screen.queryByRole('dialog')).toBeInTheDocument();
@@ -111,10 +111,10 @@ describe('TodayView Modal Integration', () => {
     // This test verifies that the modal management hook is properly integrated
     // by checking that the component renders without errors and manages state
     const { rerender } = render(<TodayView />);
-    
+
     // Component should render successfully with modal management
     expect(screen.getByText('Today')).toBeInTheDocument();
-    
+
     // Re-render should work without issues
     rerender(<TodayView />);
     expect(screen.getByText('Today')).toBeInTheDocument();
@@ -127,4 +127,4 @@ describe('Modal Management Hook Smoke Test', () => {
     const { useTaskModalManagement } = await import('@/hooks/useTaskModalManagement');
     expect(typeof useTaskModalManagement).toBe('function');
   });
-}); 
+});

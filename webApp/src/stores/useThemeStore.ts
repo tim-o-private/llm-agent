@@ -39,8 +39,8 @@ export const useThemeStore = create<ThemeState>()(
           }
         }
       },
-    }
-  )
+    },
+  ),
 );
 
 // Helper to get the effective appearance considering 'system' setting
@@ -52,4 +52,4 @@ export function getEffectiveAppearance(storedAppearance: ThemeAppearance): 'ligh
     return 'light'; // Default for SSR or non-browser environments
   }
   return storedAppearance;
-} 
+}

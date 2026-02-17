@@ -51,7 +51,9 @@ export interface PendingCount {
 
 // Helper to get auth headers
 async function getAuthHeaders(): Promise<HeadersInit> {
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   if (!session?.access_token) {
     throw new Error('User not authenticated');
   }
@@ -110,7 +112,7 @@ async function fetchAuditHistory(
   limit = 50,
   offset = 0,
   toolName?: string,
-  approvalStatus?: string
+  approvalStatus?: string,
 ): Promise<AuditLogEntry[]> {
   const headers = await getAuthHeaders();
   const params = new URLSearchParams({

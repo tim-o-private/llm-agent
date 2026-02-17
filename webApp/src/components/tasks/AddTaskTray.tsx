@@ -18,7 +18,7 @@ interface AddTaskTrayProps {
 
 const AddTaskTray: React.FC<AddTaskTrayProps> = ({ isOpen, onClose }) => {
   const { mutate: createTask, isPending: isCreatingTask } = useCreateTask();
-  
+
   const {
     register,
     handleSubmit,
@@ -26,20 +26,20 @@ const AddTaskTray: React.FC<AddTaskTrayProps> = ({ isOpen, onClose }) => {
     formState: { errors, isSubmitting },
   } = useForm<TaskFormData>({
     resolver: zodResolver(taskSchema),
-    defaultValues: { title: '' }
+    defaultValues: { title: '' },
   });
 
   const isLoading = isCreatingTask || isSubmitting;
 
   const onSubmit: SubmitHandler<TaskFormData> = (data) => {
     createTask(
-      { title: data.title, status: 'pending', priority: 0 }, 
+      { title: data.title, status: 'pending', priority: 0 },
       {
         onSuccess: () => {
           reset();
           onClose();
         },
-      }
+      },
     );
   };
 
@@ -51,11 +51,7 @@ const AddTaskTray: React.FC<AddTaskTrayProps> = ({ isOpen, onClose }) => {
   };
 
   return (
-    <Modal
-      open={isOpen}
-      onOpenChange={handleModalClose}
-      title="Add New Task"
-    >
+    <Modal open={isOpen} onOpenChange={handleModalClose} title="Add New Task">
       <form onSubmit={handleSubmit(onSubmit)}>
         <div className="mt-4">
           <Input
@@ -64,26 +60,19 @@ const AddTaskTray: React.FC<AddTaskTrayProps> = ({ isOpen, onClose }) => {
             {...register('title')}
             className="w-full"
             aria-label="Task title"
-            aria-invalid={errors.title ? "true" : "false"}
-            aria-describedby={errors.title ? "title-error" : undefined} // For screen readers
+            aria-invalid={errors.title ? 'true' : 'false'}
+            aria-describedby={errors.title ? 'title-error' : undefined} // For screen readers
             disabled={isLoading}
           />
-          {errors.title && (
-            <ErrorMessage id="title-error">{errors.title.message}</ErrorMessage>
-          )}
+          {errors.title && <ErrorMessage id="title-error">{errors.title.message}</ErrorMessage>}
         </div>
         <div className="mt-5 sm:mt-6 sm:grid sm:grid-flow-row-dense sm:grid-cols-2 sm:gap-3">
-          <Button
-            variant="solid"
-            type="submit"
-            className="w-full justify-center sm:col-start-2"
-            disabled={isLoading}
-          >
+          <Button variant="solid" type="submit" className="w-full justify-center sm:col-start-2" disabled={isLoading}>
             {isLoading ? 'Adding...' : 'Add Task'}
           </Button>
           <Button
             variant="soft"
-            onClick={onClose} 
+            onClick={onClose}
             className="mt-3 w-full justify-center sm:col-start-1 sm:mt-0"
             disabled={isLoading}
             type="button"
@@ -96,4 +85,4 @@ const AddTaskTray: React.FC<AddTaskTrayProps> = ({ isOpen, onClose }) => {
   );
 };
 
-export default AddTaskTray; 
+export default AddTaskTray;

@@ -12,9 +12,9 @@ Security Model:
 The LLM cannot modify these tiers - they are enforced at the application layer.
 """
 
+import logging
 from enum import Enum
 from typing import Optional
-import logging
 
 logger = logging.getLogger(__name__)
 

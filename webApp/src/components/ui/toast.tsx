@@ -18,7 +18,7 @@ const StyledToastViewport = React.forwardRef<
     ref={ref}
     className={cn(
       'fixed top-0 z-[99999] flex max-h-screen w-full flex-col-reverse p-4 sm:bottom-0 sm:right-0 sm:top-auto sm:flex-col md:max-w-[420px]',
-      className
+      className,
     )}
     {...props}
   />
@@ -41,7 +41,7 @@ const StyledToast = React.forwardRef<
           'destructive group border-destructive bg-destructive text-destructive-foreground': variant === 'destructive',
           'success group border-success-indicator bg-bg-success-subtle text-success-strong': variant === 'success',
         },
-        className
+        className,
       )}
       {...props}
     />
@@ -60,7 +60,7 @@ const StyledToastAction = React.forwardRef<
       getFocusClasses(),
       'group-[.destructive]:border-muted/40 group-[.destructive]:hover:border-destructive/30 group-[.destructive]:hover:bg-destructive group-[.destructive]:hover:text-destructive-foreground group-[.destructive]:focus:ring-destructive',
       'group-[.success]:border-success-indicator group-[.success]:hover:border-success-indicator group-[.success]:hover:bg-bg-success-subtle group-[.success]:hover:text-success-strong group-[.success]:focus:ring-success-indicator',
-      className
+      className,
     )}
     {...props}
   />
@@ -78,7 +78,7 @@ const StyledToastClose = React.forwardRef<
       getFocusClasses(),
       'group-[.destructive]:text-text-destructive group-[.destructive]:hover:text-text-destructive group-[.destructive]:focus:ring-destructive group-[.destructive]:focus:ring-offset-destructive',
       'group-[.success]:text-success-strong group-[.success]:hover:text-success-strong',
-      className
+      className,
     )}
     toast-close=""
     {...props}
@@ -92,11 +92,7 @@ const StyledToastTitle = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Title>,
   React.ComponentPropsWithoutRef<typeof ToastPrimitives.Title>
 >(({ className, ...props }, ref) => (
-  <ToastPrimitives.Title
-    ref={ref}
-    className={cn('text-sm font-semibold', className)}
-    {...props}
-  />
+  <ToastPrimitives.Title ref={ref} className={cn('text-sm font-semibold', className)} {...props} />
 ));
 StyledToastTitle.displayName = ToastPrimitives.Title.displayName;
 
@@ -104,11 +100,7 @@ const StyledToastDescription = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Description>,
   React.ComponentPropsWithoutRef<typeof ToastPrimitives.Description>
 >(({ className, ...props }, ref) => (
-  <ToastPrimitives.Description
-    ref={ref}
-    className={cn('text-sm opacity-90', className)}
-    {...props}
-  />
+  <ToastPrimitives.Description ref={ref} className={cn('text-sm opacity-90', className)} {...props} />
 ));
 StyledToastDescription.displayName = ToastPrimitives.Description.displayName;
 
@@ -161,11 +153,11 @@ function showToast(props: Omit<ToastProps, 'id'>): { id: string } {
 
 // Called when Radix signals a toast should close (via onOpenChange)
 function dismissToast(toastId: string): void {
-  toastsStore = toastsStore.map(t => (t.id === toastId ? { ...t, open: false } : t));
+  toastsStore = toastsStore.map((t) => (t.id === toastId ? { ...t, open: false } : t));
   notifyListeners();
 
   setTimeout(() => {
-    toastsStore = toastsStore.filter(t => t.id !== toastId);
+    toastsStore = toastsStore.filter((t) => t.id !== toastId);
     notifyListeners();
   }, ANIMATION_DURATION);
 }
@@ -189,7 +181,7 @@ function ToasterContainer() {
 
   return (
     <StyledToastProvider swipeDirection="right" duration={DEFAULT_TOAST_DURATION}>
-      {currentToasts.map(toastItem => {
+      {currentToasts.map((toastItem) => {
         console.log(`Rendering toast: ${toastItem.id}, duration: ${toastItem.duration}, title: ${toastItem.title}`);
         return (
           <StyledToast
@@ -205,9 +197,7 @@ function ToasterContainer() {
           >
             <div className="grid gap-1">
               {toastItem.title && <StyledToastTitle>{toastItem.title}</StyledToastTitle>}
-              {toastItem.description && (
-                <StyledToastDescription>{toastItem.description}</StyledToastDescription>
-              )}
+              {toastItem.description && <StyledToastDescription>{toastItem.description}</StyledToastDescription>}
             </div>
             {toastItem.action}
             <StyledToastClose />
@@ -231,17 +221,17 @@ function useToast() {
 
 // Helper for the new toast object
 const createToastWithOptions = (
-    variant: ToastVariant,
-    title: React.ReactNode,
-    description?: React.ReactNode,
-    options?: Omit<ToastProps, 'id' | 'title' | 'description' | 'variant'>
+  variant: ToastVariant,
+  title: React.ReactNode,
+  description?: React.ReactNode,
+  options?: Omit<ToastProps, 'id' | 'title' | 'description' | 'variant'>,
 ): { id: string } => {
-    return showToast({
-        title,
-        description,
-        variant,
-        ...options,
-    });
+  return showToast({
+    title,
+    description,
+    variant,
+    ...options,
+  });
 };
 
 const toast = {
@@ -249,17 +239,17 @@ const toast = {
   success: (
     title: React.ReactNode,
     description?: React.ReactNode,
-    options?: Omit<ToastProps, 'id' | 'title' | 'description' | 'variant'>
+    options?: Omit<ToastProps, 'id' | 'title' | 'description' | 'variant'>,
   ) => createToastWithOptions('success', title, description, options),
   error: (
     title: React.ReactNode,
     description?: React.ReactNode,
-    options?: Omit<ToastProps, 'id' | 'title' | 'description' | 'variant'>
+    options?: Omit<ToastProps, 'id' | 'title' | 'description' | 'variant'>,
   ) => createToastWithOptions('destructive', title, description, options),
   default: (
     title: React.ReactNode,
     description?: React.ReactNode,
-    options?: Omit<ToastProps, 'id' | 'title' | 'description' | 'variant'>
+    options?: Omit<ToastProps, 'id' | 'title' | 'description' | 'variant'>,
   ) => createToastWithOptions('default', title, description, options),
 };
 
@@ -275,4 +265,4 @@ export {
   useToast,
   ToasterContainer as Toaster, // The main Toaster component for App.tsx
   toast, // The new toast object
-}; 
+};

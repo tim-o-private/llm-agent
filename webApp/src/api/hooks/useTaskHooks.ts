@@ -1,13 +1,13 @@
 import { useQuery, useMutation, useQueryClient, QueryKey } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/features/auth/useAuthStore';
-import type { 
-  Task, 
+import type {
+  Task,
   NewTaskData,
   UpdateTaskData,
-  FocusSession, 
-  NewFocusSessionData, 
-  UpdateFocusSessionData 
+  FocusSession,
+  NewFocusSessionData,
+  UpdateFocusSessionData,
 } from '../types';
 import { toast } from '@/components/ui/toast';
 import { useTaskStore } from '@/stores/useTaskStore';
@@ -88,11 +88,7 @@ export function useCreateTask() {
         user_id: user.id,
       };
 
-      const { data, error } = await supabase
-        .from('tasks')
-        .insert([taskWithUser])
-        .select()
-        .single();
+      const { data, error } = await supabase.from('tasks').insert([taskWithUser]).select().single();
 
       if (error) throw error;
       if (!data) throw new Error('Failed to create task: no data returned');
@@ -112,12 +108,7 @@ export function useUpdateTask() {
 
   return useMutation<Task, Error, { id: string; updates: UpdateTaskData }>({
     mutationFn: async ({ id, updates }: { id: string; updates: UpdateTaskData }) => {
-      const { data, error } = await supabase
-        .from('tasks')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
+      const { data, error } = await supabase.from('tasks').update(updates).eq('id', id).select().single();
 
       if (error) throw error;
       if (!data) throw new Error('Failed to update task: no data returned');
@@ -154,27 +145,25 @@ export const useUpdateTaskOrder = () => {
       }
       console.log('[useUpdateTaskOrder] Supabase client seems available.');
 
-      const updates = orderedTasks.map(task =>
-        supabase
-          .from('tasks')
-          .update({ position: task.position })
-          .eq('id', task.id)
-          .select()
+      const updates = orderedTasks.map((task) =>
+        supabase.from('tasks').update({ position: task.position }).eq('id', task.id).select(),
       );
       console.log('[useUpdateTaskOrder] Supabase update promises created:', updates.length);
-      
-      const results = await Promise.all(updates.map(async (updatePromise) => {
-        console.log('[useUpdateTaskOrder] Processing one update promise...');
-        const { data, error } = await updatePromise;
-        if (error) {
-          console.error('[useUpdateTaskOrder] Supabase error during one task order update:', error);
-          throw error; 
-        }
-        console.log('[useUpdateTaskOrder] One task update successful, data:', data);
-        return data;
-      }));
+
+      const results = await Promise.all(
+        updates.map(async (updatePromise) => {
+          console.log('[useUpdateTaskOrder] Processing one update promise...');
+          const { data, error } = await updatePromise;
+          if (error) {
+            console.error('[useUpdateTaskOrder] Supabase error during one task order update:', error);
+            throw error;
+          }
+          console.log('[useUpdateTaskOrder] One task update successful, data:', data);
+          return data;
+        }),
+      );
       console.log('[useUpdateTaskOrder] All Supabase update results:', results);
-      return results; 
+      return results;
     },
     onSuccess: () => {
       toast.success('Task order updated successfully!');
@@ -203,32 +192,44 @@ export const useUpdateSubtaskOrder = () => {
   const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
 
-  return useMutation<Task[], Error, { parentTaskId: string; orderedSubtasks: SubtaskOrderUpdate[] }, { previousTasks?: Task[] }>({ 
+  return useMutation<
+    Task[],
+    Error,
+    { parentTaskId: string; orderedSubtasks: SubtaskOrderUpdate[] },
+    { previousTasks?: Task[] }
+  >({
     mutationFn: async ({ parentTaskId, orderedSubtasks }) => {
-      console.log('[useUpdateSubtaskOrder] mutationFn started. Parent:', parentTaskId, 'Ordered Subtasks:', JSON.stringify(orderedSubtasks));
+      console.log(
+        '[useUpdateSubtaskOrder] mutationFn started. Parent:',
+        parentTaskId,
+        'Ordered Subtasks:',
+        JSON.stringify(orderedSubtasks),
+      );
       if (!user) throw new Error('User not authenticated');
       if (!parentTaskId) throw new Error('Parent task ID is required to update subtask order');
 
-      const updates = orderedSubtasks.map(subtask =>
+      const updates = orderedSubtasks.map((subtask) =>
         supabase
           .from('tasks')
           .update({ subtask_position: subtask.subtask_position })
           .eq('id', subtask.id)
           .eq('user_id', user.id)
           .eq('parent_task_id', parentTaskId)
-          .select()
+          .select(),
       );
-      
-      const results = await Promise.all(updates.map(async (updatePromise) => {
-        const { data, error } = await updatePromise;
-        if (error) {
-          console.error('[useUpdateSubtaskOrder] Supabase error during one subtask order update:', error);
-          throw error; 
-        }
-        return data?.[0] || null; 
-      }));
+
+      const results = await Promise.all(
+        updates.map(async (updatePromise) => {
+          const { data, error } = await updatePromise;
+          if (error) {
+            console.error('[useUpdateSubtaskOrder] Supabase error during one subtask order update:', error);
+            throw error;
+          }
+          return data?.[0] || null;
+        }),
+      );
       console.log('[useUpdateSubtaskOrder] Raw results from Supabase:', JSON.stringify(results));
-      
+
       const filteredResults = results.filter((r: Task | null): r is Task => r !== null);
       console.log('[useUpdateSubtaskOrder] Filtered results (returned by mutationFn):_filteredResults');
       return filteredResults; // Return the updated subtasks from the server
@@ -241,33 +242,44 @@ export const useUpdateSubtaskOrder = () => {
       await queryClient.cancelQueries({ queryKey: allTasksQueryKey });
 
       const previousTasks = queryClient.getQueryData<Task[]>(allTasksQueryKey);
-      console.log('[useUpdateSubtaskOrder] onMutate. Previous tasks from cache:', JSON.stringify(previousTasks?.map(t => t.id)));
+      console.log(
+        '[useUpdateSubtaskOrder] onMutate. Previous tasks from cache:',
+        JSON.stringify(previousTasks?.map((t) => t.id)),
+      );
 
       if (previousTasks) {
         const newOptimisticTasks = previousTasks.map((task: Task) => {
           if (task.id === variables.parentTaskId) {
-            const newSubtaskPositions = new Map(variables.orderedSubtasks.map((st: SubtaskOrderUpdate) => [st.id, st.subtask_position]));
+            const newSubtaskPositions = new Map(
+              variables.orderedSubtasks.map((st: SubtaskOrderUpdate) => [st.id, st.subtask_position]),
+            );
             // Ensure task.subtasks is treated as Task[] or empty array for mapping
             const currentSubtasks: Task[] = task.subtasks || [];
             const updatedParentSubtasks = currentSubtasks
               .map((st: Task) => ({ ...st, subtask_position: newSubtaskPositions.get(st.id) || st.subtask_position }))
               .sort((a: Task, b: Task) => (a.subtask_position ?? Infinity) - (b.subtask_position ?? Infinity));
-            
+
             return { ...task, subtasks: updatedParentSubtasks };
           }
           return task;
         });
-        const parentForLog = newOptimisticTasks.find(t => t.id === variables.parentTaskId);
-        console.log('[useUpdateSubtaskOrder] onMutate. Setting optimistic tasks to cache:', JSON.stringify(parentForLog?.subtasks?.map((st: Task) => ({id: st.id, pos: st.subtask_position}))));
+        const parentForLog = newOptimisticTasks.find((t) => t.id === variables.parentTaskId);
+        console.log(
+          '[useUpdateSubtaskOrder] onMutate. Setting optimistic tasks to cache:',
+          JSON.stringify(parentForLog?.subtasks?.map((st: Task) => ({ id: st.id, pos: st.subtask_position }))),
+        );
         queryClient.setQueryData<Task[]>(allTasksQueryKey, newOptimisticTasks);
       }
-      return { previousTasks }; 
+      return { previousTasks };
     },
     onError: (err, variables, context) => {
       console.error('[useUpdateSubtaskOrder] onError. Error:', err, 'Variables:', variables);
       toast.error('Failed to update subtask order', `${err.message}. Reverting.`);
       if (context?.previousTasks && user?.id) {
-        console.log('[useUpdateSubtaskOrder] onError. Reverting to previous tasks:', JSON.stringify(context.previousTasks.map(t => t.id)));
+        console.log(
+          '[useUpdateSubtaskOrder] onError. Reverting to previous tasks:',
+          JSON.stringify(context.previousTasks.map((t) => t.id)),
+        );
         queryClient.setQueryData([TASKS_QUERY_KEY_PREFIX, user.id], context.previousTasks);
       }
     },
@@ -279,7 +291,12 @@ export const useUpdateSubtaskOrder = () => {
       }
     },
     onSuccess: (updatedSubtasksFromServer, variables) => {
-      console.log('[useUpdateSubtaskOrder] onSuccess hook. Parent:', variables.parentTaskId, 'Updated Subtasks from mutationFn:', JSON.stringify(updatedSubtasksFromServer));
+      console.log(
+        '[useUpdateSubtaskOrder] onSuccess hook. Parent:',
+        variables.parentTaskId,
+        'Updated Subtasks from mutationFn:',
+        JSON.stringify(updatedSubtasksFromServer),
+      );
       toast.success('Subtask order updated successfully!');
     },
   });
@@ -292,11 +309,7 @@ export const useCreateFocusSession = () => {
   const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
 
-  return useMutation<
-    FocusSession | null, 
-    Error,
-    Pick<NewFocusSessionData, 'task_id' | 'planned_duration_minutes'> 
-  >({
+  return useMutation<FocusSession | null, Error, Pick<NewFocusSessionData, 'task_id' | 'planned_duration_minutes'>>({
     mutationFn: async ({ task_id, planned_duration_minutes }) => {
       if (!user) throw new Error('User not authenticated');
       const newSessionData: NewFocusSessionData = {
@@ -304,11 +317,7 @@ export const useCreateFocusSession = () => {
         task_id,
         planned_duration_minutes,
       };
-      const { data, error } = await supabase
-        .from('focus_sessions')
-        .insert(newSessionData)
-        .select()
-        .single();
+      const { data, error } = await supabase.from('focus_sessions').insert(newSessionData).select().single();
 
       if (error) {
         console.error('[useCreateFocusSession] Error:', error);
@@ -341,7 +350,7 @@ export const useEndFocusSession = () => {
   >({
     mutationFn: async ({ sessionId, reflectionData }) => {
       if (!user) throw new Error('User not authenticated');
-      
+
       const updates: UpdateFocusSessionData & { end_time: string } = {
         ...reflectionData,
         end_time: new Date().toISOString(),
@@ -351,7 +360,7 @@ export const useEndFocusSession = () => {
         .from('focus_sessions')
         .update(updates)
         .eq('id', sessionId)
-        .eq('user_id', user.id) 
+        .eq('user_id', user.id)
         .select()
         .single();
 
@@ -407,14 +416,10 @@ export const useDeleteTask = () => {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
 
-  return useMutation<
-    Task | null,
-    Error,
-    { id: string }
-  >({
+  return useMutation<Task | null, Error, { id: string }>({
     mutationFn: async ({ id }) => {
       if (!user) throw new Error('User not authenticated');
-      
+
       // First, fetch all subtasks for this parent task
       const { data: subtasks, error: subtasksError } = await supabase
         .from('tasks')
@@ -431,11 +436,14 @@ export const useDeleteTask = () => {
       // Soft delete all subtasks first
       if (subtasks && subtasks.length > 0) {
         console.log(`Soft deleting ${subtasks.length} subtasks for parent task ${id}`);
-        
+
         const { error: subtaskDeleteError } = await supabase
           .from('tasks')
           .update({ deleted: true })
-          .in('id', subtasks.map((st: { id: string }) => st.id))
+          .in(
+            'id',
+            subtasks.map((st: { id: string }) => st.id),
+          )
           .eq('user_id', user.id);
 
         if (subtaskDeleteError) {
@@ -456,7 +464,7 @@ export const useDeleteTask = () => {
         console.error('Error soft deleting parent task from Supabase:', error);
         throw error;
       }
-      
+
       console.log('Task and subtasks soft deleted from Supabase:', data);
       return data as Task;
     },
@@ -474,4 +482,4 @@ export const useDeleteTask = () => {
       toast.error('Failed to delete task', 'Please try again.');
     },
   });
-}; 
+};

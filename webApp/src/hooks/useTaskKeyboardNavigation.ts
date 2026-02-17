@@ -11,13 +11,13 @@ export interface KeyboardNavigationConfig {
    * @default true
    */
   enabled?: boolean;
-  
+
   /**
    * Whether to auto-focus the first task when tasks are available
    * @default true
    */
   autoFocusFirst?: boolean;
-  
+
   /**
    * Whether to clear focus when no tasks are available
    * @default true
@@ -30,12 +30,12 @@ export interface UseTaskKeyboardNavigationProps {
    * Array of tasks that can be navigated with keyboard
    */
   tasks: NavigableTask[];
-  
+
   /**
    * Whether the fast input is currently focused (prevents auto-focus of tasks)
    */
   isInputFocused?: boolean;
-  
+
   /**
    * Configuration options
    */
@@ -47,37 +47,37 @@ export interface UseTaskKeyboardNavigationReturn {
    * ID of the currently focused task
    */
   focusedTaskId: string | null;
-  
+
   /**
    * Set the focused task ID
    */
   setFocusedTaskId: (taskId: string | null) => void;
-  
+
   /**
    * Initialize keyboard listeners (call in useEffect)
    */
   initializeKeyboardListeners: () => void;
-  
+
   /**
    * Cleanup keyboard listeners (call in useEffect cleanup)
    */
   destroyKeyboardListeners: () => void;
-  
+
   /**
    * Handle request to open detail modal (from keyboard shortcut)
    */
   requestOpenDetailForTaskId: string | null;
-  
+
   /**
    * Clear the detail open request
    */
   clearDetailOpenRequest: () => void;
-  
+
   /**
    * Handle request to focus fast input (from keyboard shortcut)
    */
   requestFocusFastInput: boolean;
-  
+
   /**
    * Clear the fast input focus request
    */
@@ -86,38 +86,34 @@ export interface UseTaskKeyboardNavigationReturn {
 
 /**
  * Custom hook for managing keyboard navigation in task lists
- * 
+ *
  * Features:
  * - Arrow keys / j/k for navigation
  * - Enter/e to open task details
  * - Space to toggle selection
  * - a/t to focus fast input
  * - Escape to clear focus/selection
- * 
+ *
  * @param props Configuration and task data
  * @returns Navigation state and handlers
  */
 export const useTaskKeyboardNavigation = ({
   tasks,
   isInputFocused = false,
-  config = {}
+  config = {},
 }: UseTaskKeyboardNavigationProps): UseTaskKeyboardNavigationReturn => {
-  const {
-    enabled = true,
-    autoFocusFirst = true,
-    clearFocusOnEmpty = true
-  } = config;
+  const { enabled = true, autoFocusFirst = true, clearFocusOnEmpty = true } = config;
 
   // Store selectors
-  const focusedTaskId = useTaskViewStore(state => state.focusedTaskId);
-  const setFocusedTaskId = useTaskViewStore(state => state.setFocusedTaskId);
-  const setCurrentNavigableTasks = useTaskViewStore(state => state.setCurrentNavigableTasks);
-  const requestOpenDetailForTaskId = useTaskViewStore(state => state.requestOpenDetailForTaskId);
-  const clearDetailOpenRequest = useTaskViewStore(state => state.clearDetailOpenRequest);
-  const requestFocusFastInput = useTaskViewStore(state => state.requestFocusFastInput);
-  const clearFocusFastInputRequest = useTaskViewStore(state => state.clearFocusFastInputRequest);
-  const initializeListener = useTaskViewStore(state => state.initializeListener);
-  const destroyListener = useTaskViewStore(state => state.destroyListener);
+  const focusedTaskId = useTaskViewStore((state) => state.focusedTaskId);
+  const setFocusedTaskId = useTaskViewStore((state) => state.setFocusedTaskId);
+  const setCurrentNavigableTasks = useTaskViewStore((state) => state.setCurrentNavigableTasks);
+  const requestOpenDetailForTaskId = useTaskViewStore((state) => state.requestOpenDetailForTaskId);
+  const clearDetailOpenRequest = useTaskViewStore((state) => state.clearDetailOpenRequest);
+  const requestFocusFastInput = useTaskViewStore((state) => state.requestFocusFastInput);
+  const clearFocusFastInputRequest = useTaskViewStore((state) => state.clearFocusFastInputRequest);
+  const initializeListener = useTaskViewStore((state) => state.initializeListener);
+  const destroyListener = useTaskViewStore((state) => state.destroyListener);
 
   // Track if we've initialized listeners to prevent double initialization
   const listenersInitialized = useRef(false);
@@ -132,7 +128,7 @@ export const useTaskKeyboardNavigation = ({
   // Auto-focus first task when tasks become available
   useEffect(() => {
     if (!enabled || !autoFocusFirst) return;
-    
+
     // Only auto-focus if there's truly no focused task AND we're not in the middle of a modal operation
     // This prevents the auto-focus from overriding manual focus restoration after modal closes
     if (!focusedTaskId && tasks.length > 0 && !isInputFocused) {
@@ -144,7 +140,7 @@ export const useTaskKeyboardNavigation = ({
           setFocusedTaskId(tasks[0].id);
         }
       }, 10);
-      
+
       return () => clearTimeout(timeoutId);
     }
   }, [tasks.length, focusedTaskId, isInputFocused, setFocusedTaskId, enabled, autoFocusFirst]);
@@ -152,7 +148,7 @@ export const useTaskKeyboardNavigation = ({
   // Clear focus when no tasks available
   useEffect(() => {
     if (!enabled || !clearFocusOnEmpty) return;
-    
+
     if (focusedTaskId && tasks.length === 0) {
       setFocusedTaskId(null);
     }
@@ -183,4 +179,4 @@ export const useTaskKeyboardNavigation = ({
     requestFocusFastInput,
     clearFocusFastInputRequest,
   };
-}; 
+};

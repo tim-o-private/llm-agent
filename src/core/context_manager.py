@@ -1,12 +1,14 @@
 import os
-import logging
+from typing import Dict, Tuple, Union
+
 import yaml
-from typing import Dict, List, Tuple, Union
-from utils.config_loader import ConfigLoader
+
 from core.file_parser import read_markdown, read_yaml
-# Import path helpers
-from utils.path_helpers import get_data_base_dir, get_config_base_dir
+from utils.config_loader import ConfigLoader
 from utils.logging_utils import get_logger
+
+# Import path helpers
+from utils.path_helpers import get_config_base_dir, get_data_base_dir
 
 # Configure logging
 logger = get_logger(__name__)
@@ -18,7 +20,7 @@ class ContextManager:
     """
     def __init__(self, config: ConfigLoader):
         self.config = config
-        
+
         # Get absolute base directories using path helpers
         # These helpers use get_base_path() internally
         base_data_path = get_data_base_dir(self.config)
@@ -30,7 +32,7 @@ class ContextManager:
 
         # Construct absolute paths for specific directories
         self.global_context_dir = os.path.join(
-            base_data_path, 
+            base_data_path,
             self.config.get('data.global_context_dir', 'global_context/')
         )
         self.config_agents_dir = os.path.join(
@@ -38,7 +40,7 @@ class ContextManager:
             self.config.get('config.agents_dir', 'agents/')
         )
         self.data_agents_dir = os.path.join(
-            base_data_path, 
+            base_data_path,
             self.config.get('data.agents_dir', 'agents/')
         )
         # TODO: Add paths for tools config/data when needed (using base_data_path or base_config_path)
@@ -53,14 +55,14 @@ class ContextManager:
         if not os.path.isdir(directory):
             logger.warning(f"Context directory not found: {directory}")
             return context_data
-            
+
         for filename in os.listdir(directory):
             filepath = os.path.join(directory, filename)
             if not os.path.isfile(filepath):
                 continue
-                
+
             base_name, extension = os.path.splitext(filename)
-            
+
             try:
                 if extension == '.md':
                     context_data[base_name] = read_markdown(filepath)
@@ -84,7 +86,7 @@ class ContextManager:
         if not context_data:
             formatted_string += "No data found.\n"
             return formatted_string
-            
+
         for key, content in context_data.items():
             formatted_key = key.replace('_', ' ').title()
             formatted_string += f"### {formatted_key}\n"
@@ -115,10 +117,10 @@ class ContextManager:
         if agent_name:
              logger.warning("ContextManager.get_context called with agent_name, but it now only loads global context. Agent-specific loading is handled elsewhere.")
 
-        raw_context = {'global': {}} 
+        raw_context = {'global': {}}
         formatted_context_parts = []
 
-        # --- Load Global Context (from Data dir) --- 
+        # --- Load Global Context (from Data dir) ---
         logger.info(f"Loading global context from: {self.global_context_dir}")
         global_context_data = self._read_context_files(self.global_context_dir)
         raw_context['global'] = global_context_data
@@ -134,7 +136,7 @@ class ContextManager:
 
         # Combine formatted parts (will only contain global context now)
         full_formatted_context = "\n".join(formatted_context_parts).strip()
-        
+
         logger.debug(f"Raw global context loaded: {raw_context}")
         logger.debug(f"Formatted global context: \n{full_formatted_context}")
 

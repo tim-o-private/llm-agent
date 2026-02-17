@@ -31,4 +31,4 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user, location.pathname, navigate]);
 
   return <>{children}</>;
-}; 
+};

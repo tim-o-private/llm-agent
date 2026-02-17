@@ -5,8 +5,9 @@ import json
 import logging
 import urllib.request
 from typing import Optional
+
 from fastapi import HTTPException, Request, status
-from jose import jwt, jwk, JWTError
+from jose import JWTError, jwk, jwt
 
 try:
     from ..config.settings import get_settings

@@ -32,7 +32,6 @@ export interface UpdateChatSessionInstancePayload {
   metadata?: Record<string, unknown>;
 }
 
-
 const CHAT_SESSIONS_QUERY_KEY_PREFIX = 'chat_sessions';
 
 /**
@@ -85,7 +84,7 @@ export function useFetchLatestChatId(agentName: string | null | undefined) {
         .eq('agent_name', agentName)
         .order('updated_at', { ascending: false })
         .limit(1);
-      
+
       if (inactiveError) {
         console.error('Error fetching latest inactive chat_id:', inactiveError);
         if (!activeError) throw inactiveError; // If active also failed, throw this one.
@@ -96,7 +95,7 @@ export function useFetchLatestChatId(agentName: string | null | undefined) {
       if (inactiveSessions && inactiveSessions.length > 0 && inactiveSessions[0].chat_id) {
         return inactiveSessions[0].chat_id;
       }
-      
+
       return null; // No session history found for this user/agent
     },
     enabled: !!user && !!agentName,
@@ -107,7 +106,6 @@ export function useFetchLatestChatId(agentName: string | null | undefined) {
     },
   });
 }
-
 
 /**
  * Manages chat session instances (creation, updates like heartbeat, deactivation).
@@ -120,7 +118,7 @@ export function useManageChatSessionInstance() {
   const createMutation = useMutation<ChatSessionInstance, Error, CreateChatSessionInstancePayload>({
     mutationFn: async (payload) => {
       if (!user) throw new Error('User not authenticated for creating session instance');
-      
+
       const newSessionData = {
         user_id: user.id,
         agent_name: payload.agent_name,
@@ -131,11 +129,7 @@ export function useManageChatSessionInstance() {
         metadata: payload.metadata,
       };
 
-      const { data, error } = await supabase
-        .from('chat_sessions')
-        .insert(newSessionData)
-        .select()
-        .single();
+      const { data, error } = await supabase.from('chat_sessions').insert(newSessionData).select().single();
 
       if (error) {
         console.error('Error creating chat session instance:', error);
@@ -154,7 +148,10 @@ export function useManageChatSessionInstance() {
       queryClient.invalidateQueries({ queryKey: [CHAT_SESSIONS_QUERY_KEY_PREFIX, data.user_id, data.agent_name] });
       // Optionally update specific queries if needed
       // For example, update the 'latest_chat_id' query
-      queryClient.setQueryData([CHAT_SESSIONS_QUERY_KEY_PREFIX, data.user_id, data.agent_name, 'latest_chat_id'], data.chat_id);
+      queryClient.setQueryData(
+        [CHAT_SESSIONS_QUERY_KEY_PREFIX, data.user_id, data.agent_name, 'latest_chat_id'],
+        data.chat_id,
+      );
       // Update cache for queries that fetch full session instances
       queryClient.setQueryData([CHAT_SESSIONS_QUERY_KEY_PREFIX, 'instance', data.id], data);
 
@@ -174,7 +171,6 @@ export function useManageChatSessionInstance() {
       updateData.updated_at = payload.updated_at || new Date().toISOString(); // Always update timestamp
       if (payload.metadata !== undefined) updateData.metadata = payload.metadata;
 
-
       const { data, error } = await supabase
         .from('chat_sessions')
         .update(updateData)
@@ -182,7 +178,7 @@ export function useManageChatSessionInstance() {
         .eq('user_id', user.id) // Ensure user owns the session they are updating
         .select()
         .single();
-      
+
       if (error) {
         console.error('Error updating chat session instance:', error);
         toast.error('Failed to update session', error.message);
@@ -201,14 +197,16 @@ export function useManageChatSessionInstance() {
       // Update specific query for this instance
       queryClient.setQueryData([CHAT_SESSIONS_QUERY_KEY_PREFIX, 'instance', data.id], data);
       if (data.is_active) {
-         // If it was made active, ensure latest_chat_id reflects this if it's the most recent
-        queryClient.invalidateQueries({ queryKey: [CHAT_SESSIONS_QUERY_KEY_PREFIX, data.user_id, data.agent_name, 'latest_chat_id']});
+        // If it was made active, ensure latest_chat_id reflects this if it's the most recent
+        queryClient.invalidateQueries({
+          queryKey: [CHAT_SESSIONS_QUERY_KEY_PREFIX, data.user_id, data.agent_name, 'latest_chat_id'],
+        });
       }
       // toast.info(`Session for ${data.agent_name} updated.`);
     },
   });
-  
-  return { 
+
+  return {
     createChatSessionInstance: createMutation.mutateAsync,
     updateChatSessionInstance: updateMutation.mutateAsync,
     isLoadingCreate: createMutation.isPending,
@@ -216,4 +214,4 @@ export function useManageChatSessionInstance() {
     errorCreate: createMutation.error,
     errorUpdate: updateMutation.error,
   };
-} 
+}

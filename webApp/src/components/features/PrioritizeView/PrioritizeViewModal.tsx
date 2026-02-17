@@ -17,7 +17,7 @@ interface PrioritizeViewModalProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onStartFocusSession: (task: Task, sessionConfig: any) => void; 
+  onStartFocusSession: (task: Task, sessionConfig: any) => void;
 }
 
 const initialSessionConfig = {
@@ -84,23 +84,22 @@ export const PrioritizeViewModal: React.FC<PrioritizeViewModalProps> = ({
       try {
         const updatedTaskResult = await updateTaskMutation.mutateAsync({ id: task.id, updates });
         if (updatedTaskResult) {
-            currentTaskData = updatedTaskResult; // Use the returned updated task
+          currentTaskData = updatedTaskResult; // Use the returned updated task
         }
         toast.success('Task details updated for focus session.');
         // Invalidate to ensure other views get the update, though we have currentTaskData
         queryClient.invalidateQueries({ queryKey: ['tasks', task.id] });
         queryClient.invalidateQueries({ queryKey: ['tasks', useAuthStore.getState().user?.id] }); // For the list view
-
       } catch (err) {
         toast.error('Failed to update task details.');
-        console.error("Failed to update task for focus session:", err);
-        return; 
+        console.error('Failed to update task for focus session:', err);
+        return;
       }
     }
-    
+
     onStartFocusSession(currentTaskData, {
-        breakdown: sessionBreakdown,
-        timerDuration: timerDuration,
+      breakdown: sessionBreakdown,
+      timerDuration: timerDuration,
     });
     onOpenChange(false); // Close modal
   };
@@ -126,16 +125,10 @@ export const PrioritizeViewModal: React.FC<PrioritizeViewModalProps> = ({
             </div>
           )}
 
-          {error && !isLoading && (
-            <div className="text-destructive">
-              Error loading task: {error.message}
-            </div>
-          )}
-          
+          {error && !isLoading && <div className="text-destructive">Error loading task: {error.message}</div>}
+
           {!taskId && isOpen && !isLoading && (
-             <div className="text-text-muted p-4">
-                No task selected or task ID is missing.
-            </div>
+            <div className="text-text-muted p-4">No task selected or task ID is missing.</div>
           )}
 
           {!isLoading && !error && task && taskId && (
@@ -143,52 +136,52 @@ export const PrioritizeViewModal: React.FC<PrioritizeViewModalProps> = ({
               <div className="flex-grow overflow-y-auto pr-2 space-y-4 custom-scrollbar">
                 <div>
                   <Label htmlFor="motivation">Why is this task important right now?</Label>
-                  <Textarea 
+                  <Textarea
                     id="motivation"
                     name="motivation"
                     value={motivation}
                     onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setMotivation(e.target.value)}
-                    className="mt-1" 
-                    rows={3} 
+                    className="mt-1"
+                    rows={3}
                     placeholder="e.g., This will unblock the team for the next phase..."
                   />
                 </div>
                 <div>
                   <Label htmlFor="completion_note">What does 'done' look like for this session/task?</Label>
-                  <Textarea 
+                  <Textarea
                     id="completion_note"
                     name="completion_note"
                     value={completionNote}
                     onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setCompletionNote(e.target.value)}
-                    className="mt-1" 
-                    rows={3} 
+                    className="mt-1"
+                    rows={3}
                     placeholder="e.g., Feature X is implemented and unit tests pass."
                   />
                 </div>
                 <div>
                   <Label htmlFor="session_breakdown">Key steps for this focus session:</Label>
-                  <Textarea 
+                  <Textarea
                     id="session_breakdown"
                     name="session_breakdown"
                     value={sessionBreakdown}
                     onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setSessionBreakdown(e.target.value)}
-                    className="mt-1" 
-                    rows={2} 
+                    className="mt-1"
+                    rows={2}
                     placeholder="1. Outline function A. 2. Implement core logic. 3. Write test cases."
                   />
                 </div>
                 <div>
                   <Label htmlFor="timer_duration">Focus Session Duration:</Label>
                   <div className="mt-1 flex items-center space-x-2">
-                    <Input 
-                        type="number" 
-                        id="timer_duration_minutes"
-                        name="timer_duration_minutes"
-                        value={timerDuration / 60}
-                        onChange={(e) => setTimerDuration(parseInt(e.target.value) * 60)}
-                        className="w-20"
-                        min="5"
-                        step="5"
+                    <Input
+                      type="number"
+                      id="timer_duration_minutes"
+                      name="timer_duration_minutes"
+                      value={timerDuration / 60}
+                      onChange={(e) => setTimerDuration(parseInt(e.target.value) * 60)}
+                      className="w-20"
+                      min="5"
+                      step="5"
                     />
                     <span>minutes</span>
                   </div>
@@ -197,14 +190,20 @@ export const PrioritizeViewModal: React.FC<PrioritizeViewModalProps> = ({
 
               <div className="mt-6 flex justify-end items-center pt-4 border-t border-ui-border space-x-2">
                 <RadixDialog.Close asChild>
-                  <Button variant="soft" type="button">Cancel</Button>
+                  <Button variant="soft" type="button">
+                    Cancel
+                  </Button>
                 </RadixDialog.Close>
-                <Button 
+                <Button
                   type="button"
-                  onClick={handleSaveChangesAndStart} 
+                  onClick={handleSaveChangesAndStart}
                   disabled={updateTaskMutation.isPending || isLoading}
                 >
-                  {updateTaskMutation.isPending || isLoading ? <span className="mr-2"><Spinner size={16} /></span> : null}
+                  {updateTaskMutation.isPending || isLoading ? (
+                    <span className="mr-2">
+                      <Spinner size={16} />
+                    </span>
+                  ) : null}
                   Start Focus Session
                 </Button>
               </div>
@@ -225,4 +224,4 @@ export const PrioritizeViewModal: React.FC<PrioritizeViewModalProps> = ({
   );
 };
 
-export default PrioritizeViewModal; 
+export default PrioritizeViewModal;

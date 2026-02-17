@@ -1,19 +1,17 @@
-import unittest
-from unittest.mock import MagicMock, patch, AsyncMock
-import os
 import logging
-from typing import Any, List, Dict, Optional # Added Dict, Optional
+import unittest
+from typing import Any  # Added Dict, Optional
+from unittest.mock import AsyncMock, MagicMock, patch
 
+from langchain.agents import AgentExecutor  # Import AgentExecutor
+from langchain_core.messages import HumanMessage
 from langchain_core.tools import BaseTool
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
-from langchain_core.runnables import Runnable # For type hint
-from langchain.agents import AgentExecutor # Import AgentExecutor
 
 # Module to test
 from src.core.agents.customizable_agent import (
-    preprocess_intermediate_steps,
     CustomizableAgentExecutor,
-    get_customizable_agent_executor
+    get_customizable_agent_executor,
+    preprocess_intermediate_steps,
 )
 
 # Basic logger for tests
@@ -76,7 +74,7 @@ class TestCustomizableAgentExecutorFactory(unittest.TestCase):
         # Ensure bind_tools returns a mock that can be used in the chain
         self.mock_llm_with_tools = MagicMock()
         self.mock_llm_instance.bind_tools = MagicMock(return_value=self.mock_llm_with_tools)
-        
+
         # Patch ChatGoogleGenerativeAI where it's imported by the from_agent_config method
         self.patch_chat_google = patch('langchain_google_genai.ChatGoogleGenerativeAI', return_value=self.mock_llm_instance)
         self.mock_chat_google_class = self.patch_chat_google.start()
@@ -104,7 +102,7 @@ class TestCustomizableAgentExecutorFactory(unittest.TestCase):
         )
         self.assertIsInstance(executor, CustomizableAgentExecutor)
         self.mock_chat_google_class.assert_called_once_with(
-            model="gemini-pro", 
+            model="gemini-pro",
             google_api_key="fake_google_api_key",
             temperature=0.5
         )
@@ -124,7 +122,7 @@ class TestCustomizableAgentExecutorFactory(unittest.TestCase):
             CustomizableAgentExecutor.from_agent_config(
                 bad_config, self.sample_tools, self.user_id, self.session_id
             )
-        
+
         bad_config_no_model = {"agent_name": "Test", "llm": {"temperature": 0.5}, "system_prompt": "Test"}
         with self.assertRaisesRegex(ValueError, "LLM model configuration is missing or incomplete"):
             CustomizableAgentExecutor.from_agent_config(
@@ -169,7 +167,7 @@ class TestCustomizableAgentExecutorFactory(unittest.TestCase):
                 elif hasattr(template, 'prompt') and hasattr(template.prompt, 'template') and "system" in str(template.role).lower(): # Heuristic for SystemMessagePromptTemplate
                     system_message_template = template.prompt.template
                     break
-            
+
             self.assertIsNotNone(system_message_template, "System message template not found in prompt")
             self.assertIn("Remember this important fact.", system_message_template)
             self.assertIn("Task Goal: Achieve X", system_message_template)
@@ -226,21 +224,21 @@ class TestCustomizableAgentExecutorInvoke(unittest.IsolatedAsyncioTestCase):
     async def test_ainvoke_adds_empty_chat_history_if_missing(self):
         # Create a proper Runnable agent instead of AsyncMock
         from langchain_core.runnables import RunnableLambda
-        
+
         def mock_agent_function(inputs):
             return {"output": "test"}
-        
+
         mock_agent_runnable = RunnableLambda(mock_agent_function)
 
         # Patching the super().ainvoke to inspect its call
         with patch.object(AgentExecutor, 'ainvoke', new_callable=AsyncMock) as mock_super_ainvoke:
             mock_super_ainvoke.return_value = {"output": "super_called"}
-            
+
             mock_executor = CustomizableAgentExecutor(agent=mock_agent_runnable, tools=[])
 
             input_dict = {"input": "hello"}
             await mock_executor.ainvoke(input_dict)
-            
+
             mock_super_ainvoke.assert_called_once()
             called_input = mock_super_ainvoke.call_args[0][0]
             self.assertIn("chat_history", called_input)
@@ -249,17 +247,17 @@ class TestCustomizableAgentExecutorInvoke(unittest.IsolatedAsyncioTestCase):
     async def test_ainvoke_uses_provided_chat_history(self):
         # Create a proper Runnable agent instead of AsyncMock
         from langchain_core.runnables import RunnableLambda
-        
+
         def mock_agent_function(inputs):
             return {"output": "test"}
-        
+
         mock_agent_runnable = RunnableLambda(mock_agent_function)
-        
+
         existing_history = [HumanMessage(content="Hi there")]
 
         with patch.object(AgentExecutor, 'ainvoke', new_callable=AsyncMock) as mock_super_ainvoke:
             mock_super_ainvoke.return_value = {"output": "super_called"}
-            
+
             mock_executor = CustomizableAgentExecutor(agent=mock_agent_runnable, tools=[])
 
             input_dict = {"input": "hello again", "chat_history": existing_history}
@@ -276,7 +274,7 @@ class TestGetCustomizableAgentExecutorHelper(unittest.TestCase):
         self.patch_from_config = patch.object(CustomizableAgentExecutor, 'from_agent_config')
         self.mock_from_config = self.patch_from_config.start()
         self.addCleanup(self.patch_from_config.stop)
-        
+
         self.agent_config_dict = {"name": "test_agent_dict"}
         self.tools = [MagicMock(spec=BaseTool)]
         self.user_id = "helper_user"
@@ -286,10 +284,10 @@ class TestGetCustomizableAgentExecutorHelper(unittest.TestCase):
 
     def test_get_executor_with_dict_config(self):
         get_customizable_agent_executor(
-            agent_config_obj=self.agent_config_dict, 
+            agent_config_obj=self.agent_config_dict,
             user_id_for_agent=self.user_id,
             session_id_for_agent=self.session_id,
-            ltm_notes=self.ltm, 
+            ltm_notes=self.ltm,
             custom_instructions=self.custom_instr,
             loaded_tools=self.tools
         )
@@ -306,16 +304,16 @@ class TestGetCustomizableAgentExecutorHelper(unittest.TestCase):
     def test_get_executor_with_non_dict_config_logs_error_and_proceeds_if_has_get(self):
         # A mock object that has a 'get' method to simulate a dict-like object
         mock_config_obj_with_get = MagicMock()
-        mock_config_obj_with_get.get = MagicMock(return_value="some_value") 
+        mock_config_obj_with_get.get = MagicMock(return_value="some_value")
         # Setup to behave like a dict for the purpose of from_agent_config if it were to try attribute access
         # This is mostly to check the logging path. The actual success depends on from_agent_config logic.
-        
+
         with patch.object(logging.getLogger('src.core.agents.customizable_agent'), 'error') as mock_logger_error:
             get_customizable_agent_executor(
-                agent_config_obj=mock_config_obj_with_get, 
+                agent_config_obj=mock_config_obj_with_get,
                 user_id_for_agent=self.user_id,
                 session_id_for_agent=self.session_id,
-                ltm_notes=self.ltm, 
+                ltm_notes=self.ltm,
                 custom_instructions=self.custom_instr,
                 loaded_tools=self.tools
             )
@@ -336,13 +334,13 @@ class TestGetCustomizableAgentExecutorHelper(unittest.TestCase):
         non_dict_like_obj = object() # Plain object without 'get'
         with self.assertRaisesRegex(TypeError, "agent_config_obj must be a dictionary, got <class 'object'>"):
             get_customizable_agent_executor(
-                agent_config_obj=non_dict_like_obj, 
+                agent_config_obj=non_dict_like_obj,
                 user_id_for_agent=self.user_id,
                 session_id_for_agent=self.session_id,
-                ltm_notes=self.ltm, 
+                ltm_notes=self.ltm,
                 custom_instructions=self.custom_instr,
                 loaded_tools=self.tools
             )
 
 if __name__ == '__main__':
-    unittest.main() 
+    unittest.main()

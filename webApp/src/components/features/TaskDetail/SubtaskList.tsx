@@ -21,11 +21,7 @@ import { Task } from '@/api/types';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { TrashIcon, Pencil1Icon, DragHandleDots2Icon, PlusIcon } from '@radix-ui/react-icons'; // For delete/edit icons
-import { 
-  getStatusContainerStyles, 
-  getStatusTextStyles, 
-  getStatusButtonStyles 
-} from '@/utils/statusStyles';
+import { getStatusContainerStyles, getStatusTextStyles, getStatusButtonStyles } from '@/utils/statusStyles';
 import clsx from 'clsx';
 
 interface SubtaskListProps {
@@ -54,14 +50,7 @@ const SubtaskListItem: React.FC<SubtaskListItemProps> = ({ subtask, onUpdate, on
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(subtask.title);
 
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: subtask.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: subtask.id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -77,8 +66,8 @@ const SubtaskListItem: React.FC<SubtaskListItemProps> = ({ subtask, onUpdate, on
   };
 
   return (
-    <div 
-      ref={setNodeRef} 
+    <div
+      ref={setNodeRef}
       style={style}
       className={clsx(
         'flex items-center justify-between hover:bg-ui-element-bg-hover',
@@ -86,25 +75,25 @@ const SubtaskListItem: React.FC<SubtaskListItemProps> = ({ subtask, onUpdate, on
         getStatusContainerStyles({
           completed: subtask.status === 'completed',
           status: subtask.status,
-          variant: compact ? 'compact' : 'item'
-        })
+          variant: compact ? 'compact' : 'item',
+        }),
       )}
     >
       <div className="flex items-center flex-grow">
         <button
           className={clsx(
             getStatusButtonStyles({ completed: subtask.status === 'completed' }),
-            "cursor-grab active:cursor-grabbing",
-            compact ? 'mr-1 p-0.5' : 'mr-2 p-1'
+            'cursor-grab active:cursor-grabbing',
+            compact ? 'mr-1 p-0.5' : 'mr-2 p-1',
           )}
           {...attributes}
           {...listeners}
         >
-          <DragHandleDots2Icon className={compact ? "w-3 h-3" : "w-4 h-4"} />
+          <DragHandleDots2Icon className={compact ? 'w-3 h-3' : 'w-4 h-4'} />
         </button>
-        
+
         {isEditing ? (
-          <Input 
+          <Input
             type="text"
             value={editTitle}
             onChange={(e) => setEditTitle(e.target.value)}
@@ -120,52 +109,52 @@ const SubtaskListItem: React.FC<SubtaskListItemProps> = ({ subtask, onUpdate, on
             className={`flex-grow mr-2 text-sm ${compact ? 'h-6' : 'h-8'}`}
           />
         ) : (
-          <span 
-              className={clsx(
-                'flex-grow cursor-pointer',
-                compact ? 'text-sm' : '',
-                getStatusTextStyles({ completed: subtask.status === 'completed' })
-              )}
-              onClick={() => setIsEditing(true)} // Click to edit title
+          <span
+            className={clsx(
+              'flex-grow cursor-pointer',
+              compact ? 'text-sm' : '',
+              getStatusTextStyles({ completed: subtask.status === 'completed' }),
+            )}
+            onClick={() => setIsEditing(true)} // Click to edit title
           >
-              {subtask.title}
+            {subtask.title}
           </span>
         )}
       </div>
-      
+
       <div className={`flex items-center ml-2 ${compact ? 'space-x-0.5' : 'space-x-1'}`}>
-        <Button 
-          onClick={() => setIsEditing(!isEditing)} 
-          aria-label="Edit subtask" 
+        <Button
+          onClick={() => setIsEditing(!isEditing)}
+          aria-label="Edit subtask"
           variant="outline"
-          className={compact ? "p-0.5 h-6 w-6" : "p-1 h-8 w-8"}
+          className={compact ? 'p-0.5 h-6 w-6' : 'p-1 h-8 w-8'}
         >
-            <Pencil1Icon className={compact ? "w-3 h-3" : "w-4 h-4"} />
+          <Pencil1Icon className={compact ? 'w-3 h-3' : 'w-4 h-4'} />
         </Button>
-        <Button 
-          onClick={() => onRemove(subtask.id)} 
-          aria-label="Remove subtask" 
+        <Button
+          onClick={() => onRemove(subtask.id)}
+          aria-label="Remove subtask"
           variant="outline"
-          className={`text-destructive hover:text-destructive ${compact ? "p-0.5 h-6 w-6" : "p-1 h-8 w-8"}`}
+          className={`text-destructive hover:text-destructive ${compact ? 'p-0.5 h-6 w-6' : 'p-1 h-8 w-8'}`}
         >
-            <TrashIcon className={compact ? "w-3 h-3" : "w-4 h-4"} />
+          <TrashIcon className={compact ? 'w-3 h-3' : 'w-4 h-4'} />
         </Button>
       </div>
     </div>
   );
 };
 
-const SubtaskList: React.FC<SubtaskListProps> = ({ 
-  parentTaskId, 
-  showAddSubtask = true, 
-  className, 
+const SubtaskList: React.FC<SubtaskListProps> = ({
+  parentTaskId,
+  showAddSubtask = true,
+  className,
   compact,
   onSubtaskChange,
   onSubtaskReorder,
   onSubtaskCreate,
   onSubtaskUpdate,
   onSubtaskDelete,
-  optimisticSubtasks
+  optimisticSubtasks,
 }) => {
   const subtasks = useTaskStore((state) => state.getSubtasksByParentId(parentTaskId));
   const { createTask, updateTask, deleteTask } = useTaskStore.getState(); // Get actions
@@ -180,15 +169,15 @@ const SubtaskList: React.FC<SubtaskListProps> = ({
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    })
+    }),
   );
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
 
     if (active.id !== over?.id && over) {
-      const oldIndex = displaySubtasks.findIndex(subtask => subtask.id === active.id);
-      const newIndex = displaySubtasks.findIndex(subtask => subtask.id === over.id);
+      const oldIndex = displaySubtasks.findIndex((subtask) => subtask.id === active.id);
+      const newIndex = displaySubtasks.findIndex((subtask) => subtask.id === over.id);
 
       if (oldIndex === -1 || newIndex === -1) {
         console.warn('[SubtaskList] handleDragEnd: Subtask not found in current list. Aborting.');
@@ -197,7 +186,7 @@ const SubtaskList: React.FC<SubtaskListProps> = ({
 
       // Create the reordered array
       const reorderedSubtasks = arrayMove(displaySubtasks, oldIndex, newIndex);
-      
+
       // If callbacks are provided, use them instead of directly updating store
       if (onSubtaskReorder) {
         onSubtaskReorder(reorderedSubtasks);
@@ -219,9 +208,9 @@ const SubtaskList: React.FC<SubtaskListProps> = ({
     // Get parent task to copy user_id and potentially other fields
     const parentTask = useTaskStore.getState().getTaskById(parentTaskId);
     if (!parentTask) {
-        console.error("Parent task not found, cannot create subtask");
-        // Potentially show a toast error
-        return;
+      console.error('Parent task not found, cannot create subtask');
+      // Potentially show a toast error
+      return;
     }
 
     const newSubtaskData = {
@@ -244,7 +233,7 @@ const SubtaskList: React.FC<SubtaskListProps> = ({
       setNewSubtaskTitle('');
       setIsAddingSubtask(false);
     } catch (error) {
-      console.error("Failed to create subtask:", error);
+      console.error('Failed to create subtask:', error);
       // Handle error (e.g., show toast)
     }
   };
@@ -273,8 +262,8 @@ const SubtaskList: React.FC<SubtaskListProps> = ({
     <div className={`space-y-3 ${className || ''}`}>
       {/* Add Subtask Button/Input */}
       {!isAddingSubtask && showAddSubtask && (
-        <Button 
-          type="button" 
+        <Button
+          type="button"
           onClick={() => setIsAddingSubtask(true)}
           variant="outline"
           className="w-full flex items-center justify-center py-2 border-2 border-dashed border-ui-border hover:border-ui-border-focus hover:bg-ui-element-bg-hover"
@@ -286,7 +275,7 @@ const SubtaskList: React.FC<SubtaskListProps> = ({
 
       {isAddingSubtask && showAddSubtask && (
         <div className="flex items-center space-x-2 p-3 border-2 border-dashed border-ui-border-focus rounded-md bg-ui-element-bg">
-          <Input 
+          <Input
             type="text"
             value={newSubtaskTitle}
             onChange={(e) => setNewSubtaskTitle(e.target.value)}
@@ -304,8 +293,8 @@ const SubtaskList: React.FC<SubtaskListProps> = ({
               }
             }}
           />
-          <Button 
-            type="button" 
+          <Button
+            type="button"
             onClick={handleAddSubtask}
             disabled={!newSubtaskTitle.trim()}
             variant="solid"
@@ -313,8 +302,8 @@ const SubtaskList: React.FC<SubtaskListProps> = ({
           >
             Add
           </Button>
-          <Button 
-            type="button" 
+          <Button
+            type="button"
             onClick={() => {
               setNewSubtaskTitle('');
               setIsAddingSubtask(false);
@@ -330,12 +319,12 @@ const SubtaskList: React.FC<SubtaskListProps> = ({
       {/* Subtasks List */}
       {displaySubtasks.length > 0 ? (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={displaySubtasks.map(s => s.id)} strategy={verticalListSortingStrategy}>
-            <div className={compact ? "space-y-1" : "space-y-2"}>
-              {displaySubtasks.map(subtask => (
-                <SubtaskListItem 
-                  key={subtask.id} 
-                  subtask={subtask} 
+          <SortableContext items={displaySubtasks.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+            <div className={compact ? 'space-y-1' : 'space-y-2'}>
+              {displaySubtasks.map((subtask) => (
+                <SubtaskListItem
+                  key={subtask.id}
+                  subtask={subtask}
                   onUpdate={handleUpdateSubtask}
                   onRemove={handleRemoveSubtask}
                   compact={compact}

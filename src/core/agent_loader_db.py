@@ -1,17 +1,21 @@
 # @docs memory-bank/patterns/agent-patterns.md#pattern-2-database-driven-tool-loading
 # @rules memory-bank/rules/agent-rules.json#agent-002
 # @examples memory-bank/patterns/agent-patterns.md#pattern-10-tool-registration-system
-import os
-import logging
 import json
-from typing import Dict, Any, List, Optional, Type
-from pydantic import BaseModel, Field, ConfigDict, create_model
-from supabase import create_client, Client as SupabaseClient
+import logging
+import os
+from typing import Any, Dict, List, Optional, Type
+
+from pydantic import BaseModel, ConfigDict, Field, create_model
+
+from chatServer.database.connection import get_db_connection
+from chatServer.tools.email_digest_tool import EmailDigestTool
+from chatServer.tools.gmail_tools import GmailDigestTool, GmailGetMessageTool, GmailSearchTool
 from core.agents.customizable_agent import CustomizableAgentExecutor
 from core.tools.crud_tool import CRUDTool, CRUDToolInput
-from chatServer.tools.gmail_tools import GmailDigestTool, GmailSearchTool, GmailGetMessageTool
-from chatServer.tools.email_digest_tool import EmailDigestTool
-from chatServer.database.connection import get_db_connection
+from supabase import Client as SupabaseClient
+from supabase import create_client
+
 # Example imports for specific tool subclasses (USER ACTION: Add actual tool class imports here)
 # from core.tools.agent_memory_tools import CreateMemoryTool, FetchMemoryTool, UpdateMemoryTool, DeleteMemoryTool
 from utils.logging_utils import get_logger
@@ -28,7 +32,7 @@ TOOL_REGISTRY: Dict[str, Type] = {
     "EmailDigestTool": EmailDigestTool,
     "GmailTool": None,  # Special handling - uses tool_class config to determine specific class
     # Add other distinct, non-CRUDTool Python classes here if any.
-    # The string key (e.g., "CRUDTool") must match the 'type' column 
+    # The string key (e.g., "CRUDTool") must match the 'type' column
     # (or ENUM value as string) in your agent_tools table for these tools.
 }
 
@@ -45,7 +49,7 @@ AGENT_REGISTRY: Dict[str, Type] = {}
 
 def register_specialized_agent(agent_name: str, agent_class: Type):
     """Register a specialized agent class for a specific agent name.
-    
+
     Args:
         agent_name: Name of the agent (e.g., 'email_digest_agent')
         agent_class: Specialized agent class to use
@@ -55,12 +59,12 @@ def register_specialized_agent(agent_name: str, agent_class: Type):
 
 def create_specialized_agent(agent_name: str, user_id: str, session_id: str) -> Any:
     """Create a specialized agent instance if one is registered.
-    
+
     Args:
         agent_name: Name of the agent
         user_id: User ID
         session_id: Session ID
-        
+
     Returns:
         Specialized agent instance or None if not registered
     """
@@ -71,8 +75,8 @@ def create_specialized_agent(agent_name: str, user_id: str, session_id: str) -> 
     return None
 
 def _create_dynamic_crud_tool_class(
-    tool_name_from_db: str, 
-    base_tool_class: Type[CRUDTool], 
+    tool_name_from_db: str,
+    base_tool_class: Type[CRUDTool],
     runtime_schema_config: Dict[str, Any]
 ) -> Type[CRUDTool]:
     """
@@ -84,7 +88,7 @@ def _create_dynamic_crud_tool_class(
     for the tool's runtime arguments ('data' and 'filters').
 
     Args:
-        tool_name_from_db: The 'name' of the tool instance from the database, used for 
+        tool_name_from_db: The 'name' of the tool instance from the database, used for
                            generating unique names for the dynamic class and its args model.
         base_tool_class: The parent class to inherit from (e.g., CRUDTool).
         runtime_schema_config: A dictionary defining the structure for the `args_schema`.
@@ -97,19 +101,19 @@ def _create_dynamic_crud_tool_class(
                                }
 
     Returns:
-        A new, dynamically created class type (not an instance) that is a subclass of 
+        A new, dynamically created class type (not an instance) that is a subclass of
         `base_tool_class` with a custom `args_schema`.
         Returns `base_tool_class` itself if `runtime_schema_config` is empty or invalid.
     """
     fields_for_args_model: Dict[str, Any] = {}
-    
+
     for field_name, field_config in runtime_schema_config.items():
         if not isinstance(field_config, dict):
             logger.warning(f"Dynamic schema for tool '{tool_name_from_db}': Field config for '{field_name}' is not a dict. Skipping.")
             continue
 
         description = field_config.get("description", f"Argument '{field_name}' for tool '{tool_name_from_db}'.")
-        is_optional = field_config.get("optional", True) 
+        is_optional = field_config.get("optional", True)
         field_type_str = field_config.get("type", "any").lower()
 
         actual_field_type: Type = Any
@@ -124,35 +128,35 @@ def _create_dynamic_crud_tool_class(
         elif field_type_str == "str": actual_field_type = str
         elif field_type_str == "int": actual_field_type = int
         elif field_type_str == "bool": actual_field_type = bool
-        elif field_type_str == "list": actual_field_type = List[Any] 
+        elif field_type_str == "list": actual_field_type = List[Any]
         # Add more type mappings (e.g., float, enums from strings) as needed.
 
         if is_optional:
             pydantic_field_definition = (Optional[actual_field_type], Field(default=None, description=description))
         else:
             pydantic_field_definition = (actual_field_type, Field(..., description=description))
-        
+
         fields_for_args_model[field_name] = pydantic_field_definition
-    
+
     if not fields_for_args_model:
         logger.warning(f"Dynamic schema for tool '{tool_name_from_db}': No valid fields parsed from runtime_args_schema. Will use default args_schema from base class '{base_tool_class.__name__}'.")
-        return base_tool_class 
+        return base_tool_class
 
     args_model_name = f"{tool_name_from_db.capitalize().replace('_', '')}ArgsSchemaModel"
     SpecificArgsModel = create_model(
-        args_model_name, 
-        **fields_for_args_model, 
+        args_model_name,
+        **fields_for_args_model,
         __config__=ConfigDict(extra='ignore', arbitrary_types_allowed=True), # Allow arbitrary types for nested models
-        __module__=__name__ 
+        __module__=__name__
     )
-    
+
     dynamic_tool_class_name = f"Dynamic{tool_name_from_db.capitalize().replace('_', '')}{base_tool_class.__name__}"
-    
+
     class_dict = {
         'args_schema': SpecificArgsModel,
-        '__module__': __name__  
+        '__module__': __name__
     }
-    
+
     DynamicToolClass = type(
         dynamic_tool_class_name,
         (base_tool_class,),
@@ -180,7 +184,7 @@ def _create_dynamic_args_model(model_name: str, properties_config: Dict[str, Any
         if not isinstance(prop_config, dict):
             logger.warning(f"Dynamic nested model '{model_name}': Property config for '{prop_name}' is not a dict. Skipping.")
             continue
-        
+
         description = prop_config.get("description", f"Property '{prop_name}' of {model_name}.")
         is_optional = prop_config.get("optional", True)
         prop_type_str = prop_config.get("type", "any").lower()
@@ -192,12 +196,12 @@ def _create_dynamic_args_model(model_name: str, properties_config: Dict[str, Any
         elif prop_type_str == "dict": actual_prop_type = Dict[str, Any]
         elif prop_type_str == "list": actual_prop_type = List[Any]
         # Add more type mappings as needed.
-        
+
         if is_optional:
             fields[prop_name] = (Optional[actual_prop_type], Field(default=None, description=description))
         else:
             fields[prop_name] = (actual_prop_type, Field(..., description=description))
-            
+
     if not fields:
         logger.warning(f"Dynamic nested model '{model_name}': No valid properties found in config. Creating a fallback model with no fields.")
         # Create a fallback model that can be instantiated but has no specific fields, rather than erroring.
@@ -208,8 +212,8 @@ def _create_dynamic_args_model(model_name: str, properties_config: Dict[str, Any
         return EmptyNestedModel
 
     return create_model(
-        model_name, 
-        **fields, 
+        model_name,
+        **fields,
         __config__=ConfigDict(extra='ignore', arbitrary_types_allowed=True),
         __module__=__name__
     )
@@ -217,7 +221,7 @@ def _create_dynamic_args_model(model_name: str, properties_config: Dict[str, Any
 def load_tools_from_db(
     tools_data: List[dict], # List of tool rows from the 'agent_tools' table
     user_id: str,
-    agent_name: str, 
+    agent_name: str,
     supabase_url: str,
     supabase_key: str,
 ) -> List[Any]: # Returns a list of instantiated tool objects
@@ -226,7 +230,7 @@ def load_tools_from_db(
 
     For each tool defined in `tools_data`:
     1. Looks up the base Python tool class in `TOOL_REGISTRY` using `tool_row["type"]`.
-    2. If the base class is `CRUDTool` and a `runtime_args_schema` is provided in the 
+    2. If the base class is `CRUDTool` and a `runtime_args_schema` is provided in the
        tool's DB `config` (JSONB column), it dynamically creates a subclass of `CRUDTool`
        with a custom `args_schema` generated from this runtime schema. This allows each
        CRUDTool instance to have tailored input validation for the LLM.
@@ -259,31 +263,31 @@ def load_tools_from_db(
         if not db_tool_description:
             logger.error(f"DB entry for tool '{db_tool_name}' (type '{db_tool_type_str}') is missing 'description'. Skipping. Row: {tool_row}")
             continue
-        
+
         # Convert to strings after validation
         db_tool_name = str(db_tool_name)
         db_tool_description = str(db_tool_description)
-            
+
         original_python_tool_class = TOOL_REGISTRY.get(db_tool_type_str)
         if db_tool_type_str not in TOOL_REGISTRY:
             logger.warning(f"Tool type '{db_tool_type_str}' (for tool name '{db_tool_name}') not found in TOOL_REGISTRY. Skipping tool.")
             continue
-        
+
         # Special handling for GmailTool type - use tool_class config to determine specific class
         if db_tool_type_str == "GmailTool":
             tool_class_name = db_tool_config_json.get("tool_class")
             if not tool_class_name:
                 logger.error(f"GmailTool instance '{db_tool_name}' is missing 'tool_class' in its DB config. Skipping.")
                 continue
-            
+
             specific_gmail_tool_class = GMAIL_TOOL_CLASSES.get(tool_class_name)
             if not specific_gmail_tool_class:
                 logger.error(f"GmailTool instance '{db_tool_name}' has unknown tool_class '{tool_class_name}'. Available: {list(GMAIL_TOOL_CLASSES.keys())}. Skipping.")
                 continue
-            
+
             original_python_tool_class = specific_gmail_tool_class
             logger.info(f"GmailTool '{db_tool_name}' resolved to specific class '{tool_class_name}'")
-        
+
         # This will be the class to instantiate, potentially a dynamic subclass of original_python_tool_class
         effective_tool_class_to_instantiate = original_python_tool_class
 
@@ -292,10 +296,10 @@ def load_tools_from_db(
         # Specific tool classes (like CRUDTool) also define these as Pydantic fields.
         tool_constructor_kwargs = {
             "user_id": user_id,
-            "agent_name": agent_name, 
+            "agent_name": agent_name,
             "supabase_url": supabase_url,
             "supabase_key": supabase_key,
-            "name": db_tool_name, 
+            "name": db_tool_name,
             "description": db_tool_description,
         }
 
@@ -311,7 +315,7 @@ def load_tools_from_db(
             if not crud_method:
                 logger.error(f"CRUDTool instance '{db_tool_name}' is missing 'method' in its DB config. Skipping.")
                 continue
-            
+
             # Add CRUDTool specific operational fields to its constructor args
             tool_constructor_kwargs["table_name"] = crud_table_name
             tool_constructor_kwargs["method"] = crud_method
@@ -328,11 +332,11 @@ def load_tools_from_db(
                     logger.error(f"CRUDTool instance '{db_tool_name}': 'runtime_args_schema' in DB config is malformed JSON. Will use default args_schema.")
             elif isinstance(raw_runtime_schema_from_db, dict):
                 parsed_runtime_schema_dict = raw_runtime_schema_from_db
-            
+
             if parsed_runtime_schema_dict: # If a valid schema dict was parsed or provided
                 try:
                     effective_tool_class_to_instantiate = _create_dynamic_crud_tool_class(
-                        db_tool_name, 
+                        db_tool_name,
                         CRUDTool, # Base class for dynamic subclassing
                         parsed_runtime_schema_dict
                     )
@@ -340,7 +344,7 @@ def load_tools_from_db(
                     logger.error(f"CRUDTool instance '{db_tool_name}': Failed to create dynamic class from runtime_args_schema. Error: {e}. Will use default '{CRUDTool.__name__}' args_schema.", exc_info=True)
             else:
                 logger.info(f"CRUDTool instance '{db_tool_name}': No 'runtime_args_schema' found or parsed in DB config. Will use default '{CRUDTool.__name__}' args_schema ('{CRUDToolInput.__name__}').")
-        
+
         else: # For non-CRUD tools registered in TOOL_REGISTRY
             # Merge their entire DB config JSON into constructor args.
             # These tools must handle these kwargs in their __init__ or have them as Pydantic fields.
@@ -353,11 +357,11 @@ def load_tools_from_db(
         try:
             tool_instance = effective_tool_class_to_instantiate(**tool_constructor_kwargs)
             tools.append(tool_instance)
-            
+
             # Sanity check for Langchain compatibility after instantiation
             if not getattr(tool_instance, 'name', None) or not getattr(tool_instance, 'description', None):
                  logger.warning(f"Instantiated tool '{db_tool_name}' appears to be missing standard 'name' or 'description' attributes post-init. This might cause issues with Langchain.")
-            
+
             if isinstance(tool_instance, CRUDTool):
                 effective_args_schema_name = type(tool_instance.args_schema).__name__ if tool_instance.args_schema else "None"
                 if effective_args_schema_name != CRUDToolInput.__name__ and tool_instance.args_schema is not CRUDToolInput:
@@ -412,22 +416,22 @@ def load_agent_executor_db(
         Various exceptions from tool instantiation or executor creation if errors occur.
     """
     logger.setLevel(log_level)
-    
+
     effective_supabase_url = supabase_url or os.getenv("VITE_SUPABASE_URL")
     effective_supabase_key = supabase_key or os.getenv("SUPABASE_SERVICE_KEY")
     if not effective_supabase_url or not effective_supabase_key:
         raise ValueError("Supabase URL and Service Key must be provided either as arguments or environment variables (VITE_SUPABASE_URL, SUPABASE_SERVICE_KEY).")
-    
+
     db: SupabaseClient = create_client(effective_supabase_url, effective_supabase_key)
 
     cache_status = "cached" if use_cache else "non-cached"
     logger.info(f"Loading agent executor for agent_name='{agent_name}', user_id='{user_id}' using {cache_status} database-driven agent loading.")
-    
+
     # 1. Fetch agent config (not cached as it's infrequent and small)
     agent_resp = db.table("agent_configurations").select("*, id").eq("agent_name", agent_name).single().execute()
     if not agent_resp.data:
         raise ValueError(f"Agent configuration for '{agent_name}' not found in 'agent_configurations' table.")
-    
+
     agent_db_config = agent_resp.data
     agent_id = agent_db_config.get("id")
     if not agent_id:
@@ -436,16 +440,17 @@ def load_agent_executor_db(
 
     # 2. Fetch tools - use cache if requested and available
     tools_data_from_db = []
-    
+
     if use_cache:
         try:
             # Try to use cache service
-            from chatServer.services.tool_cache_service import get_cached_tools_for_agent
             import asyncio
-            
+
+            from chatServer.services.tool_cache_service import get_cached_tools_for_agent
+
             cached_tools_data = asyncio.run(get_cached_tools_for_agent(str(agent_id)))
             logger.info(f"Retrieved {len(cached_tools_data)} tools for agent '{agent_name}' from cache")
-            
+
             # Transform cached tool data to match expected format
             for tool_config in cached_tools_data:
                 transformed_tool = {
@@ -456,7 +461,7 @@ def load_agent_executor_db(
                     "is_active": tool_config.get("is_active", True)
                 }
                 tools_data_from_db.append(transformed_tool)
-                
+
         except ImportError:
             logger.warning("Tool cache service not available, falling back to direct database query")
             use_cache = False
@@ -464,14 +469,14 @@ def load_agent_executor_db(
             logger.error(f"Failed to get tools from cache for agent '{agent_name}': {e}")
             logger.info("Falling back to direct database query")
             use_cache = False
-    
+
     if not use_cache:
         # Fallback to direct database query using normalized schema
         async def get_agent_tools():
             async for conn in get_db_connection():
                 async with conn.cursor() as cursor:
                     await cursor.execute("""
-                        SELECT 
+                        SELECT
                             at.id as assignment_id,
                             at.config_override,
                             at.is_active as assignment_active,
@@ -483,17 +488,17 @@ def load_agent_executor_db(
                             t.is_active as tool_active
                         FROM agent_tools at
                         JOIN tools t ON at.tool_id = t.id
-                        WHERE at.agent_id = %s 
-                        AND at.is_active = true 
+                        WHERE at.agent_id = %s
+                        AND at.is_active = true
                         AND at.is_deleted = false
-                        AND t.is_active = true 
+                        AND t.is_active = true
                         AND t.is_deleted = false
                     """, (str(agent_id),))
-                    
+
                     rows = await cursor.fetchall()
                     columns = [desc[0] for desc in cursor.description]
                     return [dict(zip(columns, row)) for row in rows]
-        
+
         # Since this is a sync function, we need to run the async query
         import asyncio
         try:
@@ -502,11 +507,11 @@ def load_agent_executor_db(
             logger.error(f"Failed to fetch tools using connection pool: {e}")
             # Fallback to Supabase client with separate queries
             logger.info("Falling back to Supabase client with separate queries")
-            
+
             # First get agent tool assignments
             assignments_resp = db.table("agent_tools").select("*").eq("agent_id", str(agent_id)).eq("is_active", True).eq("is_deleted", False).execute()
             assignments = assignments_resp.data or []
-            
+
             # Then get tool details for each assignment
             raw_tools_data = []
             for assignment in assignments:
@@ -526,7 +531,7 @@ def load_agent_executor_db(
                         "tool_active": tool_data["is_active"]
                     }
                     raw_tools_data.append(merged_data)
-        
+
         logger.info(f"Found {len(raw_tools_data)} active tools linked to agent '{agent_name}' (agent_id: {agent_id}) via normalized schema.")
 
         # Transform the joined data to match the expected format for load_tools_from_db
@@ -534,7 +539,7 @@ def load_agent_executor_db(
         for tool_data in raw_tools_data:
             # Start with the base tool config
             merged_config = tool_data.get("config", {})
-            
+
             # Apply agent-specific config overrides
             config_override = tool_data.get("config_override", {})
             if config_override:
@@ -543,7 +548,7 @@ def load_agent_executor_db(
                 else:
                     # If either is not a dict, use override as the config
                     merged_config = config_override
-            
+
             # Create the expected tool data structure
             transformed_tool = {
                 "id": tool_data["assignment_id"],  # Use assignment ID for uniqueness

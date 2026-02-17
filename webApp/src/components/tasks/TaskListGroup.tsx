@@ -14,16 +14,14 @@ const TaskListGroup: React.FC<TaskListGroupProps> = ({ title, tasks }) => {
 
   return (
     <div className="mb-8">
-      <h2 className="text-xl font-semibold text-text-primary mb-4 pb-2 border-b border-ui-border">
-        {title}
-      </h2>
+      <h2 className="text-xl font-semibold text-text-primary mb-4 pb-2 border-b border-ui-border">{title}</h2>
       <div className="space-y-3">
         {tasks.map((task) => (
           <TaskCard
             key={task.id}
             {...task} // Spread all props from the task object (TaskCardProps)
             // Individual props below are now redundant due to spread, but ensure onToggleComplete and onStartTask are part of 'task'
-            // id={task.id} 
+            // id={task.id}
             // title={task.title}
             // category={task.category}
             // completed={task.completed}
@@ -38,4 +36,4 @@ const TaskListGroup: React.FC<TaskListGroupProps> = ({ title, tasks }) => {
   );
 };
 
-export default TaskListGroup; 
+export default TaskListGroup;

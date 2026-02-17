@@ -33,21 +33,26 @@ export function parseTaskString(input: string): Partial<NewTaskData> {
   }
 
   // The remaining string is the title
-  parsed.title = title.trim(); 
-  // Ensure title is not empty after stripping other parts, 
+  parsed.title = title.trim();
+  // Ensure title is not empty after stripping other parts,
   // though this should ideally be handled by input validation before calling create
   if (!parsed.title && input.length > 0) {
-    // If stripping all parts left an empty title, but there was input, 
+    // If stripping all parts left an empty title, but there was input,
     // it implies the original input might have been *only* flags.
     // For now, let's default to using the original input as title in such edge cases,
     // or this part could be refined based on desired behavior.
     // A more robust approach might return an error or a specific flag indicating parsing issues.
-    if (input.replace(priorityMatch?.[0] || '', '').replace(descriptionMatch?.[0] || '', '').trim() === ''){
-        parsed.title = input.trim(); // Or handle as an error/invalid input upstream
+    if (
+      input
+        .replace(priorityMatch?.[0] || '', '')
+        .replace(descriptionMatch?.[0] || '', '')
+        .trim() === ''
+    ) {
+      parsed.title = input.trim(); // Or handle as an error/invalid input upstream
     } else {
-        // This case means there was likely a title, but it got blanked. This shouldn't happen with current regex if title part exists.
-        // Default to original input if all else fails to parse a title.
-        parsed.title = input.trim(); 
+      // This case means there was likely a title, but it got blanked. This shouldn't happen with current regex if title part exists.
+      // Default to original input if all else fails to parse a title.
+      parsed.title = input.trim();
     }
   }
 
@@ -92,4 +97,4 @@ console.log(parseTaskString("Task with desc: and p1 later"));
 console.log(parseTaskString("Fix bug p1"));
 // Expected: { title: 'Fix bug', priority: 1 }
 
-*/ 
+*/

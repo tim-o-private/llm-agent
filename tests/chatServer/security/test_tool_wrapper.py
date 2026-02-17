@@ -2,10 +2,11 @@
 Tests for the tool wrapper that enforces approval tiers.
 """
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-
 import sys
+from unittest.mock import AsyncMock, patch
+
+import pytest
+
 sys.path.insert(0, 'chatServer')
 
 from chatServer.security.approval_tiers import ApprovalTier
@@ -13,7 +14,6 @@ from chatServer.security.tool_wrapper import (
     ApprovalContext,
     with_approval,
     wrap_tools_with_approval,
-    ApprovalRequiredError,
 )
 
 

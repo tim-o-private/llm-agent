@@ -8,10 +8,7 @@ export const UserMenu: React.FC = () => {
 
   if (!user) {
     return (
-      <button
-        onClick={() => signInWithProvider('google')}
-        className="btn btn-primary"
-      >
+      <button onClick={() => signInWithProvider('google')} className="btn btn-primary">
         Sign in with Google
       </button>
     );
@@ -25,4 +22,4 @@ export const UserMenu: React.FC = () => {
       </button>
     </div>
   );
-}; 
+};

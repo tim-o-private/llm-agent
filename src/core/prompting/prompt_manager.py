@@ -1,6 +1,8 @@
-import httpx
-from typing import List, Dict, Any, Optional
 import asyncio
+from typing import Any, Dict, List, Optional
+
+import httpx
+
 
 # Assuming Pydantic models from chatServer.main are available or redefined here
 # For a real setup, these might be in a shared library or generated from OpenAPI spec
@@ -24,7 +26,7 @@ class PromptManagerService:
             token = await token_result
         else:
             token = token_result
-            
+
         if not token:
             raise ValueError("Auth token is not available.")
         return {"Authorization": f"Bearer {token}"}
@@ -39,11 +41,11 @@ class PromptManagerService:
             )
             response.raise_for_status() # Raise an exception for HTTP errors
             return response.json()
-        except httpx.HTTPStatusError as e:
+        except httpx.HTTPStatusError:
             # print(f"HTTP error fetching customizations for {agent_name}: {e.response.status_code} - {e.response.text}") # Proper logging
             # Depending on desired behavior, could return empty list or re-raise a custom exception
-            return [] 
-        except Exception as e:
+            return []
+        except Exception:
             # print(f"Error fetching customizations for {agent_name}: {e}") # Proper logging
             return []
 
@@ -65,10 +67,10 @@ class PromptManagerService:
             )
             response.raise_for_status()
             return response.json()
-        except httpx.HTTPStatusError as e:
+        except httpx.HTTPStatusError:
             # print(f"HTTP error adding customization for {agent_name}: {e.response.status_code} - {e.response.text}")
             return None
-        except Exception as e:
+        except Exception:
             # print(f"Error adding customization for {agent_name}: {e}")
             return None
 
@@ -90,10 +92,10 @@ class PromptManagerService:
             )
             response.raise_for_status()
             return response.json()
-        except httpx.HTTPStatusError as e:
+        except httpx.HTTPStatusError:
             # print(f"HTTP error updating customization {customization_id}: {e.response.status_code} - {e.response.text}")
             return None
-        except Exception as e:
+        except Exception:
             # print(f"Error updating customization {customization_id}: {e}")
             return None
 
@@ -103,16 +105,16 @@ class PromptManagerService:
 # Example Usage (conceptual, depends on how auth_token_provider is implemented and how asyncio loop is managed):
 # async def example_auth_provider():
 #     # In a real app, this would fetch a valid JWT token
-#     return "your_jwt_token_here" 
+#     return "your_jwt_token_here"
 
 # async def main():
 #     manager = PromptManagerService(base_url="http://localhost:8000", auth_token_provider=example_auth_provider)
 #     customizations = await manager.get_customizations(agent_name="test_agent")
 #     print("Fetched Customizations:", customizations)
-#     
+#
 #     # new_cust = await manager.add_customization(
-#     #     agent_name="test_agent", 
-#     #     customization_type="instruction_set", 
+#     #     agent_name="test_agent",
+#     #     customization_type="instruction_set",
 #     #     content={"instructions": ["Always be polite", "Summarize in 3 sentences"]}
 #     # )
 #     # print("Added Customization:", new_cust)
@@ -120,4 +122,4 @@ class PromptManagerService:
 
 # if __name__ == "__main__":
 # import asyncio
-# asyncio.run(main()) 
+# asyncio.run(main())

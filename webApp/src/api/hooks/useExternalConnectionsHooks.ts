@@ -58,7 +58,7 @@ export function useStoreTokens() {
         p_expires_at: params.expiresAt?.toISOString() || null,
         p_scopes: params.scopes || [],
         p_service_user_id: params.serviceUserId || null,
-        p_service_user_email: params.serviceUserEmail || null
+        p_service_user_email: params.serviceUserEmail || null,
       });
 
       if (error) throw error;
@@ -88,7 +88,7 @@ export function useConnectionStatus(serviceName: string) {
 
       const { data, error } = await supabase.rpc('check_connection_status', {
         p_user_id: user.id,
-        p_service_name: serviceName
+        p_service_name: serviceName,
       });
 
       if (error) throw error;
@@ -112,7 +112,7 @@ export function useConnectionInfo(serviceName: string) {
 
       const { data, error } = await supabase.rpc('get_connection_info', {
         p_user_id: user.id,
-        p_service_name: serviceName
+        p_service_name: serviceName,
       });
 
       if (error) throw error;
@@ -134,11 +134,11 @@ export function useListConnections() {
       if (!user) throw new Error('User not authenticated');
 
       const { data, error } = await supabase.rpc('list_user_connections', {
-        p_user_id: user.id
+        p_user_id: user.id,
       });
 
       if (error) throw error;
-      
+
       const response = data as ListConnectionsResponse;
       return response.connections || [];
     },
@@ -159,7 +159,7 @@ export function useRevokeTokens() {
 
       const { data, error } = await supabase.rpc('revoke_oauth_tokens', {
         p_user_id: user.id,
-        p_service_name: serviceName
+        p_service_name: serviceName,
       });
 
       if (error) throw error;
@@ -174,4 +174,4 @@ export function useRevokeTokens() {
       toast.error('Failed to revoke tokens', error.message);
     },
   });
-} 
+}

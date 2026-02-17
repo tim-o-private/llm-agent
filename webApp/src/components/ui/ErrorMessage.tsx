@@ -13,12 +13,8 @@ export const ErrorMessage: React.FC<ErrorMessageProps> = ({ children, className,
   }
 
   return (
-    <p 
-      role="alert" 
-      id={id}
-      className={clsx("text-sm text-text-destructive mt-1", className)}
-    >
+    <p role="alert" id={id} className={clsx('text-sm text-text-destructive mt-1', className)}>
       {children}
     </p>
   );
-}; 
+};

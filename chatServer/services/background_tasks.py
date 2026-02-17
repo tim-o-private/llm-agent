@@ -3,24 +3,24 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, Tuple, Any, List
+from typing import Any, Dict, Optional, Tuple
+
 from croniter import croniter
 
 try:
-    from ..config.constants import SESSION_INSTANCE_TTL_SECONDS, SCHEDULED_TASK_INTERVAL_SECONDS
+    from ..config.constants import SCHEDULED_TASK_INTERVAL_SECONDS, SESSION_INSTANCE_TTL_SECONDS
     from ..database.connection import get_database_manager
     from ..services.vault_token_service import get_vault_token_service_for_scheduler
 except ImportError:
-    from chatServer.config.constants import SESSION_INSTANCE_TTL_SECONDS, SCHEDULED_TASK_INTERVAL_SECONDS
+    from chatServer.config.constants import SCHEDULED_TASK_INTERVAL_SECONDS, SESSION_INSTANCE_TTL_SECONDS
     from chatServer.database.connection import get_database_manager
-    from chatServer.services.vault_token_service import get_vault_token_service_for_scheduler
 
 logger = logging.getLogger(__name__)
 
 
 class BackgroundTaskService:
     """Service for managing background tasks like session cleanup, cache eviction, and scheduled agent execution."""
-    
+
     def __init__(self):
         self.deactivate_task: Optional[asyncio.Task] = None
         self.evict_task: Optional[asyncio.Task] = None
@@ -28,29 +28,29 @@ class BackgroundTaskService:
         self._agent_executor_cache: Optional[Dict[Tuple[str, str], Any]] = None
         self.agent_schedules: Dict[str, Dict] = {}
         self._last_schedule_check: Optional[datetime] = None
-    
+
     def set_agent_executor_cache(self, cache: Dict[Tuple[str, str], Any]) -> None:
         """Set the agent executor cache reference for eviction tasks."""
         self._agent_executor_cache = cache
-    
+
     async def deactivate_stale_chat_session_instances(self) -> None:
         """Periodically deactivates stale chat session instances."""
         while True:
             await asyncio.sleep(SCHEDULED_TASK_INTERVAL_SECONDS)
             logger.debug("Running task: deactivate_stale_chat_session_instances")
-            
+
             db_manager = get_database_manager()
             if db_manager.pool is None:
                 logger.warning("db_pool not available, skipping deactivation task cycle.")
                 continue
-            
+
             try:
                 async with db_manager.pool.connection() as conn:
                     async with conn.cursor() as cur:
                         threshold_time = datetime.now(timezone.utc) - timedelta(seconds=SESSION_INSTANCE_TTL_SECONDS)
                         await cur.execute(
-                            """UPDATE chat_sessions 
-                               SET is_active = false, updated_at = %s 
+                            """UPDATE chat_sessions
+                               SET is_active = false, updated_at = %s
                                WHERE is_active = true AND updated_at < %s""",
                             (datetime.now(timezone.utc), threshold_time)
                         )
@@ -58,13 +58,13 @@ class BackgroundTaskService:
                             logger.info(f"Deactivated {cur.rowcount} stale chat session instances.")
             except Exception as e:
                 logger.error(f"Error in deactivate_stale_chat_session_instances: {e}", exc_info=True)
-    
+
     async def evict_inactive_executors(self) -> None:
         """Periodically evicts agent executors if no active session instances exist for them."""
         while True:
             await asyncio.sleep(SCHEDULED_TASK_INTERVAL_SECONDS + 30)  # Stagger slightly from the other task
             logger.debug("Running task: evict_inactive_executors")
-            
+
             db_manager = get_database_manager()
             if db_manager.pool is None or self._agent_executor_cache is None:
                 logger.warning("db_pool or agent_executor_cache not available, skipping eviction task cycle.")
@@ -79,7 +79,7 @@ class BackgroundTaskService:
                     async with db_manager.pool.connection() as conn:
                         async with conn.cursor() as cur:
                             await cur.execute(
-                                """SELECT 1 FROM chat_sessions 
+                                """SELECT 1 FROM chat_sessions
                                    WHERE user_id = %s AND agent_name = %s AND is_active = true LIMIT 1""",
                                 (user_id, agent_name)
                             )
@@ -88,7 +88,7 @@ class BackgroundTaskService:
                                 keys_to_evict.append((user_id, agent_name))
                 except Exception as e:
                     logger.error(f"Error checking active sessions for ({user_id}, {agent_name}): {e}", exc_info=True)
-            
+
             for key in keys_to_evict:
                 if key in self._agent_executor_cache:
                     del self._agent_executor_cache[key]
@@ -99,27 +99,27 @@ class BackgroundTaskService:
         while True:
             await asyncio.sleep(60)  # Check every minute
             logger.debug("Running task: run_scheduled_agents")
-            
+
             db_manager = get_database_manager()
             if db_manager.pool is None:
                 logger.warning("db_pool not available, skipping scheduled agents task cycle.")
                 continue
-            
+
             try:
                 current_time = datetime.now(timezone.utc)
-                
+
                 # Reload schedules periodically (every 5 minutes) or on first run
-                if (self._last_schedule_check is None or 
+                if (self._last_schedule_check is None or
                     current_time - self._last_schedule_check > timedelta(minutes=5)):
                     await self._reload_agent_schedules()
                     self._last_schedule_check = current_time
-                
+
                 # Check for agents that need to run
                 for schedule_id, schedule in self.agent_schedules.items():
                     if self._should_run_now(schedule, current_time):
                         # Create task for async execution without blocking the loop
                         asyncio.create_task(self._execute_scheduled_agent(schedule))
-                        
+
             except Exception as e:
                 logger.error(f"Error in run_scheduled_agents: {e}", exc_info=True)
 
@@ -131,18 +131,18 @@ class BackgroundTaskService:
                 async with conn.cursor() as cur:
                     await cur.execute("""
                         SELECT id, user_id, agent_name, schedule_cron, prompt, config
-                        FROM agent_schedules 
+                        FROM agent_schedules
                         WHERE active = true
                     """)
-                    
+
                     schedules = await cur.fetchall()
-                    
+
                     # Clear existing schedules and reload
                     self.agent_schedules.clear()
-                    
+
                     for schedule_row in schedules:
                         schedule_id, user_id, agent_name, schedule_cron, prompt, config = schedule_row
-                        
+
                         self.agent_schedules[str(schedule_id)] = {
                             'id': schedule_id,
                             'user_id': str(user_id),
@@ -152,9 +152,9 @@ class BackgroundTaskService:
                             'config': config or {},
                             'last_run': None  # Track last execution time
                         }
-                    
+
                     logger.info(f"Loaded {len(self.agent_schedules)} active agent schedules")
-                    
+
         except Exception as e:
             logger.error(f"Error reloading agent schedules: {e}", exc_info=True)
 
@@ -163,13 +163,13 @@ class BackgroundTaskService:
         try:
             cron_expr = schedule['schedule_cron']
             last_run = schedule.get('last_run')
-            
+
             # Create croniter instance
             cron = croniter(cron_expr, current_time)
-            
+
             # Get the previous scheduled time
             prev_time = cron.get_prev(datetime)
-            
+
             # If we've never run, or the previous scheduled time is after our last run
             if last_run is None or prev_time > last_run:
                 # Check if we're within 2 minutes of the scheduled time to avoid missing runs
@@ -177,9 +177,9 @@ class BackgroundTaskService:
                 if time_diff <= 120:  # Within 2 minutes
                     schedule['last_run'] = current_time  # Update last run time
                     return True
-            
+
             return False
-            
+
         except Exception as e:
             logger.error(f"Error checking schedule for {schedule.get('id')}: {e}")
             return False
@@ -191,13 +191,13 @@ class BackgroundTaskService:
         agent_name = schedule.get('agent_name')
         prompt = schedule.get('prompt')
         config = schedule.get('config', {})
-        
+
         try:
             logger.info(f"Executing scheduled agent {agent_name} for user {user_id} (schedule {schedule_id})")
-            
+
             # Import EmailDigestService here to avoid circular imports
             from ..services.email_digest_service import EmailDigestService
-            
+
             # Check if this is an email digest schedule
             if 'email digest' in prompt.lower() or config.get('context') == 'scheduled':
                 # Use EmailDigestService for email digest execution
@@ -207,7 +207,7 @@ class BackgroundTaskService:
                     include_read=config.get('include_read', False),
                     context="scheduled"
                 )
-                
+
                 if result.get("success"):
                     logger.info(f"Scheduled email digest completed for user {user_id}")
                 else:
@@ -217,23 +217,23 @@ class BackgroundTaskService:
                 if self._agent_executor_cache is not None:
                     executor_key = (user_id, agent_name)
                     executor = self._agent_executor_cache.get(executor_key)
-                    
+
                     if executor is None:
                         # Create new executor if not cached
                         # This would require importing and using the agent creation logic
                         logger.warning(f"No cached executor for {executor_key}, skipping scheduled execution")
                         return
-                    
+
                     # Execute with schedule-specific input
                     await executor.ainvoke({
                         "input": prompt,
                         "chat_history": []  # Fresh context for scheduled runs
                     })
-                    
+
                     logger.info(f"Scheduled agent {agent_name} completed for user {user_id}")
                 else:
                     logger.warning("Agent executor cache not available, skipping scheduled execution")
-                    
+
         except Exception as e:
             logger.error(f"Scheduled agent execution failed for schedule {schedule_id}: {e}", exc_info=True)
 
@@ -243,7 +243,7 @@ class BackgroundTaskService:
         self.evict_task = asyncio.create_task(self.evict_inactive_executors())
         self.scheduled_agents_task = asyncio.create_task(self.run_scheduled_agents())
         logger.info("Background tasks for session cleanup, cache eviction, and scheduled agents started.")
-    
+
     async def stop_background_tasks(self) -> None:
         """Stop all background tasks gracefully."""
         if self.deactivate_task:
@@ -253,7 +253,7 @@ class BackgroundTaskService:
                 await self.deactivate_task
             except asyncio.CancelledError:
                 logger.info("Deactivate stale sessions task successfully cancelled.")
-        
+
         if self.evict_task:
             self.evict_task.cancel()
             logger.info("Evict inactive executors task cancelling...")
@@ -261,7 +261,7 @@ class BackgroundTaskService:
                 await self.evict_task
             except asyncio.CancelledError:
                 logger.info("Evict inactive executors task successfully cancelled.")
-        
+
         if self.scheduled_agents_task:
             self.scheduled_agents_task.cancel()
             logger.info("Scheduled agents task cancelling...")
@@ -280,4 +280,4 @@ def get_background_task_service() -> BackgroundTaskService:
     global _background_task_service
     if _background_task_service is None:
         _background_task_service = BackgroundTaskService()
-    return _background_task_service 
+    return _background_task_service

@@ -12,12 +12,36 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
   asChild?: boolean;
   variant?: 'classic' | 'solid' | 'soft' | 'surface' | 'outline' | 'ghost';
   size?: '1' | '2' | '3' | '4';
-  color?: 'gray' | 'gold' | 'bronze' | 'brown' | 'yellow' | 'amber' | 'orange' | 'tomato' | 'red' | 'crimson' | 'pink' | 'plum' | 'purple' | 'violet' | 'iris' | 'indigo' | 'blue' | 'cyan' | 'teal' | 'jade' | 'green' | 'grass' | 'lime' | 'mint' | 'sky';
+  color?:
+    | 'gray'
+    | 'gold'
+    | 'bronze'
+    | 'brown'
+    | 'yellow'
+    | 'amber'
+    | 'orange'
+    | 'tomato'
+    | 'red'
+    | 'crimson'
+    | 'pink'
+    | 'plum'
+    | 'purple'
+    | 'violet'
+    | 'iris'
+    | 'indigo'
+    | 'blue'
+    | 'cyan'
+    | 'teal'
+    | 'jade'
+    | 'green'
+    | 'grass'
+    | 'lime'
+    | 'mint'
+    | 'sky';
 }
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ asChild = false, variant = 'solid', size = '2', className, disabled, children, ...props }, ref) => {
-    
     return (
       <RadixButton
         ref={ref}
@@ -29,14 +53,14 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           // Override Radix focus styles with our global focus system
           '[&]:focus:outline-none [&]:focus-visible:outline-none',
           !disabled && getFocusClasses(),
-          className
+          className,
         )}
         {...props}
       >
         {asChild ? children : <span>{children}</span>}
       </RadixButton>
     );
-  }
+  },
 );
 
-Button.displayName = 'Button'; 
+Button.displayName = 'Button';

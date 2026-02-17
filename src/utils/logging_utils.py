@@ -15,4 +15,4 @@ def get_logger(name: str) -> logging.Logger:
                 format='[%(asctime)s] %(levelname)s [%(name)s] - %(message)s'
             )
             _basic_config_set = True
-    return logging.getLogger(name) 
+    return logging.getLogger(name)

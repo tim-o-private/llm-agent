@@ -17,11 +17,11 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
           // Override Radix focus styles with our global focus system
           '[&]:focus-within:outline-none [&]:focus:outline-none [&]:focus-visible:outline-none',
           !disabled && getFocusClasses(),
-          className
+          className,
         )}
         {...props}
       />
     );
-  }
+  },
 );
-Textarea.displayName = 'Textarea'; 
+Textarea.displayName = 'Textarea';

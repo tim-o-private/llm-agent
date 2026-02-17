@@ -17,7 +17,7 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   Pencil2Icon,
-  DotsHorizontalIcon
+  DotsHorizontalIcon,
 } from '@radix-ui/react-icons';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 
@@ -56,14 +56,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   className,
   subtasks: initialSubtasksProp,
 }) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging
-  } = useSortable({ id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
   const [isSubtasksExpanded, setIsSubtasksExpanded] = useState(false);
   const [cardElement, setCardElement] = useState<HTMLDivElement | null>(null);
@@ -102,19 +95,21 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
   const handleCardClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
-    if (target.closest('input[type="checkbox"]') ||
-        target.closest('[role="button"]') ||
-        target.closest('button') ||
-        target.closest('.subtask-item-container') ||
-        target.closest('.subtask-drag-context')) {
+    if (
+      target.closest('input[type="checkbox"]') ||
+      target.closest('[role="button"]') ||
+      target.closest('button') ||
+      target.closest('.subtask-item-container') ||
+      target.closest('.subtask-drag-context')
+    ) {
       return;
     }
-    
+
     // Focus this task when clicked
     if (onFocus) {
       onFocus(id);
     }
-    
+
     if (onEdit) {
       onEdit();
     }
@@ -128,15 +123,15 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   };
 
   return (
-    <div 
-      ref={setRefs} 
-      style={style} 
-      {...attributes} 
+    <div
+      ref={setRefs}
+      style={style}
+      {...attributes}
       className={clsx(
-        'task-card-wrapper', 
+        'task-card-wrapper',
         isDragging && 'opacity-50',
         // Suppress browser's default focus ring - we use our custom focus system instead
-        'outline-none focus:outline-none focus-visible:outline-none'
+        'outline-none focus:outline-none focus-visible:outline-none',
       )}
       tabIndex={0}
       onFocus={handleFocus}
@@ -162,13 +157,15 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         <div className="flex items-center gap-3 p-4">
           {/* Priority indicator */}
           {priority && (
-            <div className={clsx(
-              'w-2 h-2 rounded-full flex-shrink-0',
-              priority === 3 && 'bg-danger-bg',
-              priority === 2 && 'bg-warning-strong', 
-              priority === 1 && 'bg-info-electric',
-              completed && 'bg-text-disabled opacity-50'
-            )} />
+            <div
+              className={clsx(
+                'w-2 h-2 rounded-full flex-shrink-0',
+                priority === 3 && 'bg-danger-bg',
+                priority === 2 && 'bg-warning-strong',
+                priority === 1 && 'bg-info-electric',
+                completed && 'bg-text-disabled opacity-50',
+              )}
+            />
           )}
 
           {/* Drag handle */}
@@ -177,10 +174,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             variant="ghost"
             size="1"
             aria-label="Drag to reorder task"
-            className={clsx(
-              'cursor-grab active:cursor-grabbing',
-              completed && 'opacity-50'
-            )}
+            className={clsx('cursor-grab active:cursor-grabbing', completed && 'opacity-50')}
           >
             <DragHandleDots2Icon />
           </IconButton>
@@ -195,11 +189,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
           {/* Task title */}
           <div className="flex-grow min-w-0">
-            <p className={clsx(
-              "text-sm font-medium break-words leading-tight",
-              completed && 'line-through text-text-muted',
-              !completed && 'text-text-primary'
-            )}>
+            <p
+              className={clsx(
+                'text-sm font-medium break-words leading-tight',
+                completed && 'line-through text-text-muted',
+                !completed && 'text-text-primary',
+              )}
+            >
               {title}
             </p>
           </div>
@@ -207,10 +203,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           {/* Subtask toggle */}
           {initialSubtasksProp && initialSubtasksProp.length > 0 && (
             <IconButton
-              onClick={(e) => { e.stopPropagation(); setIsSubtasksExpanded(!isSubtasksExpanded); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsSubtasksExpanded(!isSubtasksExpanded);
+              }}
               variant="ghost"
               size="1"
-              aria-label={isSubtasksExpanded ? "Collapse subtasks" : "Expand subtasks"}
+              aria-label={isSubtasksExpanded ? 'Collapse subtasks' : 'Expand subtasks'}
             >
               {isSubtasksExpanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
             </IconButton>
@@ -222,7 +221,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               In Progress
             </Badge>
           )}
-          
+
           {status !== 'in_progress' && status !== 'completed' && !completed && (
             <Button
               variant="soft"
@@ -239,12 +238,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           {/* Actions Dropdown Menu */}
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
-              <IconButton
-                variant="ghost"
-                size="1"
-                aria-label="Task actions"
-                onClick={(e) => e.stopPropagation()}
-              >
+              <IconButton variant="ghost" size="1" aria-label="Task actions" onClick={(e) => e.stopPropagation()}>
                 <DotsHorizontalIcon />
               </IconButton>
             </DropdownMenu.Trigger>
@@ -316,17 +310,14 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       </Card>
 
       {isSubtasksExpanded && initialSubtasksProp && initialSubtasksProp.length > 0 && (
-        <div className={clsx(
-          "pl-8 pr-4 pb-3 pt-2 mt-2",
-          "bg-ui-element-bg/60 rounded-b-xl border border-ui-border/50",
-          completed && "opacity-70"
-        )}>
-          <SubtaskList
-            parentTaskId={id}
-            showAddSubtask={false}
-            compact={true}
-            className="space-y-1"
-          />
+        <div
+          className={clsx(
+            'pl-8 pr-4 pb-3 pt-2 mt-2',
+            'bg-ui-element-bg/60 rounded-b-xl border border-ui-border/50',
+            completed && 'opacity-70',
+          )}
+        >
+          <SubtaskList parentTaskId={id} showAddSubtask={false} compact={true} className="space-y-1" />
         </div>
       )}
     </div>

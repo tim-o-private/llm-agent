@@ -17,7 +17,7 @@ export interface StatusStyleOptions {
  */
 export const getStatusContainerStyles = (options: StatusStyleOptions): string => {
   const { completed, status, priority, variant = 'card', isHovered, isFocused, isSelected, isDragging } = options;
-  
+
   const baseStyles = [
     'transition-all duration-300 ease-out',
     'border-2',
@@ -28,10 +28,10 @@ export const getStatusContainerStyles = (options: StatusStyleOptions): string =>
 
   // Status-based background and border styles
   const statusStyles = getStatusStyles(status, completed);
-  
+
   // Priority-based glow effects
   const priorityGlow = getPriorityGlow(priority, completed);
-  
+
   // Interactive states
   const interactiveStyles = [
     !completed && !isDragging && isHovered && 'hover:shadow-lg hover:scale-[1.02] hover:-translate-y-1',
@@ -50,12 +50,12 @@ export const getStatusContainerStyles = (options: StatusStyleOptions): string =>
  */
 export const getStatusTextStyles = (options: StatusStyleOptions): string => {
   const { completed, isHovered } = options;
-  
+
   return clsx(
     'transition-all duration-200',
     !completed && !isHovered && 'text-text-primary',
     !completed && isHovered && 'text-brand-primary',
-    completed && 'line-through text-text-muted'
+    completed && 'line-through text-text-muted',
   );
 };
 
@@ -64,15 +64,15 @@ export const getStatusTextStyles = (options: StatusStyleOptions): string => {
  */
 export const getPriorityIndicatorStyles = (options: StatusStyleOptions): string => {
   const { completed, priority } = options;
-  
+
   if (!priority) return 'hidden';
-  
+
   return clsx(
     'absolute top-2 right-2 w-2 h-2 rounded-full z-10',
     !completed && priority === 3 && 'bg-red-500',
     !completed && priority === 2 && 'bg-amber-500',
     !completed && priority === 1 && 'bg-blue-500',
-    completed && 'bg-gray-400 opacity-50'
+    completed && 'bg-gray-400 opacity-50',
   );
 };
 
@@ -81,12 +81,12 @@ export const getPriorityIndicatorStyles = (options: StatusStyleOptions): string 
  */
 export const getStatusButtonStyles = (options: StatusStyleOptions): string => {
   const { completed } = options;
-  
+
   return clsx(
     'p-2 rounded-lg transition-all duration-200 relative z-10',
     !completed && 'hover:bg-ui-interactive-bg-hover backdrop-blur-sm hover:shadow-lg',
     completed && 'hover:bg-ui-interactive-bg-hover/60 backdrop-blur-sm',
-    'active:scale-95'
+    'active:scale-95',
   );
 };
 
@@ -95,11 +95,11 @@ export const getStatusButtonStyles = (options: StatusStyleOptions): string => {
  */
 export const getStatusIconStyles = (options: StatusStyleOptions): string => {
   const { completed } = options;
-  
+
   return clsx(
     'h-5 w-5 transition-colors duration-200',
     !completed && 'text-text-muted group-hover:text-text-secondary',
-    completed && 'text-text-muted/60'
+    completed && 'text-text-muted/60',
   );
 };
 
@@ -108,14 +108,15 @@ export const getStatusIconStyles = (options: StatusStyleOptions): string => {
  */
 export const getStatusOverlayStyles = (options: StatusStyleOptions): string => {
   const { completed, status, isFocused } = options;
-  
+
   return clsx(
     'absolute inset-0 rounded-xl pointer-events-none',
     // Glassy overlay for extra depth
     'bg-gradient-to-br from-ui-surface/10 to-transparent',
     // Animated background gradient for active states - only for non-completed
-    (status === 'in_progress' || isFocused) && !completed && 
-      'bg-gradient-to-r from-brand-primary/5 via-brand-secondary/5 to-brand-primary/5 animate-gradient-shift opacity-50'
+    (status === 'in_progress' || isFocused) &&
+      !completed &&
+      'bg-gradient-to-r from-brand-primary/5 via-brand-secondary/5 to-brand-primary/5 animate-gradient-shift opacity-50',
   );
 };
 
@@ -129,11 +130,15 @@ const getStatusStyles = (status: TaskStatus | undefined, completed: boolean | un
 
 const getPriorityGlow = (priority: TaskPriority | undefined, completed: boolean | undefined): string => {
   if (completed || !priority) return '';
-  
+
   switch (priority) {
-    case 3: return 'shadow-lg shadow-danger/30';
-    case 2: return 'shadow-md shadow-warning/20';
-    case 1: return 'shadow-sm';
-    default: return '';
+    case 3:
+      return 'shadow-lg shadow-danger/30';
+    case 2:
+      return 'shadow-md shadow-warning/20';
+    case 1:
+      return 'shadow-sm';
+    default:
+      return '';
   }
-}; 
+};

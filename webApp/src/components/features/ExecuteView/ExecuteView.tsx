@@ -14,11 +14,7 @@ interface ExecuteViewProps {
   onEndSession: () => void; // Callback when session ends or is manually stopped
 }
 
-export const ExecuteView: React.FC<ExecuteViewProps> = ({
-  task,
-  sessionConfig,
-  onEndSession,
-}) => {
+export const ExecuteView: React.FC<ExecuteViewProps> = ({ task, sessionConfig, onEndSession }) => {
   const [timeLeft, setTimeLeft] = useState(sessionConfig?.timerDuration || 0);
 
   useEffect(() => {
@@ -34,7 +30,7 @@ export const ExecuteView: React.FC<ExecuteViewProps> = ({
     }
 
     const timerId = setInterval(() => {
-      setTimeLeft(prevTime => prevTime - 1);
+      setTimeLeft((prevTime) => prevTime - 1);
     }, 1000);
 
     return () => clearInterval(timerId);
@@ -59,26 +55,27 @@ export const ExecuteView: React.FC<ExecuteViewProps> = ({
       <div className="absolute top-8 left-8">
         <h1 className="text-2xl font-bold">Focus Mode</h1>
       </div>
-      
+
       <div className="text-center">
         <p className="text-lg text-text-muted mb-2">Focusing on:</p>
         <h2 className="text-4xl font-semibold mb-8 truncate max-w-xl">{task.title}</h2>
-        
-        <div className="text-8xl font-mono mb-12">
-          {formatTime(timeLeft)}
-        </div>
+
+        <div className="text-8xl font-mono mb-12">{formatTime(timeLeft)}</div>
 
         {sessionConfig.breakdown && (
-            <div className="mb-8 p-4 bg-ui-element-bg rounded-lg max-w-md mx-auto">
-                <h3 className="text-md font-semibold text-text-secondary mb-2">Session Steps:</h3>
-                <p className="text-sm text-text-muted whitespace-pre-line">
-                    {sessionConfig.breakdown}
-                </p>
-            </div>
+          <div className="mb-8 p-4 bg-ui-element-bg rounded-lg max-w-md mx-auto">
+            <h3 className="text-md font-semibold text-text-secondary mb-2">Session Steps:</h3>
+            <p className="text-sm text-text-muted whitespace-pre-line">{sessionConfig.breakdown}</p>
+          </div>
         )}
 
         <div className="flex space-x-4">
-          <Button variant="soft" onClick={() => {/* TODO: Pause timer */}}>
+          <Button
+            variant="soft"
+            onClick={() => {
+              /* TODO: Pause timer */
+            }}
+          >
             Pause
           </Button>
           <Button variant="solid" color="red" onClick={onEndSession}>
@@ -95,4 +92,4 @@ export const ExecuteView: React.FC<ExecuteViewProps> = ({
   );
 };
 
-export default ExecuteView; 
+export default ExecuteView;

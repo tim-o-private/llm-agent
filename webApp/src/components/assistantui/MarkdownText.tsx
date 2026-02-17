@@ -1,28 +1,22 @@
-"use client";
+'use client';
 
-import "@assistant-ui/react-markdown/styles/dot.css";
+import '@assistant-ui/react-markdown/styles/dot.css';
 
 import {
   CodeHeaderProps,
   MarkdownTextPrimitive,
   unstable_memoizeMarkdownComponents as memoizeMarkdownComponents,
   useIsMarkdownCodeBlock,
-} from "@assistant-ui/react-markdown";
-import remarkGfm from "remark-gfm";
-import { FC, memo, useState } from "react";
-import { CheckIcon, CopyIcon } from "lucide-react";
+} from '@assistant-ui/react-markdown';
+import remarkGfm from 'remark-gfm';
+import { FC, memo, useState } from 'react';
+import { CheckIcon, CopyIcon } from 'lucide-react';
 
-import { TooltipIconButton } from "@/components/assistantui/TooltipIconButton";
-import { cn } from "@/lib/utils";
+import { TooltipIconButton } from '@/components/assistantui/TooltipIconButton';
+import { cn } from '@/lib/utils';
 
 const MarkdownTextImpl = () => {
-  return (
-    <MarkdownTextPrimitive
-      remarkPlugins={[remarkGfm]}
-      className="aui-md"
-      components={defaultComponents}
-    />
-  );
+  return <MarkdownTextPrimitive remarkPlugins={[remarkGfm]} className="aui-md" components={defaultComponents} />;
 };
 
 export const MarkdownText = memo(MarkdownTextImpl);
@@ -65,68 +59,27 @@ const useCopyToClipboard = ({
 };
 
 const defaultComponents = memoizeMarkdownComponents({
-  h1: ({ className, ...props }) => (
-    <h1 className={cn("aui-md-h1", className)} {...props} />
-  ),
-  h2: ({ className, ...props }) => (
-    <h2 className={cn("aui-md-h2", className)} {...props} />
-  ),
-  h3: ({ className, ...props }) => (
-    <h3 className={cn("aui-md-h3", className)} {...props} />
-  ),
-  h4: ({ className, ...props }) => (
-    <h4 className={cn("aui-md-h4", className)} {...props} />
-  ),
-  h5: ({ className, ...props }) => (
-    <h5 className={cn("aui-md-h5", className)} {...props} />
-  ),
-  h6: ({ className, ...props }) => (
-    <h6 className={cn("aui-md-h6", className)} {...props} />
-  ),
-  p: ({ className, ...props }) => (
-    <p className={cn("aui-md-p", className)} {...props} />
-  ),
-  a: ({ className, ...props }) => (
-    <a className={cn("aui-md-a", className)} {...props} />
-  ),
-  blockquote: ({ className, ...props }) => (
-    <blockquote className={cn("aui-md-blockquote", className)} {...props} />
-  ),
-  ul: ({ className, ...props }) => (
-    <ul className={cn("aui-md-ul", className)} {...props} />
-  ),
-  ol: ({ className, ...props }) => (
-    <ol className={cn("aui-md-ol", className)} {...props} />
-  ),
-  hr: ({ className, ...props }) => (
-    <hr className={cn("aui-md-hr", className)} {...props} />
-  ),
-  table: ({ className, ...props }) => (
-    <table className={cn("aui-md-table", className)} {...props} />
-  ),
-  th: ({ className, ...props }) => (
-    <th className={cn("aui-md-th", className)} {...props} />
-  ),
-  td: ({ className, ...props }) => (
-    <td className={cn("aui-md-td", className)} {...props} />
-  ),
-  tr: ({ className, ...props }) => (
-    <tr className={cn("aui-md-tr", className)} {...props} />
-  ),
-  sup: ({ className, ...props }) => (
-    <sup className={cn("aui-md-sup", className)} {...props} />
-  ),
-  pre: ({ className, ...props }) => (
-    <pre className={cn("aui-md-pre", className)} {...props} />
-  ),
+  h1: ({ className, ...props }) => <h1 className={cn('aui-md-h1', className)} {...props} />,
+  h2: ({ className, ...props }) => <h2 className={cn('aui-md-h2', className)} {...props} />,
+  h3: ({ className, ...props }) => <h3 className={cn('aui-md-h3', className)} {...props} />,
+  h4: ({ className, ...props }) => <h4 className={cn('aui-md-h4', className)} {...props} />,
+  h5: ({ className, ...props }) => <h5 className={cn('aui-md-h5', className)} {...props} />,
+  h6: ({ className, ...props }) => <h6 className={cn('aui-md-h6', className)} {...props} />,
+  p: ({ className, ...props }) => <p className={cn('aui-md-p', className)} {...props} />,
+  a: ({ className, ...props }) => <a className={cn('aui-md-a', className)} {...props} />,
+  blockquote: ({ className, ...props }) => <blockquote className={cn('aui-md-blockquote', className)} {...props} />,
+  ul: ({ className, ...props }) => <ul className={cn('aui-md-ul', className)} {...props} />,
+  ol: ({ className, ...props }) => <ol className={cn('aui-md-ol', className)} {...props} />,
+  hr: ({ className, ...props }) => <hr className={cn('aui-md-hr', className)} {...props} />,
+  table: ({ className, ...props }) => <table className={cn('aui-md-table', className)} {...props} />,
+  th: ({ className, ...props }) => <th className={cn('aui-md-th', className)} {...props} />,
+  td: ({ className, ...props }) => <td className={cn('aui-md-td', className)} {...props} />,
+  tr: ({ className, ...props }) => <tr className={cn('aui-md-tr', className)} {...props} />,
+  sup: ({ className, ...props }) => <sup className={cn('aui-md-sup', className)} {...props} />,
+  pre: ({ className, ...props }) => <pre className={cn('aui-md-pre', className)} {...props} />,
   code: function Code({ className, ...props }) {
     const isCodeBlock = useIsMarkdownCodeBlock();
-    return (
-      <code
-        className={cn(!isCodeBlock && "aui-md-inline-code", className)}
-        {...props}
-      />
-    );
+    return <code className={cn(!isCodeBlock && 'aui-md-inline-code', className)} {...props} />;
   },
   CodeHeader,
-}); 
+});

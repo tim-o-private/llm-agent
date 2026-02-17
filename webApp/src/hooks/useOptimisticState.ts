@@ -11,22 +11,24 @@ export interface OptimisticStateHook<T> {
   optimisticItems: T[] | null;
   pendingChanges: PendingChanges<T>;
   isDirty: boolean;
-  
+
   // Actions
   setOptimisticItems: (items: T[] | null) => void;
-  handleCreate: (item: Partial<T>, tempIdGenerator: () => string, itemFactory: (data: Partial<T>, tempId: string) => T) => void;
+  handleCreate: (
+    item: Partial<T>,
+    tempIdGenerator: () => string,
+    itemFactory: (data: Partial<T>, tempId: string) => T,
+  ) => void;
   handleUpdate: (id: string, updates: Partial<T>) => void;
   handleDelete: (id: string) => void;
   handleReorder: (reorderedItems: T[]) => void;
-  
+
   // State management
   clearPendingChanges: () => void;
   resetState: () => void;
 }
 
-export function useOptimisticState<T extends { id: string }>(
-  getStoreItems: () => T[]
-): OptimisticStateHook<T> {
+export function useOptimisticState<T extends { id: string }>(getStoreItems: () => T[]): OptimisticStateHook<T> {
   const [optimisticItems, setOptimisticItems] = useState<T[] | null>(null);
   const [pendingChanges, setPendingChanges] = useState<PendingChanges<T>>({
     creates: [],
@@ -35,63 +37,67 @@ export function useOptimisticState<T extends { id: string }>(
     reorders: [],
   });
 
-  const isDirty = pendingChanges.creates.length > 0 || 
-                  pendingChanges.updates.length > 0 || 
-                  pendingChanges.deletes.length > 0 || 
-                  pendingChanges.reorders.length > 0;
+  const isDirty =
+    pendingChanges.creates.length > 0 ||
+    pendingChanges.updates.length > 0 ||
+    pendingChanges.deletes.length > 0 ||
+    pendingChanges.reorders.length > 0;
 
-  const handleCreate = useCallback((
-    itemData: Partial<T>, 
-    tempIdGenerator: () => string,
-    itemFactory: (data: Partial<T>, tempId: string) => T
-  ) => {
-    // Add to pending changes
-    setPendingChanges(prev => ({
-      ...prev,
-      creates: [...prev.creates, itemData],
-    }));
+  const handleCreate = useCallback(
+    (itemData: Partial<T>, tempIdGenerator: () => string, itemFactory: (data: Partial<T>, tempId: string) => T) => {
+      // Add to pending changes
+      setPendingChanges((prev) => ({
+        ...prev,
+        creates: [...prev.creates, itemData],
+      }));
 
-    // Update optimistic state
-    const currentItems = optimisticItems || getStoreItems();
-    const tempId = tempIdGenerator();
-    const newItem = itemFactory(itemData, tempId);
-    setOptimisticItems([...currentItems, newItem]);
-  }, [optimisticItems, getStoreItems]);
+      // Update optimistic state
+      const currentItems = optimisticItems || getStoreItems();
+      const tempId = tempIdGenerator();
+      const newItem = itemFactory(itemData, tempId);
+      setOptimisticItems([...currentItems, newItem]);
+    },
+    [optimisticItems, getStoreItems],
+  );
 
-  const handleUpdate = useCallback((id: string, updates: Partial<T>) => {
-    // Add to pending changes
-    setPendingChanges(prev => ({
-      ...prev,
-      updates: [...prev.updates.filter(u => u.id !== id), { id, updates }],
-    }));
+  const handleUpdate = useCallback(
+    (id: string, updates: Partial<T>) => {
+      // Add to pending changes
+      setPendingChanges((prev) => ({
+        ...prev,
+        updates: [...prev.updates.filter((u) => u.id !== id), { id, updates }],
+      }));
 
-    // Update optimistic state
-    const currentItems = optimisticItems || getStoreItems();
-    const updatedItems = currentItems.map(item => 
-      item.id === id ? { ...item, ...updates } : item
-    );
-    setOptimisticItems(updatedItems);
-  }, [optimisticItems, getStoreItems]);
+      // Update optimistic state
+      const currentItems = optimisticItems || getStoreItems();
+      const updatedItems = currentItems.map((item) => (item.id === id ? { ...item, ...updates } : item));
+      setOptimisticItems(updatedItems);
+    },
+    [optimisticItems, getStoreItems],
+  );
 
-  const handleDelete = useCallback((id: string) => {
-    // Add to pending changes
-    setPendingChanges(prev => ({
-      ...prev,
-      deletes: [...prev.deletes, id],
-    }));
+  const handleDelete = useCallback(
+    (id: string) => {
+      // Add to pending changes
+      setPendingChanges((prev) => ({
+        ...prev,
+        deletes: [...prev.deletes, id],
+      }));
 
-    // Update optimistic state
-    const currentItems = optimisticItems || getStoreItems();
-    const filteredItems = currentItems.filter(item => item.id !== id);
-    setOptimisticItems(filteredItems);
-  }, [optimisticItems, getStoreItems]);
+      // Update optimistic state
+      const currentItems = optimisticItems || getStoreItems();
+      const filteredItems = currentItems.filter((item) => item.id !== id);
+      setOptimisticItems(filteredItems);
+    },
+    [optimisticItems, getStoreItems],
+  );
 
   const handleReorder = useCallback((reorderedItems: T[]) => {
     // Set optimistic state for immediate UI feedback
     setOptimisticItems(reorderedItems);
-    
+
     // Add to pending changes
-    setPendingChanges(prev => ({
+    setPendingChanges((prev) => ({
       ...prev,
       reorders: [{ items: reorderedItems }], // Replace with latest reorder
     }));
@@ -129,4 +135,4 @@ export function useOptimisticState<T extends { id: string }>(
     clearPendingChanges,
     resetState,
   };
-} 
+}

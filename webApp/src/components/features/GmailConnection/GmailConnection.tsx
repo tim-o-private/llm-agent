@@ -12,42 +12,34 @@ interface GmailConnectionProps {
 }
 
 // Simple Alert component using existing styles
-const Alert: React.FC<{ 
-  variant?: 'default' | 'destructive'; 
-  className?: string; 
-  children: React.ReactNode 
+const Alert: React.FC<{
+  variant?: 'default' | 'destructive';
+  className?: string;
+  children: React.ReactNode;
 }> = ({ variant = 'default', className = '', children }) => {
   const baseClasses = 'p-4 rounded-lg border flex items-start gap-3';
-  const variantClasses = variant === 'destructive' 
-    ? 'border-red-200 bg-red-50 text-red-800' 
-    : 'border-blue-200 bg-blue-50 text-blue-800';
-  
-  return (
-    <div className={`${baseClasses} ${variantClasses} ${className}`}>
-      {children}
-    </div>
-  );
+  const variantClasses =
+    variant === 'destructive' ? 'border-red-200 bg-red-50 text-red-800' : 'border-blue-200 bg-blue-50 text-blue-800';
+
+  return <div className={`${baseClasses} ${variantClasses} ${className}`}>{children}</div>;
 };
 
 const AlertDescription: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div className="text-sm">{children}</div>
 );
 
-export const GmailConnection: React.FC<GmailConnectionProps> = ({
-  onConnectionChange,
-  className = ''
-}) => {
+export const GmailConnection: React.FC<GmailConnectionProps> = ({ onConnectionChange, className = '' }) => {
   const [isConnecting, setIsConnecting] = useState(false);
   const { signInWithProvider } = useAuthStore();
-  
+
   // Use React Query hooks for connection management
-  const { 
-    data: connectionStatus, 
-    isLoading: isCheckingStatus, 
+  const {
+    data: connectionStatus,
+    isLoading: isCheckingStatus,
     error: statusError,
-    refetch: refetchStatus 
+    refetch: refetchStatus,
   } = useConnectionStatus('gmail');
-  
+
   const revokeTokensMutation = useRevokeTokens();
 
   // Notify parent component of connection changes
@@ -63,10 +55,9 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({
     try {
       // Use the same OAuth pattern as working login, with Gmail scopes
       await signInWithProvider('google', true);
-      
+
       // OAuth redirect will happen automatically
       // The callback handler will process the tokens
-      
     } catch (error) {
       console.error('Gmail connection failed:', error);
       setIsConnecting(false);
@@ -137,11 +128,7 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({
 
         <div className="flex flex-col gap-3">
           {!connectionStatus?.connected ? (
-            <Button 
-              onClick={connectGmail}
-              disabled={isConnecting || isCheckingStatus}
-              className="w-full"
-            >
+            <Button onClick={connectGmail} disabled={isConnecting || isCheckingStatus} className="w-full">
               {isConnecting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -161,20 +148,11 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({
                 Gmail is connected and ready to use
               </div>
               <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
-                  onClick={() => refetchStatus()}
-                  disabled={isCheckingStatus}
-                  size="1"
-                >
-                  {isCheckingStatus ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    'Refresh Status'
-                  )}
+                <Button variant="outline" onClick={() => refetchStatus()} disabled={isCheckingStatus} size="1">
+                  {isCheckingStatus ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Refresh Status'}
                 </Button>
-                <Button 
-                  variant="soft" 
+                <Button
+                  variant="soft"
                   color="red"
                   onClick={disconnectGmail}
                   disabled={revokeTokensMutation.isPending}
@@ -196,4 +174,4 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({
       </div>
     </Card>
   );
-}; 
+};

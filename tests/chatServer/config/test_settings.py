@@ -1,8 +1,8 @@
 """Unit tests for settings module."""
 
-import unittest
-from unittest.mock import patch, MagicMock
 import os
+import unittest
+from unittest.mock import patch
 
 from chatServer.config.settings import Settings, get_settings
 
@@ -28,10 +28,10 @@ class TestSettings(unittest.TestCase):
             "RUNNING_IN_DOCKER": "true",
             "LLM_AGENT_SRC_PATH": "custom_src",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             settings = Settings()
-            
+
             self.assertEqual(settings.supabase_jwt_secret, "test_jwt_secret")
             self.assertEqual(settings.supabase_url, "https://test.supabase.co")
             self.assertEqual(settings.supabase_service_key, "test_service_key")
@@ -53,10 +53,10 @@ class TestSettings(unittest.TestCase):
             "SUPABASE_DB_PASSWORD": "test_password",
             "SUPABASE_DB_HOST": "test_host",
         }
-        
+
         with patch.dict(os.environ, minimal_env, clear=True):
             settings = Settings()
-            
+
             # Check defaults
             self.assertEqual(settings.db_name, "postgres")
             self.assertEqual(settings.db_port, "5432")
@@ -72,7 +72,7 @@ class TestSettings(unittest.TestCase):
             "SUPABASE_DB_NAME": "test_db",
             "SUPABASE_DB_PORT": "5433",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             settings = Settings()
             expected_url = "postgresql://test_user:test_password@test_host:5433/test_db?connect_timeout=10&sslmode=require"
@@ -82,10 +82,10 @@ class TestSettings(unittest.TestCase):
         """Test database_url property with missing credentials."""
         with patch.dict(os.environ, {}, clear=True):
             settings = Settings()
-            
+
             with self.assertRaises(RuntimeError) as context:
                 _ = settings.database_url
-            
+
             self.assertIn("Missing env vars", str(context.exception))
             self.assertIn("SUPABASE_DB_USER", str(context.exception))
             self.assertIn("SUPABASE_DB_PASSWORD", str(context.exception))
@@ -101,7 +101,7 @@ class TestSettings(unittest.TestCase):
             "SUPABASE_DB_PASSWORD": "test_password",
             "SUPABASE_DB_HOST": "test_host",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             settings = Settings()
             # Should not raise any exception
@@ -116,13 +116,13 @@ class TestSettings(unittest.TestCase):
             "SUPABASE_DB_PASSWORD": "test_password",
             "SUPABASE_DB_HOST": "test_host",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             settings = Settings()
-            
+
             with self.assertRaises(RuntimeError) as context:
                 settings.validate_required_settings()
-            
+
             self.assertIn("SUPABASE_JWT_SECRET is required", str(context.exception))
 
     def test_validate_required_settings_missing_supabase_url(self):
@@ -134,20 +134,20 @@ class TestSettings(unittest.TestCase):
             "SUPABASE_DB_PASSWORD": "test_password",
             "SUPABASE_DB_HOST": "test_host",
         }
-        
+
         with patch.dict(os.environ, env_vars, clear=True):
             settings = Settings()
-            
+
             with self.assertRaises(RuntimeError) as context:
                 settings.validate_required_settings()
-            
+
             self.assertIn("VITE_SUPABASE_URL is required", str(context.exception))
 
     def test_cors_origins_default(self):
         """Test that CORS origins are set correctly."""
         with patch.dict(os.environ, {}, clear=True):
             settings = Settings()
-            
+
             expected_origins = [
                 "https://clarity-webapp.fly.dev",
                 "http://localhost:3000"
@@ -167,7 +167,7 @@ class TestGetSettings(unittest.TestCase):
         with patch.dict(os.environ, {"SUPABASE_JWT_SECRET": "test"}, clear=True):
             settings1 = get_settings()
             settings2 = get_settings()
-            
+
             # Should be the same instance due to lru_cache
             self.assertIs(settings1, settings2)
 
@@ -179,4 +179,4 @@ class TestGetSettings(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main() 
+    unittest.main()

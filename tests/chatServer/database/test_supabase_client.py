@@ -1,12 +1,13 @@
 """Unit tests for Supabase client module."""
 
-import unittest
-from unittest.mock import patch, MagicMock, AsyncMock
 import os
+import unittest
+from unittest.mock import MagicMock, patch
+
 import pytest
 from fastapi import HTTPException
 
-from chatServer.database.supabase_client import SupabaseManager, get_supabase_manager, get_supabase_client
+from chatServer.database.supabase_client import SupabaseManager, get_supabase_client, get_supabase_manager
 
 
 class TestSupabaseManager(unittest.TestCase):
@@ -17,7 +18,7 @@ class TestSupabaseManager(unittest.TestCase):
         # Clear the settings cache before each test
         from chatServer.config.settings import get_settings
         get_settings.cache_clear()
-        
+
         # Reset the global Supabase manager
         import chatServer.database.supabase_client
         chatServer.database.supabase_client._supabase_manager = None
@@ -29,29 +30,29 @@ class TestSupabaseManager(unittest.TestCase):
             "SUPABASE_SERVICE_KEY": "test_service_key"
         }, clear=True):
             supabase_manager = SupabaseManager()
-            
+
             self.assertIsNone(supabase_manager.client)
             self.assertIsNotNone(supabase_manager.settings)
 
     def test_supabase_manager_get_client_success(self):
         """Test successful client retrieval."""
         from supabase import AsyncClient
-        
+
         mock_client = MagicMock(spec=AsyncClient)
         supabase_manager = SupabaseManager()
         supabase_manager.client = mock_client
-        
+
         result = supabase_manager.get_client()
-        
+
         self.assertIs(result, mock_client)
 
     def test_supabase_manager_get_client_no_client(self):
         """Test client retrieval when no client exists."""
         supabase_manager = SupabaseManager()
-        
+
         with self.assertRaises(HTTPException) as context:
             supabase_manager.get_client()
-        
+
         self.assertEqual(context.exception.status_code, 503)
         self.assertIn("Supabase client not available", context.exception.detail)
 
@@ -64,7 +65,7 @@ class TestSupabaseManagerAsync:
         # Clear the settings cache before each test
         from chatServer.config.settings import get_settings
         get_settings.cache_clear()
-        
+
         # Reset the global Supabase manager
         import chatServer.database.supabase_client
         chatServer.database.supabase_client._supabase_manager = None
@@ -73,17 +74,17 @@ class TestSupabaseManagerAsync:
     async def test_supabase_manager_initialize_success(self):
         """Test successful Supabase client initialization."""
         from supabase import AsyncClient
-        
+
         with patch.dict(os.environ, {
             "VITE_SUPABASE_URL": "https://test.supabase.co",
             "SUPABASE_SERVICE_KEY": "test_service_key"
         }, clear=True):
             mock_client = MagicMock(spec=AsyncClient)
-            
+
             with patch('chatServer.database.supabase_client.acreate_client', return_value=mock_client) as mock_create:
                 supabase_manager = SupabaseManager()
                 await supabase_manager.initialize()
-                
+
                 assert supabase_manager.client is mock_client
                 mock_create.assert_called_once_with("https://test.supabase.co", "test_service_key")
 
@@ -95,7 +96,7 @@ class TestSupabaseManagerAsync:
         }, clear=True):
             supabase_manager = SupabaseManager()
             await supabase_manager.initialize()
-            
+
             assert supabase_manager.client is None
 
     @pytest.mark.asyncio
@@ -106,7 +107,7 @@ class TestSupabaseManagerAsync:
         }, clear=True):
             supabase_manager = SupabaseManager()
             await supabase_manager.initialize()
-            
+
             assert supabase_manager.client is None
 
     @pytest.mark.asyncio
@@ -117,11 +118,11 @@ class TestSupabaseManagerAsync:
             "SUPABASE_SERVICE_KEY": "test_service_key"
         }, clear=True):
             mock_wrong_client = MagicMock()  # Not an AsyncClient
-            
+
             with patch('chatServer.database.supabase_client.acreate_client', return_value=mock_wrong_client):
                 supabase_manager = SupabaseManager()
                 await supabase_manager.initialize()
-                
+
                 assert supabase_manager.client is None
 
     @pytest.mark.asyncio
@@ -134,7 +135,7 @@ class TestSupabaseManagerAsync:
             with patch('chatServer.database.supabase_client.acreate_client', side_effect=Exception("Connection failed")):
                 supabase_manager = SupabaseManager()
                 await supabase_manager.initialize()
-                
+
                 assert supabase_manager.client is None
 
 
@@ -153,7 +154,7 @@ class TestGetSupabaseManager(unittest.TestCase):
             "SUPABASE_SERVICE_KEY": "test_service_key"
         }, clear=True):
             manager = get_supabase_manager()
-            
+
             self.assertIsInstance(manager, SupabaseManager)
 
     def test_get_supabase_manager_singleton(self):
@@ -164,7 +165,7 @@ class TestGetSupabaseManager(unittest.TestCase):
         }, clear=True):
             manager1 = get_supabase_manager()
             manager2 = get_supabase_manager()
-            
+
             self.assertIs(manager1, manager2)
 
 
@@ -180,16 +181,16 @@ class TestGetSupabaseClientAsync:
     async def test_get_supabase_client_success(self):
         """Test successful client retrieval through dependency."""
         from supabase import AsyncClient
-        
+
         mock_client = MagicMock(spec=AsyncClient)
-        
+
         with patch('chatServer.database.supabase_client.get_supabase_manager') as mock_get_manager:
             mock_manager = MagicMock()
             mock_manager.get_client.return_value = mock_client
             mock_get_manager.return_value = mock_manager
-            
+
             result = await get_supabase_client()
-            
+
             assert result is mock_client
             mock_get_manager.assert_called_once()
             mock_manager.get_client.assert_called_once()
@@ -201,13 +202,13 @@ class TestGetSupabaseClientAsync:
             mock_manager = MagicMock()
             mock_manager.get_client.side_effect = HTTPException(status_code=503, detail="Client not available")
             mock_get_manager.return_value = mock_manager
-            
+
             with pytest.raises(HTTPException) as exc_info:
                 await get_supabase_client()
-            
+
             assert exc_info.value.status_code == 503
             assert exc_info.value.detail == "Client not available"
 
 
 if __name__ == '__main__':
-    unittest.main() 
+    unittest.main()

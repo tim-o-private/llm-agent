@@ -1,13 +1,16 @@
-import logging # Ensure logging is imported at the module level
-from typing import Any, List, Dict, Optional, Union
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.tools import BaseTool
-from langchain.agents import AgentExecutor
-# from langchain.agents.format_scratchpad import format_to_openai_function_messages # Old formatter
-from langchain.agents.format_scratchpad.tools import format_to_tool_messages # New formatter
-from langchain.agents.output_parsers import ToolsAgentOutputParser # User's preferred parser
-from langchain_core.runnables import RunnablePassthrough
+import logging  # Ensure logging is imported at the module level
 import os
+from typing import Any, Dict, List, Optional, Union
+
+from langchain.agents import AgentExecutor
+
+# from langchain.agents.format_scratchpad import format_to_openai_function_messages # Old formatter
+from langchain.agents.format_scratchpad.tools import format_to_tool_messages  # New formatter
+from langchain.agents.output_parsers import ToolsAgentOutputParser  # User's preferred parser
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.runnables import RunnablePassthrough
+from langchain_core.tools import BaseTool
+
 from utils.logging_utils import get_logger
 
 # Assuming PromptManagerService is in src.core.prompting
@@ -23,13 +26,13 @@ def preprocess_intermediate_steps(intermediate_steps: List[tuple]) -> List[tuple
     for i, (action, observation) in enumerate(intermediate_steps):
         logger.debug(f"[preprocess_intermediate_steps] Step {i} - Original Action: {action}")
         logger.debug(f"[preprocess_intermediate_steps] Step {i} - Original Observation: {observation!r}") # Added !r for more detail
-        
+
         processed_observation = observation
         if observation is None or (isinstance(observation, str) and not observation.strip()):
             # Using a clear placeholder for empty or None observations
             processed_observation = "(Tool returned no output or an empty string)"
             logger.warning(f"[preprocess_intermediate_steps] Step {i} - Observation was None or empty, replaced with placeholder. Original: {observation!r}")
-        
+
         logger.debug(f"[preprocess_intermediate_steps] Step {i} - Processed Observation: {processed_observation!r}")
         processed_steps.append((action, processed_observation))
     return processed_steps
@@ -39,8 +42,8 @@ class CustomizableAgentExecutor(AgentExecutor):
 
     @classmethod
     def from_agent_config(
-        cls, 
-        agent_config_dict: Dict[str, Any], 
+        cls,
+        agent_config_dict: Dict[str, Any],
         tools: List[BaseTool],
         user_id: str, # Retained, though not directly used in this method after CustomizableAgent removal, agent_loader uses it.
         session_id: str, # Retained, for consistency, though not directly used here.
@@ -48,7 +51,7 @@ class CustomizableAgentExecutor(AgentExecutor):
         explicit_custom_instructions_dict: Optional[Dict[str, Any]] = None,
         logger_instance: Optional[logging.Logger] = None,
     ) -> "CustomizableAgentExecutor":
-        
+
         current_logger = logger_instance if logger_instance else logger
         agent_name_from_config = agent_config_dict.get('agent_name', 'UnknownAgent')
         current_logger.info(f"Creating CustomizableAgentExecutor for '{agent_name_from_config}' from config dictionary.")
@@ -56,7 +59,7 @@ class CustomizableAgentExecutor(AgentExecutor):
         llm_config_dict = agent_config_dict.get('llm', {})
         if not llm_config_dict or not llm_config_dict.get('model'):
             raise ValueError("LLM model configuration is missing or incomplete in agent_config_dict.")
-        
+
         provider = llm_config_dict.get('provider', 'gemini').lower()
         model_name = llm_config_dict.get('model', 'gemini-pro')
         temperature = float(llm_config_dict.get("temperature", 0.7))
@@ -131,17 +134,17 @@ class CustomizableAgentExecutor(AgentExecutor):
             | llm_with_tools
             | ToolsAgentOutputParser() # User's preferred parser
         )
-        
+
         return cls(
-            agent=agent_runnable, 
-            tools=tools, 
-            verbose=True, 
-            handle_parsing_errors=True 
+            agent=agent_runnable,
+            tools=tools,
+            verbose=True,
+            handle_parsing_errors=True
         )
 
     async def ainvoke(self, input: Dict[str, Any], config: Optional[Dict[str, Any]] = None, **kwargs: Any) -> Dict[str, Any]:
         if "chat_history" not in input:
-             input["chat_history"] = [] 
+             input["chat_history"] = []
 
         return await super().ainvoke(input, config, **kwargs)
 
@@ -157,26 +160,26 @@ def get_customizable_agent_executor(
         loaded_tools: List[BaseTool],
         logger_to_use: Optional[logging.Logger] = None
     ) -> CustomizableAgentExecutor:
-    
+
     agent_config_data_dict: Dict[str, Any]
     if isinstance(agent_config_obj, dict):
         agent_config_data_dict = agent_config_obj
-    else: 
+    else:
         logger_to_use_effective = logger_to_use if logger_to_use else logger
         # The original AgentConfig Pydantic model is removed. This path indicates a caller error if not a dict.
         logger_to_use_effective.error(f"get_customizable_agent_executor received non-dict agent_config_obj of type {type(agent_config_obj)}. This is deprecated. Expecting a dictionary.")
         # Attempt to proceed if it's somehow dict-like, otherwise this will fail in from_agent_config.
         # This is for minimal disruption; ideally, callers should be updated.
-        if not hasattr(agent_config_obj, 'get'): 
+        if not hasattr(agent_config_obj, 'get'):
              raise TypeError(f"agent_config_obj must be a dictionary, got {type(agent_config_obj)}")
         agent_config_data_dict = agent_config_obj # This is risky, assumes it's a dict-like object.
 
     return CustomizableAgentExecutor.from_agent_config(
-        agent_config_dict=agent_config_data_dict, 
+        agent_config_dict=agent_config_data_dict,
         tools=loaded_tools,
         user_id=user_id_for_agent,
         session_id=session_id_for_agent,
         ltm_notes_content=ltm_notes,
         explicit_custom_instructions_dict=custom_instructions,
         logger_instance=logger_to_use
-    ) 
+    )

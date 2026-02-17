@@ -24,10 +24,10 @@ vi.mock('lodash-es', async () => {
   const actualLodash = await vi.importActual('lodash-es');
   return {
     ...actualLodash,
-    cloneDeep: vi.fn(data => {
+    cloneDeep: vi.fn((data) => {
       if (data === undefined) return undefined; // Handle undefined case
       try {
-        return JSON.parse(JSON.stringify(data)); 
+        return JSON.parse(JSON.stringify(data));
       } catch (e) {
         // Fallback or error for complex types not handled by JSON stringify/parse (e.g. functions, Date objects if not stringified properly)
         // For simple test data, this might be okay, but a more robust deep clone might be needed for complex objects.
@@ -35,10 +35,9 @@ vi.mock('lodash-es', async () => {
         console.error('cloneDeep mock error during JSON.parse(JSON.stringify(data)):', e, 'Data:', data);
         return data; // Or throw, depending on desired strictness for non-JSON-friendly data
       }
-    }), 
+    }),
   };
 });
-
 
 // --- RHF Mock Setup ---
 let mockFormStateObject: FormState<TaskFormData>;
@@ -48,21 +47,19 @@ const mockReset = vi.fn();
 const mockTrigger = vi.fn();
 
 // Typed mockHandleSubmit
-const mockHandleSubmit = vi.fn(
-  (onValid: SubmitHandler<TaskFormData>) => {
-    return async (event?: BaseSyntheticEvent): Promise<void> => {
-      const data = mockGetValues(); // mockGetValues() is already set up to return TaskFormData
-      try {
-        await onValid(data, event);
-      } catch (error) { 
-        // RHF might handle errors from onValid; for this mock, we can choose to let them propagate or log them.
-        // Letting them propagate is often fine for testing the calling code's error handling.
-        // console.error('Error in onValid callback during mockHandleSubmit:', error);
-        throw error; 
-      }
-    };
-  }
-);
+const mockHandleSubmit = vi.fn((onValid: SubmitHandler<TaskFormData>) => {
+  return async (event?: BaseSyntheticEvent): Promise<void> => {
+    const data = mockGetValues(); // mockGetValues() is already set up to return TaskFormData
+    try {
+      await onValid(data, event);
+    } catch (error) {
+      // RHF might handle errors from onValid; for this mock, we can choose to let them propagate or log them.
+      // Letting them propagate is often fine for testing the calling code's error handling.
+      // console.error('Error in onValid callback during mockHandleSubmit:', error);
+      throw error;
+    }
+  };
+});
 
 const mockUseFormDefaultReturn = {
   getValues: mockGetValues,
@@ -83,10 +80,17 @@ const mockUseFormDefaultReturn = {
 // --- Test Data and Schemas ---
 const testTaskFormSchema: ZodSchema<TaskFormData> = z.object({
   title: z.string().min(1, 'Title is required'),
-  description: z.string().nullable().transform(val => (val === '' ? null : val)),
+  description: z
+    .string()
+    .nullable()
+    .transform((val) => (val === '' ? null : val)),
   status: z.enum(['pending', 'planning', 'in_progress', 'completed', 'skipped', 'deferred']),
   priority: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]) as ZodSchema<TaskPriority>,
-  due_date: z.string().nullable().optional().transform(val => (val === '' ? null : val)),
+  due_date: z
+    .string()
+    .nullable()
+    .optional()
+    .transform((val) => (val === '' ? null : val)),
 });
 
 const sampleTaskEntity: Task = {
@@ -123,7 +127,7 @@ const defaultTestFormValues: TaskFormData = taskToFormData(undefined);
 
 // --- Default Hook Config ---
 const getDefaultHookConfig = (
-  overrides: Partial<UseEditableEntityConfig<Task, TaskFormData>> = {}
+  overrides: Partial<UseEditableEntityConfig<Task, TaskFormData>> = {},
 ): UseEditableEntityConfig<Task, TaskFormData> => ({
   entityId: null,
   getEntityDataFn: vi.fn() as Mock<[string | undefined], Task | undefined>,
@@ -143,14 +147,14 @@ describe('useEditableEntity', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockFormStateObject = { 
-      errors: {}, 
-      isDirty: false, 
-      isValid: true, 
-      isSubmitting: false, 
-      isLoading: false, 
-      isSubmitted: false, 
-      isSubmitSuccessful: false, 
+    mockFormStateObject = {
+      errors: {},
+      isDirty: false,
+      isValid: true,
+      isSubmitting: false,
+      isLoading: false,
+      isSubmitted: false,
+      isSubmitSuccessful: false,
       isValidating: false,
       touchedFields: {},
       dirtyFields: {},
@@ -162,12 +166,12 @@ describe('useEditableEntity', () => {
     };
     mockUseFormDefaultReturn.formState = mockFormStateObject;
     (useForm as Mock).mockReturnValue(mockUseFormDefaultReturn);
-    
+
     mockGetValues.mockReturnValue(defaultTestFormValues);
     mockTrigger.mockResolvedValue(true);
     mockReset.mockImplementation((values) => {
       mockGetValues.mockReturnValue(values);
-      if (mockFormStateObject) mockFormStateObject.isDirty = false; 
+      if (mockFormStateObject) mockFormStateObject.isDirty = false;
     });
   });
 
@@ -186,7 +190,7 @@ describe('useEditableEntity', () => {
         expect.objectContaining({
           resolver: expect.any(Function), // Loosen resolver check to expect.any(Function)
           defaultValues: expectedInitialFormValues,
-        })
+        }),
       );
       expect(mockReset).toHaveBeenCalledWith(expectedInitialFormValues);
       expect(result.current.initialData).toBeUndefined();
@@ -210,7 +214,7 @@ describe('useEditableEntity', () => {
         expect.objectContaining({
           resolver: expect.any(Function), // Loosen resolver check
           defaultValues: expectedInitialFormValues,
-        })
+        }),
       );
       expect(mockReset).toHaveBeenCalledWith(expectedInitialFormValues);
       expect(result.current.initialData).toEqual(sampleTaskEntity);
@@ -221,22 +225,22 @@ describe('useEditableEntity', () => {
     test('should not call saveEntityFn if form validation fails', async () => {
       mockTrigger.mockResolvedValue(false); // Simulate validation failure
       const config = getDefaultHookConfig();
-      const currentFormValues = { ...defaultTestFormValues, title: "Invalid Data" };
-      
+      const currentFormValues = { ...defaultTestFormValues, title: 'Invalid Data' };
+
       const { result } = renderHook(() => useEditableEntity<Task, TaskFormData>(config));
-      
+
       // Set mockGetValues to return specific data for this save attempt
       mockGetValues.mockReturnValue(currentFormValues);
 
-      await act(async () => { 
-        await result.current.handleSave(); 
+      await act(async () => {
+        await result.current.handleSave();
       });
 
       // First, ensure the saveError state itself is updated.
       await waitFor(() => {
         expect(result.current.saveError).toBeInstanceOf(Error);
       });
-      
+
       // Now that saveError state is confirmed, check its message and other callbacks/states.
       expect(result.current.saveError?.message).toBe('Form validation failed.');
       expect(config.onSaveError).toHaveBeenCalledTimes(1);
@@ -252,17 +256,19 @@ describe('useEditableEntity', () => {
     test('should call saveEntityFn and onSaveSuccess for CREATE if validation passes', async () => {
       const config = getDefaultHookConfig({ entityId: null, isCreatable: true });
       const formDataToSave = { ...defaultTestFormValues, title: 'New Task' };
-      
+
       (config.getEntityDataFn as Mock).mockReturnValue(undefined);
       const mockSavedEntity = { ...sampleTaskEntity, ...formDataToSave, id: 'newTask1' };
       (config.saveEntityFn as Mock).mockResolvedValue(mockSavedEntity);
 
       const { result } = renderHook(() => useEditableEntity<Task, TaskFormData>(config));
-      
+
       // Set mockGetValues to return specific data for this save attempt
       mockGetValues.mockReturnValue(formDataToSave);
 
-      await act(async () => { await result.current.handleSave(); });
+      await act(async () => {
+        await result.current.handleSave();
+      });
 
       expect(config.saveEntityFn).toHaveBeenCalledWith(formDataToSave, undefined, undefined);
       expect(config.onSaveSuccess).toHaveBeenCalledWith(mockSavedEntity, formDataToSave);
@@ -273,7 +279,7 @@ describe('useEditableEntity', () => {
     test('should call saveEntityFn and onSaveSuccess for UPDATE if validation passes', async () => {
       const config = getDefaultHookConfig({ entityId: sampleTaskEntity.id, isCreatable: false });
       const formDataToSave = { ...taskToFormData(sampleTaskEntity), title: 'Updated Title' };
-      
+
       (config.getEntityDataFn as Mock).mockReturnValue(sampleTaskEntity); // This sets up initialData
       const mockUpdatedEntity = { ...sampleTaskEntity, ...formDataToSave };
       (config.saveEntityFn as Mock).mockResolvedValue(mockUpdatedEntity);
@@ -283,18 +289,24 @@ describe('useEditableEntity', () => {
       // Set mockGetValues to return specific data for this save attempt
       mockGetValues.mockReturnValue(formDataToSave);
 
-      await act(async () => { await result.current.handleSave(); });
+      await act(async () => {
+        await result.current.handleSave();
+      });
 
-      expect(config.saveEntityFn).toHaveBeenCalledWith(formDataToSave, cloneDeep(sampleTaskEntity), sampleTaskEntity.id);
+      expect(config.saveEntityFn).toHaveBeenCalledWith(
+        formDataToSave,
+        cloneDeep(sampleTaskEntity),
+        sampleTaskEntity.id,
+      );
       expect(config.onSaveSuccess).toHaveBeenCalledWith(mockUpdatedEntity, formDataToSave);
       expect(result.current.isSaving).toBe(false);
     });
 
     test('should set saveError and call onSaveError if saveEntityFn throws AppError-like object', async () => {
-      const errorObj: AppError = { message: 'Save Failed', code: 'SAVE_OPERATION_FAILED' }; 
+      const errorObj: AppError = { message: 'Save Failed', code: 'SAVE_OPERATION_FAILED' };
       const config = getDefaultHookConfig();
-      const formData = { ...defaultTestFormValues, title: "Bad Save" };
-      
+      const formData = { ...defaultTestFormValues, title: 'Bad Save' };
+
       (config.saveEntityFn as Mock).mockRejectedValue(errorObj);
 
       const { result } = renderHook(() => useEditableEntity<Task, TaskFormData>(config));
@@ -302,26 +314,30 @@ describe('useEditableEntity', () => {
       // Set mockGetValues to return specific data for this save attempt
       mockGetValues.mockReturnValue(formData);
 
-      await act(async () => { await result.current.handleSave(); });
+      await act(async () => {
+        await result.current.handleSave();
+      });
 
       expect(result.current.isSaving).toBe(false);
       expect(result.current.saveError).toEqual(errorObj);
       expect(config.onSaveError).toHaveBeenCalledWith(errorObj, formData);
     });
 
-     test('should set saveError and call onSaveError if saveEntityFn throws a generic Error', async () => {
+    test('should set saveError and call onSaveError if saveEntityFn throws a generic Error', async () => {
       const error = new Error('Generic Network Error');
       const config = getDefaultHookConfig();
-      const formData = { ...defaultTestFormValues, title: "Another Bad Save" };
-      
+      const formData = { ...defaultTestFormValues, title: 'Another Bad Save' };
+
       (config.saveEntityFn as Mock).mockRejectedValue(error);
 
       const { result } = renderHook(() => useEditableEntity<Task, TaskFormData>(config));
-      
+
       // Set mockGetValues to return specific data for this save attempt
       mockGetValues.mockReturnValue(formData);
 
-      await act(async () => { await result.current.handleSave(); });
+      await act(async () => {
+        await result.current.handleSave();
+      });
 
       expect(result.current.isSaving).toBe(false);
       expect(result.current.saveError).toEqual(error);
@@ -334,21 +350,23 @@ describe('useEditableEntity', () => {
       const config = getDefaultHookConfig({ entityId: null, isCreatable: true });
       (config.getEntityDataFn as Mock).mockReturnValue(undefined);
       const expectedResetValues = config.defaultFormValues!;
-      
+
       const { result } = renderHook(() => useEditableEntity<Task, TaskFormData>(config));
 
       // Simulate a failed save to set saveError
-      const saveErrorToSet = new Error("Previous save error");
+      const saveErrorToSet = new Error('Previous save error');
       (config.saveEntityFn as Mock).mockRejectedValueOnce(saveErrorToSet);
-      mockGetValues.mockReturnValueOnce({ ...expectedResetValues, title: "Trigger Save Fail Create" });
-      
+      mockGetValues.mockReturnValueOnce({ ...expectedResetValues, title: 'Trigger Save Fail Create' });
+
       await act(async () => {
         await result.current.handleSave();
       });
-      
+
       expect(result.current.saveError).toEqual(saveErrorToSet); // Verify saveError is set
 
-      act(() => { result.current.resetFormToInitial(); });
+      act(() => {
+        result.current.resetFormToInitial();
+      });
 
       expect(mockReset).toHaveBeenCalledWith(expectedResetValues);
       expect(result.current.saveError).toBeNull();
@@ -362,20 +380,22 @@ describe('useEditableEntity', () => {
       (config.transformDataToForm as Mock).mockReturnValue(expectedResetValues); // Ensure transform returns this
 
       const { result } = renderHook(() => useEditableEntity<Task, TaskFormData>(config));
-      
-      // Simulate a failed save to set saveError
-      const saveErrorToSet = new Error("Old save error");
-      (config.saveEntityFn as Mock).mockRejectedValueOnce(saveErrorToSet);
-      mockGetValues.mockReturnValueOnce({ ...expectedResetValues, title: "Trigger Save Fail Edit" });
 
-      await act(async () => { 
+      // Simulate a failed save to set saveError
+      const saveErrorToSet = new Error('Old save error');
+      (config.saveEntityFn as Mock).mockRejectedValueOnce(saveErrorToSet);
+      mockGetValues.mockReturnValueOnce({ ...expectedResetValues, title: 'Trigger Save Fail Edit' });
+
+      await act(async () => {
         await result.current.handleSave();
       });
-      
+
       expect(result.current.saveError).toEqual(saveErrorToSet); // Verify saveError is set
-      
-      act(() => { result.current.resetFormToInitial(); });
-      
+
+      act(() => {
+        result.current.resetFormToInitial();
+      });
+
       expect(mockReset).toHaveBeenCalledWith(expectedResetValues);
       expect(result.current.saveError).toBeNull();
       if (mockFormStateObject) expect(result.current.formMethods.formState.isDirty).toBe(false);
@@ -387,19 +407,28 @@ describe('useEditableEntity', () => {
       const task1 = { ...sampleTaskEntity, id: 'id1', title: 'Task One' };
       const task1FormData = taskToFormData(task1);
       const initialTransformMock = vi.fn(taskToFormData).mockReturnValue(task1FormData);
-      const initialConfig = getDefaultHookConfig({ entityId: 'id1', getEntityDataFn: vi.fn().mockReturnValue(task1), transformDataToForm: initialTransformMock as Mock<[Task | undefined], TaskFormData> });
+      const initialConfig = getDefaultHookConfig({
+        entityId: 'id1',
+        getEntityDataFn: vi.fn().mockReturnValue(task1),
+        transformDataToForm: initialTransformMock as Mock<[Task | undefined], TaskFormData>,
+      });
 
       const { rerender } = renderHook((props) => useEditableEntity(props), { initialProps: initialConfig });
       expect(initialTransformMock).toHaveBeenCalledWith(task1);
       expect(mockReset).toHaveBeenCalledWith(task1FormData);
-      
+
       mockReset.mockClear(); // Clear mockReset before next action
 
       const task2 = { ...sampleTaskEntity, id: 'id2', title: 'Task Two' };
       const task2FormData = taskToFormData(task2);
       const newTransformMock = vi.fn(taskToFormData).mockReturnValue(task2FormData);
-      const newConfig = { ...initialConfig, entityId: 'id2', getEntityDataFn: vi.fn().mockReturnValue(task2), transformDataToForm: newTransformMock as Mock<[Task | undefined], TaskFormData> };
-      
+      const newConfig = {
+        ...initialConfig,
+        entityId: 'id2',
+        getEntityDataFn: vi.fn().mockReturnValue(task2),
+        transformDataToForm: newTransformMock as Mock<[Task | undefined], TaskFormData>,
+      };
+
       act(() => rerender(newConfig));
 
       expect(newConfig.getEntityDataFn).toHaveBeenCalledWith('id2');
@@ -414,11 +443,11 @@ describe('useEditableEntity', () => {
       const initialTransformMock = vi.fn(taskToFormData).mockReturnValue(task1FormData);
       const initialGetEntityDataFnMock = vi.fn().mockReturnValue(task1);
 
-      const initialConfig = getDefaultHookConfig({ 
-        entityId: 'id1', 
-        getEntityDataFn: initialGetEntityDataFnMock, 
-        transformDataToForm: initialTransformMock as Mock<[Task | undefined], TaskFormData>, 
-        isCreatable: true 
+      const initialConfig = getDefaultHookConfig({
+        entityId: 'id1',
+        getEntityDataFn: initialGetEntityDataFnMock,
+        transformDataToForm: initialTransformMock as Mock<[Task | undefined], TaskFormData>,
+        isCreatable: true,
       });
 
       const { rerender, result } = renderHook((props) => useEditableEntity(props), { initialProps: initialConfig });
@@ -430,21 +459,21 @@ describe('useEditableEntity', () => {
       initialGetEntityDataFnMock.mockClear(); // Clear getEntity mock
       initialTransformMock.mockClear(); // Clear transform mock
 
-      const createDefaults = { ...defaultTestFormValues, title: "New Create Mode" };
+      const createDefaults = { ...defaultTestFormValues, title: 'New Create Mode' };
       const createGetEntityDataFnMock = vi.fn().mockReturnValue(undefined);
       const createTransformMock = vi.fn((d?: Task) => {
         if (d === undefined) return createDefaults;
         return taskToFormData(d);
       });
-      
-      const createConfig = { 
-        ...initialConfig, 
-        entityId: null, 
-        defaultFormValues: createDefaults, 
-        getEntityDataFn: createGetEntityDataFnMock, 
-        transformDataToForm: createTransformMock as Mock<[Task | undefined], TaskFormData> 
+
+      const createConfig = {
+        ...initialConfig,
+        entityId: null,
+        defaultFormValues: createDefaults,
+        getEntityDataFn: createGetEntityDataFnMock,
+        transformDataToForm: createTransformMock as Mock<[Task | undefined], TaskFormData>,
       };
-      
+
       act(() => rerender(createConfig));
 
       expect(createGetEntityDataFnMock).toHaveBeenCalledWith(undefined);
@@ -454,20 +483,28 @@ describe('useEditableEntity', () => {
       expect(result.current.initialData).toBeUndefined();
     });
   });
-  
+
   describe('canSave logic', () => {
     test('should be true if form is dirty and not saving', () => {
       const config = getDefaultHookConfig();
       const { result, rerender } = renderHook(() => useEditableEntity(config));
-      act(() => { if (mockFormStateObject) { mockFormStateObject.isDirty = true; } });
-      rerender(); 
+      act(() => {
+        if (mockFormStateObject) {
+          mockFormStateObject.isDirty = true;
+        }
+      });
+      rerender();
       expect(result.current.canSave).toBe(true);
     });
 
     test('should be false if form is not dirty', () => {
       const config = getDefaultHookConfig();
       const { result, rerender } = renderHook(() => useEditableEntity(config));
-      act(() => { if (mockFormStateObject) { mockFormStateObject.isDirty = false; } });
+      act(() => {
+        if (mockFormStateObject) {
+          mockFormStateObject.isDirty = false;
+        }
+      });
       rerender();
       expect(result.current.canSave).toBe(false);
     });
@@ -475,18 +512,22 @@ describe('useEditableEntity', () => {
     test('should be false if form is saving', () => {
       const config = getDefaultHookConfig();
       const { result, rerender } = renderHook(() => useEditableEntity(config));
-      
+
       // Set form as dirty first
-      act(() => { if (mockFormStateObject) { mockFormStateObject.isDirty = true; } });
+      act(() => {
+        if (mockFormStateObject) {
+          mockFormStateObject.isDirty = true;
+        }
+      });
       rerender();
       expect(result.current.canSave).toBe(true); // Should be true when dirty and not saving
-      
+
       // Now simulate saving state
-      act(() => { 
+      act(() => {
         // Trigger a save to set isSaving to true
         result.current.handleSave();
       });
-      
+
       expect(result.current.canSave).toBe(false); // Should be false when saving
     });
   });

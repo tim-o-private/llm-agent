@@ -17,7 +17,10 @@ vi.mock('@/features/auth/useAuthStore');
 
 // --- RHF Mock Setup ---
 const mockRHFRegister = vi.fn();
-const mockRHFHandleSubmit = vi.fn((cb) => (e?: React.BaseSyntheticEvent) => { e?.preventDefault(); return cb({}); });
+const mockRHFHandleSubmit = vi.fn((cb) => (e?: React.BaseSyntheticEvent) => {
+  e?.preventDefault();
+  return cb({});
+});
 let mockRHFFormState: FormState<TaskFormData>;
 const mockRHFReset = vi.fn();
 const mockRHFGetValues = vi.fn();
@@ -41,7 +44,7 @@ const mockFormMethods = {
   setError: mockRHFSetError,
   getFieldState: mockRHFGetFieldState,
   control: {} as Control<TaskFormData>,
-} as unknown as UseFormReturn<TaskFormData>; 
+} as unknown as UseFormReturn<TaskFormData>;
 // --- End RHF Mock Setup ---
 
 let mockUseEditableEntityReturnValue: UseEditableEntityReturn<Task, TaskFormData>;
@@ -63,11 +66,11 @@ const sampleTaskForForm: Task = {
 };
 
 const sampleTaskFormDataForForm: TaskFormData = {
-    title: sampleTaskForForm.title,
-    description: sampleTaskForForm.description ?? null,
-    status: sampleTaskForForm.status,
-    priority: sampleTaskForForm.priority,
-    due_date: '2024-12-31',
+  title: sampleTaskForForm.title,
+  description: sampleTaskForForm.description ?? null,
+  status: sampleTaskForForm.status,
+  priority: sampleTaskForForm.priority,
+  due_date: '2024-12-31',
 };
 
 // Use the actual imported store state types for mocks
@@ -83,24 +86,24 @@ describe('TaskForm', () => {
     vi.clearAllMocks();
 
     mockRHFFormState = {
-        errors: {},
-        isDirty: false,
-        isValid: true,
-        isLoading: false,
-        isSubmitted: false,
-        isSubmitSuccessful: false,
-        isSubmitting: false,
-        isValidating: false,
-        touchedFields: {},
-        dirtyFields: {},
-        submitCount: 0,
-        disabled: false,
-        defaultValues: undefined,
-        validatingFields: {},
-        isReady: true, 
+      errors: {},
+      isDirty: false,
+      isValid: true,
+      isLoading: false,
+      isSubmitted: false,
+      isSubmitSuccessful: false,
+      isSubmitting: false,
+      isValidating: false,
+      touchedFields: {},
+      dirtyFields: {},
+      submitCount: 0,
+      disabled: false,
+      defaultValues: undefined,
+      validatingFields: {},
+      isReady: true,
     };
     mockFormMethods.formState = mockRHFFormState;
-    mockRHFRegister.mockImplementation(name => ({ name, onChange: vi.fn(), onBlur: vi.fn(), ref: vi.fn() }));
+    mockRHFRegister.mockImplementation((name) => ({ name, onChange: vi.fn(), onBlur: vi.fn(), ref: vi.fn() }));
     mockRHFGetValues.mockReturnValue(sampleTaskFormDataForForm);
 
     mockUseEditableEntityReturnValue = {
@@ -118,17 +121,19 @@ describe('TaskForm', () => {
 
     const taskStoreMock = useTaskStore as unknown as Mocked<typeof useTaskStore>;
     taskStoreMock.getState = vi.fn().mockReturnValue({
-        getTaskById: vi.fn().mockImplementation((id: string) => (id === sampleTaskForForm.id ? sampleTaskForForm : undefined)),
-        createTask: vi.fn().mockResolvedValue({ ...sampleTaskForForm, id: 'new-task-id'} as Task), 
-        updateTask: vi.fn().mockResolvedValue(undefined as void), 
-        tasks: [] // Added to satisfy MockTaskStoreState if not all parts are optional
-    } as MockTaskStoreState ); 
+      getTaskById: vi
+        .fn()
+        .mockImplementation((id: string) => (id === sampleTaskForForm.id ? sampleTaskForForm : undefined)),
+      createTask: vi.fn().mockResolvedValue({ ...sampleTaskForForm, id: 'new-task-id' } as Task),
+      updateTask: vi.fn().mockResolvedValue(undefined as void),
+      tasks: [], // Added to satisfy MockTaskStoreState if not all parts are optional
+    } as MockTaskStoreState);
 
     const authStoreMock = useAuthStore as unknown as Mocked<typeof useAuthStore>;
     // Make sure the mock provides all non-optional fields of AuthState required by MockAuthStoreState
     // If `user` can be null in AuthState, MockAuthStoreState should reflect that or provide a default.
     authStoreMock.getState = vi.fn().mockReturnValue({
-        user: { id: 'user-auth-1' } as AuthState['user'], // Cast to User or User | null depending on AuthState
+      user: { id: 'user-auth-1' } as AuthState['user'], // Cast to User or User | null depending on AuthState
     } as MockAuthStoreState);
   });
 
@@ -172,64 +177,64 @@ describe('TaskForm', () => {
   test('calls handleSave when form is submitted via external button', async () => {
     const user = userEvent.setup();
     let capturedFormState: any = null;
-    
+
     renderTestForm({
       onFormStateChange: (state) => {
         capturedFormState = state;
-      }
+      },
     });
-    
+
     await user.type(screen.getByLabelText(/title/i), 'New Test Task Title');
-    
+
     // Wait for form state to be captured
     await waitFor(() => {
       expect(capturedFormState).toBeTruthy();
       expect(capturedFormState.canSave).toBe(true);
     });
-    
+
     // Simulate external button click
     capturedFormState.handleSave();
-    
+
     await waitFor(() => {
-        expect(mockUseEditableEntityReturnValue.handleSave).toHaveBeenCalledOnce();
+      expect(mockUseEditableEntityReturnValue.handleSave).toHaveBeenCalledOnce();
     });
   });
 
   test('calls resetFormToInitial and onCancel when external cancel is triggered', async () => {
     let capturedFormState: any = null;
-    
+
     renderTestForm({
       onFormStateChange: (state) => {
         capturedFormState = state;
-      }
+      },
     });
-    
+
     // Wait for form state to be captured
     await waitFor(() => {
       expect(capturedFormState).toBeTruthy();
     });
-    
+
     // Simulate external cancel button click
     capturedFormState.handleCancel();
-    
+
     expect(mockUseEditableEntityReturnValue.resetFormToInitial).toHaveBeenCalledOnce();
     expect(mockOnCancel).toHaveBeenCalledOnce();
   });
 
   test('exposes correct saving state via form state callback', async () => {
     let capturedFormState: any = null;
-    
+
     (useEditableEntity as Mock).mockReturnValue({
       ...mockUseEditableEntityReturnValue,
       isSaving: true,
     });
-    
+
     renderTestForm({
       onFormStateChange: (state) => {
         capturedFormState = state;
-      }
+      },
     });
-    
+
     await waitFor(() => {
       expect(capturedFormState).toBeTruthy();
       expect(capturedFormState.isSaving).toBe(true);
@@ -238,18 +243,18 @@ describe('TaskForm', () => {
 
   test('exposes correct canSave state via form state callback', async () => {
     let capturedFormState: any = null;
-    
+
     (useEditableEntity as Mock).mockReturnValue({
       ...mockUseEditableEntityReturnValue,
       canSave: false,
     });
-    
+
     renderTestForm({
       onFormStateChange: (state) => {
         capturedFormState = state;
-      }
+      },
     });
-    
+
     await waitFor(() => {
       expect(capturedFormState).toBeTruthy();
       expect(capturedFormState.canSave).toBe(false);
@@ -273,13 +278,27 @@ describe('TaskForm', () => {
     rtlAct(() => {
       mockRHFFormState.isDirty = true;
     });
-    rerender(<TaskForm taskId={null} onSaveSuccess={mockOnSaveSuccess} onCancel={mockOnCancel} onDirtyStateChange={mockOnDirtyStateChange} />); 
+    rerender(
+      <TaskForm
+        taskId={null}
+        onSaveSuccess={mockOnSaveSuccess}
+        onCancel={mockOnCancel}
+        onDirtyStateChange={mockOnDirtyStateChange}
+      />,
+    );
     expect(mockOnDirtyStateChange).toHaveBeenCalledWith(true);
-    mockOnDirtyStateChange.mockClear(); 
+    mockOnDirtyStateChange.mockClear();
     rtlAct(() => {
       mockRHFFormState.isDirty = false;
     });
-    rerender(<TaskForm taskId={null} onSaveSuccess={mockOnSaveSuccess} onCancel={mockOnCancel} onDirtyStateChange={mockOnDirtyStateChange} />); 
+    rerender(
+      <TaskForm
+        taskId={null}
+        onSaveSuccess={mockOnSaveSuccess}
+        onCancel={mockOnCancel}
+        onDirtyStateChange={mockOnDirtyStateChange}
+      />,
+    );
     expect(mockOnDirtyStateChange).toHaveBeenCalledWith(false);
   });
-}); 
+});

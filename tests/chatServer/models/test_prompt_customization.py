@@ -2,12 +2,13 @@
 
 import unittest
 from datetime import datetime
+
 from pydantic import ValidationError
 
 from chatServer.models.prompt_customization import (
+    PromptCustomization,
     PromptCustomizationBase,
     PromptCustomizationCreate,
-    PromptCustomization,
 )
 
 
@@ -20,7 +21,7 @@ class TestPromptCustomizationBase(unittest.TestCase):
             agent_name="test_agent",
             content={"instructions": "Be helpful"}
         )
-        
+
         self.assertEqual(customization.agent_name, "test_agent")
         self.assertEqual(customization.customization_type, "instruction_set")  # default
         self.assertEqual(customization.content, {"instructions": "Be helpful"})
@@ -41,7 +42,7 @@ class TestPromptCustomizationBase(unittest.TestCase):
             is_active=False,
             priority=5
         )
-        
+
         self.assertEqual(customization.agent_name, "test_agent")
         self.assertEqual(customization.customization_type, "system_prompt")
         self.assertEqual(customization.content, content)
@@ -53,7 +54,7 @@ class TestPromptCustomizationBase(unittest.TestCase):
         # Missing agent_name
         with self.assertRaises(ValidationError):
             PromptCustomizationBase(content={"instructions": "Be helpful"})
-        
+
         # Missing content
         with self.assertRaises(ValidationError):
             PromptCustomizationBase(agent_name="test_agent")
@@ -66,7 +67,7 @@ class TestPromptCustomizationBase(unittest.TestCase):
             content={"key": "value"}
         )
         self.assertEqual(customization.content, {"key": "value"})
-        
+
         # Invalid content types should raise ValidationError
         with self.assertRaises(ValidationError):
             PromptCustomizationBase(
@@ -84,7 +85,7 @@ class TestPromptCustomizationCreate(unittest.TestCase):
             agent_name="test_agent",
             content={"instructions": "Be helpful"}
         )
-        
+
         # Should have all the same fields as base
         self.assertEqual(customization.agent_name, "test_agent")
         self.assertEqual(customization.customization_type, "instruction_set")
@@ -107,7 +108,7 @@ class TestPromptCustomization(unittest.TestCase):
             created_at=now,
             updated_at=now
         )
-        
+
         self.assertEqual(customization.agent_name, "test_agent")
         self.assertEqual(customization.content, {"instructions": "Be helpful"})
         self.assertEqual(customization.id, "123e4567-e89b-12d3-a456-426614174000")
@@ -126,7 +127,7 @@ class TestPromptCustomization(unittest.TestCase):
                 created_at=datetime.now(),
                 updated_at=datetime.now()
             )
-        
+
         # Missing user_id
         with self.assertRaises(ValidationError):
             PromptCustomization(
@@ -151,7 +152,7 @@ class TestPromptCustomization(unittest.TestCase):
         )
         self.assertEqual(customization.created_at, now)
         self.assertEqual(customization.updated_at, now)
-        
+
         # Test with string representations (common from database)
         customization_str = PromptCustomization(
             agent_name="test_agent",
@@ -166,4 +167,4 @@ class TestPromptCustomization(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main() 
+    unittest.main()

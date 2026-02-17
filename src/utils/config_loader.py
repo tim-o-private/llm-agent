@@ -1,7 +1,9 @@
 import os
+from typing import Any, Optional
+
 import yaml
 from dotenv import load_dotenv
-from typing import Any, Optional
+
 from utils.logging_utils import get_logger
 
 # Import the helper function

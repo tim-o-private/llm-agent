@@ -2,4 +2,4 @@
 
 from .agent_executor import AgentExecutorProtocol
 
-__all__ = ["AgentExecutorProtocol"] 
+__all__ = ["AgentExecutorProtocol"]

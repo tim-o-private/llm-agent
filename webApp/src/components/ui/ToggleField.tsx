@@ -26,9 +26,7 @@ export const ToggleField: React.FC<ToggleFieldProps> = ({
         <label htmlFor={id} className="text-sm font-medium text-text-primary">
           {label}
         </label>
-        {description && (
-          <p className="text-sm text-text-secondary">{description}</p>
-        )}
+        {description && <p className="text-sm text-text-secondary">{description}</p>}
       </div>
       <Switch
         id={id}
@@ -40,16 +38,16 @@ export const ToggleField: React.FC<ToggleFieldProps> = ({
           'data-[state=checked]:bg-brand-primary data-[state=unchecked]:bg-ui-border',
           'disabled:cursor-not-allowed disabled:opacity-50',
           // Use our consistent focus system
-          !disabled && getFocusClasses()
+          !disabled && getFocusClasses(),
         )}
       >
         <span
           className={clsx(
             'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-            'group-data-[state=checked]:translate-x-5 group-data-[state=unchecked]:translate-x-0'
+            'group-data-[state=checked]:translate-x-5 group-data-[state=unchecked]:translate-x-0',
           )}
         />
       </Switch>
     </div>
   );
-}; 
+};

@@ -1,10 +1,12 @@
 // Utility to validate semantic color usage in components
-export const validateSemanticColors = (element: HTMLElement): {
+export const validateSemanticColors = (
+  element: HTMLElement,
+): {
   valid: boolean;
   violations: string[];
 } => {
   const violations: string[] = [];
-  
+
   // Check for forbidden Tailwind color classes
   const forbiddenPatterns = [
     { pattern: /bg-(blue|red|green|yellow|purple|pink|indigo|gray)-\d+/, type: 'background' },
@@ -13,7 +15,7 @@ export const validateSemanticColors = (element: HTMLElement): {
   ];
 
   const className = element.className;
-  
+
   forbiddenPatterns.forEach(({ pattern, type }) => {
     if (pattern.test(className)) {
       violations.push(`Found forbidden ${type} color class in: ${className}`);
@@ -43,7 +45,9 @@ export const validateSemanticColors = (element: HTMLElement): {
 };
 
 // Utility to scan entire DOM for color violations
-export const scanForColorViolations = (container: HTMLElement = document.body): {
+export const scanForColorViolations = (
+  container: HTMLElement = document.body,
+): {
   totalElements: number;
   violatingElements: number;
   violations: Array<{
@@ -77,7 +81,7 @@ export const APPROVED_COLOR_TOKENS = {
   // Brand & Accent Colors
   brand: [
     'brand-primary',
-    'brand-primary-hover', 
+    'brand-primary-hover',
     'brand-primary-text',
     'bg-accent-subtle',
     'accent-subtle',
@@ -87,7 +91,7 @@ export const APPROVED_COLOR_TOKENS = {
     'accent-track',
     'accent-hover',
   ],
-  
+
   // UI Element Colors
   ui: [
     'ui-bg',
@@ -104,17 +108,10 @@ export const APPROVED_COLOR_TOKENS = {
     'ui-border-hover',
     'ui-border-focus',
   ],
-  
+
   // Text Colors
-  text: [
-    'text-primary',
-    'text-secondary',
-    'text-muted',
-    'text-disabled',
-    'text-accent',
-    'text-accent-hover',
-  ],
-  
+  text: ['text-primary', 'text-secondary', 'text-muted', 'text-disabled', 'text-accent', 'text-accent-hover'],
+
   // Status Colors
   status: [
     'destructive',
@@ -141,38 +138,38 @@ export const isApprovedColorToken = (token: string): boolean => {
 export const extractColorClasses = (className: string): string[] => {
   const colorPrefixes = ['bg-', 'text-', 'border-', 'ring-'];
   const classes = className.split(' ');
-  
-  return classes.filter(cls => 
-    colorPrefixes.some(prefix => cls.startsWith(prefix))
-  );
+
+  return classes.filter((cls) => colorPrefixes.some((prefix) => cls.startsWith(prefix)));
 };
 
 // Validate color classes in a className string
-export const validateColorClasses = (className: string): {
+export const validateColorClasses = (
+  className: string,
+): {
   valid: boolean;
   approvedClasses: string[];
   forbiddenClasses: string[];
 } => {
   const colorClasses = extractColorClasses(className);
   const approvedTokens = getAllApprovedTokens();
-  
+
   const approvedClasses: string[] = [];
   const forbiddenClasses: string[] = [];
-  
-  colorClasses.forEach(cls => {
+
+  colorClasses.forEach((cls) => {
     // Remove prefix to get token name
     const token = cls.replace(/^(bg-|text-|border-|ring-)/, '');
-    
+
     if (approvedTokens.includes(token)) {
       approvedClasses.push(cls);
     } else {
       forbiddenClasses.push(cls);
     }
   });
-  
+
   return {
     valid: forbiddenClasses.length === 0,
     approvedClasses,
     forbiddenClasses,
   };
-}; 
+};

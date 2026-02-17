@@ -11,13 +11,13 @@ export interface TaskViewState {
   // rawTasks: Task[]; // Removed
   focusedTaskId: string | null;
   selectedTaskIds: Set<string>;
-  
+
   // Keyboard shortcut related state
   currentNavigableTasks: Array<{ id: string }>;
   isSystemBusy: boolean; // True if an input is focused or a modal is open
   inputFocusCount: number; // Count of focused inputs
   activeModalIdentifiers: Set<string>; // IDs of currently open modals
-  
+
   // UI Action Requests - store signals, UI components react
   requestOpenDetailForTaskId: string | null;
   requestFocusFastInput: boolean;
@@ -86,32 +86,49 @@ export const useTaskViewStore = create<TaskViewStore>()(
     immer((set, get) => ({
       ...initialState,
       // setRawTasks: (tasks) => set(state => { state.rawTasks = tasks; }), // Removed
-      clearTaskRelatedState: () => set(state => { 
-        // state.rawTasks = []; // Removed
-        state.focusedTaskId = null; 
-        state.selectedTaskIds.clear(); 
-        state.currentNavigableTasks = [];
-        // state.isSystemBusy = false; // Recalculated by focus/modal state
-        // state.inputFocusCount = 0; // Resetting these might be too aggressive here
-        // state.activeModalIdentifiers.clear(); 
-        state.requestOpenDetailForTaskId = null;
-        state.requestFocusFastInput = false;
-        // No need to reset legacy state here as it's removed
-      }),
-      setFocusedTaskId: (taskId) => set(state => { state.focusedTaskId = taskId; }),
-      toggleSelectedTask: (taskId) => set(state => {
-        if (state.selectedTaskIds.has(taskId)) {
-          state.selectedTaskIds.delete(taskId);
-        } else {
+      clearTaskRelatedState: () =>
+        set((state) => {
+          // state.rawTasks = []; // Removed
+          state.focusedTaskId = null;
+          state.selectedTaskIds.clear();
+          state.currentNavigableTasks = [];
+          // state.isSystemBusy = false; // Recalculated by focus/modal state
+          // state.inputFocusCount = 0; // Resetting these might be too aggressive here
+          // state.activeModalIdentifiers.clear();
+          state.requestOpenDetailForTaskId = null;
+          state.requestFocusFastInput = false;
+          // No need to reset legacy state here as it's removed
+        }),
+      setFocusedTaskId: (taskId) =>
+        set((state) => {
+          state.focusedTaskId = taskId;
+        }),
+      toggleSelectedTask: (taskId) =>
+        set((state) => {
+          if (state.selectedTaskIds.has(taskId)) {
+            state.selectedTaskIds.delete(taskId);
+          } else {
+            state.selectedTaskIds.add(taskId);
+          }
+        }),
+      addSelectedTask: (taskId) =>
+        set((state) => {
           state.selectedTaskIds.add(taskId);
-        }
-      }),
-      addSelectedTask: (taskId) => set(state => { state.selectedTaskIds.add(taskId); }),
-      removeSelectedTask: (taskId) => set(state => { state.selectedTaskIds.delete(taskId); }),
-      clearSelectedTasks: () => set(state => { state.selectedTaskIds.clear(); }),
+        }),
+      removeSelectedTask: (taskId) =>
+        set((state) => {
+          state.selectedTaskIds.delete(taskId);
+        }),
+      clearSelectedTasks: () =>
+        set((state) => {
+          state.selectedTaskIds.clear();
+        }),
 
-      setCurrentNavigableTasks: (tasks) => set(state => { state.currentNavigableTasks = tasks; }),
-      
+      setCurrentNavigableTasks: (tasks) =>
+        set((state) => {
+          state.currentNavigableTasks = tasks;
+        }),
+
       setInputFocusState: (isFocused) =>
         set((state) => {
           if (isFocused) {
@@ -130,22 +147,28 @@ export const useTaskViewStore = create<TaskViewStore>()(
             state.activeModalIdentifiers.delete(modalIdentifier);
           }
           state.isSystemBusy = state.inputFocusCount > 0 || state.activeModalIdentifiers.size > 0;
-          
+
           // If a modal is opening, clear any pending detail request unless it's the detail modal itself.
           // This handles cases where a shortcut might have requested a detail view, but another modal pops up first.
           if (isOpen && state.requestOpenDetailForTaskId && modalIdentifier !== state.requestOpenDetailForTaskId) {
-             // Assuming modalIdentifier for detail view would be the task ID or a specific string like 'taskDetailModal'
-             // This logic might need refinement based on how detail modals are identified.
+            // Assuming modalIdentifier for detail view would be the task ID or a specific string like 'taskDetailModal'
+            // This logic might need refinement based on how detail modals are identified.
           }
           // If a modal is closing, and it was the one requested, clear the request.
           if (!isOpen && state.requestOpenDetailForTaskId === modalIdentifier) {
             // This also needs careful thought on how `requestOpenDetailForTaskId` relates to `modalIdentifier`
-            // state.requestOpenDetailForTaskId = null; 
+            // state.requestOpenDetailForTaskId = null;
           }
         }),
-      
-      clearDetailOpenRequest: () => set((state) => { state.requestOpenDetailForTaskId = null; }),
-      clearFocusFastInputRequest: () => set((state) => { state.requestFocusFastInput = false; }),
+
+      clearDetailOpenRequest: () =>
+        set((state) => {
+          state.requestOpenDetailForTaskId = null;
+        }),
+      clearFocusFastInputRequest: () =>
+        set((state) => {
+          state.requestFocusFastInput = false;
+        }),
 
       initializeListener: () => {
         if (!window.__taskViewStoreListenerAttached) {
@@ -168,25 +191,25 @@ export const useTaskViewStore = create<TaskViewStore>()(
 
         // Always allow Escape for modals to handle themselves, or for global deselect/defocus
         if (event.key === 'Escape') {
-            if (state.activeModalIdentifiers.size > 0) {
-                // Modals should handle their own escape. Store doesn't interfere.
-                return;
-            }
-            // If no modals, Escape could clear focus or selection
-            if (state.focusedTaskId) {
-                event.preventDefault();
-                set({ focusedTaskId: null });
-                return;
-            }
-            if (state.selectedTaskIds.size > 0) {
-                event.preventDefault();
-                get().clearSelectedTasks();
-                return;
-            }
-            // Potentially close other UI elements if any are "escape-closable" via store
-            return; 
+          if (state.activeModalIdentifiers.size > 0) {
+            // Modals should handle their own escape. Store doesn't interfere.
+            return;
+          }
+          // If no modals, Escape could clear focus or selection
+          if (state.focusedTaskId) {
+            event.preventDefault();
+            set({ focusedTaskId: null });
+            return;
+          }
+          if (state.selectedTaskIds.size > 0) {
+            event.preventDefault();
+            get().clearSelectedTasks();
+            return;
+          }
+          // Potentially close other UI elements if any are "escape-closable" via store
+          return;
         }
-        
+
         // Always allow typing in input fields regardless of system busy state
         if (
           event.target instanceof HTMLInputElement ||
@@ -208,9 +231,8 @@ export const useTaskViewStore = create<TaskViewStore>()(
 
         const { currentNavigableTasks, focusedTaskId } = state;
         const hasTasks = currentNavigableTasks.length > 0;
-        const focusedIndex = focusedTaskId && hasTasks
-          ? currentNavigableTasks.findIndex((t) => t.id === focusedTaskId)
-          : -1;
+        const focusedIndex =
+          focusedTaskId && hasTasks ? currentNavigableTasks.findIndex((t) => t.id === focusedTaskId) : -1;
 
         let newFocusedId: string | null = null;
 
@@ -244,9 +266,10 @@ export const useTaskViewStore = create<TaskViewStore>()(
             if (focusedTaskId) {
               event.preventDefault();
               set({ requestOpenDetailForTaskId: focusedTaskId });
-            } else if (hasTasks && currentNavigableTasks[0]?.id) { // Open first task if none focused
+            } else if (hasTasks && currentNavigableTasks[0]?.id) {
+              // Open first task if none focused
               event.preventDefault();
-              set({ requestOpenDetailForTaskId: currentNavigableTasks[0].id })
+              set({ requestOpenDetailForTaskId: currentNavigableTasks[0].id });
             }
             break;
           case ' ': // Spacebar
@@ -264,7 +287,7 @@ export const useTaskViewStore = create<TaskViewStore>()(
             break;
           default:
             // Allow other keys to bubble up if not handled
-            return; 
+            return;
         }
       },
 
@@ -272,7 +295,7 @@ export const useTaskViewStore = create<TaskViewStore>()(
       // These should be re-evaluated. Components should react to `requestOpenDetailForTaskId` or use `setModalOpenState`.
       // openDetailModal: (taskId) => {
       //   console.warn("Legacy openDetailModal called. Use requestOpenDetailForTaskId pattern.");
-      //   set(state => { 
+      //   set(state => {
       //     state.requestOpenDetailForTaskId = taskId;
       //     // Also need to set modal open state if this direct action is kept
       //     // state.activeModalIdentifiers.add(taskId); // Or a generic 'detailModal' identifier
@@ -318,8 +341,8 @@ export const useTaskViewStore = create<TaskViewStore>()(
       //   });
       // }
     })),
-    { name: 'TaskViewStore' }
-  )
+    { name: 'TaskViewStore' },
+  ),
 );
 
 // Old useKeyboardShortcuts hook removed entirely.
@@ -333,4 +356,4 @@ export const useTaskViewStore = create<TaskViewStore>()(
 //   if (userId) {
 //     queryClient.invalidateQueries({ queryKey: ['tasks', userId] });
 //   }
-// }; 
+// };

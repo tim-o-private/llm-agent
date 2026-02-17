@@ -1,9 +1,10 @@
-import sys
-import os
+
+from unittest.mock import MagicMock, patch
 
 import pytest
-from unittest.mock import patch, MagicMock
+
 from utils.config_loader import ConfigLoader
+
 
 # Mock ConfigLoader fixture
 @pytest.fixture
@@ -22,7 +23,7 @@ def test_llm_interface_initialization(MockChatGoogle, mock_config):
     """Test if LLMInterface initializes ChatGoogleGenerativeAI correctly."""
     from core.llm_interface import LLMInterface
     interface = LLMInterface(config=mock_config)
-    
+
     # Assert ChatGoogleGenerativeAI was called with correct parameters
     MockChatGoogle.assert_called_once_with(
         model='gemini-pro',
@@ -40,22 +41,22 @@ def test_llm_interface_generate_text(MockChatGoogle, mock_config):
     mock_llm_instance = MockChatGoogle.return_value
     # Use a generic mock instead of AIMessage
     mock_response = MagicMock()
-    mock_response.content = "Mocked response text" 
+    mock_response.content = "Mocked response text"
     mock_llm_instance.invoke.return_value = mock_response
-    
+
     interface = LLMInterface(config=mock_config)
     prompt = "Test prompt"
     system_context = "Test system context"
-    
+
     response_content = interface.generate_text(prompt=prompt, system_context=system_context)
-    
+
     # Assert that invoke was called with the correct messages
     mock_llm_instance.invoke.assert_called_once()
     call_args = mock_llm_instance.invoke.call_args[0][0]
     assert len(call_args) == 2
     assert call_args[0].content == system_context
     assert call_args[1].content == prompt
-    
+
     # Assert the response content is correct
     assert response_content == "Mocked response text"
 
@@ -68,12 +69,12 @@ def test_llm_interface_generate_text_no_context(MockChatGoogle, mock_config):
     mock_response = MagicMock()
     mock_response.content = "Response without context"
     mock_llm_instance.invoke.return_value = mock_response
-    
+
     interface = LLMInterface(config=mock_config)
     prompt = "Another prompt"
-    
+
     response_content = interface.generate_text(prompt=prompt)
-    
+
     mock_llm_instance.invoke.assert_called_once()
     call_args = mock_llm_instance.invoke.call_args[0][0]
     assert len(call_args) == 1 # Only HumanMessage should be present
@@ -103,4 +104,4 @@ def test_llm_interface_api_error(MockChatGoogle, mock_config):
     prompt = "Prompt that causes error"
 
     with pytest.raises(Exception, match="API call failed"):
-        interface.generate_text(prompt=prompt) 
+        interface.generate_text(prompt=prompt)

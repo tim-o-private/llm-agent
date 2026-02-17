@@ -8,11 +8,10 @@ import { Spinner } from '@/components/ui';
 import { useTaskViewStore } from '@/stores/useTaskViewStore';
 import { Toaster } from '@/components/ui/toast';
 
-
 // Lazy load pages for better performance
 const Home = lazy(() => import('@/pages/Home'));
 const Login = lazy(() => import('@/pages/Login'));
-const AuthCallback = lazy(() => import('@/pages/AuthCallback').then(module => ({ default: module.AuthCallback })));
+const AuthCallback = lazy(() => import('@/pages/AuthCallback').then((module) => ({ default: module.AuthCallback })));
 
 const TodayView = lazy(() => import('@/pages/TodayView.tsx'));
 const TodayViewMockup = lazy(() => import('@/pages/TodayViewMockup'));
@@ -21,9 +20,15 @@ const CoachPageV2 = lazy(() => import('@/pages/CoachPageV2'));
 const ColorSwatchPage = lazy(() => import('@/pages/ColorSwatchPage'));
 const DesignSystemPage = lazy(() => import('@/pages/DesignSystemPage'));
 const SelectTestPage = lazy(() => import('@/pages/SelectTestPage'));
-const IntegrationsPage = lazy(() => import('@/pages/Settings/Integrations').then(module => ({ default: module.IntegrationsPage })));
-const DesignDemo = lazy(() => import('@/components/ui/DesignDemo').then(module => ({ default: () => <module.DesignDemo /> })));
-const LayoutMockups = lazy(() => import('@/components/ui/LayoutMockups').then(module => ({ default: () => <module.LayoutMockups /> })));
+const IntegrationsPage = lazy(() =>
+  import('@/pages/Settings/Integrations').then((module) => ({ default: module.IntegrationsPage })),
+);
+const DesignDemo = lazy(() =>
+  import('@/components/ui/DesignDemo').then((module) => ({ default: () => <module.DesignDemo /> })),
+);
+const LayoutMockups = lazy(() =>
+  import('@/components/ui/LayoutMockups').then((module) => ({ default: () => <module.LayoutMockups /> })),
+);
 
 // AppLayout component is no longer needed as AppShell is the primary layout.
 
@@ -40,7 +45,13 @@ function App() {
     <Router>
       <AuthProvider>
         <ErrorBoundary>
-          <Suspense fallback={<div className="w-full h-screen flex items-center justify-center"><Spinner /></div>}>
+          <Suspense
+            fallback={
+              <div className="w-full h-screen flex items-center justify-center">
+                <Spinner />
+              </div>
+            }
+          >
             <Routes>
               {/* Public routes */}
               <Route path="/" element={<Home />} />
@@ -63,12 +74,18 @@ function App() {
               {/* Protected routes wrapped by AppShell directly */}
               <Route element={<ProtectedRoute />}>
                 {/* Wrap child routes with AppShell and render them via Outlet */}
-                <Route element={<AppShell><Outlet /></AppShell>}> 
+                <Route
+                  element={
+                    <AppShell>
+                      <Outlet />
+                    </AppShell>
+                  }
+                >
                   <Route path="/today" element={<TodayView />} />
                   <Route path="/coach" element={<CoachPage />} />
                   <Route path="/settings" element={<IntegrationsPage />} />
                   {/* Default protected route */}
-                  <Route index element={<TodayView />} /> 
+                  <Route index element={<TodayView />} />
                 </Route>
               </Route>
             </Routes>
@@ -80,4 +97,4 @@ function App() {
   );
 }
 
-export default App; 
+export default App;

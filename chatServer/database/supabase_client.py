@@ -2,8 +2,10 @@
 
 import logging
 from typing import Optional
-from supabase import acreate_client, AsyncClient
+
 from fastapi import HTTPException
+
+from supabase import AsyncClient, acreate_client
 
 try:
     from ..config.settings import get_settings
@@ -15,21 +17,21 @@ logger = logging.getLogger(__name__)
 
 class SupabaseManager:
     """Manages the Supabase async client."""
-    
+
     def __init__(self):
         self.client: Optional[AsyncClient] = None
         self.settings = get_settings()
-    
+
     async def initialize(self) -> None:
         """Initialize the Supabase async client."""
         if not self.settings.supabase_url or not self.settings.supabase_service_key:
             logger.warning("Supabase async client not initialized due to missing URL or Key.")
             return
-        
+
         try:
             logger.info(f"Attempting to initialize Supabase async client with URL: {self.settings.supabase_url}")
             client_instance = await acreate_client(self.settings.supabase_url, self.settings.supabase_service_key)
-            
+
             if isinstance(client_instance, AsyncClient):
                 self.client = client_instance
                 logger.info("Supabase AsyncClient initialized successfully.")
@@ -39,7 +41,7 @@ class SupabaseManager:
         except Exception as e:
             logger.error(f"Error initializing Supabase async client: {e}", exc_info=True)
             self.client = None
-    
+
     def get_client(self) -> AsyncClient:
         """Get the Supabase client."""
         if self.client is None:
@@ -63,4 +65,4 @@ def get_supabase_manager() -> SupabaseManager:
 async def get_supabase_client() -> AsyncClient:
     """FastAPI dependency to get the Supabase client."""
     supabase_manager = get_supabase_manager()
-    return supabase_manager.get_client() 
+    return supabase_manager.get_client()

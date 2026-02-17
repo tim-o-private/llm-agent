@@ -9,9 +9,9 @@ const DesignSystemPage: React.FC = () => {
   const [focusedCard, setFocusedCard] = useState<string | null>(null);
 
   // Component State Examples
-  const ComponentStateExample: React.FC<{ 
-    title: string; 
-    description: string; 
+  const ComponentStateExample: React.FC<{
+    title: string;
+    description: string;
     children: React.ReactNode;
   }> = ({ title, description, children }) => (
     <div className="mb-8">
@@ -19,9 +19,7 @@ const DesignSystemPage: React.FC = () => {
         <h3 className="text-lg font-semibold text-text-primary mb-1">{title}</h3>
         <p className="text-sm text-text-secondary">{description}</p>
       </div>
-      <div className="space-y-4">
-        {children}
-      </div>
+      <div className="space-y-4">{children}</div>
     </div>
   );
 
@@ -36,62 +34,60 @@ const DesignSystemPage: React.FC = () => {
     isChild?: boolean;
     onClick?: () => void;
   }> = ({ title, status, priority, selected, focused, isParent, isChild, onClick }) => {
-    
     const getStatusSpecificStyles = () => {
       if (status === 'completed') {
         return 'opacity-70 bg-ui-element-bg/60 text-text-muted line-through';
       }
-      
+
       if (status === 'deleted') {
         return 'opacity-40 bg-red-50 border-red-200 text-red-400 line-through';
       }
-      
+
       return '';
     };
 
     const getHierarchyStyles = () => {
       let styles = '';
-      
+
       if (isParent) {
         styles += ' shadow-lg border-brand-primary/30';
       }
-      
+
       if (isChild) {
         styles += ' ml-6 border-l-4 border-l-brand-primary/50 bg-ui-element-bg/80';
       }
-      
+
       return styles;
     };
 
     const interactiveProps: InteractiveElementProps = {
       variant: 'card',
       focusState: focused ? 'focused' : selected ? 'selected' : 'default',
-      interactionState: status === 'deleted' ? 'disabled' : 'default'
+      interactionState: status === 'deleted' ? 'disabled' : 'default',
     };
 
     const getPriorityIndicator = () => {
       if (!priority || status === 'completed' || status === 'deleted') {
-        return status === 'completed' ? 
-          <div className="w-3 h-3 rounded-full bg-gray-400 opacity-50" /> : null;
+        return status === 'completed' ? <div className="w-3 h-3 rounded-full bg-gray-400 opacity-50" /> : null;
       }
-      
+
       const colors = {
         high: 'bg-red-500 shadow-lg shadow-red-500/50',
         medium: 'bg-amber-500 shadow-lg shadow-amber-500/50',
-        low: 'bg-blue-500 shadow-lg shadow-blue-500/50'
+        low: 'bg-blue-500 shadow-lg shadow-blue-500/50',
       };
-      
+
       return <div className={clsx('w-3 h-3 rounded-full', colors[priority])} />;
     };
 
     return (
-      <div 
+      <div
         className={clsx(
           'p-4',
           getCompleteInteractiveClasses(interactiveProps),
           getStatusSpecificStyles(),
-          getHierarchyStyles()
-        )} 
+          getHierarchyStyles(),
+        )}
         onClick={onClick}
         tabIndex={0} // Make focusable with keyboard
       >
@@ -99,7 +95,9 @@ const DesignSystemPage: React.FC = () => {
           <div className="flex items-center space-x-3">
             {getPriorityIndicator()}
             <span className="text-sm font-medium">{title}</span>
-            {isParent && <span className="text-xs bg-brand-primary/20 text-brand-primary px-2 py-1 rounded">Parent</span>}
+            {isParent && (
+              <span className="text-xs bg-brand-primary/20 text-brand-primary px-2 py-1 rounded">Parent</span>
+            )}
             {isChild && <span className="text-xs bg-ui-border text-text-muted px-2 py-1 rounded">Child</span>}
           </div>
           <div className="text-xs text-text-muted capitalize">{status}</div>
@@ -115,13 +113,13 @@ const DesignSystemPage: React.FC = () => {
         <div className="mb-12 text-center">
           <h1 className="text-4xl font-bold text-text-primary mb-4">Design System</h1>
           <p className="text-text-secondary text-lg max-w-3xl mx-auto">
-            Our unified visual design language with consistent focus states across all interactive elements.
-            All components use the same focus ring system for accessibility and consistency.
+            Our unified visual design language with consistent focus states across all interactive elements. All
+            components use the same focus ring system for accessibility and consistency.
           </p>
           <div className="mt-4 p-4 bg-ui-element-bg rounded-lg border border-ui-border">
             <p className="text-sm text-text-muted">
-              <strong>Focus System:</strong> Blue ring for keyboard focus, brand color ring for selection, red ring for errors.
-              Try tabbing through elements or clicking to see consistent focus behavior.
+              <strong>Focus System:</strong> Blue ring for keyboard focus, brand color ring for selection, red ring for
+              errors. Try tabbing through elements or clicking to see consistent focus behavior.
             </p>
           </div>
         </div>
@@ -138,16 +136,18 @@ const DesignSystemPage: React.FC = () => {
               <TaskCard title="Selected Card" status="active" priority="medium" selected />
               <TaskCard title="Focused Card" status="active" priority="medium" focused />
             </div>
-            
+
             <div className="space-y-3">
               <h4 className="text-sm font-medium text-text-primary">Buttons</h4>
               <Button variant="solid">Solid Button</Button>
               <Button variant="soft">Soft Button</Button>
               <Button variant="outline">Outline Button</Button>
               <Button variant="ghost">Ghost Button</Button>
-              <Button variant="solid" color="red">Danger Button</Button>
+              <Button variant="solid" color="red">
+                Danger Button
+              </Button>
             </div>
-            
+
             <div className="space-y-3">
               <h4 className="text-sm font-medium text-text-primary">Inputs</h4>
               <Input placeholder="Default input..." />
@@ -167,30 +167,10 @@ const DesignSystemPage: React.FC = () => {
           description="Visual distinction between parent and child components, with proper nesting and relationship indicators"
         >
           <div className="space-y-3">
-            <TaskCard 
-              title="Parent Task - Project Planning" 
-              status="active" 
-              priority="high" 
-              isParent 
-            />
-            <TaskCard 
-              title="Child Task - Research competitors" 
-              status="active" 
-              priority="medium" 
-              isChild 
-            />
-            <TaskCard 
-              title="Child Task - Define requirements" 
-              status="completed" 
-              priority="medium" 
-              isChild 
-            />
-            <TaskCard 
-              title="Child Task - Create wireframes" 
-              status="active" 
-              priority="low" 
-              isChild 
-            />
+            <TaskCard title="Parent Task - Project Planning" status="active" priority="high" isParent />
+            <TaskCard title="Child Task - Research competitors" status="active" priority="medium" isChild />
+            <TaskCard title="Child Task - Define requirements" status="completed" priority="medium" isChild />
+            <TaskCard title="Child Task - Create wireframes" status="active" priority="low" isChild />
           </div>
         </ComponentStateExample>
 
@@ -224,30 +204,10 @@ const DesignSystemPage: React.FC = () => {
           description="Selection and focus states for keyboard and mouse interaction - all using the same focus ring system"
         >
           <div className="space-y-3">
-            <TaskCard 
-              title="Default Task (try tabbing to focus)" 
-              status="active" 
-              priority="medium" 
-            />
-            <TaskCard 
-              title="Selected Task" 
-              status="active" 
-              priority="medium" 
-              selected 
-            />
-            <TaskCard 
-              title="Focused Task (Keyboard Navigation)" 
-              status="active" 
-              priority="medium" 
-              focused 
-            />
-            <TaskCard 
-              title="Selected + Focused Task" 
-              status="active" 
-              priority="medium" 
-              selected 
-              focused 
-            />
+            <TaskCard title="Default Task (try tabbing to focus)" status="active" priority="medium" />
+            <TaskCard title="Selected Task" status="active" priority="medium" selected />
+            <TaskCard title="Focused Task (Keyboard Navigation)" status="active" priority="medium" focused />
+            <TaskCard title="Selected + Focused Task" status="active" priority="medium" selected focused />
           </div>
         </ComponentStateExample>
 
@@ -297,10 +257,18 @@ const DesignSystemPage: React.FC = () => {
             <div>
               <h4 className="font-medium text-text-primary mb-2">Global Focus System</h4>
               <ul className="text-sm text-text-secondary space-y-1">
-                <li>• <strong>Blue ring:</strong> Keyboard focus (always consistent)</li>
-                <li>• <strong>Brand ring:</strong> Selection state</li>
-                <li>• <strong>Red ring:</strong> Error state</li>
-                <li>• <strong>No transforms:</strong> Focus rings stay flat for clean appearance</li>
+                <li>
+                  • <strong>Blue ring:</strong> Keyboard focus (always consistent)
+                </li>
+                <li>
+                  • <strong>Brand ring:</strong> Selection state
+                </li>
+                <li>
+                  • <strong>Red ring:</strong> Error state
+                </li>
+                <li>
+                  • <strong>No transforms:</strong> Focus rings stay flat for clean appearance
+                </li>
               </ul>
             </div>
             <div>
@@ -336,4 +304,4 @@ const DesignSystemPage: React.FC = () => {
   );
 };
 
-export default DesignSystemPage; 
+export default DesignSystemPage;

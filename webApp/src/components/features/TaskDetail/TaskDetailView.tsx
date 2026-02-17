@@ -29,7 +29,7 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
 }) => {
   log.debug('Render', { taskId, isOpen });
 
-  const task = useTaskStore((state) => taskId ? state.getTaskById(taskId) : undefined);
+  const task = useTaskStore((state) => (taskId ? state.getTaskById(taskId) : undefined));
   const setModalOpenState = useTaskViewStore((state) => state.setModalOpenState);
   const taskFormRef = useRef<TaskFormRef>(null);
 
@@ -81,7 +81,7 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
 
   const handleDelete = async () => {
     if (!taskId) return;
-    
+
     if (window.confirm('Are you sure you want to delete this task? This action cannot be undone.')) {
       try {
         const { deleteTask } = useTaskStore.getState();
@@ -98,7 +98,7 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
   };
 
   // Dynamic title and description
-  const title = taskId ? (task?.title || 'Edit Task') : 'Create New Task';
+  const title = taskId ? task?.title || 'Edit Task' : 'Create New Task';
   const description = taskId ? 'View and edit task information.' : 'Enter details for the new task.';
 
   // Define dialog actions
@@ -109,12 +109,16 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
       variant: 'soft',
       color: 'gray',
     },
-    ...(taskId ? [{
-      label: 'Delete',
-      onClick: handleDelete,
-      variant: 'soft' as const,
-      color: 'red' as const,
-    }] : []),
+    ...(taskId
+      ? [
+          {
+            label: 'Delete',
+            onClick: handleDelete,
+            variant: 'soft' as const,
+            color: 'red' as const,
+          },
+        ]
+      : []),
     {
       label: taskId ? 'Save Changes' : 'Create Task',
       onClick: handleSave,
@@ -135,19 +139,19 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
 
         <Flex direction="column" gap="5">
           {/* Main Task Form */}
-        <TaskForm
+          <TaskForm
             ref={taskFormRef}
-          taskId={taskId}
-          onSaveSuccess={handleSaveSuccess}
+            taskId={taskId}
+            onSaveSuccess={handleSaveSuccess}
             onCancel={dialogState.handleCancel}
             onDirtyStateChange={dialogState.setIsFormDirty}
-        />
-        
+          />
+
           {/* Subtasks Section - Only show for existing tasks */}
-        {taskId && (
+          {taskId && (
             <div>
               <h3 className="text-lg font-semibold text-text-primary mb-3">Subtasks</h3>
-              <SubtaskList 
+              <SubtaskList
                 parentTaskId={taskId}
                 showAddSubtask={true}
                 className="border border-ui-border rounded-lg p-4 bg-ui-element-bg"
@@ -157,8 +161,8 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
                 onSubtaskUpdate={subtaskManagement.handleSubtaskUpdate}
                 onSubtaskDelete={subtaskManagement.handleSubtaskDelete}
                 optimisticSubtasks={subtaskManagement.optimisticSubtasks}
-        />
-      </div>
+              />
+            </div>
           )}
 
           {/* Generic Action Bar */}
@@ -169,4 +173,4 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
   );
 };
 
-export default TaskDetailView; 
+export default TaskDetailView;

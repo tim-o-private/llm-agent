@@ -21,7 +21,8 @@ const PlusIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   </svg>
 );
 
-const FABQuickAdd: React.FC = () => { // Removed onClick from props
+const FABQuickAdd: React.FC = () => {
+  // Removed onClick from props
   const { openOverlay } = useOverlayStore(); // Get openOverlay from the store
 
   const handleClick = () => {
@@ -29,17 +30,17 @@ const FABQuickAdd: React.FC = () => { // Removed onClick from props
   };
 
   return (
-    <FAB 
-      onClick={handleClick} 
-      icon={<PlusIcon />} 
-      aria-label="Add new task" 
+    <FAB
+      onClick={handleClick}
+      icon={<PlusIcon />}
+      aria-label="Add new task"
       tooltip="Add Task" // Tooltip as per FAB.tsx capabilities
       position="bottom-right" // Explicitly set position
-      // Position is handled by the parent placing this component, 
+      // Position is handled by the parent placing this component,
       // or FAB.tsx itself could have default positioning if that's its design.
       // The placeholder in TodayView already positions it. --> This comment is a bit misleading now, FAB itself handles its fixed position.
     />
   );
 };
 
-export default FABQuickAdd; 
+export default FABQuickAdd;

@@ -1,9 +1,8 @@
 """Unit tests for background task service."""
 
 import unittest
-import asyncio
-from unittest.mock import patch, MagicMock, AsyncMock
-from datetime import datetime, timezone, timedelta
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 
 from chatServer.services.background_tasks import BackgroundTaskService, get_background_task_service
@@ -15,7 +14,7 @@ class TestBackgroundTaskService(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures."""
         self.service = BackgroundTaskService()
-        
+
         # Reset global instance
         import chatServer.services.background_tasks
         chatServer.services.background_tasks._background_task_service = None
@@ -41,9 +40,9 @@ class TestBackgroundTaskService(unittest.TestCase):
                     mock_task1 = MagicMock()
                     mock_task2 = MagicMock()
                     mock_create_task.side_effect = [mock_task1, mock_task2]
-                    
+
                     self.service.start_background_tasks()
-                    
+
                     self.assertEqual(mock_create_task.call_count, 2)
                     self.assertEqual(self.service.deactivate_task, mock_task1)
                     self.assertEqual(self.service.evict_task, mock_task2)
@@ -73,11 +72,11 @@ class TestBackgroundTaskServiceGlobal(unittest.TestCase):
         """Test singleton pattern behavior."""
         # First call creates instance
         service1 = get_background_task_service()
-        
+
         # Subsequent calls return same instance
         service2 = get_background_task_service()
         service3 = get_background_task_service()
-        
+
         self.assertIs(service1, service2)
         self.assertIs(service2, service3)
 
@@ -89,7 +88,7 @@ class TestBackgroundTaskServiceAsync:
     def setup_method(self):
         """Set up test fixtures."""
         self.service = BackgroundTaskService()
-        
+
         # Reset global instance
         import chatServer.services.background_tasks
         chatServer.services.background_tasks._background_task_service = None
@@ -108,10 +107,10 @@ class TestBackgroundTaskServiceAsync:
         mock_db_manager = MagicMock()
         mock_db_manager.pool = None
         mock_get_db_manager.return_value = mock_db_manager
-        
+
         # Make sleep raise an exception after first iteration to break the loop
         mock_sleep.side_effect = [None, Exception("Break loop")]
-        
+
         with pytest.raises(Exception, match="Break loop"):
             await self.service.deactivate_stale_chat_session_instances()
 
@@ -123,12 +122,12 @@ class TestBackgroundTaskServiceAsync:
         mock_db_manager = MagicMock()
         mock_db_manager.pool = MagicMock()
         mock_get_db_manager.return_value = mock_db_manager
-        
+
         # Cache is None by default
-        
+
         # Make sleep raise an exception after first iteration to break the loop
         mock_sleep.side_effect = [None, Exception("Break loop")]
-        
+
         with pytest.raises(Exception, match="Break loop"):
             await self.service.evict_inactive_executors()
 
@@ -139,9 +138,9 @@ class TestBackgroundTaskServiceAsync:
         service = BackgroundTaskService()
         cache = {("user1", "agent1"): MagicMock()}
         service.set_agent_executor_cache(cache)
-        
+
         assert service._agent_executor_cache == cache
-        
+
         # Test that start_background_tasks creates tasks
         with patch('asyncio.create_task') as mock_create_task:
             # Mock the async methods to avoid "coroutine was never awaited" warnings
@@ -150,13 +149,13 @@ class TestBackgroundTaskServiceAsync:
                     mock_task1 = MagicMock()
                     mock_task2 = MagicMock()
                     mock_create_task.side_effect = [mock_task1, mock_task2]
-                    
+
                     service.start_background_tasks()
-                    
+
                     assert mock_create_task.call_count == 2
                     assert service.deactivate_task == mock_task1
                     assert service.evict_task == mock_task2
 
 
 if __name__ == "__main__":
-    unittest.main() 
+    unittest.main()

@@ -3,17 +3,11 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useState, useEffect, useCallback } from 'react';
 import { cloneDeep } from 'lodash-es';
 
-import {
-  UseEditableEntityConfig,
-  UseEditableEntityReturn,
-} from '@/types/editableEntityTypes';
+import { UseEditableEntityConfig, UseEditableEntityReturn } from '@/types/editableEntityTypes';
 import { AppError } from '@/types/error';
 
-export function useEditableEntity<
-  TEntityData,
-  TFormData extends FieldValues
->(
-  config: UseEditableEntityConfig<TEntityData, TFormData>
+export function useEditableEntity<TEntityData, TFormData extends FieldValues>(
+  config: UseEditableEntityConfig<TEntityData, TFormData>,
 ): UseEditableEntityReturn<TEntityData, TFormData> {
   const {
     entityId,
@@ -30,7 +24,7 @@ export function useEditableEntity<
 
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [saveError, setSaveError] = useState<AppError | Error | null>(null);
-  
+
   const isCreating = (entityId === null || entityId === undefined) && isCreatable;
   const effectiveEntityId = entityId === null ? undefined : entityId;
 
@@ -38,14 +32,14 @@ export function useEditableEntity<
     resolver: zodResolver(formSchema),
     mode: 'onChange',
     defaultValues: (isCreating
-      ? (defaultFormValues || transformDataToForm(undefined))
+      ? defaultFormValues || transformDataToForm(undefined)
       : transformDataToForm(getEntityDataFn(effectiveEntityId))) as DefaultValues<TFormData>,
   });
 
   useEffect(() => {
     const currentInitialData = getEntityDataFn(isCreating ? undefined : effectiveEntityId);
     const newFormValues = isCreating
-      ? (defaultFormValues || transformDataToForm(undefined))
+      ? defaultFormValues || transformDataToForm(undefined)
       : transformDataToForm(currentInitialData);
     formMethods.reset(newFormValues);
   }, [
@@ -56,7 +50,7 @@ export function useEditableEntity<
     isCreating,
     effectiveEntityId,
   ]);
-  
+
   const handleSave = useCallback(async () => {
     setIsSaving(true);
     setSaveError(null);
@@ -77,15 +71,18 @@ export function useEditableEntity<
     const currentInitialData = getEntityDataFn(isCreating ? undefined : effectiveEntityId);
 
     try {
-      const result = await saveEntityFn(formData, cloneDeep(currentInitialData), isCreating ? undefined : effectiveEntityId);
+      const result = await saveEntityFn(
+        formData,
+        cloneDeep(currentInitialData),
+        isCreating ? undefined : effectiveEntityId,
+      );
       setIsSaving(false);
       if (onSaveSuccess) {
         onSaveSuccess(result, formData);
       }
     } catch (error) {
-      const err = error instanceof Error || (error as AppError)?.message 
-        ? (error as AppError | Error) 
-        : new Error(String(error));
+      const err =
+        error instanceof Error || (error as AppError)?.message ? (error as AppError | Error) : new Error(String(error));
       console.error(`[useEditableEntity: ${entityName}] Save failed:`, err);
       setSaveError(err);
       setIsSaving(false);
@@ -108,22 +105,13 @@ export function useEditableEntity<
   const resetFormToInitial = useCallback(() => {
     const currentInitialData = getEntityDataFn(isCreating ? undefined : effectiveEntityId);
     formMethods.reset(
-      isCreating
-        ? (defaultFormValues || transformDataToForm(undefined))
-        : transformDataToForm(currentInitialData)
+      isCreating ? defaultFormValues || transformDataToForm(undefined) : transformDataToForm(currentInitialData),
     );
     setSaveError(null);
-  }, [
-    getEntityDataFn,
-    transformDataToForm,
-    formMethods,
-    defaultFormValues,
-    isCreating,
-    effectiveEntityId,
-  ]);
+  }, [getEntityDataFn, transformDataToForm, formMethods, defaultFormValues, isCreating, effectiveEntityId]);
 
   const canSave = formMethods.formState.isDirty && !isSaving;
-  
+
   return {
     formMethods,
     isSaving,
@@ -150,4 +138,4 @@ export function useEditableEntity<
 // - Implement sub-entity CRUD and DND handlers
 // - Add proper default functions for cloneData and isDataEqual using lodash-es
 // - Ensure all config options are utilized correctly.
-// - Add comprehensive JSDoc comments. 
+// - Add comprehensive JSDoc comments.

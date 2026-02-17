@@ -13,4 +13,4 @@ PROMPT_CUSTOMIZATIONS_TAG = "Prompt Customizations"
 CHAT_MESSAGE_HISTORY_TABLE_NAME = "chat_message_history"
 
 # Logging
-DEFAULT_LOG_LEVEL = logging.INFO 
+DEFAULT_LOG_LEVEL = logging.INFO

@@ -36,7 +36,7 @@ export const FAB: React.FC<FABProps> = ({
     sm: 'h-5 w-5',
     md: 'h-6 w-6',
     lg: 'h-7 w-7',
-  }
+  };
 
   return (
     <button
@@ -44,12 +44,12 @@ export const FAB: React.FC<FABProps> = ({
       disabled={disabled}
       className={clsx(
         'fixed inline-flex items-center justify-center rounded-full shadow-lg text-brand-primary-text transition-colors',
-        'bg-brand-primary hover:bg-brand-primary-hover', 
+        'bg-brand-primary hover:bg-brand-primary-hover',
         positionClasses[position],
         sizeClasses[size],
         !disabled && getFocusClasses(),
         disabled && 'opacity-50 cursor-not-allowed',
-        className
+        className,
       )}
       title={tooltip}
       {...props}
@@ -58,4 +58,4 @@ export const FAB: React.FC<FABProps> = ({
       {tooltip && <span className="sr-only">{tooltip}</span>}
     </button>
   );
-}; 
+};

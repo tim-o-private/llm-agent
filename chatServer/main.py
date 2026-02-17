@@ -1,11 +1,11 @@
 # @docs memory-bank/patterns/api-patterns.md#pattern-11-fastapi-project-structure
 # @rules memory-bank/rules/api-rules.json#api-001
 # @examples memory-bank/patterns/api-patterns.md#pattern-1-single-database-use-prescribed-connections
-import sys
+import logging  # Added for log_level
 import os
-import logging # Added for log_level
-from typing import List # Added Optional and List here, NEW: AsyncIterator
-from contextlib import asynccontextmanager # NEW IMPORT
+import sys
+from contextlib import asynccontextmanager  # NEW IMPORT
+from typing import List  # Added Optional and List here, NEW: AsyncIterator
 
 # Add parent directory to path for imports when running directly
 if __name__ == "__main__":
@@ -15,59 +15,56 @@ if __name__ == "__main__":
         sys.path.insert(0, parent_dir)
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Depends, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-
 
 # Import models and protocols from extracted modules
 try:
     # Try relative imports first (when imported as a module)
-    from .models.chat import ChatRequest, ChatResponse
-    from .models.prompt_customization import PromptCustomization, PromptCustomizationCreate
-    from .models.webhook import SupabasePayload
-    from .config.settings import get_settings
     from .config.constants import (
         PROMPT_CUSTOMIZATIONS_TAG,
     )
+    from .config.settings import get_settings
     from .database.connection import get_db_connection
     from .database.supabase_client import get_supabase_client
-    from .dependencies.auth import get_current_user
     from .dependencies.agent_loader import get_agent_loader
+    from .dependencies.auth import get_current_user
+    from .models.chat import ChatRequest, ChatResponse
+    from .models.prompt_customization import PromptCustomization, PromptCustomizationCreate
+    from .models.webhook import SupabasePayload
+    from .routers.actions import router as actions_router
+    from .routers.email_agent_router import router as email_agent_router
+    from .routers.external_api_router import router as external_api_router
     from .services.chat import get_chat_service
     from .services.prompt_customization import get_prompt_customization_service
-    from .routers.external_api_router import router as external_api_router
-    from .routers.email_agent_router import router as email_agent_router
-    from .routers.actions import router as actions_router
 except ImportError:
     # Fall back to absolute imports (when run directly)
+    from config.constants import PROMPT_CUSTOMIZATIONS_TAG
+    from config.settings import get_settings
+    from database.connection import get_db_connection
+    from database.supabase_client import get_supabase_client
+    from dependencies.agent_loader import get_agent_loader
+    from dependencies.auth import get_current_user
     from models.chat import ChatRequest, ChatResponse
     from models.prompt_customization import PromptCustomization, PromptCustomizationCreate
     from models.webhook import SupabasePayload
-    from config.settings import get_settings
-    from config.constants import (
-        PROMPT_CUSTOMIZATIONS_TAG
-    )
-    from database.connection import get_db_connection
-    from database.supabase_client import get_supabase_client
-    from dependencies.auth import get_current_user
-    from dependencies.agent_loader import get_agent_loader
+    from routers.actions import router as actions_router
+    from routers.email_agent_router import router as email_agent_router
+    from routers.external_api_router import router as external_api_router
     from services.chat import get_chat_service
     from services.prompt_customization import get_prompt_customization_service
-    from routers.external_api_router import router as external_api_router
-    from routers.email_agent_router import router as email_agent_router
-    from routers.actions import router as actions_router
 
 # Correctly import ConfigLoader
-from utils.config_loader import ConfigLoader
-
-# Import agent_loader
-from core.agents.customizable_agent import CustomizableAgentExecutor # Added import
-
 # For V2 Agent Memory System
 import psycopg
 
 # NEW: Agent Executor Cache
 from cachetools import TTLCache
+
+# Import agent_loader
+from core.agents.customizable_agent import CustomizableAgentExecutor  # Added import
+from utils.config_loader import ConfigLoader
+
 # Cache for (user_id, agent_name) -> CustomizableAgentExecutor
 AGENT_EXECUTOR_CACHE: TTLCache[tuple[str, str], CustomizableAgentExecutor] = TTLCache(maxsize=100, ttl=900)
 
@@ -107,9 +104,9 @@ else:
 try:
     # Assuming ConfigLoader can be instantiated without arguments if it has defaults,
     # or provide a path to your main settings/config YAML file if needed.
-    # Based on ConfigLoader's likely structure, it might try to find 'config/settings.yaml' 
+    # Based on ConfigLoader's likely structure, it might try to find 'config/settings.yaml'
     # from the project root.
-    GLOBAL_CONFIG_LOADER = ConfigLoader() 
+    GLOBAL_CONFIG_LOADER = ConfigLoader()
 except Exception as e:
     # Log this critical error; the application might not be able to start correctly.
     logging.critical(f"Failed to initialize GlobalConfigLoader: {e}", exc_info=True)
@@ -134,10 +131,10 @@ async def lifespan(app: FastAPI):
         from database.supabase_client import get_supabase_manager
         from services.background_tasks import get_background_task_service
         from services.tool_cache_service import initialize_tool_cache, shutdown_tool_cache
-    
+
     global AGENT_EXECUTOR_CACHE
     logger.info("Application startup: Initializing resources...")
-    
+
     # Initialize database manager
     db_manager = get_database_manager()
     try:
@@ -164,17 +161,17 @@ async def lifespan(app: FastAPI):
     yield # Application runs here
 
     logger.info("Application shutdown: Cleaning up resources...")
-    
+
     # Stop background tasks
     await background_service.stop_background_tasks()
-    
+
     # Stop tool cache service
     try:
         await shutdown_tool_cache()
         logger.info("Tool cache service stopped successfully")
     except Exception as e:
         logger.error(f"Failed to stop tool cache service: {e}", exc_info=True)
-    
+
     # Close database manager
     await db_manager.close()
 
@@ -199,12 +196,13 @@ app.include_router(actions_router)
 # Ensure logger is available if not already globally configured
 # This can be more sophisticated, e.g., using utils.logging_utils.get_logger
 from utils.logging_utils import get_logger
+
 logger = get_logger(__name__)
 
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat_endpoint(
-    chat_input: ChatRequest, 
-    request: Request, 
+    chat_input: ChatRequest,
+    request: Request,
     user_id: str = Depends(get_current_user),
     pg_connection: psycopg.AsyncConnection = Depends(get_db_connection),
     agent_loader_module = Depends(get_agent_loader),
@@ -226,7 +224,7 @@ async def chat_endpoint(
 # For now, commenting out:
 # class ArchiveMessagesPayload(BaseModel):
 # ... (rest of the old archive endpoint code commented out or removed) ...
-    
+
 # Placeholder for PromptManagerService if not fully defined elsewhere for this snippet
 # class PromptManagerService:
 # ... existing code ...
@@ -325,7 +323,7 @@ async def supabase_webhook(payload: SupabasePayload):
     if payload.type == "INSERT" and payload.table == "tasks":
         print(f"New task inserted: {payload.record}")
         # Potentially send a notification or update a real-time view
-    
+
     # Add more specific handling based on type and table, e.g., using payload.webhook_schema
 
     return {"status": "received"}
@@ -359,6 +357,6 @@ async def supabase_webhook(payload: SupabasePayload):
 if __name__ == "__main__":
     import uvicorn
     # Ensure logging is configured to see messages from the application
-    logging.basicConfig(level=logging.DEBUG) 
+    logging.basicConfig(level=logging.DEBUG)
     print("Starting API server with Uvicorn for local development...")
-    uvicorn.run(app, host="0.0.0.0", port=3001) 
+    uvicorn.run(app, host="0.0.0.0", port=3001)

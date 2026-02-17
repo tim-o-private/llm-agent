@@ -34,24 +34,26 @@ import { toast } from '@/components/ui/toast';
 import { useTaskViewStore } from '@/stores/useTaskViewStore';
 
 const TodayView: React.FC = () => {
-  
   const { isLoading: isLoadingTasks, error: fetchError, initialized } = useTaskStoreInitializer();
-  const {
-    updateTask,
-    deleteTask,
-    getSubtasksByParentId,
-  } = useTaskStore(state => ({
+  const { updateTask, deleteTask, getSubtasksByParentId } = useTaskStore((state) => ({
     updateTask: state.updateTask,
     deleteTask: state.deleteTask,
     getSubtasksByParentId: state.getSubtasksByParentId,
   }));
-  
+
   // Subscribe to the actual task data
-  const topLevelTasksFromStore = useTaskStore(state => state.getTopLevelTasks());
+  const topLevelTasksFromStore = useTaskStore((state) => state.getTopLevelTasks());
 
   // Log topLevelTasksFromStore and taskDataSignature when they change
   useEffect(() => {
-    console.log('[TodayView] topLevelTasksFromStore updated:', JSON.stringify(topLevelTasksFromStore.map(t => ({id: t.id, title: t.title, completed: t.completed, status: t.status})), null, 2));
+    console.log(
+      '[TodayView] topLevelTasksFromStore updated:',
+      JSON.stringify(
+        topLevelTasksFromStore.map((t) => ({ id: t.id, title: t.title, completed: t.completed, status: t.status })),
+        null,
+        2,
+      ),
+    );
   }, [topLevelTasksFromStore]);
 
   const { mutate: createFocusSession } = useCreateFocusSession();
@@ -61,23 +63,23 @@ const TodayView: React.FC = () => {
   const [isFastInputUiFocused, setIsFastInputUiFocused] = useState(false); // Local UI focus state
 
   // --- Zustand Store Selectors (Non-keyboard navigation) ---
-  const selectedTaskIds = useTaskViewStore(state => state.selectedTaskIds);
-  const toggleSelectedTask = useTaskViewStore(state => state.toggleSelectedTask);
-  const removeSelectedTask = useTaskViewStore(state => state.removeSelectedTask);
-  const setInputFocusState = useTaskViewStore(state => state.setInputFocusState);
+  const selectedTaskIds = useTaskViewStore((state) => state.selectedTaskIds);
+  const toggleSelectedTask = useTaskViewStore((state) => state.toggleSelectedTask);
+  const removeSelectedTask = useTaskViewStore((state) => state.removeSelectedTask);
+  const setInputFocusState = useTaskViewStore((state) => state.setInputFocusState);
 
   const fastInputRef = useRef<HTMLInputElement>(null);
   const isClosingModalRef = useRef(false); // Track when we're closing a modal to prevent auto-focus
 
   // --- Modal Management Hook ---
   const modalManagement = useTaskModalManagement({
-    syncWithStore: true
+    syncWithStore: true,
   });
 
   // Memoize navigable tasks to prevent unnecessary re-creation
-  const navigableTasks = useMemo(() => 
-    topLevelTasksFromStore.map(task => ({ id: task.id })), 
-    [topLevelTasksFromStore]
+  const navigableTasks = useMemo(
+    () => topLevelTasksFromStore.map((task) => ({ id: task.id })),
+    [topLevelTasksFromStore],
   );
 
   // --- Keyboard Navigation Hook (needs to be early to provide setFocusedTaskId) ---
@@ -88,7 +90,7 @@ const TodayView: React.FC = () => {
       enabled: true,
       autoFocusFirst: true, // Keep this stable to avoid dependency issues
       clearFocusOnEmpty: true,
-    }
+    },
   });
 
   // Destructure functions to avoid dependency issues
@@ -104,94 +106,118 @@ const TodayView: React.FC = () => {
   } = keyboardNavigation;
 
   // Custom modal close handler that preserves focus (after setFocusedTaskId is available)
-  const handleModalCloseWithFocusRestore = useCallback((isOpen: boolean) => {
-    if (!isOpen) {
-      // Set flag to prevent auto-focus during modal close
-      isClosingModalRef.current = true;
-      
-      // Get the task ID before closing the modal
-      const taskIdToFocus = modalManagement.currentTaskId;
-      
-      // Close the modal
-      modalManagement.closeModal();
-      
-      // Restore focus to the task that was being edited, but only if it still exists
-      if (taskIdToFocus && topLevelTasksFromStore.some(task => task.id === taskIdToFocus)) {
-        // Use a longer delay to ensure this runs after any competing auto-focus effects
+  const handleModalCloseWithFocusRestore = useCallback(
+    (isOpen: boolean) => {
+      if (!isOpen) {
+        // Set flag to prevent auto-focus during modal close
+        isClosingModalRef.current = true;
+
+        // Get the task ID before closing the modal
+        const taskIdToFocus = modalManagement.currentTaskId;
+
+        // Close the modal
+        modalManagement.closeModal();
+
+        // Restore focus to the task that was being edited, but only if it still exists
+        if (taskIdToFocus && topLevelTasksFromStore.some((task) => task.id === taskIdToFocus)) {
+          // Use a longer delay to ensure this runs after any competing auto-focus effects
+          setTimeout(() => {
+            // Double-check the task still exists before setting focus
+            if (topLevelTasksFromStore.some((task) => task.id === taskIdToFocus)) {
+              setFocusedTaskId(taskIdToFocus);
+            }
+          }, 20); // Increased delay to ensure it runs after the keyboard navigation auto-focus
+        }
+
+        // Clear the flag after a brief delay to allow focus restoration to complete
         setTimeout(() => {
-          // Double-check the task still exists before setting focus
-          if (topLevelTasksFromStore.some(task => task.id === taskIdToFocus)) {
-            setFocusedTaskId(taskIdToFocus);
-          }
-        }, 20); // Increased delay to ensure it runs after the keyboard navigation auto-focus
+          isClosingModalRef.current = false;
+        }, 100); // Increased delay to match the focus restoration timing
       }
-      
-      // Clear the flag after a brief delay to allow focus restoration to complete
-      setTimeout(() => {
-        isClosingModalRef.current = false;
-      }, 100); // Increased delay to match the focus restoration timing
-    }
-  }, [modalManagement, setFocusedTaskId, topLevelTasksFromStore]);
+    },
+    [modalManagement, setFocusedTaskId, topLevelTasksFromStore],
+  );
 
   // --- Component-level Handlers ---
-  const handleTaskCreatedByFastInput = useCallback((taskId: string) => {
-    setIsFastInputUiFocused(false); // Update local UI state
-    setInputFocusState(false); // Notify store
-    if (taskId) {
-      // Will be handled by keyboard navigation hook
-    }
-  }, [setInputFocusState]);
-
-  const handleMarkComplete = useCallback((taskId: string) => {
-    updateTask(taskId, { completed: true, status: 'completed' });
-    removeSelectedTask(taskId);
-  }, [updateTask, removeSelectedTask]);
-
-  const handleDeleteTask = useCallback((taskId: string) => {
-    deleteTask(taskId);
-    if (modalManagement.isModalOpenForTask(taskId)) {
-      modalManagement.closeModal();
-    }
-    // Focus clearing will be handled by keyboard navigation hook
-    removeSelectedTask(taskId);
-  }, [deleteTask, modalManagement, removeSelectedTask]);
-
-  const handleStartTaskLegacy = useCallback((taskId: string) => {
-    console.log(`[TodayView] Attempting to start task (legacy): ${taskId}`);
-    updateTask(taskId, { status: 'in_progress' });
-    createFocusSession(
-      { task_id: taskId, planned_duration_minutes: 25 },
-      {
-        onSuccess: () => {
-          toast.success('Focus session started for task.');
-        },
-        onError: () => {
-          toast.error('Error creating focus session.');
-          updateTask(taskId, { status: 'planning' });
-        },
+  const handleTaskCreatedByFastInput = useCallback(
+    (taskId: string) => {
+      setIsFastInputUiFocused(false); // Update local UI state
+      setInputFocusState(false); // Notify store
+      if (taskId) {
+        // Will be handled by keyboard navigation hook
       }
-    );
-  }, [updateTask, createFocusSession]);
+    },
+    [setInputFocusState],
+  );
 
-  const handleStartFocusSessionConfirmed = useCallback(async (task: Task, sessionConfig: { motivation?: string; completionNote?: string }) => {
-    toast.success(`Task "${task.title}" ready for focus session.`);
-    if (task.status !== 'in_progress' && task.status !== 'planning') {
-      updateTask(task.id, { 
-        status: 'planning',
-        motivation: sessionConfig.motivation, 
-        completion_note: sessionConfig.completionNote 
-      });
-    }
-    modalManagement.closeModal();
-  }, [updateTask, modalManagement]);
-  
-  const openDetailModalForTask = useCallback((taskId: string) => {
-    modalManagement.detailModal.open(taskId);
-  }, [modalManagement]);
+  const handleMarkComplete = useCallback(
+    (taskId: string) => {
+      updateTask(taskId, { completed: true, status: 'completed' });
+      removeSelectedTask(taskId);
+    },
+    [updateTask, removeSelectedTask],
+  );
 
-  const openPrioritizeModalForTask = useCallback((taskId: string) => {
-    modalManagement.prioritizeModal.open(taskId);
-  }, [modalManagement]);
+  const handleDeleteTask = useCallback(
+    (taskId: string) => {
+      deleteTask(taskId);
+      if (modalManagement.isModalOpenForTask(taskId)) {
+        modalManagement.closeModal();
+      }
+      // Focus clearing will be handled by keyboard navigation hook
+      removeSelectedTask(taskId);
+    },
+    [deleteTask, modalManagement, removeSelectedTask],
+  );
+
+  const handleStartTaskLegacy = useCallback(
+    (taskId: string) => {
+      console.log(`[TodayView] Attempting to start task (legacy): ${taskId}`);
+      updateTask(taskId, { status: 'in_progress' });
+      createFocusSession(
+        { task_id: taskId, planned_duration_minutes: 25 },
+        {
+          onSuccess: () => {
+            toast.success('Focus session started for task.');
+          },
+          onError: () => {
+            toast.error('Error creating focus session.');
+            updateTask(taskId, { status: 'planning' });
+          },
+        },
+      );
+    },
+    [updateTask, createFocusSession],
+  );
+
+  const handleStartFocusSessionConfirmed = useCallback(
+    async (task: Task, sessionConfig: { motivation?: string; completionNote?: string }) => {
+      toast.success(`Task "${task.title}" ready for focus session.`);
+      if (task.status !== 'in_progress' && task.status !== 'planning') {
+        updateTask(task.id, {
+          status: 'planning',
+          motivation: sessionConfig.motivation,
+          completion_note: sessionConfig.completionNote,
+        });
+      }
+      modalManagement.closeModal();
+    },
+    [updateTask, modalManagement],
+  );
+
+  const openDetailModalForTask = useCallback(
+    (taskId: string) => {
+      modalManagement.detailModal.open(taskId);
+    },
+    [modalManagement],
+  );
+
+  const openPrioritizeModalForTask = useCallback(
+    (taskId: string) => {
+      modalManagement.prioritizeModal.open(taskId);
+    },
+    [modalManagement],
+  );
 
   // --- Derived Data (View Models for TaskCards) ---
   const displayTasksWithSubtasks = useMemo(() => {
@@ -199,7 +225,7 @@ const TodayView: React.FC = () => {
     if (!initialized) return [];
     if (!topLevelTasksFromStore || topLevelTasksFromStore.length === 0) return [];
 
-    return topLevelTasksFromStore.map(task => {
+    return topLevelTasksFromStore.map((task) => {
       const subtasks = getSubtasksByParentId(task.id);
       return {
         ...task,
@@ -220,14 +246,14 @@ const TodayView: React.FC = () => {
     topLevelTasksFromStore,
     getSubtasksByParentId,
     focusedTaskId, // Now we can include focusedTaskId
-    selectedTaskIds, 
+    selectedTaskIds,
     handleStartTaskLegacy,
     openDetailModalForTask,
     setFocusedTaskId,
     toggleSelectedTask,
     handleMarkComplete,
     handleDeleteTask,
-    openPrioritizeModalForTask
+    openPrioritizeModalForTask,
   ]);
 
   // Use displayTasksWithSubtasks directly since focus is now included
@@ -260,19 +286,22 @@ const TodayView: React.FC = () => {
   }, [requestFocusFastInput, clearFocusFastInputRequest]);
 
   // Handle task creation - focus the newly created task
-  const handleTaskCreatedByFastInputWithFocus = useCallback((taskId: string) => {
-    handleTaskCreatedByFastInput(taskId);
-    if (taskId) {
-      setFocusedTaskId(taskId);
-    }
-  }, [handleTaskCreatedByFastInput, setFocusedTaskId]);
+  const handleTaskCreatedByFastInputWithFocus = useCallback(
+    (taskId: string) => {
+      handleTaskCreatedByFastInput(taskId);
+      if (taskId) {
+        setFocusedTaskId(taskId);
+      }
+    },
+    [handleTaskCreatedByFastInput, setFocusedTaskId],
+  );
 
   // DND functionality sensors (removed redundant focus management effect)
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    })
+    }),
   );
 
   function handleDragEnd(event: DragEndEvent) {
@@ -280,8 +309,8 @@ const TodayView: React.FC = () => {
 
     if (active.id !== over?.id && over) {
       const currentTasks = topLevelTasksFromStore;
-      const oldIndex = currentTasks.findIndex(task => task.id === active.id);
-      const newIndex = currentTasks.findIndex(task => task.id === over.id);
+      const oldIndex = currentTasks.findIndex((task) => task.id === active.id);
+      const newIndex = currentTasks.findIndex((task) => task.id === over.id);
 
       if (oldIndex === -1 || newIndex === -1) {
         console.warn('[TodayView] handleDragEnd: Task not found in current list. Aborting.');
@@ -294,32 +323,37 @@ const TodayView: React.FC = () => {
       // 2. Optimistically update the Zustand store IMMEDIATELY
       // This ensures that topLevelTasksFromStore selector will return the new order quickly.
       optimisticallyReorderedTasks.forEach((task, index) => {
-        if (task.position !== index) { // Check if position actually changed
+        if (task.position !== index) {
+          // Check if position actually changed
           // Call the existing updateTask which handles local state and pendingChanges for sync
           useTaskStore.getState().updateTask(task.id, { position: index });
         }
       });
 
       // 3. Prepare updates for the backend batch operation
-      const taskOrderUpdatesForBackend: Array<{ id: string; position: number }> = optimisticallyReorderedTasks.map((task, index) => ({
-        id: task.id,
-        position: index,
-      }));
-      
+      const taskOrderUpdatesForBackend: Array<{ id: string; position: number }> = optimisticallyReorderedTasks.map(
+        (task, index) => ({
+          id: task.id,
+          position: index,
+        }),
+      );
+
       // 4. Call the mutation to update backend
       if (taskOrderUpdatesForBackend.length > 0) {
         console.log('[TodayView] Calling updateTaskOrderMutation with:', taskOrderUpdatesForBackend);
         updateTaskOrderMutation(taskOrderUpdatesForBackend, {
           onSuccess: () => {
-            console.log('[TodayView] updateTaskOrderMutation successful. Query invalidation should refresh the store from server.');
+            console.log(
+              '[TodayView] updateTaskOrderMutation successful. Query invalidation should refresh the store from server.',
+            );
             // Query invalidation is handled by the useUpdateTaskOrder hook.
           },
           onError: (error) => {
             console.error('[TodayView] updateTaskOrderMutation failed:', error);
-            toast.error("Failed to reorder tasks. Please try again.");
-            // Consider a strategy to revert optimistic updates if backend fails, 
+            toast.error('Failed to reorder tasks. Please try again.');
+            // Consider a strategy to revert optimistic updates if backend fails,
             // e.g., by refetching or rolling back store changes if the hook doesn't handle it.
-          }
+          },
         });
       }
     }
@@ -328,7 +362,8 @@ const TodayView: React.FC = () => {
   if (isLoadingTasks) {
     return (
       <div className="flex justify-center items-center h-full">
-        <Spinner size={32} /><p className="ml-2">Loading tasks...</p>
+        <Spinner size={32} />
+        <p className="ml-2">Loading tasks...</p>
       </div>
     );
   }
@@ -346,40 +381,54 @@ const TodayView: React.FC = () => {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-text-primary">Today</h1>
         <div className="flex items-center space-x-2">
-          <Button variant="outline" onClick={() => {
-            setIsFastInputUiFocused(true);
-            // FastTaskInput's onFocused will call setInputFocusState(true)
-          }}>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setIsFastInputUiFocused(true);
+              // FastTaskInput's onFocused will call setInputFocusState(true)
+            }}
+          >
             <PlusIcon className="mr-2 h-4 w-4" /> New Task
           </Button>
         </div>
       </div>
       <div className="mb-6">
-        <FastTaskInput 
-            ref={fastInputRef}
-            isFocused={isFastInputUiFocused} 
-            onTaskCreated={handleTaskCreatedByFastInputWithFocus} 
-            onBlurred={() => {
-              setIsFastInputUiFocused(false);
-              setInputFocusState(false);
-            }}
-            onFocused={() => { 
-              // setIsFastInputUiFocused(true); // Already set by button click or requestFocusFastInput effect
-              setInputFocusState(true);
-            }}
+        <FastTaskInput
+          ref={fastInputRef}
+          isFocused={isFastInputUiFocused}
+          onTaskCreated={handleTaskCreatedByFastInputWithFocus}
+          onBlurred={() => {
+            setIsFastInputUiFocused(false);
+            setInputFocusState(false);
+          }}
+          onFocused={() => {
+            // setIsFastInputUiFocused(true); // Already set by button click or requestFocusFastInput effect
+            setInputFocusState(true);
+          }}
         />
       </div>
       {displayTasksWithFocus.length === 0 ? (
         <div className="flex-grow flex flex-col items-center justify-center text-text-muted">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 0 002-2V8m-9 4h4" />
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-16 w-16 mb-4 opacity-50"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 0 002-2V8m-9 4h4"
+            />
           </svg>
           <p className="text-lg">Your day is clear!</p>
           <p>Add some tasks to get started.</p>
         </div>
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={displayTasksWithFocus.map(t => t.id)} strategy={verticalListSortingStrategy}>
+          <SortableContext items={displayTasksWithFocus.map((t) => t.id)} strategy={verticalListSortingStrategy}>
             <TaskListGroup tasks={displayTasksWithFocus} title="Today's Tasks" />
           </SortableContext>
         </DndContext>
@@ -390,7 +439,7 @@ const TodayView: React.FC = () => {
           taskId={modalManagement.detailModal.taskId!}
           isOpen={modalManagement.detailModal.isOpen}
           onOpenChange={handleModalCloseWithFocusRestore}
-          onTaskUpdated={() => {}} 
+          onTaskUpdated={() => {}}
           onDeleteTaskFromDetail={handleDeleteTask}
         />
       )}
@@ -407,4 +456,4 @@ const TodayView: React.FC = () => {
   );
 };
 
-export default TodayView; 
+export default TodayView;

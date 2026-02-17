@@ -24,24 +24,18 @@ describe('useTaskKeyboardNavigation', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    
+
     // Mock the store selector to return different values based on the property being accessed
     mockUseTaskViewStore.mockImplementation((selector: any) => {
       return selector(mockStoreState);
     });
   });
 
-  const sampleTasks: NavigableTask[] = [
-    { id: 'task-1' },
-    { id: 'task-2' },
-    { id: 'task-3' },
-  ];
+  const sampleTasks: NavigableTask[] = [{ id: 'task-1' }, { id: 'task-2' }, { id: 'task-3' }];
 
   describe('Basic functionality', () => {
     it('should initialize with default configuration', () => {
-      const { result } = renderHook(() =>
-        useTaskKeyboardNavigation({ tasks: sampleTasks })
-      );
+      const { result } = renderHook(() => useTaskKeyboardNavigation({ tasks: sampleTasks }));
 
       expect(result.current.focusedTaskId).toBe(null);
       expect(result.current.setFocusedTaskId).toBe(mockStoreState.setFocusedTaskId);
@@ -50,10 +44,9 @@ describe('useTaskKeyboardNavigation', () => {
     });
 
     it('should update navigable tasks in store when tasks change', () => {
-      const { rerender } = renderHook(
-        ({ tasks }) => useTaskKeyboardNavigation({ tasks }),
-        { initialProps: { tasks: sampleTasks } }
-      );
+      const { rerender } = renderHook(({ tasks }) => useTaskKeyboardNavigation({ tasks }), {
+        initialProps: { tasks: sampleTasks },
+      });
 
       expect(mockStoreState.setCurrentNavigableTasks).toHaveBeenCalledWith(sampleTasks);
 
@@ -68,12 +61,12 @@ describe('useTaskKeyboardNavigation', () => {
     it('should auto-focus first task when tasks become available', () => {
       // Start with no focused task and no input focused
       mockStoreState.focusedTaskId = null;
-      
+
       renderHook(() =>
-        useTaskKeyboardNavigation({ 
-          tasks: sampleTasks, 
-          isInputFocused: false 
-        })
+        useTaskKeyboardNavigation({
+          tasks: sampleTasks,
+          isInputFocused: false,
+        }),
       );
 
       expect(mockStoreState.setFocusedTaskId).toHaveBeenCalledWith('task-1');
@@ -81,12 +74,12 @@ describe('useTaskKeyboardNavigation', () => {
 
     it('should not auto-focus when input is focused', () => {
       mockStoreState.focusedTaskId = null;
-      
+
       renderHook(() =>
-        useTaskKeyboardNavigation({ 
-          tasks: sampleTasks, 
-          isInputFocused: true 
-        })
+        useTaskKeyboardNavigation({
+          tasks: sampleTasks,
+          isInputFocused: true,
+        }),
       );
 
       expect(mockStoreState.setFocusedTaskId).not.toHaveBeenCalled();
@@ -94,12 +87,12 @@ describe('useTaskKeyboardNavigation', () => {
 
     it('should not auto-focus when already focused on a task', () => {
       mockStoreState.focusedTaskId = 'task-2';
-      
+
       renderHook(() =>
-        useTaskKeyboardNavigation({ 
-          tasks: sampleTasks, 
-          isInputFocused: false 
-        })
+        useTaskKeyboardNavigation({
+          tasks: sampleTasks,
+          isInputFocused: false,
+        }),
       );
 
       expect(mockStoreState.setFocusedTaskId).not.toHaveBeenCalled();
@@ -107,13 +100,13 @@ describe('useTaskKeyboardNavigation', () => {
 
     it('should not auto-focus when disabled in config', () => {
       mockStoreState.focusedTaskId = null;
-      
+
       renderHook(() =>
-        useTaskKeyboardNavigation({ 
-          tasks: sampleTasks, 
+        useTaskKeyboardNavigation({
+          tasks: sampleTasks,
           isInputFocused: false,
-          config: { autoFocusFirst: false }
-        })
+          config: { autoFocusFirst: false },
+        }),
       );
 
       expect(mockStoreState.setFocusedTaskId).not.toHaveBeenCalled();
@@ -123,11 +116,10 @@ describe('useTaskKeyboardNavigation', () => {
   describe('Clear focus behavior', () => {
     it('should clear focus when no tasks available', () => {
       mockStoreState.focusedTaskId = 'task-1';
-      
-      const { rerender } = renderHook(
-        ({ tasks }) => useTaskKeyboardNavigation({ tasks }),
-        { initialProps: { tasks: sampleTasks } }
-      );
+
+      const { rerender } = renderHook(({ tasks }) => useTaskKeyboardNavigation({ tasks }), {
+        initialProps: { tasks: sampleTasks },
+      });
 
       // Change to empty tasks array
       rerender({ tasks: [] });
@@ -137,13 +129,14 @@ describe('useTaskKeyboardNavigation', () => {
 
     it('should not clear focus when disabled in config', () => {
       mockStoreState.focusedTaskId = 'task-1';
-      
+
       const { rerender } = renderHook(
-        ({ tasks }) => useTaskKeyboardNavigation({ 
-          tasks, 
-          config: { clearFocusOnEmpty: false } 
-        }),
-        { initialProps: { tasks: sampleTasks } }
+        ({ tasks }) =>
+          useTaskKeyboardNavigation({
+            tasks,
+            config: { clearFocusOnEmpty: false },
+          }),
+        { initialProps: { tasks: sampleTasks } },
       );
 
       rerender({ tasks: [] });
@@ -154,18 +147,14 @@ describe('useTaskKeyboardNavigation', () => {
 
   describe('Keyboard listener management', () => {
     it('should provide initialize and destroy functions', () => {
-      const { result } = renderHook(() =>
-        useTaskKeyboardNavigation({ tasks: sampleTasks })
-      );
+      const { result } = renderHook(() => useTaskKeyboardNavigation({ tasks: sampleTasks }));
 
       expect(typeof result.current.initializeKeyboardListeners).toBe('function');
       expect(typeof result.current.destroyKeyboardListeners).toBe('function');
     });
 
     it('should initialize listeners when called', () => {
-      const { result } = renderHook(() =>
-        useTaskKeyboardNavigation({ tasks: sampleTasks })
-      );
+      const { result } = renderHook(() => useTaskKeyboardNavigation({ tasks: sampleTasks }));
 
       act(() => {
         result.current.initializeKeyboardListeners();
@@ -175,9 +164,7 @@ describe('useTaskKeyboardNavigation', () => {
     });
 
     it('should destroy listeners when called', () => {
-      const { result } = renderHook(() =>
-        useTaskKeyboardNavigation({ tasks: sampleTasks })
-      );
+      const { result } = renderHook(() => useTaskKeyboardNavigation({ tasks: sampleTasks }));
 
       // Initialize first
       act(() => {
@@ -193,9 +180,7 @@ describe('useTaskKeyboardNavigation', () => {
     });
 
     it('should not double-initialize listeners', () => {
-      const { result } = renderHook(() =>
-        useTaskKeyboardNavigation({ tasks: sampleTasks })
-      );
+      const { result } = renderHook(() => useTaskKeyboardNavigation({ tasks: sampleTasks }));
 
       act(() => {
         result.current.initializeKeyboardListeners();
@@ -209,12 +194,12 @@ describe('useTaskKeyboardNavigation', () => {
   describe('Configuration options', () => {
     it('should respect enabled: false configuration', () => {
       mockStoreState.focusedTaskId = null;
-      
+
       renderHook(() =>
-        useTaskKeyboardNavigation({ 
+        useTaskKeyboardNavigation({
           tasks: sampleTasks,
-          config: { enabled: false }
-        })
+          config: { enabled: false },
+        }),
       );
 
       // Should not set navigable tasks or auto-focus when disabled
@@ -224,10 +209,10 @@ describe('useTaskKeyboardNavigation', () => {
 
     it('should not initialize listeners when disabled', () => {
       const { result } = renderHook(() =>
-        useTaskKeyboardNavigation({ 
+        useTaskKeyboardNavigation({
           tasks: sampleTasks,
-          config: { enabled: false }
-        })
+          config: { enabled: false },
+        }),
       );
 
       act(() => {
@@ -243,21 +228,17 @@ describe('useTaskKeyboardNavigation', () => {
       mockStoreState.requestOpenDetailForTaskId = 'task-1';
       mockStoreState.requestFocusFastInput = true;
 
-      const { result } = renderHook(() =>
-        useTaskKeyboardNavigation({ tasks: sampleTasks })
-      );
+      const { result } = renderHook(() => useTaskKeyboardNavigation({ tasks: sampleTasks }));
 
       expect(result.current.requestOpenDetailForTaskId).toBe('task-1');
       expect(result.current.requestFocusFastInput).toBe(true);
     });
 
     it('should expose store clear functions', () => {
-      const { result } = renderHook(() =>
-        useTaskKeyboardNavigation({ tasks: sampleTasks })
-      );
+      const { result } = renderHook(() => useTaskKeyboardNavigation({ tasks: sampleTasks }));
 
       expect(result.current.clearDetailOpenRequest).toBe(mockStoreState.clearDetailOpenRequest);
       expect(result.current.clearFocusFastInputRequest).toBe(mockStoreState.clearFocusFastInputRequest);
     });
   });
-}); 
+});

@@ -5,7 +5,14 @@
 // UI components should typically interact with Zustand store actions for optimistic updates
 // and data manipulation, rather than calling these mutation hooks directly for form saves.
 
-import { useQuery, useMutation, useQueryClient, UseQueryResult, UseMutationResult, QueryKey } from '@tanstack/react-query';
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  UseQueryResult,
+  UseMutationResult,
+  QueryKey,
+} from '@tanstack/react-query';
 import { Task, TaskCreatePayload, TaskUpdatePayload } from '@/api/types'; // Ensure these types exist or adjust path
 import { AppError } from '@/types/error'; // Ensure AppError is correctly typed and path is correct
 
@@ -13,7 +20,8 @@ import { AppError } from '@/types/error'; // Ensure AppError is correctly typed 
 export const taskQueryKeys = {
   all: ['tasks'] as const,
   lists: () => [...taskQueryKeys.all, 'list'] as const,
-  list: (filters?: string | Record<string, unknown>): QueryKey => [...taskQueryKeys.lists(), filters ? { filters } : 'all'] as const,
+  list: (filters?: string | Record<string, unknown>): QueryKey =>
+    [...taskQueryKeys.lists(), filters ? { filters } : 'all'] as const,
   details: () => [...taskQueryKeys.all, 'detail'] as const,
   detail: (id: string | undefined): QueryKey => [...taskQueryKeys.details(), id] as const,
 };
@@ -40,14 +48,26 @@ const apiClient = {
     // Replace with actual API call
     // Example: const response = await fetch('/api/tasks', { method: 'POST', body: JSON.stringify(payload) }); return response.json();
     // @ts-expect-error Mock implementation for placeholder
-    return Promise.resolve({ id: String(Date.now()), ...payload, created_at: new Date().toISOString(), subtasks: [], user_id: 'mock-user' }); // Placeholder
+    return Promise.resolve({
+      id: String(Date.now()),
+      ...payload,
+      created_at: new Date().toISOString(),
+      subtasks: [],
+      user_id: 'mock-user',
+    }); // Placeholder
   },
   updateTask: async (id: string, payload: TaskUpdatePayload): Promise<Task> => {
     console.log(`[apiClient.updateTask] Updating task ${id} with payload:`, payload);
     // Replace with actual API call
     // Example: const response = await fetch(`/api/tasks/${id}', { method: 'PUT', body: JSON.stringify(payload) }); return response.json();
     // @ts-expect-error Mock implementation for placeholder
-    return Promise.resolve({ id, ...payload, created_at: new Date().toISOString(), subtasks: [], user_id: 'mock-user' }); // Placeholder
+    return Promise.resolve({
+      id,
+      ...payload,
+      created_at: new Date().toISOString(),
+      subtasks: [],
+      user_id: 'mock-user',
+    }); // Placeholder
   },
   deleteTask: async (id: string): Promise<void> => {
     console.log(`[apiClient.deleteTask] Deleting task with id: ${id}`);
@@ -102,7 +122,11 @@ export const useCreateTaskMutation = (): UseMutationResult<Task, AppError | Erro
  * Hook for updating an existing task.
  * Used by Zustand store for background sync.
  */
-export const useUpdateTaskMutation = (): UseMutationResult<Task, AppError | Error, { id: string; payload: TaskUpdatePayload }> => {
+export const useUpdateTaskMutation = (): UseMutationResult<
+  Task,
+  AppError | Error,
+  { id: string; payload: TaskUpdatePayload }
+> => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: TaskUpdatePayload }) => apiClient.updateTask(id, payload),
@@ -127,4 +151,4 @@ export const useDeleteTaskMutation = (): UseMutationResult<void, AppError | Erro
       queryClient.removeQueries({ queryKey: taskQueryKeys.detail(id) });
     },
   });
-}; 
+};

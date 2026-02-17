@@ -1,6 +1,7 @@
 """Prompt customization Pydantic models."""
 
-from typing import Dict, Any
+from typing import Any, Dict
+
 from pydantic import BaseModel, ConfigDict
 
 
@@ -22,4 +23,4 @@ class PromptCustomization(PromptCustomizationBase):
     created_at: Any  # datetime, will be serialized to string
     updated_at: Any  # datetime
 
-    model_config = ConfigDict(from_attributes=True) 
+    model_config = ConfigDict(from_attributes=True)

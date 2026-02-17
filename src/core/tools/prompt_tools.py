@@ -1,10 +1,12 @@
-from typing import Type, Dict, Any, Optional
-from pydantic import BaseModel, Field
+from typing import Any, Dict, Type
+
 from langchain_core.tools import BaseTool
+from pydantic import BaseModel, Field
 
 # Assuming PromptManagerService is in src.core.prompting
 # Adjust import path as necessary based on your project structure
 from core.prompting.prompt_manager import PromptManagerService
+
 
 class UpdateSelfInstructionsInput(BaseModel):
     agent_name: str = Field(description="The name of the agent whose instructions are to be updated.")
@@ -26,7 +28,7 @@ class UpdateSelfInstructionsTool(BaseTool):
 
     # This tool is async because PromptManagerService methods are async
     async def _arun(
-        self, 
+        self,
         agent_name: str,
         instruction_change_proposal: Dict[str, Any],
         customization_type: str = 'instruction_set',
@@ -36,18 +38,18 @@ class UpdateSelfInstructionsTool(BaseTool):
         """Use the tool asynchronously."""
         # In a multi-customization scenario, we might need to fetch existing, find the right one, then update.
         # For MVP, assume we add a new one or update the primary 'instruction_set' type.
-        
+
         # Attempt to find an existing customization of this type for this agent
         existing_customizations = await self.prompt_manager.get_customizations(agent_name=agent_name)
         target_customization_id = None
         existing_content = {}
-        
+
         for cust in existing_customizations:
             if cust.get("agent_name") == agent_name and cust.get("customization_type") == customization_type:
                 target_customization_id = cust.get("id")
                 existing_content = cust.get("content", {})
                 break
-        
+
         # Simple merge: overwrite or add. A more complex merge could be implemented.
         # For "instruction_set", if proposal has "instructions" list, replace/add.
         # This merge strategy needs to be robust.
@@ -92,4 +94,4 @@ class UpdateSelfInstructionsTool(BaseTool):
     # Synchronous version is not strictly needed if AgentExecutor handles async tools.
     # If required, it would need a synchronous version of PromptManagerService or run_in_executor.
     def _run(self, *args: Any, **kwargs: Any) -> str:
-        raise NotImplementedError("update_self_instructions tool does not support synchronous execution.") 
+        raise NotImplementedError("update_self_instructions tool does not support synchronous execution.")

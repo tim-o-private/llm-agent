@@ -11,4 +11,4 @@ const CoachPageV2: React.FC = () => {
   );
 };
 
-export default CoachPageV2; 
+export default CoachPageV2;

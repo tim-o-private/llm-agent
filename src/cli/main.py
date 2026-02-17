@@ -1,21 +1,17 @@
-import click
-import os
 import logging
-import yaml
+
+# Hack. Remove after packaging.
 from typing import Dict
+
+import click
+import yaml
 from langchain.memory import ConversationBufferMemory
 from prompt_toolkit import prompt as prompt_toolkit_prompt
 from prompt_toolkit.history import InMemoryHistory
-# Hack. Remove after packaging.
-import sys
-from utils.config_loader import ConfigLoader
+
 from core.agent_loader import load_agent_executor
-from utils.chat_helpers import (
-    save_agent_memory,
-    generate_and_save_summary,
-    get_or_create_memory,
-    process_user_command
-)
+from utils.chat_helpers import generate_and_save_summary, get_or_create_memory, process_user_command, save_agent_memory
+from utils.config_loader import ConfigLoader
 
 # --- Basic Logging Setup ---
 # Set format only, level will be set dynamically
@@ -25,7 +21,7 @@ logger = logging.getLogger(__name__) # Get root logger or specific module logger
 # --- CLI Command Group ---
 @click.group(invoke_without_command=True)
 @click.option(
-    '--log-level', 
+    '--log-level',
     type=click.Choice(['debug', 'info', 'warning', 'error', 'critical'], case_sensitive=False),
     default='error',
     help='Set the logging level.'
@@ -41,11 +37,11 @@ def cli(ctx, log_level):
 
     # Create a context object if it doesn't exist
     ctx.ensure_object(dict)
-    
+
     # Store the chosen level and config_loader in the context object
     ctx.obj['LOG_LEVEL'] = level
     ctx.obj['config_loader'] = ConfigLoader()
-    
+
     # If no command is specified, run the chat command
     if ctx.invoked_subcommand is None:
         ctx.invoke(chat)
@@ -72,7 +68,7 @@ def cli(ctx, log_level):
 @click.pass_context # Pass context to command function
 def chat(ctx, agent: str, verbose: bool, show_tokens: bool):
     """Start an interactive chat session (REPL) with an agent."""
-    
+
     effective_log_level = logging.DEBUG if verbose else ctx.obj['LOG_LEVEL']
     if verbose:
         # Note: We set the root logger level here, affecting all modules
@@ -102,9 +98,9 @@ def chat(ctx, agent: str, verbose: bool, show_tokens: bool):
         current_memory = get_or_create_memory(current_agent_name, agent_memories, config_loader)
         # 2. Load executor, passing the created memory object
         agent_executor = load_agent_executor(
-            current_agent_name, 
-            config_loader, 
-            effective_log_level, 
+            current_agent_name,
+            config_loader,
+            effective_log_level,
             current_memory,
         )
 
@@ -125,7 +121,7 @@ def chat(ctx, agent: str, verbose: bool, show_tokens: bool):
             try:
                 # Get user input using prompt_toolkit with history
                 user_input = prompt_toolkit_prompt(
-                    f"({current_agent_name}) > ", 
+                    f"({current_agent_name}) > ",
                     history=session_history,
                     # TODO: Add completer for commands like /agent?
                 )
@@ -140,11 +136,11 @@ def chat(ctx, agent: str, verbose: bool, show_tokens: bool):
 
             # Process user commands and regular input
             current_agent_name, agent_executor, current_memory, exit_requested = process_user_command(
-                user_input, current_agent_name, agent_executor, current_memory, 
+                user_input, current_agent_name, agent_executor, current_memory,
                 agent_memories, config_loader, effective_log_level,
                 show_tokens=show_tokens # Pass the flag value
             )
-            
+
             if exit_requested:
                 break
 
@@ -179,7 +175,7 @@ def chat(ctx, agent: str, verbose: bool, show_tokens: bool):
         for agent_name_to_save, memory_to_save in agent_memories.items():
              # Use imported helper
              save_agent_memory(agent_name_to_save, memory_to_save, config_loader) # Call helper
-        
+
         logger.info("Finished saving chat histories.")
         pass # Keep the pass here
 

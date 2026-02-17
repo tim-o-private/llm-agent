@@ -1,14 +1,14 @@
 """Unit tests for constants module."""
 
-import unittest
 import logging
+import unittest
 
 from chatServer.config.constants import (
-    SESSION_INSTANCE_TTL_SECONDS,
-    SCHEDULED_TASK_INTERVAL_SECONDS,
-    PROMPT_CUSTOMIZATIONS_TAG,
     CHAT_MESSAGE_HISTORY_TABLE_NAME,
     DEFAULT_LOG_LEVEL,
+    PROMPT_CUSTOMIZATIONS_TAG,
+    SCHEDULED_TASK_INTERVAL_SECONDS,
+    SESSION_INSTANCE_TTL_SECONDS,
 )
 
 
@@ -73,4 +73,4 @@ class TestConstants(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main() 
+    unittest.main()

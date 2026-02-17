@@ -19,7 +19,7 @@ interface NotesStore {
   deleteNote: (noteId: string) => Promise<void>;
   loadNotes: () => Promise<void>;
   syncNotes: () => Promise<void>;
-  
+
   // Internal state management
   setNotes: (notes: Note[]) => void;
   setLoading: (loading: boolean) => void;
@@ -34,7 +34,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
   lastSyncedAt: null,
 
   setCurrentNote: (noteId) => set({ currentNoteId: noteId }),
-  
+
   setNotes: (notes) => set({ notes }),
   setLoading: (loading) => set({ isLoading: loading }),
   setSaving: (saving) => set({ isSaving: saving }),
@@ -55,21 +55,17 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
         user_id: user.id,
       };
 
-      const { data, error } = await supabase
-        .from('notes')
-        .insert(newNote)
-        .select()
-        .single();
+      const { data, error } = await supabase.from('notes').insert(newNote).select().single();
 
       if (error) throw error;
 
       // Update local state
       const currentNotes = get().notes;
       const updatedNotes = [data, ...currentNotes];
-      set({ 
+      set({
         notes: updatedNotes,
         currentNoteId: data.id,
-        lastSyncedAt: new Date()
+        lastSyncedAt: new Date(),
       });
 
       toast.success('Note created');
@@ -95,10 +91,8 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     try {
       // Optimistic update
       const currentNotes = get().notes;
-      const optimisticNotes = currentNotes.map(note =>
-        note.id === noteId 
-          ? { ...note, ...updates, updated_at: new Date().toISOString() }
-          : note
+      const optimisticNotes = currentNotes.map((note) =>
+        note.id === noteId ? { ...note, ...updates, updated_at: new Date().toISOString() } : note,
       );
       set({ notes: optimisticNotes });
 
@@ -113,18 +107,15 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       if (error) throw error;
 
       // Update with server response
-      const serverNotes = currentNotes.map(note =>
-        note.id === noteId ? data : note
-      );
-      set({ 
+      const serverNotes = currentNotes.map((note) => (note.id === noteId ? data : note));
+      set({
         notes: serverNotes,
-        lastSyncedAt: new Date()
+        lastSyncedAt: new Date(),
       });
-
     } catch (error) {
       console.error('Error updating note:', error);
       toast.error('Failed to save note');
-      
+
       // Revert optimistic update
       await get().loadNotes();
     } finally {
@@ -143,21 +134,17 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
 
     try {
       // Soft delete
-      const { error } = await supabase
-        .from('notes')
-        .update({ deleted: true })
-        .eq('id', noteId)
-        .eq('user_id', user.id);
+      const { error } = await supabase.from('notes').update({ deleted: true }).eq('id', noteId).eq('user_id', user.id);
 
       if (error) throw error;
 
       // Remove from local state
       const currentNotes = get().notes;
-      const updatedNotes = currentNotes.filter(note => note.id !== noteId);
-      set({ 
+      const updatedNotes = currentNotes.filter((note) => note.id !== noteId);
+      set({
         notes: updatedNotes,
         currentNoteId: get().currentNoteId === noteId ? null : get().currentNoteId,
-        lastSyncedAt: new Date()
+        lastSyncedAt: new Date(),
       });
 
       toast.success('Note deleted');
@@ -188,9 +175,9 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
 
       if (error) throw error;
 
-      set({ 
+      set({
         notes: data || [],
-        lastSyncedAt: new Date()
+        lastSyncedAt: new Date(),
       });
     } catch (error) {
       console.error('Error loading notes:', error);
@@ -211,11 +198,11 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
 export const useInitializeNotesStore = () => {
   const user = useAuthStore.getState().user;
   const loadNotes = useNotesStore.getState().loadNotes;
-  const notes = useNotesStore(state => state.notes);
+  const notes = useNotesStore((state) => state.notes);
 
   React.useEffect(() => {
     if (user?.id && notes.length === 0) {
       loadNotes();
     }
   }, [user?.id, loadNotes, notes.length]);
-}; 
+};

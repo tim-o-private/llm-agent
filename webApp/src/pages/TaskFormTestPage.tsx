@@ -28,22 +28,30 @@ const TaskFormTestPage: React.FC = () => {
   return (
     <div className="p-8 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold mb-6">TaskForm Test Page</h1>
-      
+
       <div className="space-y-4 mb-8">
-        <Button onClick={() => { setTaskId(null); setShowForm(true); }}>
+        <Button
+          onClick={() => {
+            setTaskId(null);
+            setShowForm(true);
+          }}
+        >
           Create New Task
         </Button>
-        <Button onClick={() => { setTaskId('existing-task-id'); setShowForm(true); }}>
+        <Button
+          onClick={() => {
+            setTaskId('existing-task-id');
+            setShowForm(true);
+          }}
+        >
           Edit Existing Task (Mock)
         </Button>
       </div>
 
       {showForm && (
         <div className="border border-ui-border rounded-lg p-6 bg-ui-element-bg">
-          <h2 className="text-lg font-semibold mb-4">
-            {taskId ? 'Edit Task' : 'Create New Task'}
-          </h2>
-          
+          <h2 className="text-lg font-semibold mb-4">{taskId ? 'Edit Task' : 'Create New Task'}</h2>
+
           <TaskForm
             taskId={taskId}
             onSaveSuccess={handleSaveSuccess}
@@ -57,4 +65,4 @@ const TaskFormTestPage: React.FC = () => {
   );
 };
 
-export default TaskFormTestPage; 
+export default TaskFormTestPage;

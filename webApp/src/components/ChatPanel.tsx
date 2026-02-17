@@ -14,4 +14,4 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ agentId }) => {
 };
 
 // Re-export for backward compatibility
-export default ChatPanel; 
+export default ChatPanel;

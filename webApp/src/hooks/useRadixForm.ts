@@ -5,23 +5,19 @@ import { AppError } from '@/types/error';
 export interface UseRadixFormConfig<EntityType, FormData> {
   // Entity identification
   entityId: string | null | undefined;
-  
+
   // Data access
   getEntity: (id: string | undefined) => EntityType | undefined;
-  
+
   // Data transformation
   transformToForm: (entity: EntityType | undefined) => FormData;
-  
+
   // Validation
   schema: ZodSchema<FormData>;
-  
+
   // Persistence
-  saveEntity: (
-    formData: FormData,
-    entityId: string | undefined,
-    isCreating: boolean
-  ) => Promise<void>;
-  
+  saveEntity: (formData: FormData, entityId: string | undefined, isCreating: boolean) => Promise<void>;
+
   // Callbacks
   onSaveSuccess?: () => void;
   onCancel?: () => void;
@@ -32,18 +28,18 @@ export interface UseRadixFormReturn<FormData> {
   // Form data
   formData: FormData;
   setFormData: React.Dispatch<React.SetStateAction<FormData>>;
-  
+
   // State
   isDirty: boolean;
   isSaving: boolean;
   isCreating: boolean;
   saveError: AppError | null;
-  
+
   // Actions
   handleSave: () => Promise<void>;
   handleCancel: () => void;
   handleFieldChange: (field: keyof FormData, value: any) => void;
-  
+
   // Form state for external components
   formState: {
     canSave: boolean;
@@ -65,7 +61,6 @@ export function useRadixForm<EntityType, FormData>({
   onCancel,
   onDirtyStateChange,
 }: UseRadixFormConfig<EntityType, FormData>): UseRadixFormReturn<FormData> {
-  
   const [isSaving, setIsSaving] = React.useState(false);
   const [saveError, setSaveError] = React.useState<AppError | null>(null);
   const [isDirty, setIsDirty] = React.useState(false);
@@ -79,9 +74,7 @@ export function useRadixForm<EntityType, FormData>({
   const isCreating = !entityId;
 
   // Initialize form data
-  const [formData, setFormData] = React.useState<FormData>(() => 
-    transformToForm(entity)
-  );
+  const [formData, setFormData] = React.useState<FormData>(() => transformToForm(entity));
 
   // Track dirty state
   React.useEffect(() => {
@@ -110,7 +103,7 @@ export function useRadixForm<EntityType, FormData>({
 
       // Reset dirty state
       setIsDirty(false);
-      
+
       onSaveSuccess?.();
     } catch (error) {
       console.error('Save failed', error);
@@ -128,17 +121,20 @@ export function useRadixForm<EntityType, FormData>({
   }, [entity, transformToForm, onCancel]);
 
   const handleFieldChange = React.useCallback((field: keyof FormData, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   }, []);
 
-  const formState = React.useMemo(() => ({
-    canSave: isDirty && !isSaving,
-    isSaving,
-    isCreating,
-    saveError,
-    handleSave,
-    handleCancel,
-  }), [isDirty, isSaving, isCreating, saveError, handleSave, handleCancel]);
+  const formState = React.useMemo(
+    () => ({
+      canSave: isDirty && !isSaving,
+      isSaving,
+      isCreating,
+      saveError,
+      handleSave,
+      handleCancel,
+    }),
+    [isDirty, isSaving, isCreating, saveError, handleSave, handleCancel],
+  );
 
   return {
     formData,
@@ -152,4 +148,4 @@ export function useRadixForm<EntityType, FormData>({
     handleFieldChange,
     formState,
   };
-} 
+}
