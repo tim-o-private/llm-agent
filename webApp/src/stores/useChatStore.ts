@@ -179,14 +179,55 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         `Successfully created new session instance in DB. ID: ${newSessionInstanceId}, Chat ID: ${chatIdToUse}`,
       );
 
+      // 5. Load historical messages from server
+      let historicalMessages: ChatMessage[] = [];
+      if (chatIdToUse) {
+        try {
+          const {
+            data: { session: authSession },
+          } = await supabase.auth.getSession();
+          const accessToken = authSession?.access_token;
+          if (accessToken) {
+            const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const response = await fetch(
+              `${apiBaseUrl}/api/chat/sessions/${encodeURIComponent(chatIdToUse)}/messages?limit=50`,
+              {
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${accessToken}`,
+                },
+              },
+            );
+            if (response.ok) {
+              const serverMessages = await response.json();
+              // Convert server messages to ChatMessage format (newest first from server, reverse for chronological)
+              historicalMessages = serverMessages
+                .reverse()
+                .map(
+                  (msg: { id: number; session_id: string; message: Record<string, unknown>; created_at: string }) => ({
+                    id: String(msg.id),
+                    text: String(msg.message?.data?.content || msg.message?.content || ''),
+                    sender: msg.message?.type === 'human' ? ('user' as const) : ('ai' as const),
+                    timestamp: new Date(msg.created_at),
+                  }),
+                )
+                .filter((msg: ChatMessage) => msg.text.length > 0);
+              console.log(`Loaded ${historicalMessages.length} historical messages from server`);
+            }
+          }
+        } catch (historyError) {
+          console.warn('Failed to load historical messages (non-fatal):', historyError);
+        }
+      }
+
       set({
         activeChatId: chatIdToUse,
         currentSessionInstanceId: newSessionInstanceId,
         currentAgentName: agentName,
-        messages: [], // Messages are loaded from backend via PostgresChatMessageHistory, keyed by activeChatId
+        messages: historicalMessages,
       });
       console.log(
-        `Chat store initialized. Agent: ${agentName}, Active Chat ID: ${chatIdToUse}, Session Instance ID: ${newSessionInstanceId}`,
+        `Chat store initialized. Agent: ${agentName}, Active Chat ID: ${chatIdToUse}, Session Instance ID: ${newSessionInstanceId}, Historical messages: ${historicalMessages.length}`,
       );
     } catch (error) {
       console.error('Error creating new session instance in DB:', error);
