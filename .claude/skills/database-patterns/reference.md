@@ -94,6 +94,45 @@ user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE
 user_id UUID  -- No FK, no NOT NULL
 ```
 
+## 5a. Agent References — UUID FK, Not Name
+
+**Always reference agents by UUID, never by `agent_name TEXT`.**
+
+`agent_configurations.id` is the canonical identifier. `agent_name` is a display name — unique and stable, but not the right join key.
+
+```sql
+-- ✅ Correct: UUID FK with index
+agent_id UUID NOT NULL REFERENCES agent_configurations(id) ON DELETE CASCADE
+
+CREATE INDEX idx_mytable_agent_id ON mytable(agent_id);
+
+-- ❌ Wrong: text "foreign key"
+agent_name TEXT NOT NULL   -- No referential integrity, no cascade, slower
+```
+
+Why UUID FK:
+- **Referential integrity**: deleting an agent config cascades to its data
+- **Performance**: UUID PK lookup is always indexed; text columns require explicit indexing
+- **Consistency**: `agent_tools` already uses `agent_id UUID FK` — follow the same pattern
+
+**Known tech debt** — these tables use `agent_name TEXT` and need migration:
+- `agent_long_term_memory.agent_name` → `agent_id UUID FK`
+- `agent_schedules.agent_name` → `agent_id UUID FK`
+- `agent_logs.agent_name` → `agent_id UUID FK`
+- `user_agent_prompt_customizations.agent_name` → `agent_id UUID FK`
+- `reminders.agent_name` (added in SPEC-006) → `agent_id UUID FK`
+
+**How to get `agent_id` in code:** `agent_loader_db.py` loads the agent config from DB and has
+`agent_id = agent_db_config.get("id")` — pass this UUID to tools and services instead of the name string.
+
+```python
+# ✅ Pass UUID to tools/services
+tool = SaveMemoryTool(user_id=user_id, agent_id=agent_config_id, ...)
+
+# ❌ Don't pass name as a surrogate key
+tool = SaveMemoryTool(user_id=user_id, agent_name="assistant", ...)
+```
+
 ## 6. Timestamps with Auto-Update Trigger
 
 ```sql
