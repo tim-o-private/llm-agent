@@ -62,10 +62,14 @@ TOOL_APPROVAL_DEFAULTS: dict[str, tuple[ApprovalTier, ApprovalTier]] = {
     "list_files": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
     "write_file": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.REQUIRES_APPROVAL),
 
-    # Memory tools
+    # Memory tools (legacy CRUD-based)
     "memory_store": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
     "memory_search": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
     "memory_delete": (ApprovalTier.REQUIRES_APPROVAL, ApprovalTier.REQUIRES_APPROVAL),
+
+    # LTM memory tools
+    "save_memory": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.REQUIRES_APPROVAL),
+    "read_memory": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
 }
 
 # Default tier for unknown tools (fail-safe)
