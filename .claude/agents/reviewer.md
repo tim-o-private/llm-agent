@@ -77,6 +77,7 @@ cd webApp && pnpm lint
 - [ ] Migration naming: `YYYYMMDDHHMMSS_descriptive_name.sql`
 - [ ] UUID PKs, `created_at`/`updated_at` timestamps
 - [ ] Foreign keys with appropriate ON DELETE behavior
+- [ ] **BLOCKER:** No `agent_name TEXT` — must use `agent_id UUID NOT NULL REFERENCES agent_configurations(id) ON DELETE CASCADE`
 
 **Backend changes (backend-dev):**
 - [ ] Service layer pattern: routers → services → database
@@ -113,6 +114,10 @@ cd webApp && pnpm lint
 - [ ] If behavior changed, relevant docs are updated
 - [ ] New tables have SQL comments
 - [ ] New API endpoints registered in main.py
+
+#### PR Metadata
+- [ ] PR body includes a "Merge Order" section
+- [ ] Merge order correctly states prerequisites and what this PR unblocks
 
 #### Security
 - [ ] No hardcoded secrets, URLs, or credentials

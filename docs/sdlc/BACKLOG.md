@@ -13,10 +13,25 @@ Prioritized task queue. Items move to specs when ready for implementation.
 
 | Priority | ID | Title | Status |
 |----------|----|-------|--------|
-| P0 | SPEC-006 | [Email Digests & Proactive Reminders](specs/SPEC-006-email-digests-and-proactive-reminders.md) | PRs #30-34 open — awaiting UAT + merge |
-| P1 | SPEC-007 | [Frontend Cleanup + Approval Toasts](specs/SPEC-007-frontend-cleanup.md) | Draft — 2 functional units |
+| P0 | SPEC-009 | [Conversation History & Agent Scheduling](specs/SPEC-009-conversation-history-and-agent-scheduling.md) | Planning |
+| P1 | SPEC-007 | [Frontend Cleanup + Approval Toasts](specs/SPEC-007-frontend-cleanup.md) | Draft |
+| P1 | SPEC-008 | [Context Management & Compaction](specs/SPEC-008-context-management-and-compaction.md) | Draft |
+| P1 | SPEC-010 | [Agent Prompt Architecture](specs/SPEC-010-agent-prompt-architecture.md) | Draft — 3 functional units |
 
 ## Backlog Items (Not Yet Specced)
+
+### Legacy Tool Renaming (P2)
+
+These tools predate the `verb_resource` naming convention. Each rename requires: Python class, DB `tools.name`, `agent_tool_type` enum value, and a migration.
+
+| Current Name | New Name | Current Class | New Class |
+|-------------|----------|---------------|-----------|
+| `gmail_search` | `search_gmail_messages` | `GmailSearchTool` | `SearchGmailMessagesTool` |
+| `gmail_get_message` | `get_gmail_message` | `GmailGetMessageTool` | `GetGmailMessageTool` |
+| `gmail_digest` | `create_gmail_digest` | `GmailDigestTool` | `CreateGmailDigestTool` |
+| `email_digest` | `send_email_digest` | `EmailDigestTool` | `SendEmailDigestTool` |
+
+### Other Items
 
 | Priority | Title | Notes |
 |----------|-------|-------|
@@ -42,3 +57,4 @@ Prioritized task queue. Items move to specs when ready for implementation.
 | SPEC-003 | Scheduled Agent Execution | Feb 2026 |
 | SPEC-004 | Test Coverage | Feb 2026 |
 | SPEC-005 | Unified Sessions | Feb 2026 |
+| SPEC-006 | Email Digests & Proactive Reminders | Feb 2026 |
