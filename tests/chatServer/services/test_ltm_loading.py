@@ -129,7 +129,7 @@ def test_update_ltm_context_noop_without_rebuild_state():
 
 @pytest.mark.asyncio
 async def test_scheduled_execution_loads_ltm():
-    """ScheduledExecutionService loads LTM before invoking agent."""
+    """ScheduledExecutionService loads LTM and prepends it to the prompt."""
     from chatServer.services.scheduled_execution_service import ScheduledExecutionService
 
     service = ScheduledExecutionService()
@@ -144,7 +144,6 @@ async def test_scheduled_execution_loads_ltm():
     mock_executor = MagicMock()
     mock_executor.ainvoke = AsyncMock(return_value={"output": "Test response"})
     mock_executor.tools = [MagicMock()]
-    mock_executor.update_ltm_context = MagicMock()
 
     mock_supabase = MagicMock()
     mock_supabase.table.return_value.insert.return_value.execute = AsyncMock(
@@ -153,10 +152,6 @@ async def test_scheduled_execution_loads_ltm():
     update_chain = mock_supabase.table.return_value.update.return_value
     update_chain.eq.return_value = update_chain
     update_chain.execute = AsyncMock(return_value=MagicMock(data=[]))
-    # LTM query chain
-    mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute = AsyncMock(
-        return_value=MagicMock(data={"notes": "User context from LTM"})
-    )
 
     with (
         patch(
@@ -178,6 +173,10 @@ async def test_scheduled_execution_loads_ltm():
         patch(
             "chatServer.services.notification_service.NotificationService"
         ) as mock_notif_cls,
+        patch.object(
+            service, "_load_ltm", new_callable=AsyncMock,
+            return_value="User context from LTM",
+        ),
     ):
         mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
         mock_notif_cls.return_value.notify_user = AsyncMock()
@@ -186,7 +185,7 @@ async def test_scheduled_execution_loads_ltm():
         result = await service.execute(mock_schedule)
 
     assert result["success"] is True
-    # Verify update_ltm_context was called
-    mock_executor.update_ltm_context.assert_called_once()
-    call_args = mock_executor.update_ltm_context.call_args[0]
-    assert call_args[0] == "User context from LTM"
+    # Verify LTM was prepended to the prompt passed to ainvoke
+    invoke_args = mock_executor.ainvoke.call_args[0][0]
+    assert "User context from LTM" in invoke_args["input"]
+    assert "What's new?" in invoke_args["input"]

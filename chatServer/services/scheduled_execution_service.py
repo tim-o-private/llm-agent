@@ -9,10 +9,13 @@ Pattern mirrors chatServer/services/chat.py:225-258 for approval wrapping.
 """
 
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-from src.core.agent_loader_db import fetch_ltm_notes, load_agent_executor_db
+from src.core.agent_loader_db import load_agent_executor_db
+from supabase import Client as SupabaseClient
+from supabase import create_client
 
 try:
     from ..database.supabase_client import get_supabase_client
@@ -26,6 +29,8 @@ except ImportError:
     from chatServer.services.pending_actions import PendingActionsService
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_SCHEDULED_MODEL = "claude-haiku-4-5-20251001"
 
 
 class ScheduledExecutionService:
@@ -58,9 +63,13 @@ class ScheduledExecutionService:
 
         session_id = f"scheduled_{agent_name}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
         start_time = datetime.now(timezone.utc)
+        model_override = config.get("model_override")
 
         try:
-            logger.info(f"Executing scheduled agent '{agent_name}' for user {user_id} (schedule {schedule_id})")
+            logger.info(
+                f"Executing scheduled agent '{agent_name}' for user {user_id} "
+                f"(schedule {schedule_id})"
+            )
 
             # 1. Load agent from DB — always fresh, never rely on cache
             agent_executor = load_agent_executor_db(
@@ -69,16 +78,23 @@ class ScheduledExecutionService:
                 session_id=session_id,
             )
 
-            # 2. Load fresh LTM and inject into the executor
-            supabase_client = await get_supabase_client()
-            try:
-                ltm_notes = await fetch_ltm_notes(user_id, agent_name, supabase_client)
-                if hasattr(agent_executor, 'update_ltm_context'):
-                    agent_executor.update_ltm_context(ltm_notes)
-            except Exception as e:
-                logger.warning(f"Failed to load LTM for scheduled run (non-fatal): {e}")
+            # 1b. Apply model override if specified in schedule config (AC-14, AC-16)
+            model_used = self._get_model_name(agent_executor)
+            if model_override:
+                self._apply_model_override(agent_executor, model_override)
+                model_used = model_override
+                logger.info(f"Applied model override '{model_override}' for scheduled run")
 
-            # 3. Create chat_sessions row for this scheduled run
+            # 1c. Load LTM and prepend to prompt (AC-5, AC-8)
+            ltm_notes = await self._load_ltm(user_id, agent_name)
+            if ltm_notes:
+                prompt = (
+                    f"User context (from memory):\n{ltm_notes}\n\n{prompt}"
+                )
+                logger.info(f"Prepended LTM ({len(ltm_notes)} chars) to prompt")
+
+            # 2. Create chat_sessions row for this scheduled run
+            supabase_client = await get_supabase_client()
             await supabase_client.table("chat_sessions").insert(
                 {
                     "user_id": user_id,
@@ -106,10 +122,11 @@ class ScheduledExecutionService:
             if hasattr(agent_executor, "tools") and agent_executor.tools:
                 wrap_tools_with_approval(agent_executor.tools, approval_context)
                 logger.info(
-                    f"Wrapped {len(agent_executor.tools)} tools with approval for scheduled run of '{agent_name}'"
+                    f"Wrapped {len(agent_executor.tools)} tools with approval "
+                    f"for scheduled run of '{agent_name}'"
                 )
 
-            # 3. Invoke the agent
+            # 4. Invoke the agent
             response = await agent_executor.ainvoke(
                 {
                     "input": prompt,
@@ -117,7 +134,7 @@ class ScheduledExecutionService:
                 }
             )
 
-            # 4. Normalize output (handle content block lists from newer langchain-anthropic)
+            # 5. Normalize output (handle content block lists from newer langchain-anthropic)
             output = response.get("output", "")
             if isinstance(output, list):
                 output = (
@@ -129,11 +146,17 @@ class ScheduledExecutionService:
                     or "No text content in response."
                 )
 
-            # 5. Count pending actions created during this run
+            # 6. Count pending actions created during this run
             pending_count = await pending_actions_service.get_pending_count(user_id)
 
-            # 6. Store result
+            # 7. Build execution metadata with token usage (AC-15)
             duration_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+            execution_metadata = self._build_execution_metadata(
+                agent_executor=agent_executor,
+                model_used=model_used,
+            )
+
+            # 8. Store result
             await self._store_result(
                 supabase_client=supabase_client,
                 user_id=user_id,
@@ -144,9 +167,10 @@ class ScheduledExecutionService:
                 status="success",
                 pending_actions_created=pending_count,
                 duration_ms=duration_ms,
+                metadata=execution_metadata,
             )
 
-            # 7. Notify user
+            # 9. Notify user (AC-7)
             await self._notify_user(
                 supabase_client=supabase_client,
                 user_id=user_id,
@@ -156,7 +180,7 @@ class ScheduledExecutionService:
                 config=config,
             )
 
-            # 8. Mark session inactive after completion
+            # 10. Mark session inactive after completion
             await supabase_client.table("chat_sessions").update(
                 {"is_active": False}
             ).eq("session_id", session_id).execute()
@@ -203,6 +227,90 @@ class ScheduledExecutionService:
                 "duration_ms": duration_ms,
             }
 
+    async def _load_ltm(self, user_id: str, agent_name: str) -> Optional[str]:
+        """Load long-term memory notes for user+agent from the database."""
+        try:
+            url = os.getenv("VITE_SUPABASE_URL", "")
+            key = os.getenv("SUPABASE_SERVICE_KEY", "")
+            if not url or not key:
+                logger.warning("Supabase config missing, skipping LTM load")
+                return None
+
+            db: SupabaseClient = create_client(url, key)
+            result = (
+                db.table("agent_long_term_memory")
+                .select("notes")
+                .eq("user_id", user_id)
+                .eq("agent_id", agent_name)
+                .maybe_single()
+                .execute()
+            )
+            if result.data and result.data.get("notes"):
+                return result.data["notes"]
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to load LTM for {user_id}/{agent_name}: {e}")
+            return None
+
+    def _get_model_name(self, agent_executor) -> str:
+        """Extract the model name from the agent executor's LLM chain."""
+        try:
+            agent = getattr(agent_executor, "agent", None)
+            if agent and hasattr(agent, "middle"):
+                for step in agent.middle:
+                    if hasattr(step, "model"):
+                        return step.model
+                    if hasattr(step, "model_name"):
+                        return step.model_name
+            # Fallback: check if the bound LLM has a model attribute
+            if agent and hasattr(agent, "last"):
+                last = agent.last
+                if hasattr(last, "bound") and hasattr(last.bound, "model"):
+                    return last.bound.model
+        except Exception:
+            pass
+        return "unknown"
+
+    def _apply_model_override(self, agent_executor, model_override: str) -> None:
+        """Override the model on the agent executor's LLM instance."""
+        try:
+            agent = getattr(agent_executor, "agent", None)
+            if agent and hasattr(agent, "middle"):
+                for step in agent.middle:
+                    if hasattr(step, "model"):
+                        step.model = model_override
+                        return
+            # Try the bound LLM path
+            if agent and hasattr(agent, "last"):
+                last = agent.last
+                if hasattr(last, "bound") and hasattr(last.bound, "model"):
+                    last.bound.model = model_override
+                    return
+            logger.warning(f"Could not apply model override '{model_override}' — LLM not found in chain")
+        except Exception as e:
+            logger.warning(f"Failed to apply model override: {e}")
+
+    def _build_execution_metadata(
+        self,
+        agent_executor,
+        model_used: str,
+    ) -> Dict[str, Any]:
+        """Build metadata dict with model and token usage info (AC-15)."""
+        metadata: Dict[str, Any] = {"model": model_used}
+        try:
+            # LangChain AgentExecutor may have callback-based token tracking
+            # Try to extract from the LLM's usage metadata if available
+            agent = getattr(agent_executor, "agent", None)
+            if agent and hasattr(agent, "middle"):
+                for step in agent.middle:
+                    usage = getattr(step, "_last_usage_metadata", None)
+                    if usage:
+                        metadata["input_tokens"] = usage.get("input_tokens", 0)
+                        metadata["output_tokens"] = usage.get("output_tokens", 0)
+        except Exception as e:
+            logger.debug(f"Could not extract token usage: {e}")
+        return metadata
+
     async def _store_result(
         self,
         supabase_client,
@@ -214,6 +322,7 @@ class ScheduledExecutionService:
         status: str,
         pending_actions_created: int,
         duration_ms: int,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Store execution result in agent_execution_results table."""
         try:
@@ -221,11 +330,11 @@ class ScheduledExecutionService:
                 "user_id": user_id,
                 "agent_name": agent_name,
                 "prompt": prompt,
-                "result_content": result_content[:50000] if result_content else None,  # Truncate very long results
+                "result_content": result_content[:50000] if result_content else None,
                 "status": status,
                 "pending_actions_created": pending_actions_created,
                 "execution_duration_ms": duration_ms,
-                "metadata": {},
+                "metadata": metadata or {},
             }
             if schedule_id:
                 data["schedule_id"] = str(schedule_id)
