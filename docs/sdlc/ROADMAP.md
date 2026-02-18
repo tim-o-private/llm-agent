@@ -30,13 +30,15 @@ The agent becomes stateful, context-aware, and proactive. This is the minimum vi
 
 | ID | Feature | Status | Spec |
 |----|---------|--------|------|
-| SPEC-006 | Email Digests & Proactive Reminders | Draft | [SPEC-006](specs/SPEC-006-email-digests-and-proactive-reminders.md) |
+| SPEC-006 | Email Digests & Proactive Reminders | PRs #30-34 — UAT | [SPEC-006](specs/SPEC-006-email-digests-and-proactive-reminders.md) |
+| SPEC-007 | Frontend Cleanup + Approval Toasts | Draft | [SPEC-007](specs/SPEC-007-frontend-cleanup.md) |
 
 Key deliverables:
 - **Working memory** — agent remembers things across sessions (LTM wired + memory tools)
 - **Email digests** — context-aware, cost-efficient (Haiku), delivered via Telegram/web
 - **Proactive reminders** — "remind me about X on Friday" just works
 - **Cost controls** — model tiering, token usage tracking
+- **Frontend cleanup** — remove cruft pages, add approval toasts
 
 ## Milestone 3: Self-Extending Agent (TBD)
 

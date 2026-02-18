@@ -19,6 +19,7 @@ Before writing database code, verify:
 - [ ] Auto-update trigger on `updated_at`
 - [ ] Schema change is in a migration file under `supabase/migrations/`
 - [ ] Indexes on user_id and common query columns
+- [ ] Agent references use `agent_id UUID FK` → `agent_configurations(id)`, NOT `agent_name TEXT`
 - [ ] JSONB for flexible config (not key-value tables)
 - [ ] Table and column COMMENT statements
 - [ ] snake_case naming throughout

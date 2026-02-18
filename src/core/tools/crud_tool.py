@@ -274,11 +274,10 @@ class CRUDTool(BaseTool):
 
         db_payload["user_id"] = self.user_id
 
-        # # Original logic: Add agent_name to payload for tables other than agent_long_term_memory
-        # # This is now removed in favor of explicit schema definition if agent_name is needed.
-        # if self.table_name != "agent_long_term_memory":
-        #     if hasattr(self, 'agent_name') and self.agent_name:
-        #         db_payload["agent_name"] = self.agent_name
+        # agent_long_term_memory requires agent_name to scope records per agent.
+        # Inject it automatically (same pattern as user_id) so callers don't have to pass it.
+        if self.table_name == "agent_long_term_memory" and self.agent_name:
+            db_payload["agent_name"] = self.agent_name
 
         # Check if there are any meaningful keys in the payload other than user_id/agent_name,
         # UNLESS it's agent_long_term_memory, in which case agent_name itself might be a meaningful field
