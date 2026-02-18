@@ -18,7 +18,14 @@ CREATE UNIQUE INDEX idx_chat_sessions_session_id
 CREATE INDEX idx_chat_sessions_user_channel_created
   ON chat_sessions (user_id, channel, created_at DESC);
 
--- Backfill existing rows
-UPDATE chat_sessions
-  SET session_id = chat_id::text, channel = 'web'
-  WHERE session_id IS NULL;
+-- Backfill existing rows: only assign session_id to the most recent row per chat_id
+-- to avoid unique constraint violations when multiple session instances share a chat_id.
+UPDATE chat_sessions cs
+  SET session_id = cs.chat_id::text, channel = 'web'
+  WHERE cs.session_id IS NULL
+    AND cs.id = (
+      SELECT id FROM chat_sessions sub
+      WHERE sub.chat_id = cs.chat_id
+      ORDER BY sub.created_at DESC
+      LIMIT 1
+    );
