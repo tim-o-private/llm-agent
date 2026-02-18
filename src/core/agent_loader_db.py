@@ -11,6 +11,8 @@ from pydantic import BaseModel, ConfigDict, Field, create_model
 from chatServer.database.connection import get_db_connection
 from chatServer.tools.email_digest_tool import EmailDigestTool
 from chatServer.tools.gmail_tools import GmailDigestTool, GmailGetMessageTool, GmailSearchTool
+from chatServer.tools.memory_tools import ReadMemoryTool, SaveMemoryTool
+from chatServer.tools.reminder_tools import CreateReminderTool, ListRemindersTool
 from core.agents.customizable_agent import CustomizableAgentExecutor
 from core.tools.crud_tool import CRUDTool, CRUDToolInput
 from supabase import Client as SupabaseClient
@@ -30,7 +32,11 @@ TOOL_REGISTRY: Dict[str, Type] = {
     "GmailSearchTool": GmailSearchTool,
     "GmailGetMessageTool": GmailGetMessageTool,
     "EmailDigestTool": EmailDigestTool,
+    "SaveMemoryTool": SaveMemoryTool,
+    "ReadMemoryTool": ReadMemoryTool,
     "GmailTool": None,  # Special handling - uses tool_class config to determine specific class
+    "CreateReminderTool": CreateReminderTool,
+    "ListRemindersTool": ListRemindersTool,
     # Add other distinct, non-CRUDTool Python classes here if any.
     # The string key (e.g., "CRUDTool") must match the 'type' column
     # (or ENUM value as string) in your agent_tools table for these tools.
@@ -607,7 +613,7 @@ async def fetch_ltm_notes(user_id: str, agent_name: str, supabase_client=None) -
 
     Args:
         user_id: The user's ID.
-        agent_name: The agent name (matches agent_id column in agent_long_term_memory).
+        agent_name: The agent name (matches agent_name column in agent_long_term_memory).
         supabase_client: Optional async Supabase client. If not provided, one will be obtained.
 
     Returns:
@@ -620,7 +626,7 @@ async def fetch_ltm_notes(user_id: str, agent_name: str, supabase_client=None) -
 
         ltm_result = await supabase_client.table("agent_long_term_memory").select("notes").eq(
             "user_id", user_id
-        ).eq("agent_id", agent_name).maybe_single().execute()
+        ).eq("agent_name", agent_name).maybe_single().execute()
 
         if ltm_result.data:
             notes = ltm_result.data.get("notes")
