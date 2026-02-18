@@ -38,15 +38,26 @@ def preprocess_intermediate_steps(intermediate_steps: List[tuple]) -> List[tuple
     return processed_steps
 
 class CustomizableAgentExecutor(AgentExecutor):
-    # ... (existing class structure if any) ...
+    # Store base prompt and LLM reference for per-request LTM updates.
+    # These are set after construction via _set_ltm_rebuild_state().
+    _base_system_prompt: Optional[str] = None
+    _custom_instructions_block: Optional[str] = None
+    _llm_with_tools: Optional[Any] = None
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    @property
+    def input_keys(self) -> List[str]:
+        """Override to avoid AgentExecutor introspecting RunnableSequence for input_keys."""
+        return ["input", "chat_history"]
 
     @classmethod
     def from_agent_config(
         cls,
         agent_config_dict: Dict[str, Any],
         tools: List[BaseTool],
-        user_id: str, # Retained, though not directly used in this method after CustomizableAgent removal, agent_loader uses it.
-        session_id: str, # Retained, for consistency, though not directly used here.
+        user_id: str,
+        session_id: str,
         ltm_notes_content: Optional[str] = None,
         explicit_custom_instructions_dict: Optional[Dict[str, Any]] = None,
         logger_instance: Optional[logging.Logger] = None,
@@ -90,26 +101,16 @@ class CustomizableAgentExecutor(AgentExecutor):
         if not base_prompt_str:
             raise ValueError("'system_prompt' is missing in agent_config_dict.")
 
-        final_system_message_content = base_prompt_str
-
-        if ltm_notes_content:
-            ltm_section = f"\n\n--- BEGIN LONG-TERM MEMORY NOTES ---\n{ltm_notes_content}\n--- END LONG-TERM MEMORY NOTES ---"
-            if "{{ltm_notes}}" in final_system_message_content:
-                final_system_message_content = final_system_message_content.replace("{{ltm_notes}}", ltm_section)
-            else:
-                final_system_message_content = ltm_section + "\n\n" + final_system_message_content
-        elif "{{ltm_notes}}" in final_system_message_content:
-             final_system_message_content = final_system_message_content.replace("{{ltm_notes}}", "(No LTM notes for this session.)")
-
+        # Build custom instructions block (stable across requests)
+        custom_instructions_block = None
         if explicit_custom_instructions_dict:
-            instr_parts = [f"{k.replace('_',' ').title()}: {v}" for k,v in explicit_custom_instructions_dict.items()]
-            instr_block = "\n--- BEGIN CUSTOM INSTRUCTIONS ---\n" + "\n".join(instr_parts) + "\n--- END CUSTOM INSTRUCTIONS ---"
-            if "{{custom_instructions}}" in final_system_message_content:
-                final_system_message_content = final_system_message_content.replace("{{custom_instructions}}", instr_block)
-            else:
-                final_system_message_content += "\n" + instr_block
-        elif "{{custom_instructions}}" in final_system_message_content:
-             final_system_message_content = final_system_message_content.replace("{{custom_instructions}}", "(No explicit custom instructions for this session.)")
+            instr_parts = [f"{k.replace('_',' ').title()}: {v}" for k, v in explicit_custom_instructions_dict.items()]
+            custom_instructions_block = "\n--- BEGIN CUSTOM INSTRUCTIONS ---\n" + "\n".join(instr_parts) + "\n--- END CUSTOM INSTRUCTIONS ---"
+
+        # Build the full system message with LTM
+        final_system_message_content = cls._build_system_message(
+            base_prompt_str, ltm_notes_content, custom_instructions_block
+        )
 
         current_logger.debug(f"Final system message content for agent: \n{final_system_message_content}")
 
@@ -132,15 +133,87 @@ class CustomizableAgentExecutor(AgentExecutor):
             )
             | prompt
             | llm_with_tools
-            | ToolsAgentOutputParser() # User's preferred parser
+            | ToolsAgentOutputParser()
         )
 
-        return cls(
+        instance = cls(
             agent=agent_runnable,
             tools=tools,
             verbose=True,
             handle_parsing_errors=True
         )
+        # Store state needed for per-request LTM rebuilds
+        instance._base_system_prompt = base_prompt_str
+        instance._custom_instructions_block = custom_instructions_block
+        instance._llm_with_tools = llm_with_tools
+        return instance
+
+    @staticmethod
+    def _build_system_message(
+        base_prompt: str,
+        ltm_notes_content: Optional[str],
+        custom_instructions_block: Optional[str],
+    ) -> str:
+        """Build the final system message from base prompt, LTM, and custom instructions."""
+        result = base_prompt
+
+        if ltm_notes_content:
+            ltm_section = f"\n\n--- BEGIN LONG-TERM MEMORY NOTES ---\n{ltm_notes_content}\n--- END LONG-TERM MEMORY NOTES ---"
+            if "{{ltm_notes}}" in result:
+                result = result.replace("{{ltm_notes}}", ltm_section)
+            else:
+                result = ltm_section + "\n\n" + result
+        elif "{{ltm_notes}}" in result:
+            result = result.replace("{{ltm_notes}}", "(No LTM notes for this session.)")
+
+        if custom_instructions_block:
+            if "{{custom_instructions}}" in result:
+                result = result.replace("{{custom_instructions}}", custom_instructions_block)
+            else:
+                result += "\n" + custom_instructions_block
+        elif "{{custom_instructions}}" in result:
+            result = result.replace("{{custom_instructions}}", "(No explicit custom instructions for this session.)")
+
+        return result
+
+    def update_ltm_context(self, ltm_notes_content: Optional[str]) -> None:
+        """Update the system prompt with fresh LTM notes. Called per-request.
+
+        Rebuilds the agent's runnable chain with a new system message containing
+        the latest LTM, without re-creating the LLM or tools.
+        """
+        if self._base_system_prompt is None or self._llm_with_tools is None:
+            logger.warning("Cannot update LTM context: executor missing rebuild state")
+            return
+
+        final_system_message_content = self._build_system_message(
+            self._base_system_prompt, ltm_notes_content, self._custom_instructions_block
+        )
+
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", final_system_message_content),
+            MessagesPlaceholder(variable_name="chat_history"),
+            ("human", "{input}"),
+            MessagesPlaceholder(variable_name="agent_scratchpad"),
+        ])
+
+        new_runnable = (
+            RunnablePassthrough.assign(
+                agent_scratchpad=lambda x: format_to_tool_messages(
+                    preprocess_intermediate_steps(x.get("intermediate_steps", []))
+                )
+            )
+            | prompt
+            | self._llm_with_tools
+            | ToolsAgentOutputParser()
+        )
+        # AgentExecutor's Pydantic validator wraps the raw RunnableSequence in
+        # RunnableAgent/RunnableMultiActionAgent during __init__, providing aplan().
+        # Direct self.agent assignment bypasses that validator — update .runnable instead.
+        if hasattr(self.agent, 'runnable'):
+            self.agent.runnable = new_runnable
+        else:
+            logger.warning("Agent wrapper missing .runnable; LTM context update skipped")
 
     async def ainvoke(self, input: Dict[str, Any], config: Optional[Dict[str, Any]] = None, **kwargs: Any) -> Dict[str, Any]:
         if "chat_history" not in input:

@@ -220,6 +220,78 @@ class TestCustomizableAgentExecutorFactory(unittest.TestCase):
             self.assertIsNotNone(system_message_template, "System message template not found in prompt")
             self.assertIn("(No explicit custom instructions for this session.)", system_message_template)
 
+class TestUpdateLtmContext(unittest.TestCase):
+    """Tests for update_ltm_context — ensures the AgentExecutor interface is preserved.
+
+    Root cause of prior bugs: update_ltm_context assigned self.agent = RunnableSequence,
+    bypassing AgentExecutor's Pydantic validator that wraps runnables in RunnableAgent.
+    RunnableAgent provides input_keys and aplan(); a raw RunnableSequence does not.
+    """
+
+    def setUp(self):
+        self.mock_llm_instance = MagicMock()
+        self.mock_llm_with_tools = MagicMock()
+        self.mock_llm_instance.bind_tools = MagicMock(return_value=self.mock_llm_with_tools)
+
+        self.patch_chat_google = patch('langchain_google_genai.ChatGoogleGenerativeAI', return_value=self.mock_llm_instance)
+        self.patch_chat_google.start()
+        self.addCleanup(self.patch_chat_google.stop)
+
+        self.patch_os_getenv = patch('os.getenv')
+        mock_getenv = self.patch_os_getenv.start()
+        mock_getenv.side_effect = lambda key, default=None: {"GOOGLE_API_KEY": "fake"}.get(key, default)
+        self.addCleanup(self.patch_os_getenv.stop)
+
+        self.config = {
+            "agent_name": "TestAgent",
+            "llm": {"model": "gemini-pro", "temperature": 0.0},
+            "system_prompt": "You are a test agent.",
+        }
+        self.executor = CustomizableAgentExecutor.from_agent_config(
+            self.config, [], "user-1", "session-1"
+        )
+
+    def test_agent_has_aplan_after_init(self):
+        """Regression: agent must have aplan after initial construction."""
+        self.assertTrue(hasattr(self.executor.agent, 'aplan'),
+                        "self.agent must have aplan() — if this fails, AgentExecutor's validator broke")
+
+    def test_agent_has_input_keys_after_init(self):
+        """Regression: agent must respond to input_keys after initial construction."""
+        self.assertTrue(hasattr(self.executor, 'input_keys'))
+        self.assertIn("input", self.executor.input_keys)
+
+    def test_update_ltm_context_preserves_aplan(self):
+        """Critical regression: update_ltm_context must not strip aplan from self.agent."""
+        self.executor.update_ltm_context("User cares about invoices.")
+        self.assertTrue(hasattr(self.executor.agent, 'aplan'),
+                        "aplan() missing after update_ltm_context — self.agent was replaced with raw RunnableSequence")
+
+    def test_update_ltm_context_updates_runnable_not_agent_wrapper(self):
+        """The agent wrapper (RunnableAgent/RunnableMultiActionAgent) should be reused; only .runnable updated."""
+        original_agent_wrapper = self.executor.agent
+        self.executor.update_ltm_context("Some notes.")
+        # The wrapper object should be the same instance
+        self.assertIs(self.executor.agent, original_agent_wrapper,
+                      "self.agent wrapper was replaced — should update .runnable instead")
+        # But the inner runnable should be replaced
+        self.assertIsNotNone(self.executor.agent.runnable)
+
+    def test_update_ltm_context_with_none_is_safe(self):
+        """update_ltm_context(None) must not crash and must preserve aplan."""
+        self.executor.update_ltm_context(None)
+        self.assertTrue(hasattr(self.executor.agent, 'aplan'))
+
+    def test_update_ltm_context_missing_rebuild_state(self):
+        """If rebuild state is missing, update_ltm_context logs warning and returns safely."""
+        self.executor._base_system_prompt = None
+        self.executor._llm_with_tools = None
+        # Should not raise
+        self.executor.update_ltm_context("Some notes.")
+        # aplan still present from original init
+        self.assertTrue(hasattr(self.executor.agent, 'aplan'))
+
+
 class TestCustomizableAgentExecutorInvoke(unittest.IsolatedAsyncioTestCase):
     async def test_ainvoke_adds_empty_chat_history_if_missing(self):
         # Create a proper Runnable agent instead of AsyncMock
