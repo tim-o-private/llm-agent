@@ -11,6 +11,7 @@ Capabilities:
 
 import json
 import logging
+import uuid
 from typing import Optional
 
 from aiogram import Bot, Dispatcher, Router, types
@@ -273,12 +274,29 @@ async def handle_message(message: types.Message) -> None:
         from chatServer.services.pending_actions import PendingActionsService
         from src.core.agent_loader_db import load_agent_executor_db
 
-        session_id = f"telegram_{chat_id}"
+        # Cross-channel session sharing: reuse most recent web session if one exists
+        web_session_result = (
+            await bot_service._db_client.table("chat_sessions")
+            .select("chat_id")
+            .eq("user_id", user_id)
+            .eq("channel", "web")
+            .order("updated_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+
+        if web_session_result.data and web_session_result.data[0].get("chat_id"):
+            session_id = str(web_session_result.data[0]["chat_id"])
+            logger.info(f"Telegram sharing web session: {session_id}")
+        else:
+            session_id = str(uuid.uuid4())
+            logger.info(f"Telegram creating new session: {session_id}")
 
         # Upsert chat_sessions row for this Telegram conversation
         await bot_service._db_client.table("chat_sessions").upsert(
             {
                 "user_id": user_id,
+                "chat_id": session_id,
                 "session_id": session_id,
                 "channel": "telegram",
                 "agent_name": "assistant",
@@ -319,6 +337,30 @@ async def handle_message(message: types.Message) -> None:
         if hasattr(agent_executor, "tools") and agent_executor.tools:
             wrap_tools_with_approval(agent_executor.tools, approval_context)
 
+        # Load recent chat history for agent context
+        chat_history = []
+        try:
+            from chatServer.database.connection import get_database_manager
+
+            db_manager = get_database_manager()
+            await db_manager.ensure_initialized()
+            if db_manager.pool:
+                from langchain_postgres import PostgresChatMessageHistory
+
+                from chatServer.config.constants import CHAT_MESSAGE_HISTORY_TABLE_NAME
+
+                async with db_manager.pool.connection() as conn:
+                    pg_history = PostgresChatMessageHistory(
+                        CHAT_MESSAGE_HISTORY_TABLE_NAME,
+                        session_id,
+                        async_connection=conn,
+                    )
+                    messages = await pg_history.aget_messages()
+                    chat_history = messages[-10:]  # Last 10 messages for context
+                    logger.info(f"Loaded {len(chat_history)} history messages for Telegram context")
+        except Exception as e:
+            logger.warning(f"Failed to load chat history for Telegram (non-fatal): {e}")
+
         # Send typing indicator
         await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
@@ -326,7 +368,7 @@ async def handle_message(message: types.Message) -> None:
         response = await agent_executor.ainvoke(
             {
                 "input": message.text,
-                "chat_history": [],
+                "chat_history": chat_history,
             }
         )
 
