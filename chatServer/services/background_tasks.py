@@ -10,10 +10,12 @@ from croniter import croniter
 try:
     from ..config.constants import SCHEDULED_TASK_INTERVAL_SECONDS, SESSION_INSTANCE_TTL_SECONDS
     from ..database.connection import get_database_manager
+    from ..database.supabase_client import get_supabase_client
     from ..services.vault_token_service import get_vault_token_service_for_scheduler
 except ImportError:
     from chatServer.config.constants import SCHEDULED_TASK_INTERVAL_SECONDS, SESSION_INSTANCE_TTL_SECONDS
     from chatServer.database.connection import get_database_manager
+    from chatServer.database.supabase_client import get_supabase_client
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +27,7 @@ class BackgroundTaskService:
         self.deactivate_task: Optional[asyncio.Task] = None
         self.evict_task: Optional[asyncio.Task] = None
         self.scheduled_agents_task: Optional[asyncio.Task] = None
+        self.reminder_task: Optional[asyncio.Task] = None
         self._agent_executor_cache: Optional[Dict[Tuple[str, str], Any]] = None
         self.agent_schedules: Dict[str, Dict] = {}
         self._last_schedule_check: Optional[datetime] = None
@@ -242,12 +245,49 @@ class BackgroundTaskService:
         except Exception as e:
             logger.error(f"Scheduled agent execution failed for schedule {schedule_id}: {e}", exc_info=True)
 
+    async def check_due_reminders(self) -> None:
+        """Check for and deliver due reminders every 60 seconds."""
+        while True:
+            await asyncio.sleep(60)
+            logger.debug("Running task: check_due_reminders")
+
+            try:
+                db_client = await get_supabase_client()
+
+                try:
+                    from ..services.notification_service import NotificationService
+                    from ..services.reminder_service import ReminderService
+                except ImportError:
+                    from chatServer.services.notification_service import NotificationService
+                    from chatServer.services.reminder_service import ReminderService
+
+                reminder_service = ReminderService(db_client)
+                notification_service = NotificationService(db_client)
+
+                due = await reminder_service.get_due_reminders()
+                for reminder in due:
+                    try:
+                        await notification_service.notify_user(
+                            user_id=reminder["user_id"],
+                            title=f"Reminder: {reminder['title']}",
+                            body=reminder.get("body") or reminder["title"],
+                            category="reminder",
+                            metadata={"reminder_id": str(reminder["id"])},
+                        )
+                        await reminder_service.mark_sent(reminder["id"])
+                        await reminder_service.handle_recurrence(reminder)
+                    except Exception as e:
+                        logger.error(f"Failed to deliver reminder {reminder.get('id')}: {e}")
+            except Exception as e:
+                logger.error(f"Error in check_due_reminders: {e}", exc_info=True)
+
     def start_background_tasks(self) -> None:
         """Start all background tasks."""
         self.deactivate_task = asyncio.create_task(self.deactivate_stale_chat_session_instances())
         self.evict_task = asyncio.create_task(self.evict_inactive_executors())
         self.scheduled_agents_task = asyncio.create_task(self.run_scheduled_agents())
-        logger.info("Background tasks for session cleanup, cache eviction, and scheduled agents started.")
+        self.reminder_task = asyncio.create_task(self.check_due_reminders())
+        logger.info("Background tasks for session cleanup, cache eviction, scheduled agents, and reminders started.")
 
     async def stop_background_tasks(self) -> None:
         """Stop all background tasks gracefully."""
@@ -274,6 +314,14 @@ class BackgroundTaskService:
                 await self.scheduled_agents_task
             except asyncio.CancelledError:
                 logger.info("Scheduled agents task successfully cancelled.")
+
+        if self.reminder_task:
+            self.reminder_task.cancel()
+            logger.info("Reminder delivery task cancelling...")
+            try:
+                await self.reminder_task
+            except asyncio.CancelledError:
+                logger.info("Reminder delivery task successfully cancelled.")
 
 
 # Global instance for use in main.py
