@@ -68,9 +68,23 @@ async function loadHistoricalMessages(chatId: string): Promise<ChatMessage[]> {
         (msg: { id: number; session_id: string; message: Record<string, unknown>; created_at: string }) => {
           const msgData = msg.message as Record<string, unknown>;
           const dataField = msgData?.data as Record<string, unknown> | undefined;
+          const rawContent = dataField?.content ?? msgData?.content ?? '';
+
+          // Handle content block arrays from newer langchain-anthropic
+          // e.g. [{"type": "text", "text": "..."}]
+          let textContent: string;
+          if (Array.isArray(rawContent)) {
+            textContent = rawContent
+              .filter((block: unknown) => typeof block === 'object' && block !== null && (block as Record<string, unknown>).type === 'text')
+              .map((block: unknown) => (block as Record<string, string>).text || '')
+              .join('');
+          } else {
+            textContent = String(rawContent);
+          }
+
           return {
             id: String(msg.id),
-            text: String(dataField?.content || msgData?.content || ''),
+            text: textContent,
             sender: msgData?.type === 'human' ? ('user' as const) : ('ai' as const),
             timestamp: new Date(msg.created_at),
           };
