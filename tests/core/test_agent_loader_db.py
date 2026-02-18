@@ -1,19 +1,20 @@
 import logging
 import os
 import unittest
-from typing import Any, Dict, List, Optional  # Added Type
-from unittest.mock import MagicMock, patch  # Added call
+from typing import Any, Dict, List, Optional
+from unittest.mock import MagicMock, patch
 
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel
 
-from core.tools.crud_tool import CRUDTool, CRUDToolInput  # For comparison and base class
+from core.tools.crud_tool import CRUDTool, CRUDToolInput
 
 # Modules to test
 from src.core.agent_loader_db import (
     TOOL_REGISTRY,
     _create_dynamic_args_model,
     _create_dynamic_crud_tool_class,
+    _fetch_user_instructions,
     load_agent_executor_db,
     load_tools_from_db,
 )
@@ -21,7 +22,7 @@ from src.core.agents.customizable_agent import CustomizableAgentExecutor
 
 # Basic logger for tests
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG) # Use DEBUG for more verbose test output if needed
+logging.basicConfig(level=logging.DEBUG)
 
 # --- Mock Tool for TOOL_REGISTRY ---
 class SampleNonCRUDTool(BaseTool):
@@ -46,7 +47,6 @@ class TestCreateDynamicArgsModel(unittest.TestCase):
         DynamicModel = _create_dynamic_args_model(model_name, properties_config)
         self.assertEqual(DynamicModel.__name__, model_name)
 
-        # Check fields (Pydantic v2 uses model_fields)
         self.assertIn("name", DynamicModel.model_fields)
         self.assertEqual(DynamicModel.model_fields["name"].annotation, str)
         self.assertTrue(DynamicModel.model_fields["name"].is_required())
@@ -69,9 +69,7 @@ class TestCreateDynamicArgsModel(unittest.TestCase):
     def test_empty_properties_config(self):
         DynamicModel = _create_dynamic_args_model("EmptyPropsModel", {})
         self.assertEqual(len(DynamicModel.model_fields), 0)
-        # Check if it falls back to EmptyNestedModel behavior
         self.assertTrue(issubclass(DynamicModel, BaseModel))
-        # Test instantiation of the fallback model
         instance = DynamicModel()
         self.assertIsNotNone(instance)
 
@@ -105,47 +103,41 @@ class TestCreateDynamicCRUDToolClass(unittest.TestCase):
         DynamicToolClass = _create_dynamic_crud_tool_class(tool_name_from_db, CRUDTool, runtime_schema_config)
 
         self.assertTrue(issubclass(DynamicToolClass, CRUDTool))
-        self.assertNotEqual(DynamicToolClass, CRUDTool) # Ensure it's a new class
+        self.assertNotEqual(DynamicToolClass, CRUDTool)
         self.assertTrue(hasattr(DynamicToolClass, 'args_schema'))
-        self.assertNotEqual(DynamicToolClass.args_schema, CRUDToolInput) # Ensure schema is different
+        self.assertNotEqual(DynamicToolClass.args_schema, CRUDToolInput)
 
-        # Check the generated args_schema fields
         args_schema = DynamicToolClass.args_schema
         self.assertIn("data", args_schema.model_fields)
         self.assertTrue(args_schema.model_fields["data"].is_required())
         data_field_type = args_schema.model_fields["data"].annotation
-        self.assertTrue(issubclass(data_field_type, BaseModel)) # Nested model for data
+        self.assertTrue(issubclass(data_field_type, BaseModel))
         self.assertIn("item_name", data_field_type.model_fields)
         self.assertEqual(data_field_type.model_fields["item_name"].annotation, str)
 
         self.assertIn("filters", args_schema.model_fields)
         self.assertFalse(args_schema.model_fields["filters"].is_required())
-        filters_field_type = args_schema.model_fields["filters"].annotation # This is Optional[NestedModel]
-        # Pydantic v2: Optional[T] means type(T) is the actual model for .annotation on Optional fields
-        # For Optional[NestedModel], the .annotation will be the NestedModel itself if we inspect correctly.
-        # However, to get the actual model type from Optional[T], we need to look at args of typing.Union
+        filters_field_type = args_schema.model_fields["filters"].annotation
         self.assertTrue(issubclass(filters_field_type.__args__[0], BaseModel) if hasattr(filters_field_type, '__args__') else issubclass(filters_field_type, BaseModel))
         actual_filter_model = filters_field_type.__args__[0] if hasattr(filters_field_type, '__args__') else filters_field_type
         self.assertIn("filter_id", actual_filter_model.model_fields)
 
     def test_fallback_to_base_schema_if_config_empty(self):
         DynamicToolClass = _create_dynamic_crud_tool_class("EmptySchemaTool", CRUDTool, {})
-        self.assertEqual(DynamicToolClass, CRUDTool) # Should return the base class itself
+        self.assertEqual(DynamicToolClass, CRUDTool)
         self.assertEqual(DynamicToolClass.args_schema, CRUDToolInput)
 
     def test_fallback_with_invalid_runtime_schema_field(self):
-        # Schema where 'data' is not a dict, so it should be skipped, resulting in empty schema.
         runtime_schema_config = {"data": "not_a_dict"}
         DynamicToolClass = _create_dynamic_crud_tool_class("InvalidSchemaFieldTool", CRUDTool, runtime_schema_config)
-        self.assertEqual(DynamicToolClass, CRUDTool) # Fallback due to no valid fields
+        self.assertEqual(DynamicToolClass, CRUDTool)
         self.assertEqual(DynamicToolClass.args_schema, CRUDToolInput)
 
 
 class TestLoadToolsFromDb(unittest.TestCase):
     def setUp(self):
-        # Register mock tools for testing
         self.original_tool_registry = TOOL_REGISTRY.copy()
-        TOOL_REGISTRY["CRUDTool"] = CRUDTool # Ensure standard CRUDTool is there
+        TOOL_REGISTRY["CRUDTool"] = CRUDTool
         TOOL_REGISTRY["SampleNonCRUDTool"] = SampleNonCRUDTool
 
         self.user_id = "test_user"
@@ -153,30 +145,25 @@ class TestLoadToolsFromDb(unittest.TestCase):
         self.supabase_url = "http://fake.supabase.co"
         self.supabase_key = "fake_key"
 
-        # Patch os.getenv for Supabase URL and Key for CRUDTool instantiation
         self.patch_os_getenv = patch('os.getenv')
         self.mock_os_getenv = self.patch_os_getenv.start()
         self.mock_os_getenv.side_effect = lambda key, default=None: {
             "SUPABASE_URL": "http://fake.supabase.co",
             "SUPABASE_SERVICE_KEY": "fake_key",
-            "GOOGLE_API_KEY": "fake_google_api_key"  # Add this for any Google API calls
+            "GOOGLE_API_KEY": "fake_google_api_key"
         }.get(key, default)
         self.addCleanup(self.patch_os_getenv.stop)
 
-        # Patch create_client used by CRUDTool
-        # CRUDTool imports it as: from supabase import create_client
         self.patch_supabase_create_client = patch('supabase.create_client')
         self.mock_create_supabase_client = self.patch_supabase_create_client.start()
         self.mock_supabase_db_instance = MagicMock()
         self.mock_create_supabase_client.return_value = self.mock_supabase_db_instance
         self.addCleanup(self.patch_supabase_create_client.stop)
 
-        # These are passed directly to load_tools_from_db, not via getenv
         self.direct_supabase_url = "http://fake.supabase.co"
         self.direct_supabase_key = "fake_key"
 
     def tearDown(self):
-        # Restore original TOOL_REGISTRY
         TOOL_REGISTRY.clear()
         TOOL_REGISTRY.update(self.original_tool_registry)
 
@@ -192,7 +179,6 @@ class TestLoadToolsFromDb(unittest.TestCase):
                 }
             }
         ]
-        # Pass the direct URL and key, as CRUDTool will use os.getenv for its own init
         loaded_tools = load_tools_from_db(tools_data, self.user_id, self.agent_name, self.direct_supabase_url, self.direct_supabase_key)
         self.assertEqual(len(loaded_tools), 1)
         tool = loaded_tools[0]
@@ -200,7 +186,7 @@ class TestLoadToolsFromDb(unittest.TestCase):
         self.assertEqual(tool.name, "CreateItemTool")
         self.assertEqual(tool.table_name, "items")
         self.assertEqual(tool.method, "create")
-        self.assertNotEqual(tool.args_schema, CRUDToolInput) # Dynamic schema was applied
+        self.assertNotEqual(tool.args_schema, CRUDToolInput)
         self.assertIn("data", tool.args_schema.model_fields)
         data_field_type = tool.args_schema.model_fields["data"].annotation
         self.assertIn("name", data_field_type.model_fields)
@@ -209,14 +195,14 @@ class TestLoadToolsFromDb(unittest.TestCase):
         tools_data = [
             {
                 "name": "GetItemTool", "description": "Gets an item.", "type": "CRUDTool",
-                "config": {"table_name": "items", "method": "read", "runtime_args_schema": {}} # Empty schema
+                "config": {"table_name": "items", "method": "read", "runtime_args_schema": {}}
             }
         ]
         loaded_tools = load_tools_from_db(tools_data, self.user_id, self.agent_name, self.direct_supabase_url, self.direct_supabase_key)
         self.assertEqual(len(loaded_tools), 1)
         tool = loaded_tools[0]
         self.assertIsInstance(tool, CRUDTool)
-        self.assertEqual(tool.args_schema, CRUDToolInput) # Default schema
+        self.assertEqual(tool.args_schema, CRUDToolInput)
 
     def test_load_non_crud_tool(self):
         tools_data = [
@@ -241,7 +227,7 @@ class TestLoadToolsFromDb(unittest.TestCase):
 
     def test_skip_tool_missing_required_config_for_crud(self):
         tools_data = [
-            {"name": "BadCrud", "description": "Bad.", "type": "CRUDTool", "config": {"method": "create"}} # Missing table_name
+            {"name": "BadCrud", "description": "Bad.", "type": "CRUDTool", "config": {"method": "create"}}
         ]
         loaded_tools = load_tools_from_db(tools_data, self.user_id, self.agent_name, self.direct_supabase_url, self.direct_supabase_key)
         self.assertEqual(len(loaded_tools), 0)
@@ -253,6 +239,44 @@ class TestLoadToolsFromDb(unittest.TestCase):
         ]
         loaded_tools = load_tools_from_db(tools_data, self.user_id, self.agent_name, self.direct_supabase_url, self.direct_supabase_key)
         self.assertEqual(len(loaded_tools), 0)
+
+
+class TestFetchUserInstructions(unittest.TestCase):
+    """Tests for _fetch_user_instructions helper."""
+
+    def test_returns_instructions_when_found(self):
+        db = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.data = {"instructions": "Always use bullet points."}
+        db.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_resp
+
+        result = _fetch_user_instructions(db, "user-1", "assistant")
+        self.assertEqual(result, "Always use bullet points.")
+
+    def test_returns_none_when_no_row(self):
+        db = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.data = None
+        db.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_resp
+
+        result = _fetch_user_instructions(db, "user-1", "assistant")
+        self.assertIsNone(result)
+
+    def test_returns_none_when_empty_instructions(self):
+        db = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.data = {"instructions": ""}
+        db.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_resp
+
+        result = _fetch_user_instructions(db, "user-1", "assistant")
+        self.assertIsNone(result)
+
+    def test_returns_none_on_error(self):
+        db = MagicMock()
+        db.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.side_effect = Exception("DB error")
+
+        result = _fetch_user_instructions(db, "user-1", "assistant")
+        self.assertIsNone(result)
 
 
 class TestLoadAgentExecutorDb(unittest.TestCase):
@@ -267,10 +291,14 @@ class TestLoadAgentExecutorDb(unittest.TestCase):
         self.mock_executor = MagicMock(spec=CustomizableAgentExecutor)
         self.mock_from_agent_config.return_value = self.mock_executor
 
+        self.patch_build_prompt = patch('chatServer.services.prompt_builder.build_agent_prompt')
+        self.mock_build_prompt = self.patch_build_prompt.start()
+        self.mock_build_prompt.return_value = "## Soul\nYou are a test agent.\n\n## Channel\nweb"
+
         self.patch_getenv = patch.dict(os.environ, {
             "VITE_SUPABASE_URL": "env_supabase_url",
             "SUPABASE_SERVICE_KEY": "env_supabase_key",
-            "GOOGLE_API_KEY": "fake_google_api_key"  # Add this for CustomizableAgentExecutor
+            "GOOGLE_API_KEY": "fake_google_api_key"
         })
         self.patch_getenv.start()
 
@@ -278,26 +306,29 @@ class TestLoadAgentExecutorDb(unittest.TestCase):
         self.user_id = "db_user"
         self.session_id = "db_session"
 
-        # Mock DB responses
+        # Mock DB responses - note: column is now 'soul' not 'system_prompt'
         self.mock_agent_config_data = {
             "id": "agent-uuid-123",
             "agent_name": self.agent_name,
             "llm_config": {"model": "gemini-db", "temperature": 0.1},
-            "system_prompt": "You are a DB agent."
+            "soul": "You are a DB agent.",
+            "identity": {"name": "DBBot", "description": "a database assistant"},
         }
-        self.mock_tools_data = [] # Default to no tools
+        self.mock_tools_data = []
 
-        # Setup mock chaining for Supabase client
         mock_agent_response = MagicMock()
         mock_agent_response.data = self.mock_agent_config_data
         self.db_instance_mock.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = mock_agent_response
 
         mock_tools_response = MagicMock()
-        mock_tools_response.data = self.mock_tools_data # Initially no tools
-        # The code chains: .table("agent_tools").select("*").eq("agent_id", ...).eq("is_active", True).eq("is_deleted", False).execute()
+        mock_tools_response.data = self.mock_tools_data
         self.db_instance_mock.table.return_value.select.return_value.eq.return_value.eq.return_value.eq.return_value.execute.return_value = mock_tools_response
 
-        # Register SampleNonCRUDTool for tests that might use it
+        # Mock user instructions fetch
+        mock_instructions_resp = MagicMock()
+        mock_instructions_resp.data = None
+        self.db_instance_mock.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_instructions_resp
+
         self.original_tool_registry = TOOL_REGISTRY.copy()
         TOOL_REGISTRY["CRUDTool"] = CRUDTool
         TOOL_REGISTRY["SampleNonCRUDTool"] = SampleNonCRUDTool
@@ -305,24 +336,16 @@ class TestLoadAgentExecutorDb(unittest.TestCase):
     def tearDown(self):
         self.patch_create_client.stop()
         self.patch_from_agent_config.stop()
+        self.patch_build_prompt.stop()
         self.patch_getenv.stop()
         TOOL_REGISTRY.clear()
         TOOL_REGISTRY.update(self.original_tool_registry)
 
     def configure_db_responses(self, agent_data, tools_data_list):
-        """Configure mock Supabase responses for agent loading.
-
-        Args:
-            agent_data: Agent config dict or None
-            tools_data_list: List of tool dicts. Each must have 'name', 'type', 'description', 'config'.
-                            Will be split into agent_tools assignments and tools records.
-        """
-        # Agent config response
+        """Configure mock Supabase responses for agent loading."""
         agent_resp_mock = MagicMock()
         agent_resp_mock.data = agent_data
 
-        # Build assignment and tool records from tools_data_list
-        # The new code queries agent_tools for assignments, then tools for each tool
         assignments = []
         tool_records = {}
         for i, tool in enumerate(tools_data_list or []):
@@ -348,6 +371,10 @@ class TestLoadAgentExecutorDb(unittest.TestCase):
         assignments_resp_mock = MagicMock()
         assignments_resp_mock.data = assignments
 
+        # Mock user instructions response
+        instructions_resp_mock = MagicMock()
+        instructions_resp_mock.data = None
+
         def make_table_mock(table_name):
             if table_name == 'agent_configurations':
                 return MagicMock(
@@ -360,14 +387,12 @@ class TestLoadAgentExecutorDb(unittest.TestCase):
                     ))
                 )
             elif table_name == 'agent_tools':
-                # .select("*").eq("agent_id", ...).eq("is_active", True).eq("is_deleted", False).execute()
                 chain = MagicMock()
                 chain.select.return_value = chain
                 chain.eq.return_value = chain
                 chain.execute.return_value = assignments_resp_mock
                 return chain
             elif table_name == 'tools':
-                # .select("*").eq("id", tool_id).eq("is_active", True).eq("is_deleted", False).single().execute()
                 def make_tool_chain():
                     tool_chain = MagicMock()
                     captured_tool_id = [None]
@@ -390,28 +415,55 @@ class TestLoadAgentExecutorDb(unittest.TestCase):
                     return tool_chain
 
                 return make_tool_chain()
+            elif table_name == 'user_agent_prompt_customizations':
+                chain = MagicMock()
+                chain.select.return_value = chain
+                chain.eq.return_value = chain
+                chain.maybe_single.return_value = chain
+                chain.execute.return_value = instructions_resp_mock
+                return chain
             else:
                 return MagicMock()
 
         self.db_instance_mock.table.side_effect = make_table_mock
 
     def test_load_executor_success_no_tools(self):
-        self.configure_db_responses(self.mock_agent_config_data, []) # No tools
+        self.configure_db_responses(self.mock_agent_config_data, [])
 
         executor = load_agent_executor_db(self.agent_name, self.user_id, self.session_id, use_cache=False)
 
         self.assertEqual(executor, self.mock_executor)
         self.mock_supabase_client.assert_called_once_with("env_supabase_url", "env_supabase_key")
         self.mock_from_agent_config.assert_called_once()
-        call_kwargs = self.mock_from_agent_config.call_args.kwargs # Get keyword arguments
+        call_kwargs = self.mock_from_agent_config.call_args.kwargs
         agent_config_dict = call_kwargs["agent_config_dict"]
         self.assertEqual(agent_config_dict["agent_name"], self.agent_name)
         self.assertEqual(agent_config_dict["llm"], self.mock_agent_config_data["llm_config"])
-        self.assertEqual(agent_config_dict["system_prompt"], self.mock_agent_config_data["system_prompt"])
+        # system_prompt is now assembled by build_agent_prompt
+        self.assertEqual(agent_config_dict["system_prompt"], self.mock_build_prompt.return_value)
 
-        # Check tools passed to from_agent_config
         passed_tools_list = call_kwargs["tools"]
         self.assertEqual(len(passed_tools_list), 0)
+
+    def test_load_executor_passes_channel_to_prompt_builder(self):
+        self.configure_db_responses(self.mock_agent_config_data, [])
+
+        load_agent_executor_db(self.agent_name, self.user_id, self.session_id, channel="telegram", use_cache=False)
+
+        # Verify build_agent_prompt was called with correct channel
+        self.mock_build_prompt.assert_called_once()
+        call_kwargs = self.mock_build_prompt.call_args.kwargs
+        self.assertEqual(call_kwargs["channel"], "telegram")
+        self.assertEqual(call_kwargs["soul"], "You are a DB agent.")
+        self.assertEqual(call_kwargs["identity"], {"name": "DBBot", "description": "a database assistant"})
+
+    def test_load_executor_default_channel_is_web(self):
+        self.configure_db_responses(self.mock_agent_config_data, [])
+
+        load_agent_executor_db(self.agent_name, self.user_id, self.session_id, use_cache=False)
+
+        call_kwargs = self.mock_build_prompt.call_args.kwargs
+        self.assertEqual(call_kwargs["channel"], "web")
 
     def test_load_executor_with_crud_tool_dynamic_schema(self):
         crud_tool_db_data = [
@@ -436,26 +488,37 @@ class TestLoadAgentExecutorDb(unittest.TestCase):
         loaded_tool = passed_tools_list[0]
         self.assertIsInstance(loaded_tool, CRUDTool)
         self.assertEqual(loaded_tool.name, "DB_CreateItem")
-        self.assertNotEqual(loaded_tool.args_schema, CRUDToolInput) # Dynamic schema
+        self.assertNotEqual(loaded_tool.args_schema, CRUDToolInput)
 
     def test_load_executor_failure_agent_not_found(self):
-        self.configure_db_responses(None, []) # Simulate agent not found
+        self.configure_db_responses(None, [])
         with self.assertRaisesRegex(ValueError, f"Agent configuration for '{self.agent_name}' not found"):
             load_agent_executor_db(self.agent_name, self.user_id, self.session_id, use_cache=False)
 
     def test_load_executor_failure_missing_supabase_env_vars(self):
-        self.patch_getenv.stop() # Stop the patch to remove env vars
-        patch.dict(os.environ, clear=True).start() # Clear os.environ for this test case
+        self.patch_getenv.stop()
+        patch.dict(os.environ, clear=True).start()
 
         with self.assertRaisesRegex(ValueError, "Supabase URL and Service Key must be provided"):
             load_agent_executor_db(self.agent_name, self.user_id, self.session_id, use_cache=False)
 
-        # Restore for other tests
         patch.dict(os.environ, {
             "VITE_SUPABASE_URL": "env_supabase_url",
             "SUPABASE_SERVICE_KEY": "env_supabase_key"
-        }).start() # Start the patch again to restore
-        self.patch_getenv.start() # Also restart the original class-level patch if needed
+        }).start()
+        self.patch_getenv.start()
+
+    def test_load_executor_does_not_pass_ltm_to_from_agent_config(self):
+        """Verify LTM is no longer passed to from_agent_config."""
+        self.configure_db_responses(self.mock_agent_config_data, [])
+
+        load_agent_executor_db(self.agent_name, self.user_id, self.session_id, use_cache=False)
+
+        call_kwargs = self.mock_from_agent_config.call_args.kwargs
+        # ltm_notes_content should NOT be in the kwargs
+        self.assertNotIn("ltm_notes_content", call_kwargs)
+        # explicit_custom_instructions_dict should NOT be in the kwargs
+        self.assertNotIn("explicit_custom_instructions_dict", call_kwargs)
 
 
 if __name__ == '__main__':

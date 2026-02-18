@@ -9,13 +9,10 @@ Pattern mirrors chatServer/services/chat.py:225-258 for approval wrapping.
 """
 
 import logging
-import os
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from src.core.agent_loader_db import load_agent_executor_db
-from supabase import Client as SupabaseClient
-from supabase import create_client
 
 try:
     from ..database.supabase_client import get_supabase_client
@@ -76,6 +73,7 @@ class ScheduledExecutionService:
                 agent_name=agent_name,
                 user_id=user_id,
                 session_id=session_id,
+                channel="scheduled",
             )
 
             # 1b. Apply model override if specified in schedule config (AC-14, AC-16)
@@ -84,14 +82,6 @@ class ScheduledExecutionService:
                 self._apply_model_override(agent_executor, model_override)
                 model_used = model_override
                 logger.info(f"Applied model override '{model_override}' for scheduled run")
-
-            # 1c. Load LTM and prepend to prompt (AC-5, AC-8)
-            ltm_notes = await self._load_ltm(user_id, agent_name)
-            if ltm_notes:
-                prompt = (
-                    f"User context (from memory):\n{ltm_notes}\n\n{prompt}"
-                )
-                logger.info(f"Prepended LTM ({len(ltm_notes)} chars) to prompt")
 
             # 2. Create chat_sessions row for this scheduled run
             supabase_client = await get_supabase_client()
@@ -226,31 +216,6 @@ class ScheduledExecutionService:
                 "error": str(e),
                 "duration_ms": duration_ms,
             }
-
-    async def _load_ltm(self, user_id: str, agent_name: str) -> Optional[str]:
-        """Load long-term memory notes for user+agent from the database."""
-        try:
-            url = os.getenv("VITE_SUPABASE_URL", "")
-            key = os.getenv("SUPABASE_SERVICE_KEY", "")
-            if not url or not key:
-                logger.warning("Supabase config missing, skipping LTM load")
-                return None
-
-            db: SupabaseClient = create_client(url, key)
-            result = (
-                db.table("agent_long_term_memory")
-                .select("notes")
-                .eq("user_id", user_id)
-                .eq("agent_id", agent_name)
-                .maybe_single()
-                .execute()
-            )
-            if result.data and result.data.get("notes"):
-                return result.data["notes"]
-            return None
-        except Exception as e:
-            logger.warning(f"Failed to load LTM for {user_id}/{agent_name}: {e}")
-            return None
 
     def _get_model_name(self, agent_executor) -> str:
         """Extract the model name from the agent executor's LLM chain."""

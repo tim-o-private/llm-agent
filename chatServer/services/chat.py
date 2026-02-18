@@ -222,15 +222,6 @@ class ChatService:
                 memory=agent_short_term_memory
             )
 
-            # Load fresh LTM and inject into the (possibly cached) executor
-            try:
-                from src.core.agent_loader_db import fetch_ltm_notes
-                ltm_notes = await fetch_ltm_notes(user_id, agent_name)
-                if hasattr(agent_executor, 'update_ltm_context'):
-                    agent_executor.update_ltm_context(ltm_notes)
-            except Exception as e:
-                logger.warning(f"Failed to load LTM for chat (non-fatal): {e}")
-
             # Wrap tools with approval checking
             try:
                 supabase_client = await get_supabase_client()
