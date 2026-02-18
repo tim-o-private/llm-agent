@@ -10,11 +10,11 @@ The core insight: the value of AI is under-realized because using the tools is p
 
 | ID | Feature | Status | Spec |
 |----|---------|--------|------|
-| SPEC-001 | Notification System | Done | [SPEC-001](specs/SPEC-001-notification-system.md) |
-| SPEC-002 | Telegram Integration | Done | [SPEC-002](specs/SPEC-002-telegram-integration.md) |
-| SPEC-003 | Scheduled Agent Execution | Done | [SPEC-003](specs/SPEC-003-scheduled-execution.md) |
-| SPEC-004 | Test Coverage for SPEC-001/002/003 | Done | [SPEC-004](specs/SPEC-004-test-coverage-existing-specs.md) |
-| SPEC-005 | Unified Sessions | Done | [SPEC-005](specs/SPEC-005-unified-sessions.md) |
+| SPEC-001 | Notification System | Done | [SPEC-001](specs/completed/SPEC-001-notification-system.md) |
+| SPEC-002 | Telegram Integration | Done | [SPEC-002](specs/completed/SPEC-002-telegram-integration.md) |
+| SPEC-003 | Scheduled Agent Execution | Done | [SPEC-003](specs/completed/SPEC-003-scheduled-execution.md) |
+| SPEC-004 | Test Coverage for SPEC-001/002/003 | Done | [SPEC-004](specs/completed/SPEC-004-test-coverage-existing-specs.md) |
+| SPEC-005 | Unified Sessions | Done | [SPEC-005](specs/completed/SPEC-005-unified-sessions.md) |
 
 Also complete:
 - Agent SDLC setup (agents, skills, hooks, documentation)
@@ -24,23 +24,37 @@ Also complete:
 - Content block normalization for langchain-anthropic
 - Product architecture skill + cruft cleanup
 
-## Milestone 2: Agent Memory & Proactive Value (Feb–Mar 2026) — IN PROGRESS
-
-The agent becomes stateful, context-aware, and proactive. This is the minimum viable "Chief of Staff."
+## Milestone 2: Agent Memory & Proactive Value (Feb 2026) — COMPLETE
 
 | ID | Feature | Status | Spec |
 |----|---------|--------|------|
-| SPEC-006 | Email Digests & Proactive Reminders | PRs #30-34 — UAT | [SPEC-006](specs/SPEC-006-email-digests-and-proactive-reminders.md) |
+| SPEC-006 | Email Digests & Proactive Reminders | Done | [SPEC-006](specs/completed/SPEC-006-email-digests-and-proactive-reminders.md) |
+
+Complete:
+- **Working memory** — agent remembers things across sessions (LTM wired + memory tools on all channels)
+- **Email digests** — context-aware, cost-efficient (Haiku), delivered via Telegram/web
+- **Proactive reminders** — create_reminder + list_reminders tools, background delivery loop, notification routing
+- **Cost controls** — model tiering (Haiku default for scheduled), token usage tracking in execution metadata
+- **Telegram deployed** — full conversational channel with LTM injection, tool approval, session tracking
+
+## Milestone 3: Conversation Management & Agent Autonomy (Feb–Mar 2026) — IN PROGRESS
+
+The agent becomes persistent across sessions and gains the ability to schedule its own work.
+
+| ID | Feature | Status | Spec |
+|----|---------|--------|------|
 | SPEC-007 | Frontend Cleanup + Approval Toasts | Draft | [SPEC-007](specs/SPEC-007-frontend-cleanup.md) |
+| SPEC-008 | Context Management & Compaction | Draft | [SPEC-008](specs/SPEC-008-context-management-and-compaction.md) |
+| SPEC-009 | Conversation History & Agent Scheduling | Planning | [SPEC-009](specs/SPEC-009-conversation-history-and-agent-scheduling.md) |
 
 Key deliverables:
-- **Working memory** — agent remembers things across sessions (LTM wired + memory tools)
-- **Email digests** — context-aware, cost-efficient (Haiku), delivered via Telegram/web
-- **Proactive reminders** — "remind me about X on Friday" just works
-- **Cost controls** — model tiering, token usage tracking
+- **Conversation history UI** — create new conversations, browse past sessions, restore messages on page load
+- **Cross-channel session sharing** — web and Telegram share the active conversation
+- **Agent-managed scheduling** — agents create, list, and delete cron jobs via tools (OpenClaw pattern)
 - **Frontend cleanup** — remove cruft pages, add approval toasts
+- **Context compaction** — tool output pruning, pre-compaction memory flush, conversation summarization
 
-## Milestone 3: Self-Extending Agent (TBD)
+## Milestone 4: Self-Extending Agent (TBD)
 
 The agent can create its own tools and adapt to your needs without you writing code.
 
@@ -49,7 +63,7 @@ The agent can create its own tools and adapt to your needs without you writing c
 - Tool approval dashboard
 - Agent-initiated OAuth flows ("I need access to your calendar to do this")
 
-## Milestone 4: Chief of Staff (TBD)
+## Milestone 5: Chief of Staff (TBD)
 
 Full orchestration: the agent understands your intent and delegates to specialized sub-agents.
 

@@ -53,6 +53,19 @@ FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 COMMENT ON TABLE example_table IS 'Description of what this table stores';
 ```
 
+## Migration Timestamp Uniqueness
+
+Migration files are named `YYYYMMDDHHMMSS_descriptive_name.sql`. When agents work in parallel worktrees, timestamp collisions cause merge failures.
+
+**Rules:**
+1. **Never invent a prefix.** Use the one assigned by the orchestrator in the task contract.
+2. If no prefix was assigned, derive the next available one from existing migrations:
+   ```bash
+   ls supabase/migrations/ | grep -oP '^\d{14}' | sort | tail -1
+   ```
+   Then increment by 1.
+3. The `validate-patterns.sh` hook will warn if a collision is detected against the main repo.
+
 ## Detailed Reference
 
 For full patterns with examples (RLS testing, JSONB config, index strategy, data access in Python), see [reference.md](reference.md).

@@ -245,7 +245,44 @@ if isinstance(ai_response, list):
     ) or "No text content in response."
 ```
 
-## 12. Tool Error Handling
+## 12. Tool Naming Conventions
+
+All new tools must follow `verb_resource` naming. Domain prefix goes on the **resource**, not the verb.
+
+### Approved Verbs
+
+| Operation | `name` string | Class name |
+|-----------|--------------|------------|
+| Create | `create_{resource}` | `Create{Resource}Tool` |
+| List/query | `list_{resources}` | `List{Resources}Tool` |
+| Get single | `get_{resource}` | `Get{Resource}Tool` |
+| Update | `update_{resource}` | `Update{Resource}Tool` |
+| Delete | `delete_{resource}` | `Delete{Resource}Tool` |
+| Search | `search_{resources}` | `Search{Resources}Tool` |
+| Save | `save_{resource}` | `Save{Resource}Tool` |
+| Read | `read_{resource}` | `Read{Resource}Tool` |
+| Send | `send_{resource}` | `Send{Resource}Tool` |
+| Fetch | `fetch_{resource}` | `Fetch{Resource}Tool` |
+
+### Domain Prefix Placement
+
+Domain prefix goes on the resource: `search_gmail_messages` NOT `gmail_search`.
+
+```python
+# ✅ Correct
+name = "search_gmail_messages"
+class SearchGmailMessagesTool(BaseTool): ...
+
+# ❌ Wrong — domain on the verb
+name = "gmail_search"
+class GmailSearchTool(BaseTool): ...
+```
+
+### Legacy Tools (Pre-Convention)
+
+Existing tools that predate this convention should NOT be renamed without a migration plan (DB `tools.name`, `agent_tool_type` enum, agent_tools rows). They are documented as legacy exceptions. See `docs/sdlc/BACKLOG.md` for the rename backlog.
+
+## 13. Tool Error Handling
 
 ```python
 from langchain_core.tools import ToolException

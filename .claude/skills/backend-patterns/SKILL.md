@@ -30,6 +30,8 @@ Before writing backend code, verify:
 - [ ] Error handling re-raises HTTPException, logs unexpected errors
 - [ ] Agent tools configured in DB, using generic CRUDTool
 - [ ] Content block lists normalized to strings in chat responses
+- [ ] Tool name follows `verb_resource` pattern (e.g., `create_reminder`, `list_reminders`)
+- [ ] Tool verb is from approved list: create, list, get, update, delete, search, save, read, send, fetch
 
 ## Key Gotchas
 
