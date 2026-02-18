@@ -32,11 +32,96 @@ interface ChatStore {
   initializeSessionAsync: (agentName: string) => Promise<void>; // Renamed and made async
   clearCurrentSessionAsync: () => Promise<void>;
   setCurrentAgentName: (agentName: string | null) => void; // Renamed
+  startNewConversationAsync: (agentName: string) => Promise<void>;
+  switchToConversationAsync: (chatId: string) => Promise<void>;
 
   // Archival related methods and state are removed assuming backend handles all message history
 }
 
 const CHAT_ID_LOCAL_STORAGE_PREFIX = 'chatUI_activeChatId';
+
+/** Shared helper: fetch historical messages for a chat_id from the backend API. */
+async function loadHistoricalMessages(chatId: string): Promise<ChatMessage[]> {
+  try {
+    const {
+      data: { session: authSession },
+    } = await supabase.auth.getSession();
+    const accessToken = authSession?.access_token;
+    if (!accessToken) return [];
+
+    const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+    const response = await fetch(
+      `${apiBaseUrl}/api/chat/sessions/${encodeURIComponent(chatId)}/messages?limit=50`,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    );
+    if (!response.ok) return [];
+
+    const serverMessages = await response.json();
+    const messages: ChatMessage[] = serverMessages
+      .reverse()
+      .map(
+        (msg: { id: number; session_id: string; message: Record<string, unknown>; created_at: string }) => {
+          const msgData = msg.message as Record<string, unknown>;
+          const dataField = msgData?.data as Record<string, unknown> | undefined;
+          return {
+            id: String(msg.id),
+            text: String(dataField?.content || msgData?.content || ''),
+            sender: msgData?.type === 'human' ? ('user' as const) : ('ai' as const),
+            timestamp: new Date(msg.created_at),
+          };
+        },
+      )
+      .filter((msg: ChatMessage) => msg.text.length > 0);
+    console.log(`Loaded ${messages.length} historical messages for chat ${chatId}`);
+    return messages;
+  } catch (historyError) {
+    console.warn('Failed to load historical messages (non-fatal):', historyError);
+    return [];
+  }
+}
+
+/** Shared helper: create a new session instance row in DB and return its id. */
+async function createSessionInstanceInDb(
+  userId: string,
+  agentName: string,
+  chatId: string,
+): Promise<string> {
+  const payload = {
+    user_id: userId,
+    agent_name: agentName,
+    chat_id: chatId,
+    is_active: true,
+    updated_at: new Date().toISOString(),
+  };
+  const { data: newInstance, error: instanceError } = await supabase
+    .from('chat_sessions')
+    .insert(payload)
+    .select('id')
+    .single();
+
+  if (instanceError) throw instanceError;
+  if (!newInstance || !newInstance.id) throw new Error('Failed to create session instance or get its ID.');
+  return newInstance.id;
+}
+
+/** Shared helper: deactivate the current session instance in DB. */
+async function deactivateSessionInstance(sessionInstanceId: string, userId: string): Promise<void> {
+  try {
+    console.log(`Deactivating session instance: ${sessionInstanceId}`);
+    await supabase
+      .from('chat_sessions')
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq('id', sessionInstanceId)
+      .eq('user_id', userId);
+  } catch (error) {
+    console.error('Error deactivating session instance in DB:', error);
+  }
+}
 
 export const useChatStore = create<ChatStore>((set, get) => ({
   messages: [], // Messages will be primarily managed by backend history; client might only hold current view if needed.
@@ -157,68 +242,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
     // 4. Now, create a NEW SESSION INSTANCE in chat_sessions table for this client engagement
     try {
-      const newSessionInstancePayload = {
-        user_id: user.id,
-        agent_name: agentName,
-        chat_id: chatIdToUse,
-        is_active: true,
-        updated_at: new Date().toISOString(),
-        // created_at is by DB default
-      };
-      const { data: newInstance, error: instanceError } = await supabase
-        .from('chat_sessions')
-        .insert(newSessionInstancePayload)
-        .select('id') // Only need the ID of the new row
-        .single();
-
-      if (instanceError) throw instanceError;
-      if (!newInstance || !newInstance.id) throw new Error('Failed to create session instance or get its ID.');
-
-      newSessionInstanceId = newInstance.id;
+      newSessionInstanceId = await createSessionInstanceInDb(user.id, agentName, chatIdToUse);
       console.log(
         `Successfully created new session instance in DB. ID: ${newSessionInstanceId}, Chat ID: ${chatIdToUse}`,
       );
 
       // 5. Load historical messages from server
-      let historicalMessages: ChatMessage[] = [];
-      if (chatIdToUse) {
-        try {
-          const {
-            data: { session: authSession },
-          } = await supabase.auth.getSession();
-          const accessToken = authSession?.access_token;
-          if (accessToken) {
-            const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-            const response = await fetch(
-              `${apiBaseUrl}/api/chat/sessions/${encodeURIComponent(chatIdToUse)}/messages?limit=50`,
-              {
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${accessToken}`,
-                },
-              },
-            );
-            if (response.ok) {
-              const serverMessages = await response.json();
-              // Convert server messages to ChatMessage format (newest first from server, reverse for chronological)
-              historicalMessages = serverMessages
-                .reverse()
-                .map(
-                  (msg: { id: number; session_id: string; message: Record<string, unknown>; created_at: string }) => ({
-                    id: String(msg.id),
-                    text: String(msg.message?.data?.content || msg.message?.content || ''),
-                    sender: msg.message?.type === 'human' ? ('user' as const) : ('ai' as const),
-                    timestamp: new Date(msg.created_at),
-                  }),
-                )
-                .filter((msg: ChatMessage) => msg.text.length > 0);
-              console.log(`Loaded ${historicalMessages.length} historical messages from server`);
-            }
-          }
-        } catch (historyError) {
-          console.warn('Failed to load historical messages (non-fatal):', historyError);
-        }
-      }
+      const historicalMessages = chatIdToUse ? await loadHistoricalMessages(chatIdToUse) : [];
 
       set({
         activeChatId: chatIdToUse,
@@ -250,23 +280,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const user = useAuthStore.getState().user;
 
     if (currentSessionInstanceId && user) {
-      try {
-        console.log(`Deactivating session instance: ${currentSessionInstanceId}`);
-        await supabase
-          .from('chat_sessions')
-          .update({ is_active: false, updated_at: new Date().toISOString() })
-          .eq('id', currentSessionInstanceId)
-          .eq('user_id', user.id);
-      } catch (error) {
-        console.error('Error deactivating session instance in DB:', error);
-        // Proceed to clear local state anyway
-      }
+      await deactivateSessionInstance(currentSessionInstanceId, user.id);
     }
 
     if (user && typeof currentAgentName === 'string') {
-      // We keep the chat_id in localStorage, as it's persistent.
-      // We only clear the session instance related things from the store.
-      // localStorage.removeItem(localStorageKey); // Do NOT remove chat_id from LS on clear session.
       console.log(
         `Chat session instance ${currentSessionInstanceId} marked inactive (if applicable). Local store state clearing.`,
       );
@@ -274,13 +291,96 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
     set({
       messages: [],
-      // activeChatId: null, // Keep activeChatId so user can resume later
       currentSessionInstanceId: null,
-      // currentAgentName: null, // Keep currentAgentName if user might reopen same agent panel
     });
     console.log(
       'Current session instance ID cleared. Active chat ID and agent name retained for potential resumption.',
     );
+  },
+
+  startNewConversationAsync: async (agentName: string) => {
+    const user = useAuthStore.getState().user;
+    if (!user) {
+      console.warn('User not authenticated, cannot start new conversation.');
+      return;
+    }
+
+    // 1. Deactivate current session instance
+    const { currentSessionInstanceId } = get();
+    if (currentSessionInstanceId) {
+      await deactivateSessionInstance(currentSessionInstanceId, user.id);
+    }
+
+    // 2. Generate new chatId
+    const newChatId = generateNewChatId();
+    console.log(`Starting new conversation with Chat ID: ${newChatId}`);
+
+    // 3. Create new session instance in DB
+    try {
+      const newSessionInstanceId = await createSessionInstanceInDb(user.id, agentName, newChatId);
+
+      // 4. Update localStorage
+      const localStorageKey = `${CHAT_ID_LOCAL_STORAGE_PREFIX}_${user.id}_${agentName}`;
+      localStorage.setItem(localStorageKey, newChatId);
+
+      // 5. Clear messages, update activeChatId
+      set({
+        messages: [],
+        activeChatId: newChatId,
+        currentSessionInstanceId: newSessionInstanceId,
+        currentAgentName: agentName,
+      });
+      console.log(`New conversation started. Chat ID: ${newChatId}, Session Instance: ${newSessionInstanceId}`);
+    } catch (error) {
+      console.error('Error starting new conversation:', error);
+      toast.error('Failed to start new conversation. Please try again.');
+    }
+  },
+
+  switchToConversationAsync: async (chatId: string) => {
+    const user = useAuthStore.getState().user;
+    const { currentSessionInstanceId, currentAgentName } = get();
+    if (!user) {
+      console.warn('User not authenticated, cannot switch conversation.');
+      return;
+    }
+    if (!currentAgentName) {
+      console.warn('No current agent name set, cannot switch conversation.');
+      return;
+    }
+
+    // 1. Deactivate current session instance
+    if (currentSessionInstanceId) {
+      await deactivateSessionInstance(currentSessionInstanceId, user.id);
+    }
+
+    // 2. Set activeChatId
+    console.log(`Switching to conversation: ${chatId}`);
+
+    try {
+      // 3. Load historical messages
+      const historicalMessages = await loadHistoricalMessages(chatId);
+
+      // 4. Create new session instance in DB
+      const newSessionInstanceId = await createSessionInstanceInDb(user.id, currentAgentName, chatId);
+
+      // 5. Update localStorage
+      const localStorageKey = `${CHAT_ID_LOCAL_STORAGE_PREFIX}_${user.id}_${currentAgentName}`;
+      localStorage.setItem(localStorageKey, chatId);
+
+      // 6. Update store state
+      set({
+        activeChatId: chatId,
+        currentSessionInstanceId: newSessionInstanceId,
+        messages: historicalMessages,
+      });
+      console.log(
+        `Switched to conversation ${chatId}. Session Instance: ${newSessionInstanceId}, Messages: ${historicalMessages.length}`,
+      );
+    } catch (error) {
+      console.error('Error switching conversation:', error);
+      toast.error('Failed to switch conversation. Please try again.');
+    }
   },
 
   sendHeartbeatAsync: async () => {

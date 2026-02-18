@@ -1,12 +1,13 @@
-import React, { useEffect, useMemo } from 'react';
-import { AssistantRuntimeProvider, useLocalRuntime } from '@assistant-ui/react';
-import { createCustomChatModelAdapter } from '@/lib/assistantui/CustomRuntime';
+import React, { useEffect, useCallback, useState } from 'react';
+import { AssistantRuntimeProvider } from '@assistant-ui/react';
+import { useExternalStoreRuntime } from '@assistant-ui/react';
+import type { ThreadMessageLike, AppendMessage } from '@assistant-ui/react';
 import { Thread } from '@assistant-ui/react-ui';
-import { useChatStore, useInitializeChatStore } from '@/stores/useChatStore';
-import { useAuthStore } from '@/features/auth/useAuthStore';
+import { useChatStore, useInitializeChatStore, type ChatMessage } from '@/stores/useChatStore';
 import { useTaskViewStore } from '@/stores/useTaskViewStore';
 import { MessageHeader } from '@/components/ui/chat/MessageHeader';
-import { useSendMessageMutation } from '@/api/hooks/useChatApiHooks';
+import { ConversationList } from '@/components/features/Conversations';
+import { supabase } from '@/lib/supabaseClient';
 
 interface ChatPanelV2Props {
   agentId?: string;
@@ -19,23 +20,108 @@ export const ChatPanelV2: React.FC<ChatPanelV2Props> = ({ agentId: agentIdProp }
   useInitializeChatStore(agentId);
 
   // Get current state from stores
-  const { activeChatId, currentSessionInstanceId, sendHeartbeatAsync, clearCurrentSessionAsync } = useChatStore();
-  const { user } = useAuthStore();
+  const {
+    messages,
+    activeChatId,
+    currentSessionInstanceId,
+    sendHeartbeatAsync,
+    clearCurrentSessionAsync,
+    addMessage,
+  } = useChatStore();
   const { setInputFocusState } = useTaskViewStore();
 
-  // Get mutation state for header status
-  const sendMessageMutation = useSendMessageMutation();
+  // Track running state for the external store
+  const [isRunning, setIsRunning] = useState(false);
 
-  // Create chat model adapter with provider functions that get current values
-  const chatModelAdapter = useMemo(() => {
-    const userIdProvider = () => user?.id || null;
-    const activeChatIdProvider = () => activeChatId;
+  // Convert ChatMessage to ThreadMessageLike
+  const convertMessage = useCallback(
+    (msg: ChatMessage): ThreadMessageLike => ({
+      role: msg.sender === 'user' ? 'user' : 'assistant',
+      content: msg.text,
+      id: msg.id,
+      createdAt: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
+    }),
+    [],
+  );
 
-    return createCustomChatModelAdapter(agentId, userIdProvider, activeChatIdProvider);
-  }, [agentId, user?.id, activeChatId]);
+  // onNew handler - sends message via /api/chat
+  const onNew = useCallback(
+    async (message: AppendMessage) => {
+      // Extract text from content parts
+      const userText = message.content
+        .filter((c): c is { type: 'text'; text: string } => c.type === 'text')
+        .map((c) => c.text)
+        .join(' ');
+      if (!userText) return;
 
-  // Create runtime using useLocalRuntime hook
-  const runtime = useLocalRuntime(chatModelAdapter);
+      setIsRunning(true);
+      try {
+        // Add user message to store
+        await addMessage({ text: userText, sender: 'user' });
+
+        // Call /api/chat
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const accessToken = session?.access_token;
+        if (!accessToken) throw new Error('Not authenticated');
+
+        const apiUrl = `${import.meta.env.VITE_API_BASE_URL || ''}/api/chat`;
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            agent_name: agentId,
+            message: userText,
+            session_id: activeChatId,
+          }),
+        });
+
+        if (!response.ok) {
+          let errorDetail = `API Error: ${response.status} ${response.statusText}`;
+          try {
+            const errorData = await response.json();
+            errorDetail = errorData.detail || errorDetail;
+          } catch {
+            // Ignore if error response is not JSON
+          }
+          throw new Error(errorDetail);
+        }
+
+        const data = await response.json();
+
+        if (data.error) {
+          throw new Error(data.error);
+        }
+
+        // Add AI response to store
+        await addMessage({
+          text: data.response,
+          sender: 'ai',
+          tool_name: data.tool_name || undefined,
+          tool_input: data.tool_input || undefined,
+        });
+        await sendHeartbeatAsync();
+      } catch (error) {
+        console.error('ChatPanelV2: Error sending message:', error);
+        throw error;
+      } finally {
+        setIsRunning(false);
+      }
+    },
+    [agentId, activeChatId, addMessage, sendHeartbeatAsync],
+  );
+
+  // Create runtime using useExternalStoreRuntime
+  const runtime = useExternalStoreRuntime({
+    messages,
+    convertMessage,
+    onNew,
+    isRunning,
+  });
 
   // Periodic Heartbeat - same as original ChatPanel
   useEffect(() => {
@@ -109,9 +195,12 @@ export const ChatPanelV2: React.FC<ChatPanelV2Props> = ({ agentId: agentIdProp }
       {/* Header matching the existing design */}
       <MessageHeader
         chatTitle="AI Coach"
-        status={sendMessageMutation.isPending ? 'Typing...' : 'Online'}
-        statusColor={sendMessageMutation.isPending ? 'yellow' : 'green'}
+        status={isRunning ? 'Typing...' : 'Online'}
+        statusColor={isRunning ? 'yellow' : 'green'}
       />
+
+      {/* Conversation history list */}
+      <ConversationList agentName={agentId} />
 
       {/* Assistant-UI Thread with comprehensive theming from assistant-ui-theme.css */}
       <div className="flex-1 relative">
