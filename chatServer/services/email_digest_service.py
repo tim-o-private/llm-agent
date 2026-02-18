@@ -1,11 +1,14 @@
 """Unified Email Digest Service for both scheduled and on-demand execution."""
 
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from chatServer.services.email_digest_storage_service import get_email_digest_storage_service
 from src.core.agent_loader_db import load_agent_executor_db
+from supabase import Client as SupabaseClient
+from supabase import create_client
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +77,12 @@ class EmailDigestService:
                     f"{read_filter}. Use your Gmail tools to search for recent emails and "
                     f"create a comprehensive summary. Focus on actionable items and important communications."
                 )
+
+            # Load LTM and prepend to prompt for context-aware prioritization (AC-5, AC-8)
+            ltm_notes = await self._load_ltm(self.user_id, "email_digest_agent")
+            if ltm_notes:
+                prompt = f"User context (from memory):\n{ltm_notes}\n\n{prompt}"
+                logger.info(f"Prepended LTM ({len(ltm_notes)} chars) to digest prompt")
 
             logger.info(f"Invoking email_digest_agent with prompt: {prompt[:100]}...")
 
@@ -153,6 +162,30 @@ class EmailDigestService:
                 })
 
             return error_result
+
+    async def _load_ltm(self, user_id: str, agent_name: str) -> Optional[str]:
+        """Load long-term memory notes for user+agent from the database."""
+        try:
+            url = os.getenv("VITE_SUPABASE_URL", "")
+            key = os.getenv("SUPABASE_SERVICE_KEY", "")
+            if not url or not key:
+                return None
+
+            db: SupabaseClient = create_client(url, key)
+            result = (
+                db.table("agent_long_term_memory")
+                .select("notes")
+                .eq("user_id", user_id)
+                .eq("agent_id", agent_name)
+                .maybe_single()
+                .execute()
+            )
+            if result.data and result.data.get("notes"):
+                return result.data["notes"]
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to load LTM for {user_id}/{agent_name}: {e}")
+            return None
 
     def _extract_email_count(self, digest_content: str) -> Optional[int]:
         """Extract email count from digest content if possible."""
