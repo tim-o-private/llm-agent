@@ -46,6 +46,11 @@ class CustomizableAgentExecutor(AgentExecutor):
 
     model_config = {"arbitrary_types_allowed": True}
 
+    @property
+    def input_keys(self) -> List[str]:
+        """Override to avoid AgentExecutor introspecting RunnableSequence for input_keys."""
+        return ["input", "chat_history"]
+
     @classmethod
     def from_agent_config(
         cls,
