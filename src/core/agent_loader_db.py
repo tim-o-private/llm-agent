@@ -600,3 +600,37 @@ def load_agent_executor_db(
     except Exception as e:
         logger.error(f"Failed to create CustomizableAgentExecutor for agent '{agent_db_config['agent_name']}': {e}", exc_info=True)
         raise
+
+
+async def fetch_ltm_notes(user_id: str, agent_name: str, supabase_client=None) -> Optional[str]:
+    """Fetch long-term memory notes for a user+agent from the database.
+
+    Args:
+        user_id: The user's ID.
+        agent_name: The agent name (matches agent_id column in agent_long_term_memory).
+        supabase_client: Optional async Supabase client. If not provided, one will be obtained.
+
+    Returns:
+        The LTM notes string, or None if no notes exist.
+    """
+    try:
+        if supabase_client is None:
+            from chatServer.database.supabase_client import get_supabase_client
+            supabase_client = await get_supabase_client()
+
+        ltm_result = await supabase_client.table("agent_long_term_memory").select("notes").eq(
+            "user_id", user_id
+        ).eq("agent_id", agent_name).maybe_single().execute()
+
+        if ltm_result.data:
+            notes = ltm_result.data.get("notes")
+            if notes:
+                logger.info(f"Loaded LTM for user={user_id}, agent={agent_name} ({len(notes)} chars)")
+                return notes
+
+        logger.debug(f"No LTM found for user={user_id}, agent={agent_name}")
+        return None
+
+    except Exception as e:
+        logger.warning(f"Failed to load LTM for {user_id}/{agent_name}: {e}")
+        return None

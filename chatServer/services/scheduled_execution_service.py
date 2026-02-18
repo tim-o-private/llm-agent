@@ -12,7 +12,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-from src.core.agent_loader_db import load_agent_executor_db
+from src.core.agent_loader_db import fetch_ltm_notes, load_agent_executor_db
 
 try:
     from ..database.supabase_client import get_supabase_client
@@ -69,8 +69,16 @@ class ScheduledExecutionService:
                 session_id=session_id,
             )
 
-            # 2. Create chat_sessions row for this scheduled run
+            # 2. Load fresh LTM and inject into the executor
             supabase_client = await get_supabase_client()
+            try:
+                ltm_notes = await fetch_ltm_notes(user_id, agent_name, supabase_client)
+                if hasattr(agent_executor, 'update_ltm_context'):
+                    agent_executor.update_ltm_context(ltm_notes)
+            except Exception as e:
+                logger.warning(f"Failed to load LTM for scheduled run (non-fatal): {e}")
+
+            # 3. Create chat_sessions row for this scheduled run
             await supabase_client.table("chat_sessions").insert(
                 {
                     "user_id": user_id,
