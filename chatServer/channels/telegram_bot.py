@@ -293,6 +293,15 @@ async def handle_message(message: types.Message) -> None:
             session_id=session_id,
         )
 
+        # Load fresh LTM and inject into the executor
+        try:
+            from src.core.agent_loader_db import fetch_ltm_notes
+            ltm_notes = await fetch_ltm_notes(user_id, "assistant", bot_service._db_client)
+            if hasattr(agent_executor, 'update_ltm_context'):
+                agent_executor.update_ltm_context(ltm_notes)
+        except Exception as e:
+            logger.warning(f"Failed to load LTM for Telegram chat (non-fatal): {e}")
+
         # Wrap tools with approval
         audit_service = AuditService(bot_service._db_client)
         pending_service = PendingActionsService(

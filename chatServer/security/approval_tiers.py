@@ -67,6 +67,10 @@ TOOL_APPROVAL_DEFAULTS: dict[str, tuple[ApprovalTier, ApprovalTier]] = {
     "memory_search": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
     "memory_delete": (ApprovalTier.REQUIRES_APPROVAL, ApprovalTier.REQUIRES_APPROVAL),
 
+    # Reminder tools
+    "create_reminder": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.AUTO_APPROVE),
+    "list_reminders": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+
     # LTM memory tools
     "save_memory": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.REQUIRES_APPROVAL),
     "read_memory": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
