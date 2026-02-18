@@ -197,7 +197,7 @@ class CustomizableAgentExecutor(AgentExecutor):
             MessagesPlaceholder(variable_name="agent_scratchpad"),
         ])
 
-        self.agent = (
+        new_runnable = (
             RunnablePassthrough.assign(
                 agent_scratchpad=lambda x: format_to_tool_messages(
                     preprocess_intermediate_steps(x.get("intermediate_steps", []))
@@ -207,6 +207,13 @@ class CustomizableAgentExecutor(AgentExecutor):
             | self._llm_with_tools
             | ToolsAgentOutputParser()
         )
+        # AgentExecutor's Pydantic validator wraps the raw RunnableSequence in
+        # RunnableAgent/RunnableMultiActionAgent during __init__, providing aplan().
+        # Direct self.agent assignment bypasses that validator — update .runnable instead.
+        if hasattr(self.agent, 'runnable'):
+            self.agent.runnable = new_runnable
+        else:
+            logger.warning("Agent wrapper missing .runnable; LTM context update skipped")
 
     async def ainvoke(self, input: Dict[str, Any], config: Optional[Dict[str, Any]] = None, **kwargs: Any) -> Dict[str, Any]:
         if "chat_history" not in input:
