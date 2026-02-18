@@ -202,6 +202,18 @@ FROM agent_configurations WHERE agent_name = 'assistant';
 
 This structure helps the agent and the email digest understand what matters.
 
+**Design note — memory evolution path:**
+
+The text-blob LTM is the MVP. It works today with minimal code. But it has a ceiling: at ~4000 chars, the entire memory goes into the system prompt, which means storage is limited by context window cost.
+
+Two known upgrade paths exist for when we hit that ceiling:
+
+1. **MCP memory server** — Tim has an existing memory MCP server. The memory tools can be swapped to use MCP transport instead of direct Supabase calls, with no change to the agent's tool interface (`save_memory`/`read_memory` stay the same). This is the likely near-term path.
+
+2. **Skills-decomposition pattern** (à la [LangChain SQL assistant with skills](https://docs.langchain.com/oss/python/langchain/multi-agent/skills-sql-assistant)) — memories are decomposed into indexed, retrievable units (like SQL snippets or procedures) rather than stored as a monolithic blob. The agent retrieves relevant memories per-query instead of loading everything. This dramatically increases storage capacity at the cost of retrieval accuracy.
+
+**What this means for implementation:** Keep the memory tool interface clean and narrow (`save_memory(notes)`, `read_memory()`) so the backing store can be swapped without changing the agent's tools or the consuming code. Don't leak Supabase-specific details into the tool's public interface. The 4000-char cap is intentional — it's the forcing function that tells us when to upgrade.
+
 ### Unit 3: Reminders Table + Service (database-dev + backend-dev)
 
 **Branch:** `feat/SPEC-006-reminders`
