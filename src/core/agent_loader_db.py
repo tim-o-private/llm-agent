@@ -14,6 +14,7 @@ from chatServer.tools.gmail_tools import GmailDigestTool, GmailGetMessageTool, G
 from chatServer.tools.memory_tools import ReadMemoryTool, SaveMemoryTool
 from chatServer.tools.reminder_tools import CreateReminderTool, ListRemindersTool
 from chatServer.tools.schedule_tools import CreateScheduleTool, DeleteScheduleTool, ListSchedulesTool
+from chatServer.tools.update_instructions_tool import UpdateInstructionsTool
 from core.agents.customizable_agent import CustomizableAgentExecutor
 from core.tools.crud_tool import CRUDTool, CRUDToolInput
 from supabase import Client as SupabaseClient
@@ -41,6 +42,7 @@ TOOL_REGISTRY: Dict[str, Type] = {
     "CreateScheduleTool": CreateScheduleTool,
     "DeleteScheduleTool": DeleteScheduleTool,
     "ListSchedulesTool": ListSchedulesTool,
+    "UpdateInstructionsTool": UpdateInstructionsTool,
     # Add other distinct, non-CRUDTool Python classes here if any.
     # The string key (e.g., "CRUDTool") must match the 'type' column
     # (or ENUM value as string) in your agent_tools table for these tools.
