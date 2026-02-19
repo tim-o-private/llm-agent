@@ -113,7 +113,7 @@ class BackgroundTaskService:
 
                 # Reload schedules periodically (every 5 minutes) or on first run
                 if (self._last_schedule_check is None or
-                    current_time - self._last_schedule_check > timedelta(minutes=5)):
+                    current_time - self._last_schedule_check > timedelta(minutes=1)):
                     await self._reload_agent_schedules()
                     self._last_schedule_check = current_time
 
