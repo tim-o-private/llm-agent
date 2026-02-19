@@ -10,9 +10,26 @@ CHANNEL_GUIDANCE = {
         "This is an automated scheduled run. No one is waiting for a response. "
         "Be thorough but don't ask follow-up questions — just do the work and report results."
     ),
+    "heartbeat": (
+        "This is an automated heartbeat check. No one is waiting for a response. "
+        "Check each item on your checklist using tools. If nothing needs attention, "
+        "respond with exactly: HEARTBEAT_OK. Otherwise, report only what needs action."
+    ),
 }
 
 MAX_INSTRUCTIONS_LENGTH = 2000
+
+ONBOARDING_SECTION = (
+    "This appears to be your first interaction with this user.\n"
+    "Their memory is empty and they have no custom instructions set.\n\n"
+    "Welcome the user warmly and help them get started:\n"
+    "1. Introduce yourself briefly using your identity.\n"
+    "2. Ask about their key priorities and how they'd like to use you.\n"
+    "3. Ask about communication preferences (concise vs detailed, formal vs casual).\n"
+    "4. After gathering answers, use save_memory to record what you learn.\n"
+    "5. Use update_instructions to set initial standing instructions.\n\n"
+    "Keep it conversational — you can learn more over time."
+)
 
 MEMORY_SECTION = (
     "You have long-term memory via the read_memory and save_memory tools.\n"
@@ -30,6 +47,7 @@ def build_agent_prompt(
     user_instructions: str | None,
     timezone: str | None = None,
     tool_names: list[str] | None = None,
+    memory_notes: str | None = None,
 ) -> str:
     """Assemble the agent system prompt from layered sections.
 
@@ -40,6 +58,7 @@ def build_agent_prompt(
         user_instructions: Free-text user instructions or None.
         timezone: IANA timezone string (e.g. "America/New_York") or None.
         tool_names: List of available tool names for reference.
+        memory_notes: LTM notes string or None. Used for onboarding detection.
 
     Returns:
         Assembled system prompt string.
@@ -93,6 +112,12 @@ def build_agent_prompt(
             f"## Tools\nAvailable tools: {tools_list}\n"
             "Use tools when they help. Don't narrate routine tool calls."
         )
+
+    # 8. Onboarding (interactive channels only, when memory + instructions are empty)
+    is_interactive = channel in ("web", "telegram")
+    is_new_user = not memory_notes and not user_instructions
+    if is_interactive and is_new_user:
+        sections.append(f"## Onboarding\n{ONBOARDING_SECTION}")
 
     return "\n\n".join(sections)
 

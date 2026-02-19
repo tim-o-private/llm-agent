@@ -64,9 +64,12 @@ class ScheduledExecutionService:
         model_override = config.get("model_override")
 
         try:
+            schedule_type = config.get("schedule_type", "scheduled")
+            channel = "heartbeat" if schedule_type == "heartbeat" else "scheduled"
+
             logger.info(
                 f"Executing scheduled agent '{agent_name}' for user {user_id} "
-                f"(schedule {schedule_id})"
+                f"(schedule {schedule_id}, channel={channel})"
             )
 
             # 1. Load agent from DB — always fresh, never rely on cache
@@ -74,7 +77,7 @@ class ScheduledExecutionService:
                 agent_name=agent_name,
                 user_id=user_id,
                 session_id=session_id,
-                channel="scheduled",
+                channel=channel,
             )
 
             # 1b. Apply model override if specified in schedule config (AC-14, AC-16)
@@ -117,15 +120,23 @@ class ScheduledExecutionService:
                     f"for scheduled run of '{agent_name}'"
                 )
 
-            # 4. Invoke the agent
+            # 4. Build effective prompt (heartbeat gets checklist formatting)
+            if schedule_type == "heartbeat":
+                effective_prompt = self._build_heartbeat_prompt(
+                    prompt, config.get("heartbeat_checklist", [])
+                )
+            else:
+                effective_prompt = prompt
+
+            # 5. Invoke the agent
             response = await agent_executor.ainvoke(
                 {
-                    "input": prompt,
+                    "input": effective_prompt,
                     "chat_history": [],  # Fresh context for scheduled runs
                 }
             )
 
-            # 5. Normalize output (handle content block lists from newer langchain-anthropic)
+            # 6. Normalize output (handle content block lists from newer langchain-anthropic)
             output = response.get("output", "")
             if isinstance(output, list):
                 output = (
@@ -137,17 +148,23 @@ class ScheduledExecutionService:
                     or "No text content in response."
                 )
 
-            # 6. Count pending actions created during this run
+            # 7. Detect HEARTBEAT_OK suppression
+            is_heartbeat_ok = (
+                schedule_type == "heartbeat" and output.strip().startswith("HEARTBEAT_OK")
+            )
+
+            # 8. Count pending actions created during this run
             pending_count = await pending_actions_service.get_pending_count(user_id)
 
-            # 7. Build execution metadata with token usage (AC-15)
+            # 9. Build execution metadata with token usage (AC-15)
             duration_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
             execution_metadata = self._build_execution_metadata(
                 agent_executor=agent_executor,
                 model_used=model_used,
             )
 
-            # 8. Store result
+            # 10. Store result (always, for audit trail)
+            result_status = "heartbeat_ok" if is_heartbeat_ok else "success"
             await self._store_result(
                 supabase_client=supabase_client,
                 user_id=user_id,
@@ -155,23 +172,28 @@ class ScheduledExecutionService:
                 agent_name=agent_name,
                 prompt=prompt,
                 result_content=output,
-                status="success",
+                status=result_status,
                 pending_actions_created=pending_count,
                 duration_ms=duration_ms,
                 metadata=execution_metadata,
             )
 
-            # 9. Notify user (AC-7)
-            await self._notify_user(
-                supabase_client=supabase_client,
-                user_id=user_id,
-                agent_name=agent_name,
-                result_content=output,
-                pending_count=pending_count,
-                config=config,
-            )
+            # 11. Notify user (skip when HEARTBEAT_OK — nothing to report)
+            if is_heartbeat_ok:
+                logger.info(
+                    f"Heartbeat OK for '{agent_name}' — suppressing notification"
+                )
+            else:
+                await self._notify_user(
+                    supabase_client=supabase_client,
+                    user_id=user_id,
+                    agent_name=agent_name,
+                    result_content=output,
+                    pending_count=pending_count,
+                    config=config,
+                )
 
-            # 10. Mark session inactive after completion
+            # 12. Mark session inactive after completion
             await supabase_client.table("chat_sessions").update(
                 {"is_active": False}
             ).eq("session_id", session_id).execute()
@@ -255,6 +277,25 @@ class ScheduledExecutionService:
             logger.warning(f"Could not apply model override '{model_override}' — LLM not found in chain")
         except Exception as e:
             logger.warning(f"Failed to apply model override: {e}")
+
+    def _build_heartbeat_prompt(
+        self, original_prompt: str, checklist: list[str]
+    ) -> str:
+        """Build a structured heartbeat prompt from the original prompt and checklist items.
+
+        If no checklist is provided, falls back to the original prompt unchanged.
+        """
+        if not checklist:
+            return original_prompt
+
+        items = "\n".join(f"- {item}" for item in checklist)
+        return (
+            f"{original_prompt}\n\n"
+            f"## Heartbeat Checklist\n"
+            f"Check each item below using your tools:\n{items}\n\n"
+            f"If nothing needs attention, respond with exactly: HEARTBEAT_OK\n"
+            f"Otherwise, report only what needs action."
+        )
 
     def _build_execution_metadata(
         self,

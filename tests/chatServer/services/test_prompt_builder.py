@@ -2,6 +2,7 @@
 
 from chatServer.services.prompt_builder import (
     MAX_INSTRUCTIONS_LENGTH,
+    ONBOARDING_SECTION,
     build_agent_prompt,
 )
 
@@ -182,3 +183,75 @@ class TestBuildAgentPrompt:
         ]
         positions = [result.index(s) for s in sections]
         assert positions == sorted(positions), "Sections are not in the expected order"
+
+    # --- Heartbeat channel guidance ---
+
+    def test_channel_heartbeat(self):
+        """Heartbeat channel includes heartbeat-specific guidance."""
+        result = build_agent_prompt(soul="x", identity=None, channel="heartbeat", user_instructions=None)
+        assert "automated heartbeat check" in result
+        assert "HEARTBEAT_OK" in result
+
+    # --- Onboarding section ---
+
+    def test_onboarding_web_no_memory_no_instructions(self):
+        """Onboarding section present on web when memory_notes=None and user_instructions=None."""
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="web",
+            user_instructions=None, memory_notes=None,
+        )
+        assert "## Onboarding" in result
+        assert "first interaction" in result
+
+    def test_onboarding_telegram_no_memory_no_instructions(self):
+        """Onboarding section present on telegram when memory and instructions are empty."""
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="telegram",
+            user_instructions=None, memory_notes=None,
+        )
+        assert "## Onboarding" in result
+
+    def test_no_onboarding_when_memory_exists(self):
+        """No onboarding when memory_notes has content."""
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="web",
+            user_instructions=None, memory_notes="User prefers concise answers",
+        )
+        assert "## Onboarding" not in result
+
+    def test_no_onboarding_when_instructions_exist(self):
+        """No onboarding when user_instructions has content."""
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="web",
+            user_instructions="Always use bullet points.",
+            memory_notes=None,
+        )
+        assert "## Onboarding" not in result
+
+    def test_no_onboarding_on_scheduled_channel(self):
+        """No onboarding on non-interactive channels even if memory/instructions are empty."""
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="scheduled",
+            user_instructions=None, memory_notes=None,
+        )
+        assert "## Onboarding" not in result
+
+    def test_no_onboarding_on_heartbeat_channel(self):
+        """No onboarding on heartbeat channel."""
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="heartbeat",
+            user_instructions=None, memory_notes=None,
+        )
+        assert "## Onboarding" not in result
+
+    def test_onboarding_after_tools_section(self):
+        """Onboarding section appears after Tools section when both present."""
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="web",
+            user_instructions=None, memory_notes=None,
+            tool_names=["tool_a"],
+        )
+        assert "## Onboarding" in result
+        tools_pos = result.index("## Tools")
+        onboarding_pos = result.index("## Onboarding")
+        assert onboarding_pos > tools_pos
