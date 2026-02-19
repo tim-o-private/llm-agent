@@ -220,7 +220,10 @@ class NotificationService:
             return
 
         try:
-            from chatServer.channels.telegram_bot import get_telegram_bot_service
+            try:
+                from ..channels.telegram_bot import get_telegram_bot_service
+            except ImportError:
+                from channels.telegram_bot import get_telegram_bot_service
 
             bot_service = get_telegram_bot_service()
             if not bot_service:

@@ -68,14 +68,14 @@ Every service and router gets tests:
 
 ### 4. Verify
 
-Before marking the task complete:
+**Do NOT call TaskUpdate with status=completed until these commands exit 0:**
 
 ```bash
 pytest tests/ -x -q
 ruff check src/ chatServer/ tests/
 ```
 
-Both must pass.
+Both must pass. Include the test output summary in your completion message to the orchestrator. If tests fail, fix them first — the TaskCompleted hook will block you anyway.
 
 ### 5. Commit
 
@@ -103,6 +103,9 @@ gh pr create --title "SPEC-NNN: <short description>" --body "$(cat <<'EOF'
 ## Testing
 - [ ] pytest passes
 - [ ] ruff check passes
+
+## Merge Order
+Prerequisite: database migration PR. Unblocks: frontend PR.
 
 ## Functional Unit
 <which part of the spec this covers>

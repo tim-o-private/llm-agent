@@ -76,6 +76,16 @@ Reviewer checks: **scope boundary**, contract compliance, pattern compliance, te
 - Missing documentation = **BLOCKER**
 - Out-of-scope changes = **BLOCKER**
 
+## PR Merge Order
+
+PRs follow the cross-domain dependency flow and must be merged in order:
+
+1. **Database PRs** — merged first (no prerequisites)
+2. **Backend PRs** — merged second (requires database PR merged)
+3. **Frontend PRs** — merged last (requires database + backend PRs merged)
+
+Every PR body must include a "Merge Order" section stating its prerequisites and what it unblocks. The orchestrator reports PRs with numbered merge order — never as "all ready simultaneously" unless truly independent.
+
 ## Deviation Logging
 
 When an agent makes a mistake, log it in `docs/sdlc/DEVIATIONS.md` with: what happened, root cause, correction, target (skill/hook/agent/CLAUDE.md).

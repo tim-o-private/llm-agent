@@ -67,14 +67,14 @@ Every component and hook gets a test file:
 
 ### 4. Verify
 
-Before marking the task complete:
+**Do NOT call TaskUpdate with status=completed until these commands exit 0:**
 
 ```bash
 cd webApp && pnpm test -- --run
 cd webApp && pnpm lint
 ```
 
-Both must pass.
+Both must pass. Include the test output summary in your completion message to the orchestrator. If tests fail, fix them first — the TaskCompleted hook will block you anyway.
 
 ### 5. Commit
 
@@ -98,6 +98,9 @@ gh pr create --title "SPEC-NNN: <short description>" --body "$(cat <<'EOF'
 ## Testing
 - [ ] pnpm test passes
 - [ ] pnpm lint passes
+
+## Merge Order
+Prerequisites: 1. Database migration PR, 2. Backend service PR. No dependents.
 
 ## Functional Unit
 <which part of the spec this covers>

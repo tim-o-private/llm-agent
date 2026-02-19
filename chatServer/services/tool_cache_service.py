@@ -11,9 +11,10 @@ try:
     from .ttl_cache_service import TTLCacheService, get_ttl_cache_service, register_ttl_cache_service
 except ImportError:
     # Fall back to absolute imports (when run directly)
-    from chatServer.database.connection import get_database_manager
-    from chatServer.services.infrastructure_error_handler import handle_cache_errors, handle_database_errors
-    from chatServer.services.ttl_cache_service import TTLCacheService, register_ttl_cache_service
+    from database.connection import get_database_manager
+
+    from services.infrastructure_error_handler import handle_cache_errors, handle_database_errors
+    from services.ttl_cache_service import TTLCacheService, register_ttl_cache_service
 
 logger = logging.getLogger(__name__)
 

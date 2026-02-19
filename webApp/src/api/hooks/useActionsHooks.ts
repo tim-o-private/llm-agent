@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { toast } from '@/components/ui/toast';
 
 const ACTIONS_QUERY_KEY = 'actions';
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 // Types
 export interface PendingAction {

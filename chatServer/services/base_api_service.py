@@ -17,7 +17,7 @@ from supabase import AsyncClient
 try:
     from ..models.external_api import ExternalAPIConnectionResponse, ServiceName
 except ImportError:
-    from chatServer.models.external_api import ExternalAPIConnectionResponse, ServiceName
+    from models.external_api import ExternalAPIConnectionResponse, ServiceName
 
 logger = logging.getLogger(__name__)
 

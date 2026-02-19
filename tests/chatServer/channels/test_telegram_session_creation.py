@@ -34,11 +34,19 @@ async def test_handle_message_upserts_chat_session():
         return_value=MagicMock(data={"user_id": "user-123"})
     )
 
-    upsert_chain = MagicMock()
-    upsert_chain.execute = AsyncMock(return_value=MagicMock(data=[]))
+    # chat_sessions select chain (returns empty — no existing session)
+    cs_select_chain = MagicMock()
+    cs_select_chain.eq.return_value = cs_select_chain
+    cs_select_chain.limit.return_value = cs_select_chain
+    cs_select_chain.execute = AsyncMock(return_value=MagicMock(data=[]))
+
+    # chat_sessions insert chain
+    cs_insert_chain = MagicMock()
+    cs_insert_chain.execute = AsyncMock(return_value=MagicMock(data=[]))
 
     chat_sessions_mock = MagicMock()
-    chat_sessions_mock.upsert.return_value = upsert_chain
+    chat_sessions_mock.select.return_value = cs_select_chain
+    chat_sessions_mock.insert.return_value = cs_insert_chain
 
     user_channels_mock = MagicMock()
     user_channels_mock.select.return_value = user_channels_chain
@@ -70,15 +78,16 @@ async def test_handle_message_upserts_chat_session():
     ):
         await handle_message(message)
 
-    # Verify chat_sessions upsert was called
-    chat_sessions_mock.upsert.assert_called_once()
-    upsert_data = chat_sessions_mock.upsert.call_args[0][0]
-    assert upsert_data["user_id"] == "user-123"
-    assert upsert_data["session_id"] == "telegram_12345"
-    assert upsert_data["channel"] == "telegram"
-    assert upsert_data["agent_name"] == "assistant"
-    assert upsert_data["is_active"] is True
-    assert chat_sessions_mock.upsert.call_args[1].get("on_conflict") == "session_id"
+    # Verify chat_sessions select was called to check existence
+    chat_sessions_mock.select.assert_called_once_with("id")
+    # Verify chat_sessions insert was called (since select returned empty)
+    chat_sessions_mock.insert.assert_called_once()
+    insert_data = chat_sessions_mock.insert.call_args[0][0]
+    assert insert_data["user_id"] == "user-123"
+    assert insert_data["session_id"] == "telegram_12345"
+    assert insert_data["channel"] == "telegram"
+    assert insert_data["agent_name"] == "assistant"
+    assert insert_data["is_active"] is True
 
 
 @pytest.mark.asyncio

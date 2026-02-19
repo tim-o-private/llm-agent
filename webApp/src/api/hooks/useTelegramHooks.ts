@@ -7,7 +7,7 @@ import { useAuthStore } from '@/features/auth/useAuthStore';
 import { supabase } from '@/lib/supabaseClient';
 
 const TELEGRAM_QUERY_KEY = 'telegram';
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 // Types
 export interface TelegramStatus {
