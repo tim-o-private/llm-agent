@@ -27,6 +27,7 @@ export const ChatPanelV2: React.FC<ChatPanelV2Props> = ({ agentId: agentIdProp }
     sendHeartbeatAsync,
     clearCurrentSessionAsync,
     addMessage,
+    refreshMessages,
   } = useChatStore();
   const { setInputFocusState } = useTaskViewStore();
 
@@ -136,6 +137,15 @@ export const ChatPanelV2: React.FC<ChatPanelV2Props> = ({ agentId: agentIdProp }
     }
   }, [currentSessionInstanceId, sendHeartbeatAsync]);
 
+  // Poll for cross-channel messages (e.g., Telegram → web sync)
+  useEffect(() => {
+    if (!activeChatId || !currentSessionInstanceId) return;
+    const intervalId = setInterval(() => {
+      refreshMessages();
+    }, 5000);
+    return () => clearInterval(intervalId);
+  }, [activeChatId, currentSessionInstanceId, refreshMessages]);
+
   // beforeunload listener to deactivate session instance - same as original ChatPanel
   useEffect(() => {
     const handleBeforeUnload = () => {
@@ -202,7 +212,7 @@ export const ChatPanelV2: React.FC<ChatPanelV2Props> = ({ agentId: agentIdProp }
 
     if (messages.length > 0 && !hasScrolledRef.current) {
       hasScrolledRef.current = true;
-      requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
         const viewport = document.querySelector('.aui-thread-viewport');
         if (viewport) {
           viewport.scrollTop = viewport.scrollHeight;
