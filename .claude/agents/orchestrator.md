@@ -136,6 +136,7 @@ Task tool: subagent_type="general-purpose", team_name="spec-NNN", name="<domain>
 ```
 
 Include in the prompt:
+- "Run this first: export CLAUDE_AGENT_TYPE=<domain>" (e.g., `export CLAUDE_AGENT_TYPE=backend-dev`)
 - The task details and contract
 - The worktree path to work in
 - The spec file path
