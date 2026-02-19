@@ -58,20 +58,20 @@ function renderToolArgs(args: Record<string, unknown>): React.ReactNode {
   const entries = Object.entries(args);
 
   if (entries.length === 0) {
-    return <span className="text-gray-400 italic">No arguments</span>;
+    return <span className="text-text-muted italic">No arguments</span>;
   }
 
   return (
     <dl className="space-y-1">
       {entries.slice(0, 5).map(([key, value]) => (
         <div key={key} className="flex gap-2">
-          <dt className="text-gray-500 font-medium text-xs">{key}:</dt>
-          <dd className="text-gray-700 text-xs truncate max-w-[200px]">
+          <dt className="text-text-muted font-medium text-xs">{key}:</dt>
+          <dd className="text-text-secondary text-xs truncate max-w-[200px]">
             {typeof value === 'string' ? value : JSON.stringify(value)}
           </dd>
         </div>
       ))}
-      {entries.length > 5 && <div className="text-gray-400 text-xs italic">+{entries.length - 5} more fields</div>}
+      {entries.length > 5 && <div className="text-text-muted text-xs italic">+{entries.length - 5} more fields</div>}
     </dl>
   );
 }
@@ -86,23 +86,23 @@ export const ActionCard: React.FC<ActionCardProps> = ({
   const isExpiringSoon = new Date(action.expires_at).getTime() - Date.now() < 3600000;
 
   return (
-    <Card className="p-4 border-l-4 border-l-amber-400">
+    <Card className="p-4 border-l-4 border-l-warning-strong">
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2">
             <AlertTriangle className="h-4 w-4 text-amber-500" />
-            <h4 className="font-semibold text-gray-900">{formatToolName(action.tool_name)}</h4>
-            <Badge className="bg-amber-100 text-amber-800 text-xs">Pending Approval</Badge>
+            <h4 className="font-semibold text-text-primary">{formatToolName(action.tool_name)}</h4>
+            <Badge className="bg-warning-subtle text-warning-strong text-xs">Pending Approval</Badge>
           </div>
 
-          <div className="bg-gray-50 rounded p-2 mb-2">{renderToolArgs(action.tool_args)}</div>
+          <div className="bg-ui-bg-alt rounded p-2 mb-2">{renderToolArgs(action.tool_args)}</div>
 
-          <div className="flex items-center gap-4 text-xs text-gray-500">
+          <div className="flex items-center gap-4 text-xs text-text-muted">
             <span className="flex items-center gap-1">
               <Clock className="h-3 w-3" />
               {formatRelativeTime(action.created_at)}
             </span>
-            <span className={`flex items-center gap-1 ${isExpiringSoon ? 'text-amber-600 font-medium' : ''}`}>
+            <span className={`flex items-center gap-1 ${isExpiringSoon ? 'text-warning-strong font-medium' : ''}`}>
               {isExpiringSoon && <AlertTriangle className="h-3 w-3" />}
               {formatTimeUntilExpiry(action.expires_at)}
             </span>
@@ -115,7 +115,7 @@ export const ActionCard: React.FC<ActionCardProps> = ({
             size="1"
             onClick={() => onApprove(action.id)}
             disabled={isApproving || isRejecting}
-            className="bg-green-600 hover:bg-green-700 text-white"
+            className="bg-success-indicator hover:bg-success-strong text-white"
           >
             {isApproving ? (
               <span className="animate-pulse">Approving...</span>
@@ -131,7 +131,7 @@ export const ActionCard: React.FC<ActionCardProps> = ({
             variant="outline"
             onClick={() => onReject(action.id)}
             disabled={isApproving || isRejecting}
-            className="border-red-300 text-red-600 hover:bg-red-50"
+            className="border-destructive/30 text-destructive hover:bg-destructive-subtle"
           >
             {isRejecting ? (
               <span className="animate-pulse">Rejecting...</span>

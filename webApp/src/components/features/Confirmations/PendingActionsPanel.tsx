@@ -51,7 +51,7 @@ export const PendingActionsPanel: React.FC<PendingActionsPanelProps> = ({ classN
     if (pendingCount === 0) return null;
 
     return (
-      <Badge className="flex items-center gap-1 bg-amber-100 text-amber-800 cursor-pointer hover:bg-amber-200">
+      <Badge className="flex items-center gap-1 bg-warning-subtle text-warning-strong cursor-pointer hover:bg-warning-subtle/80">
         <AlertTriangle className="h-3 w-3" />
         {pendingCount} pending
       </Badge>
@@ -64,7 +64,7 @@ export const PendingActionsPanel: React.FC<PendingActionsPanelProps> = ({ classN
         <div className="flex items-center gap-2">
           <AlertTriangle className="h-5 w-5 text-amber-500" />
           <h3 className="text-lg font-semibold">Pending Actions</h3>
-          {pendingCount > 0 && <Badge className="bg-amber-100 text-amber-800">{pendingCount}</Badge>}
+          {pendingCount > 0 && <Badge className="bg-warning-subtle text-warning-strong">{pendingCount}</Badge>}
         </div>
         <Button size="1" variant="ghost" onClick={() => refetch()} disabled={isLoading}>
           {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
@@ -72,15 +72,15 @@ export const PendingActionsPanel: React.FC<PendingActionsPanelProps> = ({ classN
       </div>
 
       {isLoading && pendingActions.length === 0 ? (
-        <div className="flex items-center justify-center py-8 text-gray-500">
+        <div className="flex items-center justify-center py-8 text-text-muted">
           <Loader2 className="h-6 w-6 animate-spin mr-2" />
           Loading actions...
         </div>
       ) : error ? (
-        <div className="text-red-500 py-4 text-center">Failed to load pending actions: {error.message}</div>
+        <div className="text-destructive py-4 text-center">Failed to load pending actions: {error.message}</div>
       ) : pendingActions.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-8 text-gray-500">
-          <CheckCircle className="h-12 w-12 text-green-400 mb-2" />
+        <div className="flex flex-col items-center justify-center py-8 text-text-muted">
+          <CheckCircle className="h-12 w-12 text-success-strong mb-2" />
           <p className="font-medium">No pending actions</p>
           <p className="text-sm">All actions have been reviewed</p>
         </div>
@@ -100,8 +100,8 @@ export const PendingActionsPanel: React.FC<PendingActionsPanelProps> = ({ classN
       )}
 
       {pendingActions.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-gray-100">
-          <Button size="1" variant="ghost" className="w-full text-gray-500 hover:text-gray-700">
+        <div className="mt-4 pt-4 border-t border-ui-border">
+          <Button size="1" variant="ghost" className="w-full text-text-muted hover:text-text-secondary">
             <History className="h-4 w-4 mr-2" />
             View Action History
           </Button>
@@ -136,14 +136,14 @@ export const PendingActionsBadge: React.FC = () => {
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="relative inline-flex items-center px-2 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-medium hover:bg-amber-200 transition-colors"
+        className="relative inline-flex items-center px-2 py-1 rounded-full bg-warning-subtle text-warning-strong text-xs font-medium hover:bg-warning-subtle/80 transition-colors"
       >
         <AlertTriangle className="h-3 w-3 mr-1" />
         {count} pending
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-96 rounded-lg border border-ui-border bg-ui-element-bg shadow-lg z-50">
+        <div className="absolute right-0 top-full mt-2 w-96 max-h-[80vh] overflow-y-auto rounded-lg border border-ui-border bg-ui-element-bg shadow-lg z-50">
           <PendingActionsPanel />
         </div>
       )}
