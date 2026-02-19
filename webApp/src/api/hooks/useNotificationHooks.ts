@@ -7,7 +7,7 @@ import { useAuthStore } from '@/features/auth/useAuthStore';
 import { supabase } from '@/lib/supabaseClient';
 
 const NOTIFICATIONS_QUERY_KEY = 'notifications';
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 // Types
 export interface Notification {

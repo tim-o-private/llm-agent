@@ -49,7 +49,7 @@ async function loadHistoricalMessages(chatId: string): Promise<ChatMessage[]> {
     const accessToken = authSession?.access_token;
     if (!accessToken) return [];
 
-    const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
     const response = await fetch(
       `${apiBaseUrl}/api/chat/sessions/${encodeURIComponent(chatId)}/messages?limit=50`,
       {
