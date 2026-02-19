@@ -17,9 +17,9 @@ try:
         ExternalAPIConnectionUpdate,
     )
 except ImportError:
-    from chatServer.database.connection import get_db_connection
-    from chatServer.dependencies.auth import get_current_user
-    from chatServer.models.external_api import (
+    from database.connection import get_db_connection
+    from dependencies.auth import get_current_user
+    from models.external_api import (
         ExternalAPIConnectionCreate,
         ExternalAPIConnectionResponse,
         ExternalAPIConnectionUpdate,

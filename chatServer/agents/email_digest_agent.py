@@ -17,7 +17,7 @@ from typing import Any, Dict, Optional
 try:
     from ..services.email_digest_service import EmailDigestService
 except ImportError:
-    from chatServer.services.email_digest_service import EmailDigestService
+    from services.email_digest_service import EmailDigestService
 
 logger = logging.getLogger(__name__)
 
