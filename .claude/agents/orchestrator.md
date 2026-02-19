@@ -104,7 +104,20 @@ Example contract for backend-dev:
 - is_record_owner() function exists
 ```
 
-### 5. Manage Worktrees
+### 5. Pre-allocate Migration Prefixes
+
+Before spawning any database-dev task that creates migrations:
+
+```bash
+ls supabase/migrations/ | grep -oP '^\d{14}' | sort | tail -3
+```
+
+Assign each database-dev task an explicit prefix in the contract:
+- `"Use EXACTLY this migration prefix: 20260219000004_"`
+- If multiple database tasks run in parallel, assign non-overlapping prefixes (increment by 1)
+- Never leave prefix selection to the agent — collisions are expensive to fix
+
+### 6. Manage Worktrees
 
 For each functional unit, create a git worktree before spawning the agent:
 
@@ -114,7 +127,7 @@ git worktree add ../llm-agent-SPEC-NNN-<unit> -b feat/SPEC-NNN-<unit>
 
 Pass the worktree path to the agent in the spawn prompt.
 
-### 6. Spawn Domain Agents
+### 7. Spawn Domain Agents
 
 For each ready task (unblocked), spawn the correct domain agent:
 
@@ -123,13 +136,14 @@ Task tool: subagent_type="general-purpose", team_name="spec-NNN", name="<domain>
 ```
 
 Include in the prompt:
+- "Run this first: export CLAUDE_AGENT_TYPE=<domain>" (e.g., `export CLAUDE_AGENT_TYPE=backend-dev`)
 - The task details and contract
 - The worktree path to work in
 - The spec file path
 - Branch name (already created via worktree)
 - Which agent definition to follow (e.g., "Follow .claude/agents/backend-dev.md")
 
-### 7. Spawn Reviewer
+### 8. Spawn Reviewer
 
 After an agent reports task complete and PR created:
 
@@ -142,12 +156,12 @@ Include in the prompt:
 - The spec file path
 - Which domain agent produced the code (so reviewer checks scope boundaries)
 
-### 8. Handle Review Results
+### 9. Handle Review Results
 
 - **BLOCKER found:** Message the original domain agent with the blocker details. Do NOT report the PR to the user.
 - **Clean review:** Report the PR URL to the user for UAT.
 
-### 9. After PR Merge
+### 10. After PR Merge
 
 When the user confirms a PR is merged:
 - Remove the worktree: `git worktree remove ../llm-agent-SPEC-NNN-<unit>`
@@ -155,13 +169,26 @@ When the user confirms a PR is merged:
 - Pass the contract forward to the next domain agent
 - Repeat from step 6 for the next functional unit
 
-### 10. Wrap Up
+### 11. Wrap Up
 
 When all tasks are complete:
 - Update the spec status to "Done"
 - Update `docs/sdlc/BACKLOG.md` to move the spec to Done
 - Shut down teammates via `SendMessage` with `type: "shutdown_request"`
 - Clean up: `TeamDelete`
+
+## PR Merge Order
+
+When reporting PRs to the user, ALWAYS include a numbered merge order:
+
+```
+PRs ready for review:
+1. [MERGE FIRST] PR #42 — Database migration (no prerequisites)
+2. [MERGE SECOND] PR #43 — Backend service (requires: #42 merged)
+3. [MERGE THIRD] PR #44 — Frontend component (requires: #42, #43 merged)
+```
+
+Do NOT report all PRs as "ready" simultaneously unless they are truly independent. The user needs to know the merge sequence.
 
 ## Rules
 

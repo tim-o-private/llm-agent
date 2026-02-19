@@ -34,19 +34,22 @@ async def test_handle_message_upserts_chat_session():
         return_value=MagicMock(data={"user_id": "user-123"})
     )
 
-    upsert_chain = MagicMock()
-    upsert_chain.execute = AsyncMock(return_value=MagicMock(data=[]))
+    # chat_sessions select chain (handles both web session lookup and existence check)
+    cs_select_chain = MagicMock()
+    cs_select_chain.eq.return_value = cs_select_chain
+    cs_select_chain.order.return_value = cs_select_chain
+    cs_select_chain.limit.return_value = cs_select_chain
+    cs_select_chain.execute = AsyncMock(return_value=MagicMock(data=[]))
 
-    # Mock the web session lookup chain: .select().eq().order().limit().execute()
-    web_session_chain = MagicMock()
-    web_session_chain.eq.return_value = web_session_chain
-    web_session_chain.order.return_value = web_session_chain
-    web_session_chain.limit.return_value = web_session_chain
-    web_session_chain.execute = AsyncMock(return_value=MagicMock(data=[]))
+    # chat_sessions insert chain
+    cs_insert_chain = MagicMock()
+    cs_insert_chain.execute = AsyncMock(return_value=MagicMock(data=[]))
 
     chat_sessions_mock = MagicMock()
-    chat_sessions_mock.select.return_value = web_session_chain
-    chat_sessions_mock.upsert.return_value = upsert_chain
+    # select is called twice: first for web session lookup, then for existence check
+    # Both return empty data (no existing sessions)
+    chat_sessions_mock.select.return_value = cs_select_chain
+    chat_sessions_mock.insert.return_value = cs_insert_chain
 
     user_channels_mock = MagicMock()
     user_channels_mock.select.return_value = user_channels_chain
@@ -78,16 +81,15 @@ async def test_handle_message_upserts_chat_session():
     ):
         await handle_message(message)
 
-    # Verify chat_sessions upsert was called
-    chat_sessions_mock.upsert.assert_called_once()
-    upsert_data = chat_sessions_mock.upsert.call_args[0][0]
-    assert upsert_data["user_id"] == "user-123"
-    assert upsert_data["channel"] == "telegram"
-    assert upsert_data["agent_name"] == "assistant"
-    assert upsert_data["is_active"] is True
-    # session_id is a UUID (no existing web session to reuse)
-    assert upsert_data["session_id"] == upsert_data["chat_id"]
-    assert chat_sessions_mock.upsert.call_args[1].get("on_conflict") == "session_id"
+    # Verify chat_sessions select was called (web session lookup + existence check)
+    assert chat_sessions_mock.select.call_count == 2
+    # Verify chat_sessions insert was called (since no existing session)
+    chat_sessions_mock.insert.assert_called_once()
+    insert_data = chat_sessions_mock.insert.call_args[0][0]
+    assert insert_data["user_id"] == "user-123"
+    assert insert_data["channel"] == "telegram"
+    assert insert_data["agent_name"] == "assistant"
+    assert insert_data["is_active"] is True
 
 
 @pytest.mark.asyncio

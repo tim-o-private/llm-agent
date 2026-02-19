@@ -13,9 +13,9 @@ try:
     from ..database.supabase_client import get_supabase_client
     from ..services.vault_token_service import get_vault_token_service_for_scheduler
 except ImportError:
-    from chatServer.config.constants import SCHEDULED_TASK_INTERVAL_SECONDS, SESSION_INSTANCE_TTL_SECONDS
-    from chatServer.database.connection import get_database_manager
-    from chatServer.database.supabase_client import get_supabase_client
+    from config.constants import SCHEDULED_TASK_INTERVAL_SECONDS, SESSION_INSTANCE_TTL_SECONDS
+    from database.connection import get_database_manager
+    from database.supabase_client import get_supabase_client
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +113,7 @@ class BackgroundTaskService:
 
                 # Reload schedules periodically (every 5 minutes) or on first run
                 if (self._last_schedule_check is None or
-                    current_time - self._last_schedule_check > timedelta(minutes=5)):
+                    current_time - self._last_schedule_check > timedelta(minutes=1)):
                     await self._reload_agent_schedules()
                     self._last_schedule_check = current_time
 
@@ -258,8 +258,8 @@ class BackgroundTaskService:
                     from ..services.notification_service import NotificationService
                     from ..services.reminder_service import ReminderService
                 except ImportError:
-                    from chatServer.services.notification_service import NotificationService
-                    from chatServer.services.reminder_service import ReminderService
+                    from services.notification_service import NotificationService
+                    from services.reminder_service import ReminderService
 
                 reminder_service = ReminderService(db_client)
                 notification_service = NotificationService(db_client)

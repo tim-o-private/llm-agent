@@ -38,12 +38,6 @@ def preprocess_intermediate_steps(intermediate_steps: List[tuple]) -> List[tuple
     return processed_steps
 
 class CustomizableAgentExecutor(AgentExecutor):
-    # Store base prompt and LLM reference for per-request LTM updates.
-    # These are set after construction via _set_ltm_rebuild_state().
-    _base_system_prompt: Optional[str] = None
-    _custom_instructions_block: Optional[str] = None
-    _llm_with_tools: Optional[Any] = None
-
     model_config = {"arbitrary_types_allowed": True}
 
     @property
@@ -58,8 +52,6 @@ class CustomizableAgentExecutor(AgentExecutor):
         tools: List[BaseTool],
         user_id: str,
         session_id: str,
-        ltm_notes_content: Optional[str] = None,
-        explicit_custom_instructions_dict: Optional[Dict[str, Any]] = None,
         logger_instance: Optional[logging.Logger] = None,
     ) -> "CustomizableAgentExecutor":
 
@@ -97,25 +89,14 @@ class CustomizableAgentExecutor(AgentExecutor):
             )
         current_logger.info(f"LLM instance created ({provider}): {model_name}")
 
-        base_prompt_str = agent_config_dict.get('system_prompt')
-        if not base_prompt_str:
+        system_prompt = agent_config_dict.get('system_prompt')
+        if not system_prompt:
             raise ValueError("'system_prompt' is missing in agent_config_dict.")
 
-        # Build custom instructions block (stable across requests)
-        custom_instructions_block = None
-        if explicit_custom_instructions_dict:
-            instr_parts = [f"{k.replace('_',' ').title()}: {v}" for k, v in explicit_custom_instructions_dict.items()]
-            custom_instructions_block = "\n--- BEGIN CUSTOM INSTRUCTIONS ---\n" + "\n".join(instr_parts) + "\n--- END CUSTOM INSTRUCTIONS ---"
-
-        # Build the full system message with LTM
-        final_system_message_content = cls._build_system_message(
-            base_prompt_str, ltm_notes_content, custom_instructions_block
-        )
-
-        current_logger.debug(f"Final system message content for agent: \n{final_system_message_content}")
+        current_logger.debug(f"System prompt for agent (first 200 chars): {system_prompt[:200]}")
 
         prompt = ChatPromptTemplate.from_messages([
-            ("system", final_system_message_content),
+            ("system", system_prompt),
             MessagesPlaceholder(variable_name="chat_history"),
             ("human", "{input}"),
             MessagesPlaceholder(variable_name="agent_scratchpad"),
@@ -142,78 +123,7 @@ class CustomizableAgentExecutor(AgentExecutor):
             verbose=True,
             handle_parsing_errors=True
         )
-        # Store state needed for per-request LTM rebuilds
-        instance._base_system_prompt = base_prompt_str
-        instance._custom_instructions_block = custom_instructions_block
-        instance._llm_with_tools = llm_with_tools
         return instance
-
-    @staticmethod
-    def _build_system_message(
-        base_prompt: str,
-        ltm_notes_content: Optional[str],
-        custom_instructions_block: Optional[str],
-    ) -> str:
-        """Build the final system message from base prompt, LTM, and custom instructions."""
-        result = base_prompt
-
-        if ltm_notes_content:
-            ltm_section = f"\n\n--- BEGIN LONG-TERM MEMORY NOTES ---\n{ltm_notes_content}\n--- END LONG-TERM MEMORY NOTES ---"
-            if "{{ltm_notes}}" in result:
-                result = result.replace("{{ltm_notes}}", ltm_section)
-            else:
-                result = ltm_section + "\n\n" + result
-        elif "{{ltm_notes}}" in result:
-            result = result.replace("{{ltm_notes}}", "(No LTM notes for this session.)")
-
-        if custom_instructions_block:
-            if "{{custom_instructions}}" in result:
-                result = result.replace("{{custom_instructions}}", custom_instructions_block)
-            else:
-                result += "\n" + custom_instructions_block
-        elif "{{custom_instructions}}" in result:
-            result = result.replace("{{custom_instructions}}", "(No explicit custom instructions for this session.)")
-
-        return result
-
-    def update_ltm_context(self, ltm_notes_content: Optional[str]) -> None:
-        """Update the system prompt with fresh LTM notes. Called per-request.
-
-        Rebuilds the agent's runnable chain with a new system message containing
-        the latest LTM, without re-creating the LLM or tools.
-        """
-        if self._base_system_prompt is None or self._llm_with_tools is None:
-            logger.warning("Cannot update LTM context: executor missing rebuild state")
-            return
-
-        final_system_message_content = self._build_system_message(
-            self._base_system_prompt, ltm_notes_content, self._custom_instructions_block
-        )
-
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", final_system_message_content),
-            MessagesPlaceholder(variable_name="chat_history"),
-            ("human", "{input}"),
-            MessagesPlaceholder(variable_name="agent_scratchpad"),
-        ])
-
-        new_runnable = (
-            RunnablePassthrough.assign(
-                agent_scratchpad=lambda x: format_to_tool_messages(
-                    preprocess_intermediate_steps(x.get("intermediate_steps", []))
-                )
-            )
-            | prompt
-            | self._llm_with_tools
-            | ToolsAgentOutputParser()
-        )
-        # AgentExecutor's Pydantic validator wraps the raw RunnableSequence in
-        # RunnableAgent/RunnableMultiActionAgent during __init__, providing aplan().
-        # Direct self.agent assignment bypasses that validator — update .runnable instead.
-        if hasattr(self.agent, 'runnable'):
-            self.agent.runnable = new_runnable
-        else:
-            logger.warning("Agent wrapper missing .runnable; LTM context update skipped")
 
     async def ainvoke(self, input: Dict[str, Any], config: Optional[Dict[str, Any]] = None, **kwargs: Any) -> Dict[str, Any]:
         if "chat_history" not in input:
@@ -225,11 +135,9 @@ class CustomizableAgentExecutor(AgentExecutor):
 # if agent_loader.load_agent_executor is the sole and sufficient entry point.
 # For now, keeping it but noting its dependency on the removed AgentConfig Pydantic model.
 def get_customizable_agent_executor(
-        agent_config_obj: Union[Dict[str, Any], Any], # Modified to accept Dict or any (original was 'AgentConfig')
+        agent_config_obj: Union[Dict[str, Any], Any],
         user_id_for_agent: str,
         session_id_for_agent: str,
-        ltm_notes: Optional[str],
-        custom_instructions: Optional[Dict[str, Any]],
         loaded_tools: List[BaseTool],
         logger_to_use: Optional[logging.Logger] = None
     ) -> CustomizableAgentExecutor:
@@ -239,20 +147,15 @@ def get_customizable_agent_executor(
         agent_config_data_dict = agent_config_obj
     else:
         logger_to_use_effective = logger_to_use if logger_to_use else logger
-        # The original AgentConfig Pydantic model is removed. This path indicates a caller error if not a dict.
         logger_to_use_effective.error(f"get_customizable_agent_executor received non-dict agent_config_obj of type {type(agent_config_obj)}. This is deprecated. Expecting a dictionary.")
-        # Attempt to proceed if it's somehow dict-like, otherwise this will fail in from_agent_config.
-        # This is for minimal disruption; ideally, callers should be updated.
         if not hasattr(agent_config_obj, 'get'):
              raise TypeError(f"agent_config_obj must be a dictionary, got {type(agent_config_obj)}")
-        agent_config_data_dict = agent_config_obj # This is risky, assumes it's a dict-like object.
+        agent_config_data_dict = agent_config_obj
 
     return CustomizableAgentExecutor.from_agent_config(
         agent_config_dict=agent_config_data_dict,
         tools=loaded_tools,
         user_id=user_id_for_agent,
         session_id=session_id_for_agent,
-        ltm_notes_content=ltm_notes,
-        explicit_custom_instructions_dict=custom_instructions,
         logger_instance=logger_to_use
     )

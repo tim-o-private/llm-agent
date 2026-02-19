@@ -2,7 +2,7 @@
 // This client handles all communication with our FastAPI router
 // which proxies PostgREST calls and provides the chat gateway
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 interface RequestOptions extends RequestInit {
   headers?: Record<string, string>;

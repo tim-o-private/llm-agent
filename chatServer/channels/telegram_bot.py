@@ -145,7 +145,10 @@ async def handle_start(message: types.Message) -> None:
     bot_service = get_telegram_bot_service()
     if bot_service and bot_service._db_client:
         try:
-            from chatServer.services.telegram_linking_service import link_telegram_account
+            try:
+                from ..services.telegram_linking_service import link_telegram_account
+            except ImportError:
+                from services.telegram_linking_service import link_telegram_account
 
             success = await link_telegram_account(
                 db_client=bot_service._db_client,
@@ -198,8 +201,12 @@ async def handle_approval_callback(callback: types.CallbackQuery) -> None:
 
         user_id = result.data["user_id"]
 
-        from chatServer.services.audit_service import AuditService
-        from chatServer.services.pending_actions import PendingActionsService
+        try:
+            from ..services.audit_service import AuditService
+            from ..services.pending_actions import PendingActionsService
+        except ImportError:
+            from services.audit_service import AuditService
+            from services.pending_actions import PendingActionsService
 
         audit_service = AuditService(bot_service._db_client)
         pending_service = PendingActionsService(
@@ -269,9 +276,14 @@ async def handle_message(message: types.Message) -> None:
         user_id = result.data["user_id"]
 
         # Route to assistant agent
-        from chatServer.security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
-        from chatServer.services.audit_service import AuditService
-        from chatServer.services.pending_actions import PendingActionsService
+        try:
+            from ..security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
+            from ..services.audit_service import AuditService
+            from ..services.pending_actions import PendingActionsService
+        except ImportError:
+            from security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
+            from services.audit_service import AuditService
+            from services.pending_actions import PendingActionsService
         from src.core.agent_loader_db import load_agent_executor_db
 
         # Cross-channel session sharing: reuse most recent web session if one exists
@@ -292,33 +304,31 @@ async def handle_message(message: types.Message) -> None:
             session_id = str(uuid.uuid4())
             logger.info(f"Telegram creating new session: {session_id}")
 
-        # Upsert chat_sessions row for this Telegram conversation
-        await bot_service._db_client.table("chat_sessions").upsert(
-            {
-                "user_id": user_id,
-                "chat_id": session_id,
-                "session_id": session_id,
-                "channel": "telegram",
-                "agent_name": "assistant",
-                "is_active": True,
-            },
-            on_conflict="session_id",
-        ).execute()
+        # Ensure chat_sessions row exists for this Telegram conversation
+        existing = (
+            await bot_service._db_client.table("chat_sessions")
+            .select("id")
+            .eq("session_id", session_id)
+            .limit(1)
+            .execute()
+        )
+        if not existing.data:
+            await bot_service._db_client.table("chat_sessions").insert(
+                {
+                    "user_id": user_id,
+                    "session_id": session_id,
+                    "channel": "telegram",
+                    "agent_name": "assistant",
+                    "is_active": True,
+                }
+            ).execute()
 
         agent_executor = load_agent_executor_db(
             agent_name="assistant",
             user_id=user_id,
             session_id=session_id,
+            channel="telegram",
         )
-
-        # Load fresh LTM and inject into the executor
-        try:
-            from src.core.agent_loader_db import fetch_ltm_notes
-            ltm_notes = await fetch_ltm_notes(user_id, "assistant", bot_service._db_client)
-            if hasattr(agent_executor, 'update_ltm_context'):
-                agent_executor.update_ltm_context(ltm_notes)
-        except Exception as e:
-            logger.warning(f"Failed to load LTM for Telegram chat (non-fatal): {e}")
 
         # Wrap tools with approval
         audit_service = AuditService(bot_service._db_client)

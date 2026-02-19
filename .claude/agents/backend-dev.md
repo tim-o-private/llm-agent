@@ -66,16 +66,16 @@ Every service and router gets tests:
 - Test auth failures (401/403) for API endpoints
 - Test invalid input handling
 
-### 4. Verify
+### 4. Verify (MANDATORY — gate will block you if you skip this)
 
-Before marking the task complete:
+Run these commands. If ANY fails, fix before continuing. The TaskCompleted hook runs these same checks and will reject your task if they fail.
 
 ```bash
-pytest tests/ -x -q
+pytest tests/ -x -q --tb=short
 ruff check src/ chatServer/ tests/
 ```
 
-Both must pass.
+**Paste the full output** in your completion message to the orchestrator. If you don't include test output, the reviewer will reject your PR.
 
 ### 5. Commit
 
@@ -103,6 +103,9 @@ gh pr create --title "SPEC-NNN: <short description>" --body "$(cat <<'EOF'
 ## Testing
 - [ ] pytest passes
 - [ ] ruff check passes
+
+## Merge Order
+Prerequisite: database migration PR. Unblocks: frontend PR.
 
 ## Functional Unit
 <which part of the spec this covers>

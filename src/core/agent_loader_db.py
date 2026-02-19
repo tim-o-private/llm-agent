@@ -13,6 +13,8 @@ from chatServer.tools.email_digest_tool import EmailDigestTool
 from chatServer.tools.gmail_tools import GmailDigestTool, GmailGetMessageTool, GmailSearchTool
 from chatServer.tools.memory_tools import ReadMemoryTool, SaveMemoryTool
 from chatServer.tools.reminder_tools import CreateReminderTool, ListRemindersTool
+from chatServer.tools.schedule_tools import CreateScheduleTool, DeleteScheduleTool, ListSchedulesTool
+from chatServer.tools.update_instructions_tool import UpdateInstructionsTool
 from core.agents.customizable_agent import CustomizableAgentExecutor
 from core.tools.crud_tool import CRUDTool, CRUDToolInput
 from supabase import Client as SupabaseClient
@@ -37,6 +39,10 @@ TOOL_REGISTRY: Dict[str, Type] = {
     "GmailTool": None,  # Special handling - uses tool_class config to determine specific class
     "CreateReminderTool": CreateReminderTool,
     "ListRemindersTool": ListRemindersTool,
+    "CreateScheduleTool": CreateScheduleTool,
+    "DeleteScheduleTool": DeleteScheduleTool,
+    "ListSchedulesTool": ListSchedulesTool,
+    "UpdateInstructionsTool": UpdateInstructionsTool,
     # Add other distinct, non-CRUDTool Python classes here if any.
     # The string key (e.g., "CRUDTool") must match the 'type' column
     # (or ENUM value as string) in your agent_tools table for these tools.
@@ -380,6 +386,28 @@ def load_tools_from_db(
             logger.error(f"Failed to instantiate tool class '{db_tool_type_str}' (intended name '{db_tool_name}', effective Python class '{effective_tool_class_to_instantiate.__name__}'): {e}", exc_info=True)
     return tools
 
+def _fetch_user_instructions(db: SupabaseClient, user_id: str, agent_name: str) -> Optional[str]:
+    """Fetch user instructions from user_agent_prompt_customizations.
+
+    Returns the instructions TEXT or None if no row exists.
+    """
+    try:
+        resp = (
+            db.table("user_agent_prompt_customizations")
+            .select("instructions")
+            .eq("user_id", user_id)
+            .eq("agent_name", agent_name)
+            .maybe_single()
+            .execute()
+        )
+        if resp.data:
+            return resp.data.get("instructions") or None
+        return None
+    except Exception as e:
+        logger.warning(f"Failed to fetch user instructions for {user_id}/{agent_name}: {e}")
+        return None
+
+
 def load_agent_executor_db(
     agent_name: str,
     user_id: str,
@@ -387,7 +415,7 @@ def load_agent_executor_db(
     supabase_url: Optional[str] = None,
     supabase_key: Optional[str] = None,
     log_level: int = logging.INFO,
-    explicit_custom_instructions: Optional[Dict[str, Any]] = None,
+    channel: str = "web",
     use_cache: bool = True,  # Default to using cache for better performance
 ) -> CustomizableAgentExecutor:
     """
@@ -575,19 +603,36 @@ def load_agent_executor_db(
         supabase_key=effective_supabase_key,
     )
 
-    # 4. Prepare LLM config and system prompt from the agent's DB configuration
+    # 4. Prepare LLM config and assemble system prompt via prompt builder
     llm_config_from_db = agent_db_config.get("llm_config")
-    system_prompt_from_db = agent_db_config.get("system_prompt")
 
     if not llm_config_from_db:
         logger.warning(f"Agent '{agent_name}' is missing 'llm_config' in its DB configuration. LLM behavior might be undefined.")
-    if not system_prompt_from_db:
-        logger.warning(f"Agent '{agent_name}' is missing 'system_prompt' in its DB configuration. Using a default or empty prompt.")
+
+    # Fetch soul (was system_prompt) and identity from agent config
+    soul = agent_db_config.get("soul") or ""
+    identity = agent_db_config.get("identity")
+
+    # Fetch user instructions from user_agent_prompt_customizations
+    user_instructions = _fetch_user_instructions(db, user_id, agent_name)
+
+    # Collect tool names for the prompt
+    tool_names = [getattr(t, "name", None) for t in instantiated_tools if getattr(t, "name", None)]
+
+    # Assemble the system prompt via the prompt builder
+    from chatServer.services.prompt_builder import build_agent_prompt
+    assembled_prompt = build_agent_prompt(
+        soul=soul,
+        identity=identity,
+        channel=channel,
+        user_instructions=user_instructions,
+        tool_names=tool_names,
+    )
 
     agent_config_for_executor = {
         "agent_name": agent_db_config["agent_name"],
         "llm": llm_config_from_db or {},
-        "system_prompt": system_prompt_from_db or "",
+        "system_prompt": assembled_prompt,
     }
 
     # 5. Create and return the executor
@@ -597,8 +642,6 @@ def load_agent_executor_db(
             tools=instantiated_tools,
             user_id=user_id,
             session_id=session_id,
-            ltm_notes_content=None,
-            explicit_custom_instructions_dict=explicit_custom_instructions,
             logger_instance=logger
         )
         logger.info(f"Successfully created CustomizableAgentExecutor for agent '{agent_db_config['agent_name']}' using {cache_status} DB data.")
@@ -610,6 +653,11 @@ def load_agent_executor_db(
 
 async def fetch_ltm_notes(user_id: str, agent_name: str, supabase_client=None) -> Optional[str]:
     """Fetch long-term memory notes for a user+agent from the database.
+
+    .. deprecated::
+        LTM is no longer injected into the system prompt. Agents use read_memory/save_memory
+        tools on-demand instead. This function is kept for backward compatibility but will
+        be removed in a future version.
 
     Args:
         user_id: The user's ID.

@@ -80,7 +80,7 @@ class EmailDigestTool(BaseTool):
             try:
                 from ..services.email_digest_service import EmailDigestService
             except ImportError:
-                from chatServer.services.email_digest_service import EmailDigestService
+                from services.email_digest_service import EmailDigestService
 
             # Create EmailDigestService for on-demand execution
             service = EmailDigestService(self.user_id, context="on-demand")

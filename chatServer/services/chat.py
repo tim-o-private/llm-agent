@@ -19,13 +19,14 @@ try:
     from ..services.audit_service import AuditService
     from ..services.pending_actions import PendingActionsService
 except ImportError:
-    from chatServer.config.constants import CHAT_MESSAGE_HISTORY_TABLE_NAME, DEFAULT_LOG_LEVEL
-    from chatServer.database.supabase_client import get_supabase_client
-    from chatServer.models.chat import ChatRequest, ChatResponse
-    from chatServer.protocols.agent_executor import AgentExecutorProtocol
-    from chatServer.security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
-    from chatServer.services.audit_service import AuditService
-    from chatServer.services.pending_actions import PendingActionsService
+    from config.constants import CHAT_MESSAGE_HISTORY_TABLE_NAME, DEFAULT_LOG_LEVEL
+    from database.supabase_client import get_supabase_client
+    from models.chat import ChatRequest, ChatResponse
+    from protocols.agent_executor import AgentExecutorProtocol
+    from security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
+
+    from services.audit_service import AuditService
+    from services.pending_actions import PendingActionsService
 
 from langchain.memory import ConversationBufferWindowMemory
 from langchain_core.messages import BaseMessage
@@ -221,15 +222,6 @@ class ChatService:
                 agent_loader_module=agent_loader_module,
                 memory=agent_short_term_memory
             )
-
-            # Load fresh LTM and inject into the (possibly cached) executor
-            try:
-                from src.core.agent_loader_db import fetch_ltm_notes
-                ltm_notes = await fetch_ltm_notes(user_id, agent_name)
-                if hasattr(agent_executor, 'update_ltm_context'):
-                    agent_executor.update_ltm_context(ltm_notes)
-            except Exception as e:
-                logger.warning(f"Failed to load LTM for chat (non-fatal): {e}")
 
             # Wrap tools with approval checking
             try:

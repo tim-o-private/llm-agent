@@ -42,6 +42,20 @@ Read the task via `TaskGet`. Understand:
 
 ### 2. Implement
 
+### CRITICAL: Agent References
+NEVER use `agent_name TEXT`. ALWAYS use:
+```sql
+agent_id UUID NOT NULL REFERENCES agent_configurations(id) ON DELETE CASCADE
+```
+Plus an explicit index on `agent_id`. This is a BLOCKER in review — no exceptions.
+
+### Migration Prefix
+Use the EXACT prefix assigned by the orchestrator in the contract. Never invent your own timestamp prefix — collisions across parallel worktrees are expensive to resolve. If no prefix was assigned, derive the next available one:
+```bash
+ls supabase/migrations/ | grep -oP '^\d{14}' | sort | tail -1
+```
+Then increment by 1.
+
 Follow database-patterns skill. Key rules:
 - **UUID PKs:** `id UUID PRIMARY KEY DEFAULT gen_random_uuid()`
 - **Timestamps:** `created_at TIMESTAMPTZ NOT NULL DEFAULT now()`, `updated_at TIMESTAMPTZ NOT NULL DEFAULT now()`
@@ -52,19 +66,18 @@ Follow database-patterns skill. Key rules:
 - **Migration naming:** `YYYYMMDDHHMMSS_descriptive_name.sql`
 - **Idempotent:** Use `IF NOT EXISTS` where possible
 
-### 3. Validate
+### 3. Validate (MANDATORY)
 
-Before marking the task complete:
+Run these checks before marking the task complete. The write hook will block known anti-patterns automatically.
 
 ```bash
-# Syntax check — ensure SQL parses correctly
-# Review the migration file for:
-# - RLS enabled on all new tables
-# - Proper indexes
-# - Comments on tables and columns
-# - Foreign key constraints
-# - Proper ON DELETE behavior
+# Check for anti-patterns that the write hook will block:
+grep -niE 'agent_name\s+TEXT' supabase/migrations/<your-file>.sql && echo "FAIL" || echo "OK"
+
+# Review your migration for: RLS enabled, indexes, comments, FKs, UUID PKs, timestamps
 ```
+
+**Include validation output** in your completion message to the orchestrator.
 
 ### 4. Provide Schema Contract
 
@@ -106,6 +119,9 @@ gh pr create --title "SPEC-NNN: <short description>" --body "$(cat <<'EOF'
 - [ ] SQL syntax valid
 - [ ] RLS policies tested
 - [ ] Indexes appropriate
+
+## Merge Order
+This PR must be merged FIRST. Unblocks: backend, frontend PRs.
 
 ## Functional Unit
 <which part of the spec this covers>

@@ -11,7 +11,7 @@ from psycopg_pool import AsyncConnectionPool
 try:
     from ..config.settings import get_settings
 except ImportError:
-    from chatServer.config.settings import get_settings
+    from config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 

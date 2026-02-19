@@ -57,7 +57,10 @@ class InfrastructureErrorHandler:
 
             try:
                 # Try to get database manager and recreate pool
-                from chatServer.database.connection import get_database_manager
+                try:
+                    from ..database.connection import get_database_manager
+                except ImportError:
+                    from database.connection import get_database_manager
                 db_manager = get_database_manager()
                 await db_manager.close()
                 await db_manager.initialize()

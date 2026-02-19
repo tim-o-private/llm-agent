@@ -1,16 +1,14 @@
 """Prompt customization Pydantic models."""
 
-from typing import Any, Dict
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
 
 class PromptCustomizationBase(BaseModel):
     agent_name: str
-    customization_type: str = 'instruction_set'
-    content: Dict[str, Any]  # JSONB content
+    instructions: str = ""
     is_active: bool = True
-    priority: int = 0
 
 
 class PromptCustomizationCreate(PromptCustomizationBase):

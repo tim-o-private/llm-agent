@@ -1,14 +1,14 @@
 """Prompt customization service for handling prompt management logic."""
 
 import logging
-from typing import Any, List
+from typing import Any, List, Optional
 
 from fastapi import HTTPException, status
 
 try:
     from ..models.prompt_customization import PromptCustomization, PromptCustomizationCreate
 except ImportError:
-    from chatServer.models.prompt_customization import PromptCustomization, PromptCustomizationCreate
+    from models.prompt_customization import PromptCustomization, PromptCustomizationCreate
 
 logger = logging.getLogger(__name__)
 
@@ -43,10 +43,8 @@ class PromptCustomizationService:
             response = await supabase_client.table("user_agent_prompt_customizations").insert({
                 "user_id": user_id,
                 "agent_name": customization_data.agent_name,
-                "customization_type": customization_data.customization_type,
-                "content": customization_data.content,
+                "instructions": customization_data.instructions,
                 "is_active": customization_data.is_active,
-                "priority": customization_data.priority
             }).execute()
 
             if response.data:
@@ -92,7 +90,6 @@ class PromptCustomizationService:
                 .eq("user_id", user_id) \
                 .eq("agent_name", agent_name) \
                 .eq("is_active", True) \
-                .order("priority", desc=False) \
                 .execute()
 
             if response.data:
@@ -104,6 +101,37 @@ class PromptCustomizationService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=str(e)
             )
+
+    async def get_user_instructions(
+        self,
+        agent_name: str,
+        user_id: str,
+        supabase_client: Any
+    ) -> Optional[str]:
+        """Get user instructions text for a specific agent.
+
+        Args:
+            agent_name: Name of the agent
+            user_id: User ID
+            supabase_client: Supabase client instance
+
+        Returns:
+            Instructions text or None
+        """
+        try:
+            response = await supabase_client.table("user_agent_prompt_customizations") \
+                .select("instructions") \
+                .eq("user_id", user_id) \
+                .eq("agent_name", agent_name) \
+                .maybe_single() \
+                .execute()
+
+            if response.data:
+                return response.data.get("instructions") or None
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to fetch instructions for {user_id}/{agent_name}: {e}")
+            return None
 
     async def update_prompt_customization(
         self,
@@ -127,10 +155,8 @@ class PromptCustomizationService:
             HTTPException: If update fails or customization not found
         """
         try:
-            # RLS will ensure the user can only update their own records.
-            # We select user_id in the update to ensure it's part of the WHERE clause enforced by RLS implicitly.
             update_payload = customization_data.model_dump()
-            update_payload["updated_at"] = "now()"  # Let database update timestamp
+            update_payload["updated_at"] = "now()"
 
             response = await supabase_client.table("user_agent_prompt_customizations") \
                 .update(update_payload) \
@@ -140,7 +166,7 @@ class PromptCustomizationService:
 
             if response.data:
                 return response.data[0]
-            elif response.error and response.error.code == 'PGRST116':  # PGRST116: Row not found
+            elif response.error and response.error.code == 'PGRST116':
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Prompt customization not found or access denied"
@@ -148,12 +174,11 @@ class PromptCustomizationService:
             else:
                 error_msg = response.error.message if response.error else 'Unknown error or no rows updated'
                 logger.error(f"Failed to update prompt customization {customization_id}: {error_msg}")
-                # If no data and no specific error, it might mean the record wasn't found or RLS prevented update without erroring differently.
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Prompt customization not found, access denied, or no changes made."
                 )
-        except HTTPException:  # Re-raise HTTP exceptions directly
+        except HTTPException:
             raise
         except Exception as e:
             logger.error(f"Error updating prompt customization {customization_id}: {e}", exc_info=True)
