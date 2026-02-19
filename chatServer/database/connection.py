@@ -41,7 +41,8 @@ class DatabaseManager:
                     open=False,
                     min_size=2,
                     max_size=10,
-                    check=AsyncConnectionPool.check_connection
+                    check=AsyncConnectionPool.check_connection,
+                    kwargs={"prepare_threshold": None},
                 )
                 await self.pool.open(wait=True, timeout=30)
                 self._initialization_attempted = True
