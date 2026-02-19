@@ -54,6 +54,7 @@ TOOL_APPROVAL_DEFAULTS: dict[str, tuple[ApprovalTier, ApprovalTier]] = {
     # Task tools - CRUD operations
     "create_task": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.AUTO_APPROVE),
     "get_tasks": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+    "get_task": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
     "update_task": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.AUTO_APPROVE),
     "delete_task": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.REQUIRES_APPROVAL),
 

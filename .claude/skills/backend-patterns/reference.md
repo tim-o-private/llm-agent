@@ -164,26 +164,67 @@ async def get_tasks(user_id: str = Depends(get_current_user)):
 
 **Never manually parse Authorization headers in endpoints.**
 
-## 7. Generic CRUDTool (Agent Tools)
+## 7. Choosing an Agent Tool Pattern
 
-Tools are configured in the database, not hardcoded:
+Two patterns exist. Choose based on the resource:
+
+| Use **CRUDTool** when... | Use **dedicated BaseTool** when... |
+|---------------------------|-------------------------------------|
+| Flat table, no relationships | Hierarchical/relational data (tasks + subtasks) |
+| No business logic beyond insert/select | Status transitions, computed fields, validation |
+| Schema is stable and simple | Rich query filtering (date ranges, status, parent) |
+| Tool is low-priority / experimental | Tool is core to agent UX |
+| Async not required | Must be async (event loop safety) |
+
+### Pattern A: CRUDTool (DB-configured)
 
 ```python
-# ✅ Database-driven tool config
+# Tool behavior configured entirely via JSONB in agent_tools table
 INSERT INTO agent_tools (agent_id, name, description, config) VALUES
-('agent-uuid', 'create_task', 'Creates a task', {
-    "table_name": "tasks",
-    "method": "create",
-    "field_map": {"task_title": "title"},
+('agent-uuid', 'fetch_notes', 'Fetch user notes', {
+    "table_name": "notes",
+    "method": "fetch",
+    "field_map": {},
     "runtime_args_schema": {
-        "data": {"type": "dict", "optional": false, "description": "Task data"}
+        "filters": {"type": "dict", "optional": true}
     }
 });
-
-# ❌ NEVER create separate tool classes per table
-class TaskCreateTool(BaseTool): ...
-class NoteCreateTool(BaseTool): ...
 ```
+
+### Pattern B: Dedicated BaseTool + Service (preferred for new tools)
+
+```python
+# chatServer/services/task_service.py
+class TaskService:
+    def __init__(self, db_client):
+        self.db = db_client
+
+    async def create_task(self, user_id: str, title: str, ...) -> dict:
+        # Business logic: validate, calculate position, insert
+        ...
+
+# chatServer/tools/task_tools.py
+class CreateTaskInput(BaseModel):
+    title: str = Field(..., description="Task title", min_length=1, max_length=200)
+    priority: int = Field(default=2, ge=1, le=5)
+    parent_task_id: Optional[str] = Field(None, description="UUID of parent task")
+
+class CreateTaskTool(BaseTool):
+    name: str = "create_task"
+    args_schema: Type[BaseModel] = CreateTaskInput
+    user_id: str
+
+    async def _arun(self, title: str, priority: int = 2, ...) -> str:
+        service = await _get_task_service()
+        task = await service.create_task(user_id=self.user_id, title=title, ...)
+        return f'Created task: "{title}"'
+```
+
+Key advantages of Pattern B:
+- Explicit `args_schema` with typed, described fields → better LLM tool-use accuracy
+- Business logic in service layer → testable, reusable by future API endpoints
+- Async-native → doesn't block event loop
+- Standard pytest with mock DB → easy to test
 
 ## 8. Database-Driven Tool Loading
 
