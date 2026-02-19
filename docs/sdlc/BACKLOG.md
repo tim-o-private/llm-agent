@@ -17,6 +17,8 @@ Prioritized task queue. Items move to specs when ready for implementation.
 | P1 | SPEC-007 | [Frontend Cleanup + Approval Toasts](specs/SPEC-007-frontend-cleanup.md) | Draft |
 | P1 | SPEC-008 | [Context Management & Compaction](specs/SPEC-008-context-management-and-compaction.md) | Draft |
 | P1 | SPEC-010 | [Agent Prompt Architecture](specs/SPEC-010-agent-prompt-architecture.md) | Draft — 3 functional units |
+| P1 | SPEC-012 | [Unified Agent Invocation Service](specs/SPEC-012-agent-invocation-service.md) | Draft — 4 functional units |
+| P1 | SPEC-013 | [Agent Task Tools](specs/SPEC-013-agent-task-tools.md) | Draft — 5 functional units |
 
 ## Backlog Items (Not Yet Specced)
 
