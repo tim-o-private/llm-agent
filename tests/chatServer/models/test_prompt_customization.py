@@ -19,61 +19,37 @@ class TestPromptCustomizationBase(unittest.TestCase):
         """Test creating a minimal PromptCustomizationBase."""
         customization = PromptCustomizationBase(
             agent_name="test_agent",
-            content={"instructions": "Be helpful"}
         )
 
         self.assertEqual(customization.agent_name, "test_agent")
-        self.assertEqual(customization.customization_type, "instruction_set")  # default
-        self.assertEqual(customization.content, {"instructions": "Be helpful"})
+        self.assertEqual(customization.instructions, "")  # default
         self.assertTrue(customization.is_active)  # default
-        self.assertEqual(customization.priority, 0)  # default
 
     def test_full_prompt_customization_base(self):
         """Test creating a PromptCustomizationBase with all fields."""
-        content = {
-            "instructions": "Be very helpful",
-            "tone": "professional",
-            "examples": ["example1", "example2"]
-        }
         customization = PromptCustomizationBase(
             agent_name="test_agent",
-            customization_type="system_prompt",
-            content=content,
+            instructions="Always respond in bullet points. Be concise.",
             is_active=False,
-            priority=5
         )
 
         self.assertEqual(customization.agent_name, "test_agent")
-        self.assertEqual(customization.customization_type, "system_prompt")
-        self.assertEqual(customization.content, content)
+        self.assertEqual(customization.instructions, "Always respond in bullet points. Be concise.")
         self.assertFalse(customization.is_active)
-        self.assertEqual(customization.priority, 5)
 
     def test_missing_required_fields(self):
         """Test that missing required fields raise ValidationError."""
         # Missing agent_name
         with self.assertRaises(ValidationError):
-            PromptCustomizationBase(content={"instructions": "Be helpful"})
+            PromptCustomizationBase()
 
-        # Missing content
-        with self.assertRaises(ValidationError):
-            PromptCustomizationBase(agent_name="test_agent")
-
-    def test_content_validation(self):
-        """Test that content must be a dictionary."""
-        # Valid dictionary content
+    def test_instructions_is_text(self):
+        """Test that instructions is a plain text field."""
         customization = PromptCustomizationBase(
             agent_name="test_agent",
-            content={"key": "value"}
+            instructions="Use bullet points for all responses."
         )
-        self.assertEqual(customization.content, {"key": "value"})
-
-        # Invalid content types should raise ValidationError
-        with self.assertRaises(ValidationError):
-            PromptCustomizationBase(
-                agent_name="test_agent",
-                content="not a dict"
-            )
+        self.assertEqual(customization.instructions, "Use bullet points for all responses.")
 
 
 class TestPromptCustomizationCreate(unittest.TestCase):
@@ -83,15 +59,12 @@ class TestPromptCustomizationCreate(unittest.TestCase):
         """Test that PromptCustomizationCreate inherits from base."""
         customization = PromptCustomizationCreate(
             agent_name="test_agent",
-            content={"instructions": "Be helpful"}
+            instructions="Be helpful"
         )
 
-        # Should have all the same fields as base
         self.assertEqual(customization.agent_name, "test_agent")
-        self.assertEqual(customization.customization_type, "instruction_set")
-        self.assertEqual(customization.content, {"instructions": "Be helpful"})
+        self.assertEqual(customization.instructions, "Be helpful")
         self.assertTrue(customization.is_active)
-        self.assertEqual(customization.priority, 0)
 
 
 class TestPromptCustomization(unittest.TestCase):
@@ -102,7 +75,7 @@ class TestPromptCustomization(unittest.TestCase):
         now = datetime.now()
         customization = PromptCustomization(
             agent_name="test_agent",
-            content={"instructions": "Be helpful"},
+            instructions="Be helpful",
             id="123e4567-e89b-12d3-a456-426614174000",
             user_id="987fcdeb-51a2-43d1-9f12-345678901234",
             created_at=now,
@@ -110,7 +83,7 @@ class TestPromptCustomization(unittest.TestCase):
         )
 
         self.assertEqual(customization.agent_name, "test_agent")
-        self.assertEqual(customization.content, {"instructions": "Be helpful"})
+        self.assertEqual(customization.instructions, "Be helpful")
         self.assertEqual(customization.id, "123e4567-e89b-12d3-a456-426614174000")
         self.assertEqual(customization.user_id, "987fcdeb-51a2-43d1-9f12-345678901234")
         self.assertEqual(customization.created_at, now)
@@ -122,7 +95,7 @@ class TestPromptCustomization(unittest.TestCase):
         with self.assertRaises(ValidationError):
             PromptCustomization(
                 agent_name="test_agent",
-                content={"instructions": "Be helpful"},
+                instructions="Be helpful",
                 user_id="987fcdeb-51a2-43d1-9f12-345678901234",
                 created_at=datetime.now(),
                 updated_at=datetime.now()
@@ -132,7 +105,7 @@ class TestPromptCustomization(unittest.TestCase):
         with self.assertRaises(ValidationError):
             PromptCustomization(
                 agent_name="test_agent",
-                content={"instructions": "Be helpful"},
+                instructions="Be helpful",
                 id="123e4567-e89b-12d3-a456-426614174000",
                 created_at=datetime.now(),
                 updated_at=datetime.now()
@@ -140,11 +113,10 @@ class TestPromptCustomization(unittest.TestCase):
 
     def test_datetime_fields(self):
         """Test that datetime fields accept various formats."""
-        # Test with datetime objects
         now = datetime.now()
         customization = PromptCustomization(
             agent_name="test_agent",
-            content={"instructions": "Be helpful"},
+            instructions="Be helpful",
             id="123e4567-e89b-12d3-a456-426614174000",
             user_id="987fcdeb-51a2-43d1-9f12-345678901234",
             created_at=now,
@@ -156,7 +128,7 @@ class TestPromptCustomization(unittest.TestCase):
         # Test with string representations (common from database)
         customization_str = PromptCustomization(
             agent_name="test_agent",
-            content={"instructions": "Be helpful"},
+            instructions="Be helpful",
             id="123e4567-e89b-12d3-a456-426614174000",
             user_id="987fcdeb-51a2-43d1-9f12-345678901234",
             created_at="2023-01-01T12:00:00",

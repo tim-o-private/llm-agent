@@ -10,7 +10,6 @@ from chatServer.models.prompt_customization import PromptCustomizationCreate
 from chatServer.services.prompt_customization import PromptCustomizationService, get_prompt_customization_service
 
 
-# Async tests using pytest directly (not unittest.TestCase)
 @pytest.mark.asyncio
 async def test_create_prompt_customization_success():
     """Test successful prompt customization creation."""
@@ -22,23 +21,18 @@ async def test_create_prompt_customization_success():
 
     customization_data = PromptCustomizationCreate(
         agent_name=agent_name,
-        customization_type="system_prompt",
-        content={"prompt": "Test prompt content"},
+        instructions="Always respond in bullet points.",
         is_active=True,
-        priority=1
     )
 
     expected_response = {
         "id": customization_id,
         "user_id": user_id,
         "agent_name": agent_name,
-        "customization_type": "system_prompt",
-        "content": {"prompt": "Test prompt content"},
+        "instructions": "Always respond in bullet points.",
         "is_active": True,
-        "priority": 1
     }
 
-    # Mock successful response
     mock_response = MagicMock()
     mock_response.data = [expected_response]
     mock_response.error = None
@@ -65,13 +59,10 @@ async def test_create_prompt_customization_no_data():
 
     customization_data = PromptCustomizationCreate(
         agent_name=agent_name,
-        customization_type="system_prompt",
-        content={"prompt": "Test prompt content"},
+        instructions="Test instructions",
         is_active=True,
-        priority=1
     )
 
-    # Mock response with no data
     mock_response = MagicMock()
     mock_response.data = None
     mock_response.error = MagicMock()
@@ -100,10 +91,8 @@ async def test_create_prompt_customization_exception():
 
     customization_data = PromptCustomizationCreate(
         agent_name=agent_name,
-        customization_type="system_prompt",
-        content={"prompt": "Test prompt content"},
+        instructions="Test instructions",
         is_active=True,
-        priority=1
     )
 
     mock_supabase_client.table.return_value.insert.return_value.execute = AsyncMock(
@@ -134,28 +123,16 @@ async def test_get_prompt_customizations_for_agent_success():
             "id": "custom-1",
             "user_id": user_id,
             "agent_name": agent_name,
-            "customization_type": "system_prompt",
-            "content": {"prompt": "Test prompt 1"},
+            "instructions": "Always use bullet points.",
             "is_active": True,
-            "priority": 1
         },
-        {
-            "id": "custom-2",
-            "user_id": user_id,
-            "agent_name": agent_name,
-            "customization_type": "user_prompt",
-            "content": {"prompt": "Test prompt 2"},
-            "is_active": True,
-            "priority": 2
-        }
     ]
 
-    # Mock successful response
     mock_response = MagicMock()
     mock_response.data = expected_data
 
     mock_query = mock_supabase_client.table.return_value.select.return_value
-    mock_query.eq.return_value.eq.return_value.eq.return_value.order.return_value.execute = AsyncMock(return_value=mock_response)
+    mock_query.eq.return_value.eq.return_value.eq.return_value.execute = AsyncMock(return_value=mock_response)
 
     result = await service.get_prompt_customizations_for_agent(
         agent_name=agent_name,
@@ -175,12 +152,11 @@ async def test_get_prompt_customizations_for_agent_empty():
     user_id = "test-user-123"
     agent_name = "test-agent"
 
-    # Mock response with no data
     mock_response = MagicMock()
     mock_response.data = None
 
     mock_query = mock_supabase_client.table.return_value.select.return_value
-    mock_query.eq.return_value.eq.return_value.eq.return_value.order.return_value.execute = AsyncMock(return_value=mock_response)
+    mock_query.eq.return_value.eq.return_value.eq.return_value.execute = AsyncMock(return_value=mock_response)
 
     result = await service.get_prompt_customizations_for_agent(
         agent_name=agent_name,
@@ -200,7 +176,7 @@ async def test_get_prompt_customizations_for_agent_exception():
     agent_name = "test-agent"
 
     mock_query = mock_supabase_client.table.return_value.select.return_value
-    mock_query.eq.return_value.eq.return_value.eq.return_value.order.return_value.execute = AsyncMock(
+    mock_query.eq.return_value.eq.return_value.eq.return_value.execute = AsyncMock(
         side_effect=Exception("Database query failed")
     )
 
@@ -216,6 +192,48 @@ async def test_get_prompt_customizations_for_agent_exception():
 
 
 @pytest.mark.asyncio
+async def test_get_user_instructions_success():
+    """Test successful retrieval of user instructions."""
+    service = PromptCustomizationService()
+    mock_supabase_client = MagicMock()
+
+    mock_response = MagicMock()
+    mock_response.data = {"instructions": "Always use bullet points."}
+
+    mock_query = mock_supabase_client.table.return_value.select.return_value
+    mock_query.eq.return_value.eq.return_value.maybe_single.return_value.execute = AsyncMock(return_value=mock_response)
+
+    result = await service.get_user_instructions(
+        agent_name="assistant",
+        user_id="user-123",
+        supabase_client=mock_supabase_client
+    )
+
+    assert result == "Always use bullet points."
+
+
+@pytest.mark.asyncio
+async def test_get_user_instructions_none():
+    """Test retrieval of user instructions when no row exists."""
+    service = PromptCustomizationService()
+    mock_supabase_client = MagicMock()
+
+    mock_response = MagicMock()
+    mock_response.data = None
+
+    mock_query = mock_supabase_client.table.return_value.select.return_value
+    mock_query.eq.return_value.eq.return_value.maybe_single.return_value.execute = AsyncMock(return_value=mock_response)
+
+    result = await service.get_user_instructions(
+        agent_name="assistant",
+        user_id="user-123",
+        supabase_client=mock_supabase_client
+    )
+
+    assert result is None
+
+
+@pytest.mark.asyncio
 async def test_update_prompt_customization_success():
     """Test successful prompt customization update."""
     service = PromptCustomizationService()
@@ -226,23 +244,18 @@ async def test_update_prompt_customization_success():
 
     customization_data = PromptCustomizationCreate(
         agent_name=agent_name,
-        customization_type="system_prompt",
-        content={"prompt": "Updated prompt content"},
+        instructions="Updated instructions",
         is_active=True,
-        priority=1
     )
 
     expected_response = {
         "id": customization_id,
         "user_id": user_id,
         "agent_name": agent_name,
-        "customization_type": "system_prompt",
-        "content": {"prompt": "Updated prompt content"},
+        "instructions": "Updated instructions",
         "is_active": True,
-        "priority": 1
     }
 
-    # Mock successful response
     mock_response = MagicMock()
     mock_response.data = [expected_response]
     mock_response.error = None
@@ -272,13 +285,10 @@ async def test_update_prompt_customization_not_found():
 
     customization_data = PromptCustomizationCreate(
         agent_name=agent_name,
-        customization_type="system_prompt",
-        content={"prompt": "Updated prompt content"},
+        instructions="Updated instructions",
         is_active=True,
-        priority=1
     )
 
-    # Mock response with PGRST116 error (not found)
     mock_response = MagicMock()
     mock_response.data = None
     mock_response.error = MagicMock()
@@ -310,13 +320,10 @@ async def test_update_prompt_customization_no_data():
 
     customization_data = PromptCustomizationCreate(
         agent_name=agent_name,
-        customization_type="system_prompt",
-        content={"prompt": "Updated prompt content"},
+        instructions="Updated instructions",
         is_active=True,
-        priority=1
     )
 
-    # Mock response with no data and no specific error
     mock_response = MagicMock()
     mock_response.data = None
     mock_response.error = None
@@ -347,10 +354,8 @@ async def test_update_prompt_customization_exception():
 
     customization_data = PromptCustomizationCreate(
         agent_name=agent_name,
-        customization_type="system_prompt",
-        content={"prompt": "Updated prompt content"},
+        instructions="Updated instructions",
         is_active=True,
-        priority=1
     )
 
     mock_query = mock_supabase_client.table.return_value.update.return_value
@@ -374,11 +379,9 @@ class TestPromptCustomizationService(unittest.TestCase):
     """Test cases for PromptCustomizationService class (non-async tests only)."""
 
     def setUp(self):
-        """Set up test fixtures."""
         self.service = PromptCustomizationService()
 
     def test_service_initialization(self):
-        """Test PromptCustomizationService initialization."""
         self.assertIsInstance(self.service, PromptCustomizationService)
 
 
@@ -386,18 +389,14 @@ class TestPromptCustomizationServiceGlobal(unittest.TestCase):
     """Test cases for global prompt customization service functions."""
 
     def setUp(self):
-        """Set up test fixtures."""
-        # Reset global instance
         import chatServer.services.prompt_customization
         chatServer.services.prompt_customization._prompt_customization_service = None
 
     def test_get_prompt_customization_service_creates_instance(self):
-        """Test that get_prompt_customization_service creates a new instance."""
         service = get_prompt_customization_service()
         self.assertIsInstance(service, PromptCustomizationService)
 
     def test_get_prompt_customization_service_returns_same_instance(self):
-        """Test that get_prompt_customization_service returns the same instance."""
         service1 = get_prompt_customization_service()
         service2 = get_prompt_customization_service()
         self.assertIs(service1, service2)

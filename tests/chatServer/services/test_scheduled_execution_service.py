@@ -94,7 +94,7 @@ async def test_execute_success(service, mock_schedule, mock_supabase, mock_agent
     assert result["success"] is True
     assert result["output"] == "Test response"
 
-    # Verify agent invoked with correct args
+    # Verify agent invoked with correct args (no LTM prepended)
     mock_agent_executor.ainvoke.assert_awaited_once_with(
         {"input": "What's new?", "chat_history": []}
     )
@@ -102,7 +102,6 @@ async def test_execute_success(service, mock_schedule, mock_supabase, mock_agent
     # Verify result stored in DB
     mock_supabase.table.assert_any_call("agent_execution_results")
     insert_calls = mock_supabase.table.return_value.insert.call_args_list
-    # Find the agent_execution_results insert (has 'status' key)
     result_inserts = [c for c in insert_calls if "status" in c[0][0]]
     assert len(result_inserts) == 1
     stored_data = result_inserts[0][0][0]
@@ -112,6 +111,57 @@ async def test_execute_success(service, mock_schedule, mock_supabase, mock_agent
 
     # Verify notification sent
     mock_notif_instance.notify_user.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_execute_passes_channel_scheduled(service, mock_schedule, mock_supabase, mock_agent_executor):
+    """load_agent_executor_db is called with channel='scheduled'."""
+    patches = _standard_patches()
+    with (
+        patches["load_agent"] as mock_load,
+        patches["get_supabase"] as mock_get_sb,
+        patches["wrap_tools"],
+        patches["pending_svc"] as mock_pending_cls,
+        patches["audit_svc"],
+        patches["notification_svc"] as mock_notif_cls,
+    ):
+        mock_load.return_value = mock_agent_executor
+        mock_get_sb.return_value = mock_supabase
+        mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
+        mock_notif_cls.return_value.notify_user = AsyncMock()
+        mock_notif_cls.return_value.notify_pending_actions = AsyncMock()
+
+        await service.execute(mock_schedule)
+
+    mock_load.assert_called_once()
+    call_kwargs = mock_load.call_args.kwargs
+    assert call_kwargs["channel"] == "scheduled"
+
+
+@pytest.mark.asyncio
+async def test_execute_does_not_prepend_ltm(service, mock_schedule, mock_supabase, mock_agent_executor):
+    """LTM is NOT prepended to the prompt — agents use read_memory tool on-demand."""
+    patches = _standard_patches()
+    with (
+        patches["load_agent"] as mock_load,
+        patches["get_supabase"] as mock_get_sb,
+        patches["wrap_tools"],
+        patches["pending_svc"] as mock_pending_cls,
+        patches["audit_svc"],
+        patches["notification_svc"] as mock_notif_cls,
+    ):
+        mock_load.return_value = mock_agent_executor
+        mock_get_sb.return_value = mock_supabase
+        mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
+        mock_notif_cls.return_value.notify_user = AsyncMock()
+        mock_notif_cls.return_value.notify_pending_actions = AsyncMock()
+
+        await service.execute(mock_schedule)
+
+    # Verify the prompt is passed unchanged (no LTM prefix)
+    call_args = mock_agent_executor.ainvoke.call_args[0][0]
+    assert call_args["input"] == "What's new?"
+    assert "User context (from memory):" not in call_args["input"]
 
 
 @pytest.mark.asyncio
@@ -317,7 +367,6 @@ async def test_execute_truncates_result_at_50000_chars(
 @pytest.mark.asyncio
 async def test_execute_creates_chat_session(service, mock_schedule, mock_agent_executor):
     """Execute should insert a chat_sessions row with channel='scheduled'."""
-    # Set up a mock that tracks calls per table
     chat_sessions_insert = MagicMock()
     chat_sessions_insert.execute = AsyncMock(return_value=MagicMock(data=[]))
     chat_sessions_update_chain = MagicMock()
@@ -362,7 +411,6 @@ async def test_execute_creates_chat_session(service, mock_schedule, mock_agent_e
 
     assert result["success"] is True
 
-    # Verify chat_sessions insert
     chat_sessions_mock.insert.assert_called_once()
     session_data = chat_sessions_mock.insert.call_args[0][0]
     assert session_data["user_id"] == "user-123"
@@ -417,119 +465,11 @@ async def test_execute_marks_session_inactive_after_completion(service, mock_sch
 
         await service.execute(mock_schedule)
 
-    # Verify session marked inactive
     chat_sessions_mock.update.assert_called_once_with({"is_active": False})
     eq_calls = [call.args for call in chat_sessions_update_chain.eq.call_args_list]
-    # session_id should start with "scheduled_assistant_"
     assert len(eq_calls) == 1
     assert eq_calls[0][0] == "session_id"
     assert eq_calls[0][1].startswith("scheduled_assistant_")
-
-
-# --- Unit 4: LTM, model override, and token logging tests ---
-
-
-@pytest.mark.asyncio
-async def test_load_ltm_returns_notes(service):
-    """_load_ltm returns notes when they exist in the database."""
-    mock_result = MagicMock()
-    mock_result.data = {"notes": "User travels March 3-7"}
-
-    mock_db = MagicMock()
-    chain = mock_db.table.return_value.select.return_value
-    chain.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_result
-
-    with patch(
-        "chatServer.services.scheduled_execution_service.create_client",
-        return_value=mock_db,
-    ), patch.dict(
-        "os.environ",
-        {"VITE_SUPABASE_URL": "https://test.supabase.co", "SUPABASE_SERVICE_KEY": "key"},
-    ):
-        result = await service._load_ltm("user-123", "assistant")
-
-    assert result == "User travels March 3-7"
-
-
-@pytest.mark.asyncio
-async def test_load_ltm_returns_none_when_empty(service):
-    """_load_ltm returns None when no notes exist."""
-    mock_result = MagicMock()
-    mock_result.data = None
-
-    mock_db = MagicMock()
-    chain = mock_db.table.return_value.select.return_value
-    chain.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_result
-
-    with patch(
-        "chatServer.services.scheduled_execution_service.create_client",
-        return_value=mock_db,
-    ), patch.dict(
-        "os.environ",
-        {"VITE_SUPABASE_URL": "https://test.supabase.co", "SUPABASE_SERVICE_KEY": "key"},
-    ):
-        result = await service._load_ltm("user-123", "assistant")
-
-    assert result is None
-
-
-@pytest.mark.asyncio
-async def test_execute_prepends_ltm_to_prompt(
-    service, mock_schedule, mock_supabase, mock_agent_executor
-):
-    """When LTM exists, it is prepended to the prompt before agent invocation."""
-    patches = _standard_patches()
-    with (
-        patches["load_agent"] as mock_load,
-        patches["get_supabase"] as mock_get_sb,
-        patches["wrap_tools"],
-        patches["pending_svc"] as mock_pending_cls,
-        patches["audit_svc"],
-        patches["notification_svc"] as mock_notif_cls,
-        patch.object(
-            service, "_load_ltm", return_value="User prefers morning summaries"
-        ),
-    ):
-        mock_load.return_value = mock_agent_executor
-        mock_get_sb.return_value = mock_supabase
-        mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
-        mock_notif_cls.return_value.notify_user = AsyncMock()
-        mock_notif_cls.return_value.notify_pending_actions = AsyncMock()
-
-        await service.execute(mock_schedule)
-
-    # Verify the prompt sent to the agent includes LTM prefix
-    call_args = mock_agent_executor.ainvoke.call_args[0][0]
-    assert call_args["input"].startswith("User context (from memory):")
-    assert "User prefers morning summaries" in call_args["input"]
-    assert "What's new?" in call_args["input"]
-
-
-@pytest.mark.asyncio
-async def test_execute_without_ltm_uses_original_prompt(
-    service, mock_schedule, mock_supabase, mock_agent_executor
-):
-    """When no LTM exists, the original prompt is used unchanged."""
-    patches = _standard_patches()
-    with (
-        patches["load_agent"] as mock_load,
-        patches["get_supabase"] as mock_get_sb,
-        patches["wrap_tools"],
-        patches["pending_svc"] as mock_pending_cls,
-        patches["audit_svc"],
-        patches["notification_svc"] as mock_notif_cls,
-        patch.object(service, "_load_ltm", return_value=None),
-    ):
-        mock_load.return_value = mock_agent_executor
-        mock_get_sb.return_value = mock_supabase
-        mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
-        mock_notif_cls.return_value.notify_user = AsyncMock()
-        mock_notif_cls.return_value.notify_pending_actions = AsyncMock()
-
-        await service.execute(mock_schedule)
-
-    call_args = mock_agent_executor.ainvoke.call_args[0][0]
-    assert call_args["input"] == "What's new?"
 
 
 @pytest.mark.asyncio
@@ -556,7 +496,6 @@ async def test_execute_applies_model_override(
         patches["pending_svc"] as mock_pending_cls,
         patches["audit_svc"],
         patches["notification_svc"] as mock_notif_cls,
-        patch.object(service, "_load_ltm", return_value=None),
         patch.object(service, "_apply_model_override") as mock_apply,
     ):
         mock_load.return_value = mock_agent_executor
@@ -583,7 +522,6 @@ async def test_execute_stores_metadata_with_model(
         patches["pending_svc"] as mock_pending_cls,
         patches["audit_svc"],
         patches["notification_svc"] as mock_notif_cls,
-        patch.object(service, "_load_ltm", return_value=None),
         patch.object(service, "_get_model_name", return_value="claude-haiku-4-5-20251001"),
     ):
         mock_load.return_value = mock_agent_executor
@@ -601,7 +539,6 @@ async def test_execute_stores_metadata_with_model(
         }
         await service.execute(schedule)
 
-    # Find the agent_execution_results insert
     insert_calls = mock_supabase.table.return_value.insert.call_args_list
     result_inserts = [c for c in insert_calls if "metadata" in c[0][0]]
     assert len(result_inserts) >= 1
@@ -612,6 +549,11 @@ async def test_execute_stores_metadata_with_model(
 def test_build_execution_metadata_includes_model(service):
     """_build_execution_metadata returns a dict with model key."""
     executor = MagicMock()
-    executor.agent = None  # No agent chain to extract tokens from
+    executor.agent = None
     meta = service._build_execution_metadata(executor, "claude-haiku-4-5-20251001")
     assert meta["model"] == "claude-haiku-4-5-20251001"
+
+
+def test_no_load_ltm_method(service):
+    """_load_ltm method should no longer exist."""
+    assert not hasattr(service, '_load_ltm')
