@@ -64,6 +64,34 @@ When an agent makes a mistake or a pattern violation is found during review or U
 - **Target:** `chatServer/channels/telegram_bot.py`, CLAUDE.md gotcha
 - **Status:** Fixed in this branch
 
+### DEV-009: 2026-02-19 Dual-import singleton in telegram_bot.py (gotcha #15 recurrence)
+- **What happened:** `telegram_bot.py` used `from chatServer.database.connection import get_database_manager` and `from chatServer.config.constants import ...`. This created separate module instances from those initialized at startup. The `db_manager.pool` was `None`, crashing the entire Telegram message handler — no agent responses in Telegram.
+- **Root cause:** Gotcha #15 was documented but the pattern was violated in new code. The `try/except ImportError` fallback pattern was not applied.
+- **Correction:** Fixed imports to use `try: from ..database.connection` / `except ImportError: from database.connection`. This is the third time gotcha #15 has been hit.
+- **Target:** `chatServer/channels/telegram_bot.py`, CLAUDE.md gotcha #15 (already documented)
+- **Status:** Fixed in PR #47
+
+### DEV-010: 2026-02-19 Zustand getState() used in React hook (not reactive)
+- **What happened:** `useInitializeChatStore` used `useAuthStore.getState().user` to get the current user. On first load after server restart, auth hadn't completed when the hook ran, so `user` was `null`. Since `getState()` returns a snapshot (not reactive), the effect never re-ran when auth completed. Result: conversation didn't load on first page visit.
+- **Root cause:** No documented rule distinguishing `getState()` (snapshot) from selector hooks (reactive) in Zustand. The auth token gotcha (#3) covered tokens but not the general pattern.
+- **Correction:** Changed to `useAuthStore((s) => s.user)` selector subscription. Added CLAUDE.md gotcha #18 and frontend-patterns reference section 4b documenting the rule.
+- **Target:** CLAUDE.md gotcha, frontend-patterns skill reference
+- **Status:** Fixed in PR #47
+
+### DEV-011: 2026-02-19 Cross-channel messages not visible in web (no polling)
+- **What happened:** Messages sent via Telegram were correctly saved to `chat_message_history` with the shared `session_id`, but never appeared in the web UI. Required a full page refresh to see them.
+- **Root cause:** `useChatStore` loaded messages once during `initializeSessionAsync` but had no mechanism to poll for new messages. The `useChatMessages` hook (with 5s polling) existed in `useChatHistoryHooks.ts` but was NOT used by `ChatPanelV2` — the chat panel reads from the store, not from that hook.
+- **Correction:** Added `refreshMessages` action to useChatStore and 5s polling interval in ChatPanelV2. Added CLAUDE.md gotcha #19.
+- **Target:** `webApp/src/stores/useChatStore.ts`, `webApp/src/components/ChatPanelV2.tsx`, CLAUDE.md gotcha
+- **Status:** Fixed in PR #47
+
+### DEV-012: 2026-02-19 Untracked files caused CI failure
+- **What happened:** New cache service files (`agent_config_cache_service.py`, `user_instructions_cache_service.py`) were created locally but never `git add`ed. `main.py` imported them, so CI failed with `AttributeError: module 'chatServer.services' has no attribute 'agent_config_cache_service'`. Tests passed locally because the files existed on disk.
+- **Root cause:** `git diff` and `git status --short` show modified files but untracked files are easy to overlook. No pre-push hook verified that imports resolve.
+- **Correction:** Committed the missing files. Added CLAUDE.md gotcha #21 as a reminder.
+- **Target:** CLAUDE.md gotcha
+- **Status:** Fixed in PR #47
+
 ### DEV-008: 2026-02-18 PR merge order not communicated
 - **What happened:** Multiple PRs from a spec were reported as "ready" simultaneously, but they had implicit ordering (database → backend → frontend). User merged in wrong order.
 - **Root cause:** No merge order documentation in PR bodies or orchestrator reporting.

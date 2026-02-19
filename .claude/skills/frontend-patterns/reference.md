@@ -101,6 +101,62 @@ async function getAuthHeaders(): Promise<HeadersInit> {
 const token = useAuthStore.getState().session?.access_token;
 ```
 
+## 4b. Zustand — getState() vs Hook Subscriptions
+
+`getState()` returns a **snapshot** — it does NOT trigger re-renders. Inside React hooks (`useEffect`, custom hooks), always use selector subscriptions so the effect re-runs when state changes.
+
+```tsx
+// ✅ Reactive — re-renders when user changes (e.g., auth completing)
+const user = useAuthStore((s) => s.user);
+const initFn = useChatStore((s) => s.initializeSessionAsync);
+
+useEffect(() => {
+  if (user) initFn(agentName);
+}, [user, initFn, agentName]);
+
+// ❌ Snapshot — user is null on first render, effect never re-fires
+const user = useAuthStore.getState().user;
+const initFn = useChatStore.getState().initializeSessionAsync;
+
+useEffect(() => {
+  if (user) initFn(agentName); // Dead code if auth hasn't completed
+}, [user, initFn, agentName]);
+```
+
+**Rule:** `getState()` is only safe in event handlers, callbacks, and non-React code (timers, `beforeunload`). Inside hooks or effects that need reactivity, always use `useStore((s) => s.field)`.
+
+## 4c. assistant-ui Thread — Auto-Scroll Pitfall
+
+The `ThreadPrimitive.Viewport` auto-scrolls on content resize **only if `isAtBottom` is already true**. When messages hydrate from history (external store), the viewport starts at `scrollTop=0` with `isAtBottom=false`, so auto-scroll never fires.
+
+**Fix:** Manually scroll to bottom after initial message load with retry delays (the Thread renders messages asynchronously):
+
+```tsx
+const hasScrolledRef = useRef(false);
+const lastChatIdRef = useRef<string | null>(null);
+
+useEffect(() => {
+  if (activeChatId !== lastChatIdRef.current) {
+    hasScrolledRef.current = false;
+    lastChatIdRef.current = activeChatId ?? null;
+  }
+  if (messages.length > 0 && !hasScrolledRef.current) {
+    hasScrolledRef.current = true;
+    const scrollToEnd = () => {
+      const viewport = document.querySelector('.aui-thread-viewport');
+      if (viewport) viewport.scrollTop = viewport.scrollHeight;
+    };
+    // Retry — Thread renders asynchronously
+    const t1 = setTimeout(scrollToEnd, 100);
+    const t2 = setTimeout(scrollToEnd, 300);
+    const t3 = setTimeout(scrollToEnd, 600);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+  }
+}, [activeChatId, messages.length]);
+```
+
+**Also:** Use `window.requestAnimationFrame` not bare `requestAnimationFrame` — ESLint flags the latter as `no-undef`.
+
 ## 5. Centralized Overlays via Zustand
 
 ```tsx

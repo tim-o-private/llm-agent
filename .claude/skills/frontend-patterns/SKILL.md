@@ -25,6 +25,7 @@ Before writing frontend code, verify:
 - [ ] All colors use semantic tokens (`bg-brand-primary`, `text-text-secondary`)
 - [ ] Data fetching via React Query hooks, not useState+useEffect
 - [ ] Auth tokens from `supabase.auth.getSession()`, not Zustand
+- [ ] Zustand: `useStore((s) => s.field)` in hooks/effects, NOT `getState()` (not reactive)
 - [ ] Modals via `useOverlayStore`, not local state
 - [ ] Loading + error states handled in every data component
 - [ ] Forms use react-hook-form + Zod
