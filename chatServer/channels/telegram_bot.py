@@ -353,8 +353,12 @@ async def handle_message(message: types.Message) -> None:
             wrap_tools_with_approval(agent_executor.tools, approval_context)
 
         # Set up persistent memory and invoke agent within a DB connection scope
-        from chatServer.database.connection import get_database_manager
-        from chatServer.config.constants import CHAT_MESSAGE_HISTORY_TABLE_NAME
+        try:
+            from ..database.connection import get_database_manager
+            from ..config.constants import CHAT_MESSAGE_HISTORY_TABLE_NAME
+        except ImportError:
+            from database.connection import get_database_manager
+            from config.constants import CHAT_MESSAGE_HISTORY_TABLE_NAME
 
         db_manager = get_database_manager()
         await db_manager.ensure_initialized()
