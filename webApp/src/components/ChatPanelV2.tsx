@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useState } from 'react';
+import React, { useEffect, useCallback, useRef, useState } from 'react';
 import { AssistantRuntimeProvider } from '@assistant-ui/react';
 import { useExternalStoreRuntime } from '@assistant-ui/react';
 import type { ThreadMessageLike, AppendMessage } from '@assistant-ui/react';
@@ -189,6 +189,27 @@ export const ChatPanelV2: React.FC<ChatPanelV2Props> = ({ agentId: agentIdProp }
       document.removeEventListener('focusout', handleFocusOut);
     };
   }, [setInputFocusState]);
+
+  // Scroll to bottom when messages first load for a session (initial hydration or session switch)
+  const hasScrolledRef = useRef(false);
+  const lastChatIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (activeChatId !== lastChatIdRef.current) {
+      hasScrolledRef.current = false;
+      lastChatIdRef.current = activeChatId ?? null;
+    }
+
+    if (messages.length > 0 && !hasScrolledRef.current) {
+      hasScrolledRef.current = true;
+      requestAnimationFrame(() => {
+        const viewport = document.querySelector('.aui-thread-viewport');
+        if (viewport) {
+          viewport.scrollTop = viewport.scrollHeight;
+        }
+      });
+    }
+  }, [activeChatId, messages.length]);
 
   return (
     <div className="flex flex-col h-full bg-ui-bg shadow-lg border-l border-ui-border">
