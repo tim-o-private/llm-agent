@@ -37,7 +37,15 @@ async def test_handle_message_upserts_chat_session():
     upsert_chain = MagicMock()
     upsert_chain.execute = AsyncMock(return_value=MagicMock(data=[]))
 
+    # Mock the web session lookup chain: .select().eq().order().limit().execute()
+    web_session_chain = MagicMock()
+    web_session_chain.eq.return_value = web_session_chain
+    web_session_chain.order.return_value = web_session_chain
+    web_session_chain.limit.return_value = web_session_chain
+    web_session_chain.execute = AsyncMock(return_value=MagicMock(data=[]))
+
     chat_sessions_mock = MagicMock()
+    chat_sessions_mock.select.return_value = web_session_chain
     chat_sessions_mock.upsert.return_value = upsert_chain
 
     user_channels_mock = MagicMock()
@@ -74,10 +82,11 @@ async def test_handle_message_upserts_chat_session():
     chat_sessions_mock.upsert.assert_called_once()
     upsert_data = chat_sessions_mock.upsert.call_args[0][0]
     assert upsert_data["user_id"] == "user-123"
-    assert upsert_data["session_id"] == "telegram_12345"
     assert upsert_data["channel"] == "telegram"
     assert upsert_data["agent_name"] == "assistant"
     assert upsert_data["is_active"] is True
+    # session_id is a UUID (no existing web session to reuse)
+    assert upsert_data["session_id"] == upsert_data["chat_id"]
     assert chat_sessions_mock.upsert.call_args[1].get("on_conflict") == "session_id"
 
 
