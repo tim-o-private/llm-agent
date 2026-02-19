@@ -3,6 +3,7 @@
 # @rules memory-bank/rules/api-rules.json#api-003
 # @examples memory-bank/patterns/api-patterns.md#pattern-4-dependency-injection-pattern
 
+import asyncio
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -73,6 +74,7 @@ class ChatService:
             agent_executor_cache: Cache for storing agent executors by (user_id, agent_name)
         """
         self.agent_executor_cache = agent_executor_cache
+        self._load_locks: Dict[Tuple[str, str], asyncio.Lock] = {}
 
     def create_chat_memory(self, session_id: str, pg_connection: psycopg.AsyncConnection) -> AsyncConversationBufferWindowMemory:
         """Create chat memory for a session.
@@ -102,7 +104,7 @@ class ChatService:
 
         return agent_short_term_memory
 
-    def get_or_load_agent_executor(
+    async def get_or_load_agent_executor(
         self,
         user_id: str,
         agent_name: str,
@@ -110,7 +112,10 @@ class ChatService:
         agent_loader_module: Any,
         memory: AsyncConversationBufferWindowMemory
     ) -> AgentExecutorProtocol:
-        """Get agent executor from cache or load a new one.
+        """Get agent executor from cache or load a new one (async).
+
+        Uses async loading path to avoid blocking the event loop.
+        Per-key locking prevents duplicate concurrent loads for the same agent.
 
         Args:
             user_id: User ID
@@ -131,18 +136,36 @@ class ChatService:
             agent_executor = self.agent_executor_cache[cache_key]
             logger.debug(f"Cache HIT for agent executor: key={cache_key}")
         else:
-            logger.debug(f"Cache MISS for agent executor: key={cache_key}. Loading new executor.")
-            try:
-                agent_executor = agent_loader_module.load_agent_executor(
-                    user_id=user_id,
-                    agent_name=agent_name,
-                    session_id=session_id,
-                    log_level=DEFAULT_LOG_LEVEL
-                )
-                self.agent_executor_cache[cache_key] = agent_executor
-            except Exception as e:
-                logger.error(f"Error loading agent executor for agent {agent_name}: {e}", exc_info=True)
-                raise HTTPException(status_code=500, detail=f"Could not load agent: {e}")
+            # Per-key lock prevents duplicate concurrent loads
+            lock = self._load_locks.setdefault(cache_key, asyncio.Lock())
+            async with lock:
+                # Double-check after acquiring lock
+                if cache_key in self.agent_executor_cache:
+                    agent_executor = self.agent_executor_cache[cache_key]
+                    logger.debug(f"Cache HIT (post-lock) for agent executor: key={cache_key}")
+                else:
+                    logger.debug(f"Cache MISS for agent executor: key={cache_key}. Loading new executor.")
+                    try:
+                        # Prefer async path if available
+                        if hasattr(agent_loader_module, 'async_load_agent_executor'):
+                            agent_executor = await agent_loader_module.async_load_agent_executor(
+                                agent_name=agent_name,
+                                user_id=user_id,
+                                session_id=session_id,
+                                log_level=DEFAULT_LOG_LEVEL,
+                            )
+                        else:
+                            # Fallback to sync path (e.g., CLI usage)
+                            agent_executor = agent_loader_module.load_agent_executor(
+                                user_id=user_id,
+                                agent_name=agent_name,
+                                session_id=session_id,
+                                log_level=DEFAULT_LOG_LEVEL,
+                            )
+                        self.agent_executor_cache[cache_key] = agent_executor
+                    except Exception as e:
+                        logger.error(f"Error loading agent executor for agent {agent_name}: {e}", exc_info=True)
+                        raise HTTPException(status_code=500, detail=f"Could not load agent: {e}")
 
         # Check if agent_executor implements the required interface
         if not hasattr(agent_executor, 'ainvoke') or not hasattr(agent_executor, 'memory'):
@@ -256,7 +279,7 @@ class ChatService:
             agent_short_term_memory = self.create_chat_memory(session_id_for_history, pg_connection)
 
             # Get or load agent executor
-            agent_executor = self.get_or_load_agent_executor(
+            agent_executor = await self.get_or_load_agent_executor(
                 user_id=user_id,
                 agent_name=agent_name,
                 session_id=session_id_for_history,
@@ -312,8 +335,9 @@ class ChatService:
 
                 # Push to Telegram if this is the linked session (best-effort)
                 try:
+                    tg_text = f"*You (web):* {chat_input.message}\n\n{ai_response_content}"
                     await self._push_to_telegram_if_linked(
-                        user_id, session_id_for_history, ai_response_content, supabase_client
+                        user_id, session_id_for_history, tg_text, supabase_client
                     )
                 except Exception as e:
                     logger.debug(f"Telegram push skipped: {e}")
