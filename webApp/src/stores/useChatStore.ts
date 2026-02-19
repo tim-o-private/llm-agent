@@ -34,8 +34,7 @@ interface ChatStore {
   setCurrentAgentName: (agentName: string | null) => void; // Renamed
   startNewConversationAsync: (agentName: string) => Promise<void>;
   switchToConversationAsync: (chatId: string) => Promise<void>;
-
-  // Archival related methods and state are removed assuming backend handles all message history
+  refreshMessages: () => Promise<void>;
 }
 
 const CHAT_ID_LOCAL_STORAGE_PREFIX = 'chatUI_activeChatId';
@@ -415,15 +414,30 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       // console.warn('Cannot send heartbeat: no currentSessionInstanceId or user.');
     }
   },
+
+  refreshMessages: async () => {
+    const { activeChatId } = get();
+    if (!activeChatId) return;
+    try {
+      const freshMessages = await loadHistoricalMessages(activeChatId);
+      const { messages: currentMessages } = get();
+      // Only update if the message count changed (avoids unnecessary re-renders)
+      if (freshMessages.length !== currentMessages.length) {
+        set({ messages: freshMessages });
+      }
+    } catch (error) {
+      console.error('Error refreshing messages:', error);
+    }
+  },
 }));
 
 // Hook to initialize and clean up the store's session management
 export const useInitializeChatStore = (agentName: string | null | undefined) => {
-  const user = useAuthStore.getState().user;
-  const initializeSessionAsync = useChatStore.getState().initializeSessionAsync;
-  const clearCurrentSessionAsync = useChatStore.getState().clearCurrentSessionAsync;
-  const currentStoreAgentName = useChatStore.getState().currentAgentName;
-  const currentStoreSessionInstanceId = useChatStore.getState().currentSessionInstanceId;
+  const user = useAuthStore((s) => s.user);
+  const initializeSessionAsync = useChatStore((s) => s.initializeSessionAsync);
+  const clearCurrentSessionAsync = useChatStore((s) => s.clearCurrentSessionAsync);
+  const currentStoreAgentName = useChatStore((s) => s.currentAgentName);
+  const currentStoreSessionInstanceId = useChatStore((s) => s.currentSessionInstanceId);
 
   useEffect(() => {
     if (agentName && user?.id) {

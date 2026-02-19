@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useState } from 'react';
+import React, { useEffect, useCallback, useRef, useState } from 'react';
 import { AssistantRuntimeProvider } from '@assistant-ui/react';
 import { useExternalStoreRuntime } from '@assistant-ui/react';
 import type { ThreadMessageLike, AppendMessage } from '@assistant-ui/react';
@@ -27,6 +27,7 @@ export const ChatPanelV2: React.FC<ChatPanelV2Props> = ({ agentId: agentIdProp }
     sendHeartbeatAsync,
     clearCurrentSessionAsync,
     addMessage,
+    refreshMessages,
   } = useChatStore();
   const { setInputFocusState } = useTaskViewStore();
 
@@ -136,6 +137,15 @@ export const ChatPanelV2: React.FC<ChatPanelV2Props> = ({ agentId: agentIdProp }
     }
   }, [currentSessionInstanceId, sendHeartbeatAsync]);
 
+  // Poll for cross-channel messages (e.g., Telegram → web sync)
+  useEffect(() => {
+    if (!activeChatId || !currentSessionInstanceId) return;
+    const intervalId = setInterval(() => {
+      refreshMessages();
+    }, 5000);
+    return () => clearInterval(intervalId);
+  }, [activeChatId, currentSessionInstanceId, refreshMessages]);
+
   // beforeunload listener to deactivate session instance - same as original ChatPanel
   useEffect(() => {
     const handleBeforeUnload = () => {
@@ -189,6 +199,37 @@ export const ChatPanelV2: React.FC<ChatPanelV2Props> = ({ agentId: agentIdProp }
       document.removeEventListener('focusout', handleFocusOut);
     };
   }, [setInputFocusState]);
+
+  // Scroll to bottom when messages first load for a session (initial hydration or session switch)
+  const hasScrolledRef = useRef(false);
+  const lastChatIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (activeChatId !== lastChatIdRef.current) {
+      hasScrolledRef.current = false;
+      lastChatIdRef.current = activeChatId ?? null;
+    }
+
+    if (messages.length > 0 && !hasScrolledRef.current) {
+      hasScrolledRef.current = true;
+      // Retry scroll with increasing delays — the assistant-ui Thread renders
+      // messages asynchronously so a single rAF fires too early.
+      const scrollToEnd = () => {
+        const viewport = document.querySelector('.aui-thread-viewport');
+        if (viewport) {
+          viewport.scrollTop = viewport.scrollHeight;
+        }
+      };
+      const t1 = setTimeout(scrollToEnd, 100);
+      const t2 = setTimeout(scrollToEnd, 300);
+      const t3 = setTimeout(scrollToEnd, 600);
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+      };
+    }
+  }, [activeChatId, messages.length]);
 
   return (
     <div className="flex flex-col h-full bg-ui-bg shadow-lg border-l border-ui-border">

@@ -100,12 +100,20 @@ class TestChatEndpoint(unittest.IsolatedAsyncioTestCase):
         p3 = patch('chatServer.services.tool_cache_service.initialize_tool_cache', new_callable=AsyncMock)
         p4 = patch('chatServer.services.tool_cache_service.shutdown_tool_cache', new_callable=AsyncMock)
 
+        # Mock agent config cache
+        p3a = patch('chatServer.services.agent_config_cache_service.initialize_agent_config_cache', new_callable=AsyncMock)
+        p4a = patch('chatServer.services.agent_config_cache_service.shutdown_agent_config_cache', new_callable=AsyncMock)
+
+        # Mock user instructions cache
+        p3b = patch('chatServer.services.user_instructions_cache_service.initialize_user_instructions_cache', new_callable=AsyncMock)
+        p4b = patch('chatServer.services.user_instructions_cache_service.shutdown_user_instructions_cache', new_callable=AsyncMock)
+
         # Mock background task service
         mock_bg_service = MagicMock()
         mock_bg_service.stop_background_tasks = AsyncMock()
         p5 = patch('chatServer.services.background_tasks.get_background_task_service', return_value=mock_bg_service)
 
-        for p in [p1, p2, p3, p4, p5]:
+        for p in [p1, p2, p3, p4, p3a, p4a, p3b, p4b, p5]:
             self._lifespan_patches.append(p)
             p.start()
 
@@ -130,7 +138,7 @@ class TestChatEndpoint(unittest.IsolatedAsyncioTestCase):
         app.dependency_overrides[get_db_connection] = self.mock_db_connection_generator
 
         # Create a mock agent loader module
-        self.mock_agent_loader = MagicMock()
+        self.mock_agent_loader = MagicMock(spec=['load_agent_executor'])
         self.fake_agent_executor_instance = FakeCustomizableAgentExecutor()
         self.mock_agent_loader.load_agent_executor.return_value = self.fake_agent_executor_instance
 

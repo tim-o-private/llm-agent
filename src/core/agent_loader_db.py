@@ -438,8 +438,6 @@ def load_agent_executor_db(
         supabase_url: Supabase project URL. Defaults to VITE_SUPABASE_URL env var.
         supabase_key: Supabase service key. Defaults to SUPABASE_SERVICE_KEY env var.
         log_level: Desired logging level for the logger instance used by the executor.
-        explicit_custom_instructions: Optional dictionary of custom instructions to override
-                                      or supplement any loaded from context or defaults.
         use_cache: Whether to use the tool cache service for improved performance. Defaults to True.
 
     Returns:
@@ -649,6 +647,146 @@ def load_agent_executor_db(
     except Exception as e:
         logger.error(f"Failed to create CustomizableAgentExecutor for agent '{agent_db_config['agent_name']}': {e}", exc_info=True)
         raise
+
+
+async def load_agent_executor_db_async(
+    agent_name: str,
+    user_id: str,
+    session_id: str,
+    supabase_url: Optional[str] = None,
+    supabase_key: Optional[str] = None,
+    log_level: int = logging.INFO,
+    channel: str = "web",
+) -> CustomizableAgentExecutor:
+    """Async version of load_agent_executor_db.
+
+    Eliminates asyncio.run() calls and event loop blocking.
+    Uses cached agent config and user instructions, parallelizes
+    tools + user_instructions fetch via asyncio.gather().
+    """
+    import asyncio
+
+    from chatServer.services.agent_config_cache_service import get_cached_agent_config
+    from chatServer.services.tool_cache_service import get_cached_tools_for_agent
+    from chatServer.services.user_instructions_cache_service import get_cached_user_instructions
+
+    logger.setLevel(log_level)
+
+    effective_supabase_url = supabase_url or os.getenv("VITE_SUPABASE_URL")
+    effective_supabase_key = supabase_key or os.getenv("SUPABASE_SERVICE_KEY")
+    if not effective_supabase_url or not effective_supabase_key:
+        raise ValueError("Supabase URL and Service Key must be provided either as arguments or environment variables.")
+
+    logger.info(f"Loading agent executor (async) for agent_name='{agent_name}', user_id='{user_id}'")
+
+    # Step 1: Agent config from cache (~0ms on hit)
+    agent_db_config = await get_cached_agent_config(agent_name)
+    if not agent_db_config:
+        # Cache miss or empty — fall back to direct DB query
+        agent_db_config = await _fetch_agent_config_from_db_async(agent_name)
+
+    if not agent_db_config:
+        raise ValueError(f"Agent configuration for '{agent_name}' not found in 'agent_configurations' table.")
+
+    agent_id = agent_db_config.get("id")
+    if not agent_id:
+        raise ValueError(f"Agent '{agent_name}' found, but its ID is missing.")
+
+    logger.info(f"Loaded agent config for '{agent_name}' (ID: {agent_id}) from cache/DB.")
+
+    # Step 2: Parallelize tools + user instructions fetch
+    tools_task = get_cached_tools_for_agent(str(agent_id))
+    instructions_task = get_cached_user_instructions(user_id, agent_name)
+    cached_tools_data, user_instructions = await asyncio.gather(tools_task, instructions_task)
+
+    # Transform cached tool data to match expected format
+    tools_data_from_db = []
+    for tool_config in cached_tools_data:
+        transformed_tool = {
+            "name": tool_config["name"],
+            "type": tool_config.get("type", "CRUDTool"),
+            "description": tool_config.get("description", ""),
+            "config": tool_config.get("config", {}),
+            "is_active": tool_config.get("is_active", True),
+        }
+        tools_data_from_db.append(transformed_tool)
+
+    logger.info(f"Retrieved {len(tools_data_from_db)} tools for agent '{agent_name}' (async path)")
+
+    # Step 3: Instantiate tools
+    instantiated_tools = load_tools_from_db(
+        tools_data=tools_data_from_db,
+        user_id=user_id,
+        agent_name=agent_db_config["agent_name"],
+        supabase_url=effective_supabase_url,
+        supabase_key=effective_supabase_key,
+    )
+
+    # Step 4: Build prompt
+    llm_config_from_db = agent_db_config.get("llm_config")
+    if not llm_config_from_db:
+        logger.warning(f"Agent '{agent_name}' is missing 'llm_config' in its DB configuration.")
+
+    soul = agent_db_config.get("soul") or ""
+    identity = agent_db_config.get("identity")
+    tool_names = [getattr(t, "name", None) for t in instantiated_tools if getattr(t, "name", None)]
+
+    from chatServer.services.prompt_builder import build_agent_prompt
+
+    assembled_prompt = build_agent_prompt(
+        soul=soul,
+        identity=identity,
+        channel=channel,
+        user_instructions=user_instructions,
+        tool_names=tool_names,
+    )
+
+    agent_config_for_executor = {
+        "agent_name": agent_db_config["agent_name"],
+        "llm": llm_config_from_db or {},
+        "system_prompt": assembled_prompt,
+    }
+
+    # Step 5: Create and return the executor
+    try:
+        agent_executor = CustomizableAgentExecutor.from_agent_config(
+            agent_config_dict=agent_config_for_executor,
+            tools=instantiated_tools,
+            user_id=user_id,
+            session_id=session_id,
+            logger_instance=logger,
+        )
+        agent_nm = agent_db_config['agent_name']
+        logger.info(f"Successfully created CustomizableAgentExecutor (async) for agent '{agent_nm}'.")
+        return agent_executor
+    except Exception as e:
+        agent_nm = agent_db_config['agent_name']
+        logger.error(f"Failed to create async executor for agent '{agent_nm}': {e}", exc_info=True)
+        raise
+
+
+async def _fetch_agent_config_from_db_async(agent_name: str) -> Optional[Dict[str, Any]]:
+    """Direct DB fetch for agent config when cache misses."""
+    try:
+        from chatServer.database.connection import get_database_manager
+
+        db_manager = get_database_manager()
+        async for conn in db_manager.get_connection():
+            async with conn.cursor() as cur:
+                await cur.execute("""
+                    SELECT id, agent_name, soul, identity, llm_config,
+                           created_at, updated_at
+                    FROM agent_configurations
+                    WHERE agent_name = %s
+                """, (agent_name,))
+                row = await cur.fetchone()
+                if row:
+                    columns = [desc[0] for desc in cur.description]
+                    return dict(zip(columns, row))
+        return None
+    except Exception as e:
+        logger.error(f"Failed to fetch agent config from DB for '{agent_name}': {e}")
+        return None
 
 
 async def fetch_ltm_notes(user_id: str, agent_name: str, supabase_client=None) -> Optional[str]:

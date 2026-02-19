@@ -48,6 +48,7 @@ class LinkTokenResponse(BaseModel):
 class TelegramStatusResponse(BaseModel):
     linked: bool
     linked_at: str | None = None
+    linked_session_id: str | None = None
 
 
 class UnlinkResponse(BaseModel):

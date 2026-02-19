@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useCallback } from 'react';
+import { Send } from 'lucide-react';
 import { useChatSessions, type ChatSession } from '@/api/hooks/useChatHistoryHooks';
 import { useChatStore } from '@/stores/useChatStore';
+import { useTelegramStatus } from '@/api/hooks/useTelegramHooks';
 
 interface ConversationGroup {
   chatId: string;
@@ -18,6 +20,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({ agentName })
   const [isExpanded, setIsExpanded] = useState(false);
   const { data: sessions, isLoading, error } = useChatSessions(undefined, 100);
   const { activeChatId, startNewConversationAsync, switchToConversationAsync } = useChatStore();
+  const { data: telegramStatus } = useTelegramStatus();
 
   // Group sessions by unique chat_id, keeping the most recent session per chat_id
   const conversationGroups = useMemo((): ConversationGroup[] => {
@@ -161,11 +164,18 @@ export const ConversationList: React.FC<ConversationListProps> = ({ agentName })
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
-                    <span
-                      className={`text-[10px] px-1.5 py-0.5 rounded-full ${channelBadgeClass(group.channel)}`}
-                    >
-                      {group.channel}
-                    </span>
+                    {group.chatId === telegramStatus?.linked_session_id ? (
+                      <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-brand-primary/10 text-brand-primary">
+                        <Send className="h-3 w-3" />
+                        Telegram
+                      </span>
+                    ) : (
+                      <span
+                        className={`text-[10px] px-1.5 py-0.5 rounded-full ${channelBadgeClass(group.channel)}`}
+                      >
+                        {group.channel}
+                      </span>
+                    )}
                     {group.isActive && (
                       <span className="w-1.5 h-1.5 rounded-full bg-success-indicator flex-shrink-0" />
                     )}

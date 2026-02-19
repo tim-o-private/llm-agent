@@ -133,13 +133,23 @@ async def lifespan(app: FastAPI):
     try:
         from .database.connection import get_database_manager
         from .database.supabase_client import get_supabase_manager
+        from .services.agent_config_cache_service import initialize_agent_config_cache, shutdown_agent_config_cache
         from .services.background_tasks import get_background_task_service
         from .services.tool_cache_service import initialize_tool_cache, shutdown_tool_cache
+        from .services.user_instructions_cache_service import (
+            initialize_user_instructions_cache, shutdown_user_instructions_cache,
+        )
     except ImportError:
         from database.connection import get_database_manager
         from database.supabase_client import get_supabase_manager
+        from services.agent_config_cache_service import (
+            initialize_agent_config_cache, shutdown_agent_config_cache,
+        )
         from services.background_tasks import get_background_task_service
         from services.tool_cache_service import initialize_tool_cache, shutdown_tool_cache
+        from services.user_instructions_cache_service import (
+            initialize_user_instructions_cache, shutdown_user_instructions_cache,
+        )
 
     global AGENT_EXECUTOR_CACHE
     logger.info("Application startup: Initializing resources...")
@@ -155,12 +165,24 @@ async def lifespan(app: FastAPI):
     supabase_manager = get_supabase_manager()
     await supabase_manager.initialize()
 
-    # Initialize tool cache service
+    # Initialize cache services
     try:
         await initialize_tool_cache()
         logger.info("Tool cache service initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize tool cache service: {e}", exc_info=True)
+
+    try:
+        await initialize_agent_config_cache()
+        logger.info("Agent config cache service initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize agent config cache service: {e}", exc_info=True)
+
+    try:
+        await initialize_user_instructions_cache()
+        logger.info("User instructions cache service initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize user instructions cache service: {e}", exc_info=True)
 
     # Initialize and start background tasks
     background_service = get_background_task_service()
@@ -199,7 +221,19 @@ async def lifespan(app: FastAPI):
     # Stop background tasks
     await background_service.stop_background_tasks()
 
-    # Stop tool cache service
+    # Stop cache services
+    try:
+        await shutdown_user_instructions_cache()
+        logger.info("User instructions cache service stopped successfully")
+    except Exception as e:
+        logger.error(f"Failed to stop user instructions cache service: {e}", exc_info=True)
+
+    try:
+        await shutdown_agent_config_cache()
+        logger.info("Agent config cache service stopped successfully")
+    except Exception as e:
+        logger.error(f"Failed to stop agent config cache service: {e}", exc_info=True)
+
     try:
         await shutdown_tool_cache()
         logger.info("Tool cache service stopped successfully")

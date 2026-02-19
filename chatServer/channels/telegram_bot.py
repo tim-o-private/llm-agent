@@ -284,7 +284,7 @@ async def handle_message(message: types.Message) -> None:
             from security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
             from services.audit_service import AuditService
             from services.pending_actions import PendingActionsService
-        from src.core.agent_loader_db import load_agent_executor_db
+        from core.agent_loader_db import load_agent_executor_db
 
         # Cross-channel session sharing: reuse most recent web session if one exists
         web_session_result = (
@@ -323,11 +323,16 @@ async def handle_message(message: types.Message) -> None:
                 }
             ).execute()
 
-        agent_executor = load_agent_executor_db(
-            agent_name="assistant",
-            user_id=user_id,
-            session_id=session_id,
-            channel="telegram",
+        import asyncio
+        loop = asyncio.get_event_loop()
+        agent_executor = await loop.run_in_executor(
+            None,
+            lambda: load_agent_executor_db(
+                agent_name="assistant",
+                user_id=user_id,
+                session_id=session_id,
+                channel="telegram",
+            ),
         )
 
         # Wrap tools with approval
@@ -347,40 +352,44 @@ async def handle_message(message: types.Message) -> None:
         if hasattr(agent_executor, "tools") and agent_executor.tools:
             wrap_tools_with_approval(agent_executor.tools, approval_context)
 
-        # Load recent chat history for agent context
-        chat_history = []
+        # Set up persistent memory and invoke agent within a DB connection scope
         try:
-            from chatServer.database.connection import get_database_manager
+            from ..database.connection import get_database_manager
+            from ..config.constants import CHAT_MESSAGE_HISTORY_TABLE_NAME
+        except ImportError:
+            from database.connection import get_database_manager
+            from config.constants import CHAT_MESSAGE_HISTORY_TABLE_NAME
 
-            db_manager = get_database_manager()
-            await db_manager.ensure_initialized()
-            if db_manager.pool:
-                from langchain_postgres import PostgresChatMessageHistory
+        db_manager = get_database_manager()
+        await db_manager.ensure_initialized()
 
-                from chatServer.config.constants import CHAT_MESSAGE_HISTORY_TABLE_NAME
+        async with db_manager.pool.connection() as pg_conn:
+            # Wire up memory so this turn is saved to the shared message store
+            from langchain_postgres import PostgresChatMessageHistory
 
-                async with db_manager.pool.connection() as conn:
-                    pg_history = PostgresChatMessageHistory(
-                        CHAT_MESSAGE_HISTORY_TABLE_NAME,
-                        session_id,
-                        async_connection=conn,
-                    )
-                    messages = await pg_history.aget_messages()
-                    chat_history = messages[-10:]  # Last 10 messages for context
-                    logger.info(f"Loaded {len(chat_history)} history messages for Telegram context")
-        except Exception as e:
-            logger.warning(f"Failed to load chat history for Telegram (non-fatal): {e}")
+            try:
+                from ..services.chat import AsyncConversationBufferWindowMemory
+            except ImportError:
+                from services.chat import AsyncConversationBufferWindowMemory
 
-        # Send typing indicator
-        await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
+            pg_history = PostgresChatMessageHistory(
+                CHAT_MESSAGE_HISTORY_TABLE_NAME,
+                session_id,
+                async_connection=pg_conn,
+            )
+            agent_executor.memory = AsyncConversationBufferWindowMemory(
+                chat_memory=pg_history,
+                k=50,
+                return_messages=True,
+                memory_key="chat_history",
+                input_key="input",
+            )
 
-        # Invoke agent
-        response = await agent_executor.ainvoke(
-            {
-                "input": message.text,
-                "chat_history": chat_history,
-            }
-        )
+            # Send typing indicator
+            await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
+
+            # Invoke agent (memory auto-saves the turn to message_store)
+            response = await agent_executor.ainvoke({"input": message.text})
 
         output = response.get("output", "")
         if isinstance(output, list):

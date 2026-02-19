@@ -104,5 +104,6 @@ export function useChatMessages(sessionId: string | null, limit = 50) {
     queryKey: [CHAT_HISTORY_QUERY_KEY, 'messages', sessionId, user?.id, limit],
     queryFn: () => fetchChatMessages(sessionId!, limit),
     enabled: !!user && !!sessionId,
+    refetchInterval: 5000,
   });
 }

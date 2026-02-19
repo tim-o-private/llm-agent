@@ -112,7 +112,7 @@ async def unlink_telegram_account(db_client, user_id: str) -> bool:
 
 
 async def get_telegram_status(db_client, user_id: str) -> dict:
-    """Check if user has Telegram linked."""
+    """Check if user has Telegram linked, including which web session is synced."""
     try:
         result = (
             await db_client.table("user_channels")
@@ -124,7 +124,28 @@ async def get_telegram_status(db_client, user_id: str) -> dict:
         )
 
         if result.data and result.data.get("is_active"):
-            return {"linked": True, "linked_at": result.data["linked_at"]}
+            # Find the most recent web session — this is the one synced to Telegram
+            linked_session_id = None
+            try:
+                web_session = (
+                    await db_client.table("chat_sessions")
+                    .select("chat_id")
+                    .eq("user_id", user_id)
+                    .eq("channel", "web")
+                    .order("updated_at", desc=True)
+                    .limit(1)
+                    .execute()
+                )
+                if web_session.data:
+                    linked_session_id = str(web_session.data[0]["chat_id"])
+            except Exception as e:
+                logger.debug(f"Could not resolve linked session for user {user_id}: {e}")
+
+            return {
+                "linked": True,
+                "linked_at": result.data["linked_at"],
+                "linked_session_id": linked_session_id,
+            }
         return {"linked": False}
 
     except Exception:

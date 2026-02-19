@@ -140,85 +140,7 @@ class TestChatService(unittest.TestCase):
         )
         self.assertEqual(result, mock_memory)
 
-    def test_get_or_load_agent_executor_cache_hit(self):
-        """Test getting agent executor from cache (cache hit)."""
-        mock_executor = MagicMock()
-        mock_executor.ainvoke = MagicMock()
-        mock_executor.memory = MagicMock()
-        mock_memory = MagicMock()
-
-        cache_key = ("user123", "agent1")
-        self.mock_cache[cache_key] = mock_executor
-
-        result = self.service.get_or_load_agent_executor(
-            user_id="user123",
-            agent_name="agent1",
-            session_id="session123",
-            agent_loader_module=MagicMock(),
-            memory=mock_memory
-        )
-
-        self.assertEqual(result, mock_executor)
-        self.assertEqual(mock_executor.memory, mock_memory)
-
-    def test_get_or_load_agent_executor_cache_miss(self):
-        """Test loading new agent executor (cache miss)."""
-        mock_executor = MagicMock()
-        mock_executor.ainvoke = MagicMock()
-        mock_executor.memory = MagicMock()
-        mock_memory = MagicMock()
-        mock_loader = MagicMock()
-        mock_loader.load_agent_executor.return_value = mock_executor
-
-        result = self.service.get_or_load_agent_executor(
-            user_id="user123",
-            agent_name="agent1",
-            session_id="session123",
-            agent_loader_module=mock_loader,
-            memory=mock_memory
-        )
-
-        self.assertEqual(result, mock_executor)
-        self.assertEqual(mock_executor.memory, mock_memory)
-        self.assertIn(("user123", "agent1"), self.mock_cache)
-        mock_loader.load_agent_executor.assert_called_once()
-
-    def test_get_or_load_agent_executor_invalid_interface(self):
-        """Test error when agent executor has invalid interface."""
-        mock_executor = MagicMock()
-        # Remove required attributes to simulate invalid interface
-        del mock_executor.ainvoke
-        mock_loader = MagicMock()
-        mock_loader.load_agent_executor.return_value = mock_executor
-
-        with self.assertRaises(HTTPException) as context:
-            self.service.get_or_load_agent_executor(
-                user_id="user123",
-                agent_name="agent1",
-                session_id="session123",
-                agent_loader_module=mock_loader,
-                memory=MagicMock()
-            )
-
-        self.assertEqual(context.exception.status_code, 500)
-        self.assertIn("Agent loading failed", context.exception.detail)
-
-    def test_get_or_load_agent_executor_loading_error(self):
-        """Test error during agent loading."""
-        mock_loader = MagicMock()
-        mock_loader.load_agent_executor.side_effect = Exception("Loading failed")
-
-        with self.assertRaises(HTTPException) as context:
-            self.service.get_or_load_agent_executor(
-                user_id="user123",
-                agent_name="agent1",
-                session_id="session123",
-                agent_loader_module=mock_loader,
-                memory=MagicMock()
-            )
-
-        self.assertEqual(context.exception.status_code, 500)
-        self.assertIn("Could not load agent", context.exception.detail)
+    # NOTE: get_or_load_agent_executor is async — these tests moved to TestChatServiceAsyncExecutor below
 
     def test_extract_tool_info_no_steps(self):
         """Test extracting tool info when no intermediate steps."""
@@ -289,7 +211,7 @@ class TestChatServiceAsync:
         assert "session_id is required" in exc_info.value.detail
 
     @patch('chatServer.services.chat.ChatService.create_chat_memory')
-    @patch('chatServer.services.chat.ChatService.get_or_load_agent_executor')
+    @patch('chatServer.services.chat.ChatService.get_or_load_agent_executor', new_callable=AsyncMock)
     @pytest.mark.asyncio
     async def test_process_chat_success(self, mock_get_executor, mock_create_memory):
         """Test successful chat processing."""
@@ -320,7 +242,7 @@ class TestChatServiceAsync:
         assert result.error is None
 
     @patch('chatServer.services.chat.ChatService.create_chat_memory')
-    @patch('chatServer.services.chat.ChatService.get_or_load_agent_executor')
+    @patch('chatServer.services.chat.ChatService.get_or_load_agent_executor', new_callable=AsyncMock)
     @pytest.mark.asyncio
     async def test_process_chat_agent_execution_error(self, mock_get_executor, mock_create_memory):
         """Test chat processing with agent execution error."""
@@ -349,6 +271,153 @@ class TestChatServiceAsync:
         assert result.session_id == "session123"
         assert "error occurred processing" in result.response
         assert "Agent failed" in result.error
+
+
+class TestChatServiceAsyncExecutor:
+    """Async test cases for get_or_load_agent_executor (now async)."""
+
+    def setup_method(self):
+        self.mock_cache = {}
+        self.service = ChatService(self.mock_cache)
+
+    @pytest.mark.asyncio
+    async def test_get_or_load_agent_executor_cache_hit(self):
+        """Test getting agent executor from cache (cache hit)."""
+        mock_executor = MagicMock()
+        mock_executor.ainvoke = MagicMock()
+        mock_executor.memory = MagicMock()
+        mock_memory = MagicMock()
+
+        cache_key = ("user123", "agent1")
+        self.mock_cache[cache_key] = mock_executor
+
+        result = await self.service.get_or_load_agent_executor(
+            user_id="user123",
+            agent_name="agent1",
+            session_id="session123",
+            agent_loader_module=MagicMock(),
+            memory=mock_memory,
+        )
+
+        assert result == mock_executor
+        assert mock_executor.memory == mock_memory
+
+    @pytest.mark.asyncio
+    async def test_get_or_load_agent_executor_cache_miss(self):
+        """Test loading new agent executor (cache miss) via sync fallback."""
+        mock_executor = MagicMock()
+        mock_executor.ainvoke = MagicMock()
+        mock_executor.memory = MagicMock()
+        mock_memory = MagicMock()
+        mock_loader = MagicMock()
+        # No async_load_agent_executor → falls back to sync
+        del mock_loader.async_load_agent_executor
+        mock_loader.load_agent_executor.return_value = mock_executor
+
+        result = await self.service.get_or_load_agent_executor(
+            user_id="user123",
+            agent_name="agent1",
+            session_id="session123",
+            agent_loader_module=mock_loader,
+            memory=mock_memory,
+        )
+
+        assert result == mock_executor
+        assert mock_executor.memory == mock_memory
+        assert ("user123", "agent1") in self.mock_cache
+        mock_loader.load_agent_executor.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_or_load_agent_executor_async_path(self):
+        """Test loading new agent executor via async path."""
+        mock_executor = MagicMock()
+        mock_executor.ainvoke = MagicMock()
+        mock_executor.memory = MagicMock()
+        mock_memory = MagicMock()
+        mock_loader = MagicMock()
+        mock_loader.async_load_agent_executor = AsyncMock(return_value=mock_executor)
+
+        result = await self.service.get_or_load_agent_executor(
+            user_id="user123",
+            agent_name="agent1",
+            session_id="session123",
+            agent_loader_module=mock_loader,
+            memory=mock_memory,
+        )
+
+        assert result == mock_executor
+        mock_loader.async_load_agent_executor.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_or_load_agent_executor_invalid_interface(self):
+        """Test error when agent executor has invalid interface."""
+        mock_executor = MagicMock()
+        del mock_executor.ainvoke
+        mock_loader = MagicMock()
+        del mock_loader.async_load_agent_executor
+        mock_loader.load_agent_executor.return_value = mock_executor
+
+        with pytest.raises(HTTPException) as exc_info:
+            await self.service.get_or_load_agent_executor(
+                user_id="user123",
+                agent_name="agent1",
+                session_id="session123",
+                agent_loader_module=mock_loader,
+                memory=MagicMock(),
+            )
+
+        assert exc_info.value.status_code == 500
+        assert "Agent loading failed" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_get_or_load_agent_executor_loading_error(self):
+        """Test error during agent loading."""
+        mock_loader = MagicMock()
+        del mock_loader.async_load_agent_executor
+        mock_loader.load_agent_executor.side_effect = Exception("Loading failed")
+
+        with pytest.raises(HTTPException) as exc_info:
+            await self.service.get_or_load_agent_executor(
+                user_id="user123",
+                agent_name="agent1",
+                session_id="session123",
+                agent_loader_module=mock_loader,
+                memory=MagicMock(),
+            )
+
+        assert exc_info.value.status_code == 500
+        assert "Could not load agent" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_get_or_load_agent_executor_duplicate_prevention(self):
+        """Test that per-key lock prevents duplicate concurrent loads."""
+        import asyncio
+
+        load_count = 0
+
+        def mock_load(**kwargs):
+            nonlocal load_count
+            load_count += 1
+            mock_executor = MagicMock()
+            mock_executor.ainvoke = MagicMock()
+            mock_executor.memory = MagicMock()
+            return mock_executor
+
+        mock_loader = MagicMock()
+        del mock_loader.async_load_agent_executor
+        mock_loader.load_agent_executor.side_effect = mock_load
+
+        mock_memory = MagicMock()
+
+        # Run two concurrent loads for the same key
+        results = await asyncio.gather(
+            self.service.get_or_load_agent_executor("user123", "agent1", "s1", mock_loader, mock_memory),
+            self.service.get_or_load_agent_executor("user123", "agent1", "s2", mock_loader, mock_memory),
+        )
+
+        # Only one should have triggered a load (the lock prevents the second)
+        assert load_count == 1
+        assert results[0] is results[1]
 
 
 class TestChatServiceGlobal(unittest.TestCase):
