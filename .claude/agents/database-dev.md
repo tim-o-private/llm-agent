@@ -66,19 +66,18 @@ Follow database-patterns skill. Key rules:
 - **Migration naming:** `YYYYMMDDHHMMSS_descriptive_name.sql`
 - **Idempotent:** Use `IF NOT EXISTS` where possible
 
-### 3. Validate
+### 3. Validate (MANDATORY)
 
-Before marking the task complete:
+Run these checks before marking the task complete. The write hook will block known anti-patterns automatically.
 
 ```bash
-# Syntax check — ensure SQL parses correctly
-# Review the migration file for:
-# - RLS enabled on all new tables
-# - Proper indexes
-# - Comments on tables and columns
-# - Foreign key constraints
-# - Proper ON DELETE behavior
+# Check for anti-patterns that the write hook will block:
+grep -niE 'agent_name\s+TEXT' supabase/migrations/<your-file>.sql && echo "FAIL" || echo "OK"
+
+# Review your migration for: RLS enabled, indexes, comments, FKs, UUID PKs, timestamps
 ```
+
+**Include validation output** in your completion message to the orchestrator.
 
 ### 4. Provide Schema Contract
 

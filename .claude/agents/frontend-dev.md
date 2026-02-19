@@ -65,16 +65,16 @@ Every component and hook gets a test file:
 - Test accessibility (focus management, ARIA)
 - Test loading/error/empty states
 
-### 4. Verify
+### 4. Verify (MANDATORY — gate will block you if you skip this)
 
-**Do NOT call TaskUpdate with status=completed until these commands exit 0:**
+Run these commands. If ANY fails, fix before continuing. The TaskCompleted hook runs these same checks and will reject your task if they fail.
 
 ```bash
 cd webApp && pnpm test -- --run
 cd webApp && pnpm lint
 ```
 
-Both must pass. Include the test output summary in your completion message to the orchestrator. If tests fail, fix them first — the TaskCompleted hook will block you anyway.
+**Paste the full output** in your completion message to the orchestrator. If you don't include test output, the reviewer will reject your PR.
 
 ### 5. Commit
 

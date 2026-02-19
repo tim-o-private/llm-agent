@@ -110,6 +110,11 @@ cd webApp && pnpm lint
 - [ ] `pytest` passes (if Python changes)
 - [ ] `pnpm test` passes (if frontend changes)
 
+#### Test Evidence (BLOCKER if missing)
+- [ ] Agent's completion message includes actual pytest/vitest output (not just "tests pass")
+- [ ] Test output shows specific test count and all passing
+- [ ] If no test output included, flag as BLOCKER: "No test evidence provided"
+
 #### Documentation
 - [ ] If behavior changed, relevant docs are updated
 - [ ] New tables have SQL comments
