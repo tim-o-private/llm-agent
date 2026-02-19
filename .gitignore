@@ -140,6 +140,8 @@ celerybeat.pid
 
 # Environments
 .env
+.env*
+!.env.example
 .venv
 env/
 venv/
@@ -185,3 +187,6 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 node_modules
+
+# Repomix output
+.repomix-output.txt
