@@ -284,7 +284,7 @@ async def handle_message(message: types.Message) -> None:
             from security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
             from services.audit_service import AuditService
             from services.pending_actions import PendingActionsService
-        from src.core.agent_loader_db import load_agent_executor_db
+        from core.agent_loader_db import load_agent_executor_db
 
         # Cross-channel session sharing: reuse most recent web session if one exists
         web_session_result = (
@@ -323,11 +323,16 @@ async def handle_message(message: types.Message) -> None:
                 }
             ).execute()
 
-        agent_executor = load_agent_executor_db(
-            agent_name="assistant",
-            user_id=user_id,
-            session_id=session_id,
-            channel="telegram",
+        import asyncio
+        loop = asyncio.get_event_loop()
+        agent_executor = await loop.run_in_executor(
+            None,
+            lambda: load_agent_executor_db(
+                agent_name="assistant",
+                user_id=user_id,
+                session_id=session_id,
+                channel="telegram",
+            ),
         )
 
         # Wrap tools with approval
