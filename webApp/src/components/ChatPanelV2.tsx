@@ -212,12 +212,22 @@ export const ChatPanelV2: React.FC<ChatPanelV2Props> = ({ agentId: agentIdProp }
 
     if (messages.length > 0 && !hasScrolledRef.current) {
       hasScrolledRef.current = true;
-      window.requestAnimationFrame(() => {
+      // Retry scroll with increasing delays — the assistant-ui Thread renders
+      // messages asynchronously so a single rAF fires too early.
+      const scrollToEnd = () => {
         const viewport = document.querySelector('.aui-thread-viewport');
         if (viewport) {
           viewport.scrollTop = viewport.scrollHeight;
         }
-      });
+      };
+      const t1 = setTimeout(scrollToEnd, 100);
+      const t2 = setTimeout(scrollToEnd, 300);
+      const t3 = setTimeout(scrollToEnd, 600);
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+      };
     }
   }, [activeChatId, messages.length]);
 
