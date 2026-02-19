@@ -24,6 +24,8 @@ def _make_db_client():
     chain.upsert.return_value = chain
     chain.eq.return_value = chain
     chain.single.return_value = chain
+    chain.order.return_value = chain
+    chain.limit.return_value = chain
     chain.execute = AsyncMock()
     db.table.return_value = chain
     return db, chain
@@ -126,18 +128,28 @@ async def test_unlink_telegram_account():
 async def test_get_telegram_status_linked():
     db, chain = _make_db_client()
 
-    mock_result = MagicMock()
-    mock_result.data = {
+    # First call: user_channels query
+    channels_result = MagicMock()
+    channels_result.data = {
         "channel_id": "chat-456",
         "is_active": True,
         "linked_at": "2026-01-15T10:00:00Z",
     }
-    chain.execute = AsyncMock(return_value=mock_result)
+    # Second call: chat_sessions query for linked session
+    sessions_result = MagicMock()
+    sessions_result.data = [{"chat_id": "session-789"}]
+
+    chain.execute = AsyncMock(side_effect=[channels_result, sessions_result])
 
     status = await get_telegram_status(db, "user-123")
 
-    assert status == {"linked": True, "linked_at": "2026-01-15T10:00:00Z"}
-    db.table.assert_called_with("user_channels")
+    assert status == {
+        "linked": True,
+        "linked_at": "2026-01-15T10:00:00Z",
+        "linked_session_id": "session-789",
+    }
+    db.table.assert_any_call("user_channels")
+    db.table.assert_any_call("chat_sessions")
 
 
 @pytest.mark.asyncio
