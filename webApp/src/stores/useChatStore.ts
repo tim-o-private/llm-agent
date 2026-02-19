@@ -419,11 +419,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
 // Hook to initialize and clean up the store's session management
 export const useInitializeChatStore = (agentName: string | null | undefined) => {
-  const user = useAuthStore.getState().user;
-  const initializeSessionAsync = useChatStore.getState().initializeSessionAsync;
-  const clearCurrentSessionAsync = useChatStore.getState().clearCurrentSessionAsync;
-  const currentStoreAgentName = useChatStore.getState().currentAgentName;
-  const currentStoreSessionInstanceId = useChatStore.getState().currentSessionInstanceId;
+  const user = useAuthStore((s) => s.user);
+  const initializeSessionAsync = useChatStore((s) => s.initializeSessionAsync);
+  const clearCurrentSessionAsync = useChatStore((s) => s.clearCurrentSessionAsync);
+  const currentStoreAgentName = useChatStore((s) => s.currentAgentName);
+  const currentStoreSessionInstanceId = useChatStore((s) => s.currentSessionInstanceId);
 
   useEffect(() => {
     if (agentName && user?.id) {
