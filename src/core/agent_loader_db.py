@@ -408,6 +408,28 @@ def _fetch_user_instructions(db: SupabaseClient, user_id: str, agent_name: str) 
         return None
 
 
+def _fetch_memory_notes(db: SupabaseClient, user_id: str, agent_name: str) -> Optional[str]:
+    """Fetch LTM notes for onboarding detection (lightweight check).
+
+    Returns the notes string or None if no row/notes exist.
+    """
+    try:
+        resp = (
+            db.table("agent_long_term_memory")
+            .select("notes")
+            .eq("user_id", user_id)
+            .eq("agent_name", agent_name)
+            .maybe_single()
+            .execute()
+        )
+        if resp.data:
+            return resp.data.get("notes") or None
+        return None
+    except Exception as e:
+        logger.warning(f"Failed to fetch memory notes for {user_id}/{agent_name}: {e}")
+        return None
+
+
 def load_agent_executor_db(
     agent_name: str,
     user_id: str,
@@ -614,6 +636,9 @@ def load_agent_executor_db(
     # Fetch user instructions from user_agent_prompt_customizations
     user_instructions = _fetch_user_instructions(db, user_id, agent_name)
 
+    # Fetch LTM notes for onboarding detection
+    memory_notes = _fetch_memory_notes(db, user_id, agent_name)
+
     # Collect tool names for the prompt
     tool_names = [getattr(t, "name", None) for t in instantiated_tools if getattr(t, "name", None)]
 
@@ -625,6 +650,7 @@ def load_agent_executor_db(
         channel=channel,
         user_instructions=user_instructions,
         tool_names=tool_names,
+        memory_notes=memory_notes,
     )
 
     agent_config_for_executor = {
@@ -694,10 +720,13 @@ async def load_agent_executor_db_async(
 
     logger.info(f"Loaded agent config for '{agent_name}' (ID: {agent_id}) from cache/DB.")
 
-    # Step 2: Parallelize tools + user instructions fetch
+    # Step 2: Parallelize tools + user instructions + memory notes fetch
     tools_task = get_cached_tools_for_agent(str(agent_id))
     instructions_task = get_cached_user_instructions(user_id, agent_name)
-    cached_tools_data, user_instructions = await asyncio.gather(tools_task, instructions_task)
+    memory_task = _fetch_memory_notes_async(user_id, agent_name)
+    cached_tools_data, user_instructions, memory_notes = await asyncio.gather(
+        tools_task, instructions_task, memory_task
+    )
 
     # Transform cached tool data to match expected format
     tools_data_from_db = []
@@ -739,6 +768,7 @@ async def load_agent_executor_db_async(
         channel=channel,
         user_instructions=user_instructions,
         tool_names=tool_names,
+        memory_notes=memory_notes,
     )
 
     agent_config_for_executor = {
@@ -763,6 +793,24 @@ async def load_agent_executor_db_async(
         agent_nm = agent_db_config['agent_name']
         logger.error(f"Failed to create async executor for agent '{agent_nm}': {e}", exc_info=True)
         raise
+
+
+async def _fetch_memory_notes_async(user_id: str, agent_name: str) -> Optional[str]:
+    """Async fetch of LTM notes for onboarding detection."""
+    try:
+        from chatServer.database.supabase_client import get_supabase_client
+
+        client = await get_supabase_client()
+        result = await client.table("agent_long_term_memory").select("notes").eq(
+            "user_id", user_id
+        ).eq("agent_name", agent_name).maybe_single().execute()
+
+        if result.data:
+            return result.data.get("notes") or None
+        return None
+    except Exception as e:
+        logger.warning(f"Failed to fetch memory notes async for {user_id}/{agent_name}: {e}")
+        return None
 
 
 async def _fetch_agent_config_from_db_async(agent_name: str) -> Optional[Dict[str, Any]]:

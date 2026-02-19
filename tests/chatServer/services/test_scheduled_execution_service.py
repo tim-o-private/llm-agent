@@ -114,28 +114,49 @@ async def test_execute_success(service, mock_schedule, mock_supabase, mock_agent
 
 
 @pytest.mark.asyncio
-async def test_execute_passes_channel_scheduled(service, mock_schedule, mock_supabase, mock_agent_executor):
-    """load_agent_executor_db is called with channel='scheduled'."""
-    patches = _standard_patches()
-    with (
-        patches["load_agent"] as mock_load,
-        patches["get_supabase"] as mock_get_sb,
-        patches["wrap_tools"],
-        patches["pending_svc"] as mock_pending_cls,
-        patches["audit_svc"],
-        patches["notification_svc"] as mock_notif_cls,
-    ):
-        mock_load.return_value = mock_agent_executor
-        mock_get_sb.return_value = mock_supabase
-        mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
-        mock_notif_cls.return_value.notify_user = AsyncMock()
-        mock_notif_cls.return_value.notify_pending_actions = AsyncMock()
+async def test_execute_passes_channel_based_on_schedule_type(service, mock_supabase, mock_agent_executor):
+    """load_agent_executor_db is called with channel matching schedule_type."""
+    # Heartbeat schedule → channel="heartbeat"
+    heartbeat_schedule = {
+        "id": "schedule-123",
+        "user_id": "user-123",
+        "agent_name": "assistant",
+        "prompt": "What's new?",
+        "config": {"schedule_type": "heartbeat"},
+    }
+    # Regular schedule → channel="scheduled"
+    regular_schedule = {
+        "id": "schedule-456",
+        "user_id": "user-123",
+        "agent_name": "assistant",
+        "prompt": "What's new?",
+        "config": {"schedule_type": "scheduled"},
+    }
+    for schedule, expected_channel in [
+        (heartbeat_schedule, "heartbeat"),
+        (regular_schedule, "scheduled"),
+    ]:
+        patches = _standard_patches()
+        with (
+            patches["load_agent"] as mock_load,
+            patches["get_supabase"] as mock_get_sb,
+            patches["wrap_tools"],
+            patches["pending_svc"] as mock_pending_cls,
+            patches["audit_svc"],
+            patches["notification_svc"] as mock_notif_cls,
+        ):
+            mock_load.return_value = mock_agent_executor
+            mock_get_sb.return_value = mock_supabase
+            mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
+            mock_notif_cls.return_value.notify_user = AsyncMock()
+            mock_notif_cls.return_value.notify_pending_actions = AsyncMock()
 
-        await service.execute(mock_schedule)
+            await service.execute(schedule)
 
-    mock_load.assert_called_once()
-    call_kwargs = mock_load.call_args.kwargs
-    assert call_kwargs["channel"] == "scheduled"
+        call_kwargs = mock_load.call_args.kwargs
+        assert call_kwargs["channel"] == expected_channel, (
+            f"Expected channel='{expected_channel}' for schedule_type='{schedule['config']['schedule_type']}'"
+        )
 
 
 @pytest.mark.asyncio
@@ -557,3 +578,191 @@ def test_build_execution_metadata_includes_model(service):
 def test_no_load_ltm_method(service):
     """_load_ltm method should no longer exist."""
     assert not hasattr(service, '_load_ltm')
+
+
+# --- Heartbeat prompt builder ---
+
+
+class TestBuildHeartbeatPrompt:
+    def test_with_checklist(self, service):
+        """Checklist items are formatted into the prompt."""
+        result = service._build_heartbeat_prompt(
+            "Check on things",
+            ["Check for new emails", "Check pending approvals"],
+        )
+        assert "Check on things" in result
+        assert "## Heartbeat Checklist" in result
+        assert "- Check for new emails" in result
+        assert "- Check pending approvals" in result
+        assert "HEARTBEAT_OK" in result
+
+    def test_empty_checklist_falls_back(self, service):
+        """Empty checklist returns the original prompt unchanged."""
+        result = service._build_heartbeat_prompt("Check on things", [])
+        assert result == "Check on things"
+
+    def test_none_checklist_falls_back(self, service):
+        """None-ish checklist (evaluated as falsy) returns original prompt."""
+        result = service._build_heartbeat_prompt("Check on things", None)
+        assert result == "Check on things"
+
+
+# --- HEARTBEAT_OK suppression ---
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_ok_suppresses_notification(
+    service, mock_supabase, mock_agent_executor
+):
+    """HEARTBEAT_OK output stores heartbeat_ok status and skips notification."""
+    mock_agent_executor.ainvoke = AsyncMock(return_value={"output": "HEARTBEAT_OK"})
+    schedule = {
+        "id": "schedule-hb",
+        "user_id": "user-123",
+        "agent_name": "assistant",
+        "prompt": "Check stuff",
+        "config": {"schedule_type": "heartbeat", "heartbeat_checklist": ["Check emails"]},
+    }
+    patches = _standard_patches()
+    with (
+        patches["load_agent"] as mock_load,
+        patches["get_supabase"] as mock_get_sb,
+        patches["wrap_tools"],
+        patches["pending_svc"] as mock_pending_cls,
+        patches["audit_svc"],
+        patches["notification_svc"] as mock_notif_cls,
+    ):
+        mock_load.return_value = mock_agent_executor
+        mock_get_sb.return_value = mock_supabase
+        mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
+        mock_notif_instance = mock_notif_cls.return_value
+        mock_notif_instance.notify_user = AsyncMock()
+        mock_notif_instance.notify_pending_actions = AsyncMock()
+
+        result = await service.execute(schedule)
+
+    assert result["success"] is True
+
+    # Status should be "heartbeat_ok"
+    insert_calls = mock_supabase.table.return_value.insert.call_args_list
+    result_inserts = [c for c in insert_calls if "status" in c[0][0]]
+    assert result_inserts[0][0][0]["status"] == "heartbeat_ok"
+
+    # Notification should NOT have been sent
+    mock_notif_instance.notify_user.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_actionable_output_sends_notification(
+    service, mock_supabase, mock_agent_executor
+):
+    """Non-HEARTBEAT_OK output on heartbeat schedule stores success and notifies."""
+    mock_agent_executor.ainvoke = AsyncMock(
+        return_value={"output": "Found 3 emails needing attention."}
+    )
+    schedule = {
+        "id": "schedule-hb2",
+        "user_id": "user-123",
+        "agent_name": "assistant",
+        "prompt": "Check stuff",
+        "config": {"schedule_type": "heartbeat"},
+    }
+    patches = _standard_patches()
+    with (
+        patches["load_agent"] as mock_load,
+        patches["get_supabase"] as mock_get_sb,
+        patches["wrap_tools"],
+        patches["pending_svc"] as mock_pending_cls,
+        patches["audit_svc"],
+        patches["notification_svc"] as mock_notif_cls,
+    ):
+        mock_load.return_value = mock_agent_executor
+        mock_get_sb.return_value = mock_supabase
+        mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
+        mock_notif_instance = mock_notif_cls.return_value
+        mock_notif_instance.notify_user = AsyncMock()
+        mock_notif_instance.notify_pending_actions = AsyncMock()
+
+        result = await service.execute(schedule)
+
+    assert result["success"] is True
+
+    # Status should be "success" (not "heartbeat_ok")
+    insert_calls = mock_supabase.table.return_value.insert.call_args_list
+    result_inserts = [c for c in insert_calls if "status" in c[0][0]]
+    assert result_inserts[0][0][0]["status"] == "success"
+
+    # Notification SHOULD have been sent
+    mock_notif_instance.notify_user.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_passes_channel_heartbeat(
+    service, mock_supabase, mock_agent_executor
+):
+    """Heartbeat schedule passes channel='heartbeat' to load_agent_executor_db."""
+    schedule = {
+        "id": "schedule-hb3",
+        "user_id": "user-123",
+        "agent_name": "assistant",
+        "prompt": "Check stuff",
+        "config": {"schedule_type": "heartbeat"},
+    }
+    patches = _standard_patches()
+    with (
+        patches["load_agent"] as mock_load,
+        patches["get_supabase"] as mock_get_sb,
+        patches["wrap_tools"],
+        patches["pending_svc"] as mock_pending_cls,
+        patches["audit_svc"],
+        patches["notification_svc"] as mock_notif_cls,
+    ):
+        mock_load.return_value = mock_agent_executor
+        mock_get_sb.return_value = mock_supabase
+        mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
+        mock_notif_cls.return_value.notify_user = AsyncMock()
+        mock_notif_cls.return_value.notify_pending_actions = AsyncMock()
+
+        await service.execute(schedule)
+
+    call_kwargs = mock_load.call_args.kwargs
+    assert call_kwargs["channel"] == "heartbeat"
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_builds_effective_prompt_with_checklist(
+    service, mock_supabase, mock_agent_executor
+):
+    """Heartbeat schedule builds effective prompt including checklist items."""
+    schedule = {
+        "id": "schedule-hb4",
+        "user_id": "user-123",
+        "agent_name": "assistant",
+        "prompt": "Daily check",
+        "config": {
+            "schedule_type": "heartbeat",
+            "heartbeat_checklist": ["Check emails", "Check approvals"],
+        },
+    }
+    patches = _standard_patches()
+    with (
+        patches["load_agent"] as mock_load,
+        patches["get_supabase"] as mock_get_sb,
+        patches["wrap_tools"],
+        patches["pending_svc"] as mock_pending_cls,
+        patches["audit_svc"],
+        patches["notification_svc"] as mock_notif_cls,
+    ):
+        mock_load.return_value = mock_agent_executor
+        mock_get_sb.return_value = mock_supabase
+        mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
+        mock_notif_cls.return_value.notify_user = AsyncMock()
+        mock_notif_cls.return_value.notify_pending_actions = AsyncMock()
+
+        await service.execute(schedule)
+
+    # The prompt passed to ainvoke should contain checklist items
+    call_args = mock_agent_executor.ainvoke.call_args[0][0]
+    assert "Daily check" in call_args["input"]
+    assert "- Check emails" in call_args["input"]
+    assert "- Check approvals" in call_args["input"]
