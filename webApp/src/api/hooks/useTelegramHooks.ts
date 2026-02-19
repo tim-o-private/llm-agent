@@ -13,6 +13,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 export interface TelegramStatus {
   linked: boolean;
   linked_at: string | null;
+  linked_session_id: string | null;
 }
 
 export interface LinkToken {
@@ -68,6 +69,7 @@ export function useTelegramStatus() {
     queryKey: [TELEGRAM_QUERY_KEY, 'status', user?.id],
     queryFn: fetchTelegramStatus,
     enabled: !!user,
+    staleTime: 60_000,
   });
 }
 

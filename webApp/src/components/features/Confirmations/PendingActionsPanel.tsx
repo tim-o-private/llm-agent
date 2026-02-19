@@ -2,7 +2,7 @@
  * PendingActionsPanel component for displaying and managing pending actions.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Card } from '../../ui/Card';
 import { Badge } from '../../ui/Badge';
 import { AlertTriangle, CheckCircle, History, RefreshCw, Loader2 } from 'lucide-react';
@@ -111,19 +111,42 @@ export const PendingActionsPanel: React.FC<PendingActionsPanelProps> = ({ classN
   );
 };
 
-export const PendingActionsBadge: React.FC<{ onClick?: () => void }> = ({ onClick }) => {
+export const PendingActionsBadge: React.FC = () => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const { data: countData, isLoading } = usePendingCount();
   const count = countData?.count || 0;
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (event: Event) => {
+      const target = event.target as HTMLElement;
+      if (dropdownRef.current && !dropdownRef.current.contains(target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
 
   if (isLoading || count === 0) return null;
 
   return (
-    <button
-      onClick={onClick}
-      className="relative inline-flex items-center px-2 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-medium hover:bg-amber-200 transition-colors"
-    >
-      <AlertTriangle className="h-3 w-3 mr-1" />
-      {count} pending
-    </button>
+    <div className="relative" ref={dropdownRef}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="relative inline-flex items-center px-2 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-medium hover:bg-amber-200 transition-colors"
+      >
+        <AlertTriangle className="h-3 w-3 mr-1" />
+        {count} pending
+      </button>
+
+      {isOpen && (
+        <div className="absolute right-0 top-full mt-2 w-96 rounded-lg border border-ui-border bg-ui-element-bg shadow-lg z-50">
+          <PendingActionsPanel />
+        </div>
+      )}
+    </div>
   );
 };
