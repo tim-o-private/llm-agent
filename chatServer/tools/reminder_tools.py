@@ -67,8 +67,12 @@ class CreateReminderTool(BaseTool):
             if recurrence and recurrence not in ("daily", "weekly", "monthly"):
                 return f"Error: invalid recurrence '{recurrence}'. Must be 'daily', 'weekly', or 'monthly'."
 
-            from chatServer.database.supabase_client import get_supabase_client
-            from chatServer.services.reminder_service import ReminderService
+            try:
+                from ..database.supabase_client import get_supabase_client
+                from ..services.reminder_service import ReminderService
+            except ImportError:
+                from database.supabase_client import get_supabase_client
+                from services.reminder_service import ReminderService
 
             db = await get_supabase_client()
             service = ReminderService(db)
@@ -118,8 +122,12 @@ class ListRemindersTool(BaseTool):
 
     async def _arun(self, limit: int = 10) -> str:
         try:
-            from chatServer.database.supabase_client import get_supabase_client
-            from chatServer.services.reminder_service import ReminderService
+            try:
+                from ..database.supabase_client import get_supabase_client
+                from ..services.reminder_service import ReminderService
+            except ImportError:
+                from database.supabase_client import get_supabase_client
+                from services.reminder_service import ReminderService
 
             db = await get_supabase_client()
             service = ReminderService(db)

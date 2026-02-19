@@ -15,7 +15,7 @@ from google.oauth2.credentials import Credentials
 try:
     from ..database.connection import get_db_connection
 except ImportError:
-    from chatServer.database.connection import get_db_connection
+    from database.connection import get_db_connection
 
 logger = logging.getLogger(__name__)
 

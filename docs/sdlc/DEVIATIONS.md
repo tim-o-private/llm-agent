@@ -43,7 +43,28 @@ When an agent makes a mistake or a pattern violation is found during review or U
 - **Target:** hook (`validate-patterns.sh`), agent (`database-dev.md`, `reviewer.md`)
 - **Status:** Fixed in this commit
 
-### DEV-005: 2026-02-18 PR merge order not communicated
+### DEV-005: 2026-02-19 Dual-import singleton bug (Supabase client "not initialized")
+- **What happened:** `background_tasks.check_due_reminders` threw "Supabase client not available" every 60s despite successful initialization at startup. The supabase client was initialized in module `database.supabase_client` but background_tasks imported from `chatServer.database.supabase_client` — two different modules with separate `_supabase_manager` globals.
+- **Root cause:** Inconsistent `except ImportError` fallback imports. Lifespan used bare paths (`from database.supabase_client`), but other files used fully-qualified paths (`from chatServer.database.supabase_client`). Python loaded the module twice under different names. The `database.connection` module masked the same bug via auto-initialization fallback.
+- **Correction:** (1) Standardized ALL `except ImportError` fallbacks in `chatServer/` to bare module paths. (2) Added `ensure_initialized()` auto-init to `supabase_client.py` matching `connection.py`'s pattern. (3) Added gotcha to CLAUDE.md.
+- **Target:** CLAUDE.md gotcha, all `chatServer/` import blocks
+- **Status:** Fixed in this branch
+
+### DEV-006: 2026-02-19 Telegram bot webhook conflict between dev and prod
+- **What happened:** Running the server locally with the production `TELEGRAM_BOT_TOKEN` called `set_webhook()` pointing the production bot at the local ngrok URL, silently breaking prod Telegram. Went unnoticed for days.
+- **Root cause:** Single bot token shared between environments. Telegram only allows one webhook URL per bot. No warning when overriding a production webhook from local dev.
+- **Correction:** Use separate Telegram bots for dev vs prod (same `TELEGRAM_BOT_TOKEN` env var, different values per environment). Added ngrok tunnel to `pnpm dev` via concurrently. Added gotcha to CLAUDE.md.
+- **Target:** CLAUDE.md gotcha, `.env` setup, `package.json`
+- **Status:** Fixed in this branch
+
+### DEV-007: 2026-02-19 PostgREST upsert fails on partial unique index
+- **What happened:** `telegram_bot.handle_message` used `.upsert(..., on_conflict="session_id")` but `chat_sessions.session_id` only had a partial unique index (`WHERE session_id IS NOT NULL`). PostgREST requires a real UNIQUE constraint for ON CONFLICT.
+- **Root cause:** Code assumed a UNIQUE constraint existed when only a partial index did. No integration test covered the Telegram message path against a real database.
+- **Correction:** Replaced upsert with select-then-insert pattern. Added gotcha to CLAUDE.md about partial indexes vs PostgREST upsert.
+- **Target:** `chatServer/channels/telegram_bot.py`, CLAUDE.md gotcha
+- **Status:** Fixed in this branch
+
+### DEV-008: 2026-02-18 PR merge order not communicated
 - **What happened:** Multiple PRs from a spec were reported as "ready" simultaneously, but they had implicit ordering (database → backend → frontend). User merged in wrong order.
 - **Root cause:** No merge order documentation in PR bodies or orchestrator reporting.
 - **Correction:** Added "Merge Order" section to all domain agent PR templates. Orchestrator now reports PRs with numbered merge sequence. Reviewer checks for merge order section. SDLC workflow skill documents the convention.
