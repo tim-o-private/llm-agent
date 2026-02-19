@@ -9,24 +9,26 @@ llm-agent is a **unified agent platform** where all channels (web, Telegram, sch
 ```
                     chat_sessions (universal registry)
                            |
-         +---------+-------+-------+---------+
-         |         |               |         |
-       Web UI   Telegram     Scheduled    (future)
-         |         |               |
-         +----+----+-------+------+
+         +---------+-------+-------+-----------+
+         |         |               |           |
+       Web UI   Telegram     Scheduled    Heartbeat
+         |         |               |           |
+         +----+----+-------+------+-----------+
               |            |
       chat_message_history  |
               |            |
          Agent Execution --|-- Tool Approval (pending_actions)
               |            |
        NotificationService-+-- routes to web + telegram
+                           |
+                    (heartbeat: suppressed when HEARTBEAT_OK)
 ```
 
 All channels converge on:
 1. **`chat_sessions`** — universal session registry with `channel` tag (`web`, `telegram`, `scheduled`)
 2. **`chat_message_history`** — message storage keyed by `session_id`
 3. **Agent execution** — `load_agent_executor_db()` + `wrap_tools_with_approval()`
-4. **NotificationService** — routes to web (DB) and Telegram (bot)
+4. **NotificationService** — routes to web (DB) and Telegram (bot); heartbeat suppresses when nothing to report
 
 ## Cross-Cutting Checklist
 

@@ -33,6 +33,21 @@ Before writing backend code, verify:
 - [ ] Tool name follows `verb_resource` pattern (e.g., `create_reminder`, `list_reminders`)
 - [ ] Tool verb is from approved list: create, list, get, update, delete, search, save, read, send, fetch
 
+## Scheduled Execution Patterns
+
+### Heartbeat vs Regular Schedules
+
+`ScheduledExecutionService.execute()` handles both types based on `config.schedule_type`:
+
+- **`"scheduled"` (default)**: channel=`"scheduled"`, always notifies, status=`"success"`
+- **`"heartbeat"`**: channel=`"heartbeat"`, appends checklist to prompt, suppresses notification when output starts with `HEARTBEAT_OK`, status=`"heartbeat_ok"`
+
+Checklist lives in `agent_schedules.config` JSONB under `heartbeat_checklist` key. See `docs/architecture/heartbeat-system.md`.
+
+### Onboarding Detection
+
+`build_agent_prompt()` accepts `memory_notes` parameter. When both `memory_notes` and `user_instructions` are empty on interactive channels (`web`/`telegram`), an onboarding section is injected into the system prompt. Self-resolving: once the agent calls `save_memory` or `update_instructions`, subsequent loads skip onboarding.
+
 ## Key Gotchas
 
 1. **ES256 tokens** — Supabase issues ES256, not HS256. Don't revert auth.py to HS256-only.

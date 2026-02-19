@@ -38,12 +38,32 @@ User sends message in Telegram
 APScheduler triggers a job
   -> chatServer/services/scheduled_execution_service.py execute():
        1. Create chat_sessions row (channel='scheduled', session_id='scheduled_{agent}_{timestamp}')
-       2. Load agent via load_agent_executor_db(session_id=session_id)
+       2. Load agent via load_agent_executor_db(channel='scheduled')
        3. Wrap tools with approval
        4. Invoke agent
        5. Store result in agent_execution_results
        6. Notify user via NotificationService
        7. Mark chat_sessions as inactive on completion
+```
+
+### Heartbeat (`channel = 'heartbeat'`)
+
+A heartbeat is a scheduled run that stays silent when nothing needs attention. See `docs/architecture/heartbeat-system.md` for the full design.
+
+```
+APScheduler triggers a job (config.schedule_type == "heartbeat")
+  -> chatServer/services/scheduled_execution_service.py execute():
+       1. Create chat_sessions row (channel='scheduled', session_id='scheduled_{agent}_{timestamp}')
+       2. Load agent via load_agent_executor_db(channel='heartbeat')
+          -> System prompt includes heartbeat guidance ("respond HEARTBEAT_OK if nothing to report")
+       3. Build effective prompt (append checklist items from config.heartbeat_checklist)
+       4. Wrap tools with approval
+       5. Invoke agent
+       6. If output starts with "HEARTBEAT_OK":
+          -> Store result with status="heartbeat_ok", skip notification
+       7. Otherwise:
+          -> Store result with status="success", notify user normally
+       8. Mark chat_sessions as inactive
 ```
 
 ## Message Flow
