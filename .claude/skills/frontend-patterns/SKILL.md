@@ -31,6 +31,7 @@ Before writing frontend code, verify:
 - [ ] Keyboard support + ARIA labels on interactive elements
 - [ ] CSS transitions preferred over framer-motion
 - [ ] Path aliases used (`@/`, `@components/` — no relative `../../../`)
+- [ ] API base URL uses `import.meta.env.VITE_API_BASE_URL || ''` — never `VITE_API_URL`
 
 ## Critical Rule: Radix Themes = Provider Only
 

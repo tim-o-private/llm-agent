@@ -1,6 +1,6 @@
 import { ChatRequest, ChatResponse } from '../types/chat';
 
-const ROUTER_BASE_URL = import.meta.env.VITE_API_URL || '';
+const ROUTER_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 export class ChatAPIClient {
   private baseURL: string;
