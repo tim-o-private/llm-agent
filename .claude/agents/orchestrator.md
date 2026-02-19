@@ -25,6 +25,7 @@ Before starting any task that touches sessions, notifications, or cross-channel 
 | **frontend-dev** | `.claude/agents/frontend-dev.md` | `webApp/src/` | Components, hooks, pages, stores |
 | **deployment-dev** | `.claude/agents/deployment-dev.md` | Dockerfiles, fly.toml, CI/CD | Docker, Fly.io, env vars, CI/CD |
 | **reviewer** | `.claude/agents/reviewer.md` | Read-only | Code review against spec + patterns |
+| **uat-tester** | `.claude/agents/uat-tester.md` | `tests/uat/` | Flow tests on integration branch |
 
 ## Tools Available
 
@@ -159,9 +160,49 @@ Include in the prompt:
 ### 9. Handle Review Results
 
 - **BLOCKER found:** Message the original domain agent with the blocker details. Do NOT report the PR to the user.
-- **Clean review:** Report the PR URL to the user for UAT.
+- **Clean review:** Proceed to UAT (step 10).
 
-### 10. After PR Merge
+### 10. Create Integration Branch and Run UAT
+
+After ALL domain agents for a spec have passed code review, create an integration branch and run UAT flow tests:
+
+```bash
+# Create integration branch from main
+git branch integrate/SPEC-NNN main
+
+# Merge each domain branch into it
+git checkout integrate/SPEC-NNN
+git merge --no-ff feat/SPEC-NNN-db
+git merge --no-ff feat/SPEC-NNN-backend
+git merge --no-ff feat/SPEC-NNN-frontend
+```
+
+Spawn the UAT tester agent:
+
+```
+Task tool: subagent_type="general-purpose", team_name="spec-NNN", name="uat-tester"
+```
+
+Include in the prompt:
+- The spec file path
+- The integration branch name (`integrate/SPEC-NNN`)
+- API contracts from backend-dev (endpoint paths, request/response shapes)
+- Schema contracts from database-dev (table names, columns)
+- "Follow .claude/agents/uat-tester.md"
+- "Write tests in `tests/uat/test_spec_NNN_<feature>.py`"
+
+#### Handle UAT Results
+
+- **UAT passes:** Report ALL PR URLs to the user with merge order. Include UAT test output as evidence.
+- **UAT fails:** Identify which domain caused the failure from the test output. Message that domain agent with the failure details. Do NOT report PRs to the user.
+- **If UAT fails repeatedly (2+ rounds):** Escalate to the user with the test output.
+
+After UAT passes, clean up the integration branch:
+```bash
+git branch -d integrate/SPEC-NNN
+```
+
+### 11. After PR Merge
 
 When the user confirms a PR is merged:
 - Remove the worktree: `git worktree remove ../llm-agent-SPEC-NNN-<unit>`
@@ -169,7 +210,7 @@ When the user confirms a PR is merged:
 - Pass the contract forward to the next domain agent
 - Repeat from step 6 for the next functional unit
 
-### 11. Wrap Up
+### 12. Wrap Up
 
 When all tasks are complete:
 - Update the spec status to "Done"
@@ -195,6 +236,7 @@ Do NOT report all PRs as "ready" simultaneously unless they are truly independen
 - NEVER write or edit application code yourself
 - NEVER commit or push code
 - NEVER skip the reviewer step
+- NEVER skip UAT — always run flow tests on the integration branch before reporting PRs
 - ALWAYS assign tasks to the correct domain agent — check scope boundaries
 - ALWAYS include contracts in task descriptions for cross-domain dependencies
 - Sequence dependent tasks — do not unblock a task until its dependency's PR is merged
