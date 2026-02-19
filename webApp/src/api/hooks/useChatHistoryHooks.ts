@@ -10,7 +10,7 @@ import { useAuthStore } from '@/features/auth/useAuthStore';
 import { supabase } from '@/lib/supabaseClient';
 
 const CHAT_HISTORY_QUERY_KEY = 'chat-history';
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 // Types
 

@@ -115,14 +115,58 @@ export default [
           selector: 'JSXAttribute[name.name="className"] Literal[value*="border-gray-"]',
           message: 'Forbidden: Use semantic color tokens (border-ui-border, border-ui-border-hover) instead of hardcoded Tailwind colors (border-gray-*)',
         },
+        // Env var allowlist: any import.meta.env.VITE_* access not listed below is an error.
+        // To add a new var: add a :not([property.name="VITE_NEW_VAR"]) clause.
+        // Also update: webApp/Dockerfile ARG list + .github/workflows/fly-deploy.yml --build-arg list.
+        {
+          selector: [
+            'MemberExpression',
+            '[object.object.type="MetaProperty"]',
+            '[object.property.name="env"]',
+            '[property.name=/^VITE_/]',
+            ':not([property.name="VITE_API_BASE_URL"])',
+            ':not([property.name="VITE_SUPABASE_URL"])',
+            ':not([property.name="VITE_SUPABASE_ANON_KEY"])',
+            ':not([property.name="VITE_DEFAULT_CHAT_AGENT_ID"])',
+            ':not([property.name="VITE_LOG_LEVEL"])',
+            ':not([property.name="VITE_USE_ASSISTANT_UI"])',
+            ':not([property.name="VITE_ENABLE_STREAMING_CHAT"])',
+            ':not([property.name="VITE_ENABLE_TOOL_VISUALIZATION"])',
+            ':not([property.name="VITE_ENABLE_MESSAGE_ACTIONS"])',
+            ':not([property.name="VITE_ENABLE_ADVANCED_ACCESSIBILITY"])',
+          ].join(''),
+          message: 'Unknown VITE_ env var. Only allowlisted vars in eslint.config.js are permitted. If this is a new var, add it to the allowlist, Dockerfile ARGs, and fly-deploy.yml.',
+        },
       ],
     },
   },
-  // Exclude test files from color validation rules
+  // Test files: disable color validation but keep env var allowlist
   {
     files: ['**/*.test.{ts,tsx}', '**/*.spec.{ts,tsx}', '**/__tests__/**/*.{ts,tsx}'],
     rules: {
-      'no-restricted-syntax': 'off', // Allow hardcoded colors in test files
+      'no-restricted-syntax': [
+        'error',
+        // Only the env var allowlist rule — color rules are off in tests
+        {
+          selector: [
+            'MemberExpression',
+            '[object.object.type="MetaProperty"]',
+            '[object.property.name="env"]',
+            '[property.name=/^VITE_/]',
+            ':not([property.name="VITE_API_BASE_URL"])',
+            ':not([property.name="VITE_SUPABASE_URL"])',
+            ':not([property.name="VITE_SUPABASE_ANON_KEY"])',
+            ':not([property.name="VITE_DEFAULT_CHAT_AGENT_ID"])',
+            ':not([property.name="VITE_LOG_LEVEL"])',
+            ':not([property.name="VITE_USE_ASSISTANT_UI"])',
+            ':not([property.name="VITE_ENABLE_STREAMING_CHAT"])',
+            ':not([property.name="VITE_ENABLE_TOOL_VISUALIZATION"])',
+            ':not([property.name="VITE_ENABLE_MESSAGE_ACTIONS"])',
+            ':not([property.name="VITE_ENABLE_ADVANCED_ACCESSIBILITY"])',
+          ].join(''),
+          message: 'Unknown VITE_ env var. Only allowlisted vars in eslint.config.js are permitted. If this is a new var, add it to the allowlist, Dockerfile ARGs, and fly-deploy.yml.',
+        },
+      ],
     },
   },
   {

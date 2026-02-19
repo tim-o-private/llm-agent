@@ -91,8 +91,12 @@ async def get_pending_actions_service():
     """Get or create the pending actions service."""
     global _pending_actions_service
     if _pending_actions_service is None:
-        from chatServer.services.audit_service import AuditService
-        from chatServer.services.pending_actions import PendingActionsService
+        try:
+            from ..services.audit_service import AuditService
+            from ..services.pending_actions import PendingActionsService
+        except ImportError:
+            from services.audit_service import AuditService
+            from services.pending_actions import PendingActionsService
 
         db_client = await get_supabase_client()
         audit_service = AuditService(db_client)
@@ -107,7 +111,10 @@ async def get_audit_service():
     """Get or create the audit service."""
     global _audit_service
     if _audit_service is None:
-        from chatServer.services.audit_service import AuditService
+        try:
+            from ..services.audit_service import AuditService
+        except ImportError:
+            from services.audit_service import AuditService
 
         db_client = await get_supabase_client()
         _audit_service = AuditService(db_client)
@@ -253,11 +260,18 @@ async def get_tool_preference(
 ):
     """Get the current approval preference for a tool."""
     try:
-        from chatServer.security.approval_tiers import (
-            ApprovalTier,
-            _get_user_preference,
-            get_tool_default_tier,
-        )
+        try:
+            from ..security.approval_tiers import (
+                ApprovalTier,
+                _get_user_preference,
+                get_tool_default_tier,
+            )
+        except ImportError:
+            from security.approval_tiers import (
+                ApprovalTier,
+                _get_user_preference,
+                get_tool_default_tier,
+            )
 
         tier, default = get_tool_default_tier(tool_name)
 
@@ -285,7 +299,10 @@ async def set_tool_preference(
 ):
     """Set approval preference for a tool. Only works for USER_CONFIGURABLE tools."""
     try:
-        from chatServer.security.approval_tiers import set_user_preference
+        try:
+            from ..security.approval_tiers import set_user_preference
+        except ImportError:
+            from security.approval_tiers import set_user_preference
 
         if request.preference not in ("auto", "requires_approval"):
             raise HTTPException(

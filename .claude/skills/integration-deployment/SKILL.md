@@ -53,6 +53,7 @@ flyctl logs -a clarity-webapp
 - [ ] Fly secrets set for any new env vars
 - [ ] Database migrations applied to production Supabase
 - [ ] CORS origins in `chatServer/main.py` include the production frontend URL
+- [ ] All frontend API hooks use `VITE_API_BASE_URL` (not `VITE_API_URL`) — only `VITE_API_BASE_URL` is passed at build time
 
 ## Environment Variables
 

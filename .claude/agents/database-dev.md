@@ -42,6 +42,20 @@ Read the task via `TaskGet`. Understand:
 
 ### 2. Implement
 
+### CRITICAL: Agent References
+NEVER use `agent_name TEXT`. ALWAYS use:
+```sql
+agent_id UUID NOT NULL REFERENCES agent_configurations(id) ON DELETE CASCADE
+```
+Plus an explicit index on `agent_id`. This is a BLOCKER in review — no exceptions.
+
+### Migration Prefix
+Use the EXACT prefix assigned by the orchestrator in the contract. Never invent your own timestamp prefix — collisions across parallel worktrees are expensive to resolve. If no prefix was assigned, derive the next available one:
+```bash
+ls supabase/migrations/ | grep -oP '^\d{14}' | sort | tail -1
+```
+Then increment by 1.
+
 Follow database-patterns skill. Key rules:
 - **UUID PKs:** `id UUID PRIMARY KEY DEFAULT gen_random_uuid()`
 - **Timestamps:** `created_at TIMESTAMPTZ NOT NULL DEFAULT now()`, `updated_at TIMESTAMPTZ NOT NULL DEFAULT now()`
@@ -106,6 +120,9 @@ gh pr create --title "SPEC-NNN: <short description>" --body "$(cat <<'EOF'
 - [ ] SQL syntax valid
 - [ ] RLS policies tested
 - [ ] Indexes appropriate
+
+## Merge Order
+This PR must be merged FIRST. Unblocks: backend, frontend PRs.
 
 ## Functional Unit
 <which part of the spec this covers>

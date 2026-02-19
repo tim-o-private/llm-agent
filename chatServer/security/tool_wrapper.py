@@ -17,7 +17,7 @@ try:
         get_effective_tier,
     )
 except ImportError:
-    from chatServer.security.approval_tiers import (
+    from security.approval_tiers import (
         ApprovalTier,
         get_effective_tier,
     )

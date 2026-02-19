@@ -4,6 +4,9 @@
 # Verifies:
 # 1. Agent is NOT on the main branch
 # 2. No uncommitted changes remain
+# 3. Pytest collection succeeds (catches import/syntax errors)
+# 4. New service files have corresponding test files
+# 5. New hook files have corresponding test files
 
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 ERRORS=""
@@ -40,6 +43,41 @@ if [ -n "$UNCOMMITTED" ]; then
   fi
 fi
 
+# Check 3: Pytest collection (catches import/syntax errors in tests, ~2s)
+if [ -f "$GIT_DIR/.venv/bin/activate" ] || command -v pytest &>/dev/null; then
+  PYTEST_CMD="pytest"
+  if [ -f "$GIT_DIR/.venv/bin/pytest" ]; then
+    PYTEST_CMD="$GIT_DIR/.venv/bin/pytest"
+  fi
+  COLLECT_OUTPUT=$($PYTEST_CMD --co -q --rootdir="$GIT_DIR" 2>&1) || {
+    COLLECT_EXIT=$?
+    if [ $COLLECT_EXIT -ne 0 ] && [ $COLLECT_EXIT -ne 5 ]; then
+      # Exit code 5 = no tests collected (OK). Other failures = real errors.
+      ERRORS="${ERRORS}BLOCKED: pytest collection failed (import/syntax errors in tests). Fix before completing.\n${COLLECT_OUTPUT}\n"
+    fi
+  }
+fi
+
+# Check 4: New service files must have corresponding test files
+for SVC_FILE in $(git -C "$GIT_DIR" diff --name-only --diff-filter=A HEAD~1 2>/dev/null | grep -E '^chatServer/services/[^/]+\.py$' || true); do
+  BASENAME=$(basename "$SVC_FILE" .py)
+  if [ "$BASENAME" != "__init__" ]; then
+    TEST_FILE="tests/chatServer/services/test_${BASENAME}.py"
+    if [ ! -f "$GIT_DIR/$TEST_FILE" ]; then
+      ERRORS="${ERRORS}BLOCKED: New service file '$SVC_FILE' has no corresponding test file '$TEST_FILE'.\n"
+    fi
+  fi
+done
+
+# Check 5: New hook files must have corresponding test files
+for HOOK_FILE in $(git -C "$GIT_DIR" diff --name-only --diff-filter=A HEAD~1 2>/dev/null | grep -E '^webApp/src/api/hooks/use.*\.ts$' | grep -v '\.test\.' || true); do
+  TEST_FILE="${HOOK_FILE%.ts}.test.ts"
+  ALT_TEST_FILE="${HOOK_FILE%.ts}.test.tsx"
+  if [ ! -f "$GIT_DIR/$TEST_FILE" ] && [ ! -f "$GIT_DIR/$ALT_TEST_FILE" ]; then
+    ERRORS="${ERRORS}BLOCKED: New hook file '$HOOK_FILE' has no corresponding test file.\n"
+  fi
+done
+
 # If there were errors, report to stderr and block
 if [ -n "$ERRORS" ]; then
   echo -e "$ERRORS" >&2
@@ -47,4 +85,4 @@ if [ -n "$ERRORS" ]; then
 fi
 
 # No blockers — provide context reminder
-jq -n '{"additionalContext": "Task completion verified: on feature branch, no uncommitted changes. Ensure pytest and pnpm test both pass before marking complete."}'
+jq -n '{"additionalContext": "Task completion verified: on feature branch, no uncommitted changes, tests collect successfully. Ensure pytest and pnpm test both pass before marking complete."}'

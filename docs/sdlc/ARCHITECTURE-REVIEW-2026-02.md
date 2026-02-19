@@ -227,3 +227,46 @@ class AgentMessageBus:
 Each channel handler would become a thin adapter that translates its input format to `InboundMessage` and routes the `OutboundMessage` back through its channel. This is essentially what SPEC-005's unified sessions enables.
 
 **Recommendation:** Don't build the message bus as a separate project. Instead, refactor toward it incrementally as part of SPEC-005 implementation.
+
+---
+
+## Addendum: State as of Feb 18, 2026
+
+This section corrects the analysis above based on what was actually implemented since the review was written.
+
+### Items completed since review
+
+| Item | Status | Evidence |
+|------|--------|----------|
+| Notification UI in AppShell | **Done** | `NotificationBadge` rendered in `TopBar.tsx:55`. Polling, mark-read, dropdown all wired. |
+| Deploy Telegram | **Done** | Bot live on Fly.io. Full conversational channel — not just notifications. |
+| Unified sessions (channel column) | **Done** | Migration `20260217220000` adds `channel` column. Telegram sets `channel='telegram'`, scheduled sets `channel='scheduled'`. |
+| Chat history API | **Done** | `chat_history_router.py` + `chat_history_service.py` + `useChatHistoryHooks.ts` fully implemented. |
+| LTM injection (all channels) | **Done** | `chat.py:226-232` loads LTM for web chat. `telegram_bot.py:297-303` loads for Telegram. `scheduled_execution_service.py:89-94` loads for scheduled runs. |
+| Telegram chat routing | **Done** | `handle_message()` in `telegram_bot.py` loads agent, injects LTM, wraps tools with approval, creates `chat_sessions` row with `channel='telegram'`. |
+| Memory tools | **Done** | `SaveMemoryTool` + `ReadMemoryTool` registered on assistant agent (migration `20260218000003`). |
+| Reminder system | **Done** | Table, service, tools (`CreateReminderTool`, `ListRemindersTool`), background delivery loop with notification routing. |
+| SPEC-004 test coverage | **Done** | Tests exist for all three feature areas. |
+| SPEC-005 unified sessions | **Done** | Channel column, session_id, chat history API, Telegram/scheduled session creation all implemented. |
+| SPEC-006 email digests & reminders | **Done** | Full stack: LTM wiring, memory tools, reminders, digest enhancement, delivery loop. |
+
+### Items still remaining
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Chat history not loaded in UI | **Not done** | `ChatPanelV2` doesn't use `useChatHistoryHooks`. No session sidebar, no message restoration on page load. Backend/hooks exist but UI doesn't consume them. |
+| Telegram conversation context | **Gap** | `handle_message()` passes `chat_history: []` — every Telegram message gets fresh context instead of loading prior conversation from `chat_message_history`. |
+| Scheduled execution dashboard | **Not started** | Backend stores results but zero UI to view/manage. |
+| Agent configuration UI | **Not started** | No agent picker (hardcoded to env var). No prompt customization UI. |
+| Streaming responses | **Not started** | Request/response only. |
+| Dynamic tool creation | **Not started** | Agents use tools but can't create new ones at runtime. |
+| Agent-managed scheduling | **Not started** | Cron schedules exist in DB but no agent tool to create/delete schedules. |
+| Frontend cleanup | **Not started** | SPEC-007 drafted but not executed. |
+| Context compaction | **Not started** | SPEC-008 drafted but not executed. |
+
+### Corrected priority recommendations
+
+The original review's Tier 1 (notification UI, chat history, Telegram deploy) is **complete** except for the chat history UI loading. The remaining work falls into two categories:
+
+1. **Conversation persistence UX** — Load history in ChatPanelV2, conversation sidebar, cross-channel session sharing. This is SPEC-009.
+2. **Agent autonomy** — Give the agent tools to manage its own schedule (create/delete cron jobs). This follows the OpenClaw `cron.*` tool pattern rather than requiring a UI.

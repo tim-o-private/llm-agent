@@ -13,8 +13,8 @@ try:
     from ..config.constants import DEFAULT_LOG_LEVEL
     from ..dependencies.auth import get_current_user
 except ImportError:
-    from chatServer.agents.email_digest_agent import EmailDigestAgent
-    from chatServer.dependencies.auth import get_current_user
+    from agents.email_digest_agent import EmailDigestAgent
+    from dependencies.auth import get_current_user
 
 # Import existing utilities
 import os
