@@ -141,6 +141,8 @@ The `get_current_user` dependency extracts `sub` from the JWT payload.
 | `webApp/src/lib/supabaseClient.ts` | Supabase client singleton |
 | `webApp/tailwind.config.js` | Semantic color tokens |
 | `supabase/migrations/` | Database schema history |
+| `tests/uat/conftest.py` | UAT shared fixtures (authenticated_client, supabase_fixture) |
+| `tests/uat/fixtures/supabase_fixture.py` | Stateful in-memory Supabase mock for flow tests |
 
 ## Resolving Bugs and Problems
 
@@ -192,6 +194,7 @@ Cross-domain dependency flow: `database-dev → backend-dev → frontend-dev`
 | `.claude/agents/frontend-dev.md` | Components, hooks, pages, stores | `webApp/src/` | Full capability |
 | `.claude/agents/deployment-dev.md` | Docker, Fly.io, CI/CD, env config | Dockerfiles, fly.toml, CI/CD | Full capability |
 | `.claude/agents/reviewer.md` | Reviews diffs, checks scope + patterns + tests | All (read-only) | Read-only |
+| `.claude/agents/uat-tester.md` | Flow tests on integration branch | `tests/uat/` | Full capability |
 
 ### Cross-Team Contract Format
 
