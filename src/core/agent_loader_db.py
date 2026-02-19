@@ -438,8 +438,6 @@ def load_agent_executor_db(
         supabase_url: Supabase project URL. Defaults to VITE_SUPABASE_URL env var.
         supabase_key: Supabase service key. Defaults to SUPABASE_SERVICE_KEY env var.
         log_level: Desired logging level for the logger instance used by the executor.
-        explicit_custom_instructions: Optional dictionary of custom instructions to override
-                                      or supplement any loaded from context or defaults.
         use_cache: Whether to use the tool cache service for improved performance. Defaults to True.
 
     Returns:

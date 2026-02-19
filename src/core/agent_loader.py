@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from core.agent_loader_db import load_agent_executor_db
 from core.agents.customizable_agent import CustomizableAgentExecutor
@@ -13,8 +13,7 @@ def load_agent_executor(
     session_id: str,
     config_loader=None,  # Deprecated, ignored
     log_level: int = logging.INFO,
-    ltm_notes: Optional[str] = None,
-    explicit_custom_instructions: Optional[Dict[str, Any]] = None,
+    ltm_notes: Optional[str] = None,  # Deprecated, ignored
 ) -> CustomizableAgentExecutor:
     """
     Loads agent configuration and tools from the database, instantiates the agent executor.
@@ -24,5 +23,4 @@ def load_agent_executor(
         user_id=user_id,
         session_id=session_id,
         log_level=log_level,
-        explicit_custom_instructions=explicit_custom_instructions
     )
