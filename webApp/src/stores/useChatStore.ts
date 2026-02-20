@@ -421,10 +421,46 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     try {
       const freshMessages = await loadHistoricalMessages(activeChatId);
       const { messages: currentMessages } = get();
-      // Only update if the message count changed (avoids unnecessary re-renders)
-      if (freshMessages.length !== currentMessages.length) {
+
+      if (freshMessages.length === 0) return;
+
+      // First load: no local messages yet — set them directly.
+      if (currentMessages.length === 0) {
         set({ messages: freshMessages });
+        return;
       }
+
+      // Compare by last-message content, NOT by count.
+      // The API returns at most 50 messages (LIMIT 50). After sending a message,
+      // the client may have 52 (50 historical + user UUID + AI UUID) while the
+      // server returns 50 (with DB row IDs). A count-based diff triggers a
+      // wholesale replacement that crashes assistant-ui's MessageRepository —
+      // it can't handle a complete ID remapping of the message array.
+      const lastFresh = freshMessages[freshMessages.length - 1];
+      const lastCurrent = currentMessages[currentMessages.length - 1];
+
+      if (lastFresh.text === lastCurrent.text && lastFresh.sender === lastCurrent.sender) {
+        return; // No new content from server — skip update.
+      }
+
+      // Server has new message(s) (e.g., from Telegram cross-channel sync).
+      // Append only the genuinely new messages to preserve MessageRepository integrity.
+      const clientLastText = lastCurrent.text;
+      const clientLastSender = lastCurrent.sender;
+
+      let matchIdx = -1;
+      for (let i = freshMessages.length - 2; i >= 0; i--) {
+        if (freshMessages[i].text === clientLastText && freshMessages[i].sender === clientLastSender) {
+          matchIdx = i;
+          break;
+        }
+      }
+
+      if (matchIdx >= 0) {
+        const newMsgs = freshMessages.slice(matchIdx + 1);
+        set({ messages: [...currentMessages, ...newMsgs] });
+      }
+      // If no match found, skip update rather than crash the runtime.
     } catch (error) {
       console.error('Error refreshing messages:', error);
     }
