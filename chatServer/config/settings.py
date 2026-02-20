@@ -11,8 +11,8 @@ class Settings:
     def __init__(self):
         # Supabase configuration
         self.supabase_jwt_secret: Optional[str] = os.getenv("SUPABASE_JWT_SECRET")
-        self.supabase_url: Optional[str] = os.getenv("VITE_SUPABASE_URL")
-        self.supabase_service_key: Optional[str] = os.getenv("SUPABASE_SERVICE_KEY")
+        self.supabase_url: Optional[str] = os.getenv("SUPABASE_URL")
+        self.supabase_service_key: Optional[str] = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
         # Database configuration
         self.db_user: Optional[str] = os.getenv("SUPABASE_DB_USER")
@@ -57,8 +57,8 @@ class Settings:
         shell environment at import time (e.g. TELEGRAM_BOT_TOKEN added to .env).
         """
         self.supabase_jwt_secret = os.getenv("SUPABASE_JWT_SECRET")
-        self.supabase_url = os.getenv("VITE_SUPABASE_URL")
-        self.supabase_service_key = os.getenv("SUPABASE_SERVICE_KEY")
+        self.supabase_url = os.getenv("SUPABASE_URL")
+        self.supabase_service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
         self.db_user = os.getenv("SUPABASE_DB_USER")
         self.db_password = os.getenv("SUPABASE_DB_PASSWORD")
         self.db_host = os.getenv("SUPABASE_DB_HOST")
@@ -77,10 +77,10 @@ class Settings:
             errors.append("SUPABASE_JWT_SECRET is required")
 
         if not self.supabase_url:
-            errors.append("VITE_SUPABASE_URL is required")
+            errors.append("SUPABASE_URL is required")
 
         if not self.supabase_service_key:
-            errors.append("SUPABASE_SERVICE_KEY is required")
+            errors.append("SUPABASE_SERVICE_ROLE_KEY is required")
 
         # Database settings are validated in database_url property
         try:

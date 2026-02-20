@@ -23,13 +23,13 @@ COPY webApp/ ./webApp/
 # Build-time args for Vite (provided by fly.toml [build.args] from Fly secrets)
 # These are public values baked into the JS bundle — not truly secret.
 ARG VITE_API_BASE_URL
-ARG VITE_SUPABASE_URL
-ARG VITE_SUPABASE_ANON_KEY
+ARG SUPABASE_URL
+ARG SUPABASE_ANON_KEY
 
 # Build the webApp (clarity-frontend)
 RUN VITE_API_BASE_URL="${VITE_API_BASE_URL}" \
-    VITE_SUPABASE_URL="${VITE_SUPABASE_URL}" \
-    VITE_SUPABASE_ANON_KEY="${VITE_SUPABASE_ANON_KEY}" \
+    SUPABASE_URL="${SUPABASE_URL}" \
+    SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY}" \
     pnpm --filter clarity-frontend build
 
 # Stage 2: Serve the static files with Nginx
