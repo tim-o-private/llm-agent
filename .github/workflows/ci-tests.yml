@@ -4,10 +4,6 @@ on:
   pull_request:
     branches:
       - main
-      - develop # Add other main branches if you have them
-  push:
-    branches:
-      - main
       - develop
 
 jobs:

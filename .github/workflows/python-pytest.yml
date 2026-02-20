@@ -4,11 +4,6 @@ on:
   pull_request:
     branches:
       - main
-      # - public_main # If your public repo's default branch is different
-  push:
-    branches:
-      - main
-      # - public_main
 
 jobs:
   test:
