@@ -50,7 +50,9 @@ flyctl logs -a clarity-webapp
 - [ ] All tests pass (`pytest` + `cd webApp && pnpm test`)
 - [ ] Linting clean (`ruff check` + `pnpm lint`)
 - [ ] No `.env` files in Docker context (check `.dockerignore`)
-- [ ] Fly secrets set for any new env vars
+- [ ] Fly secrets set for any new env vars (chatServer AND webApp if applicable)
+- [ ] GitHub repo secrets set if env var is used in CI/CD workflows (e.g., `--build-arg`)
+- [ ] New Python deps added to BOTH `requirements.txt` (root) AND `chatServer/requirements.txt`
 - [ ] Database migrations applied to production Supabase
 - [ ] CORS origins in `chatServer/main.py` include the production frontend URL
 - [ ] All frontend API hooks use `VITE_API_BASE_URL` (not `VITE_API_URL`) — only `VITE_API_BASE_URL` is passed at build time
@@ -68,14 +70,14 @@ flyctl logs -a clarity-webapp
 | `LLM_AGENT_SRC_PATH` | `src` (set in fly.toml) |
 | `RUNNING_IN_DOCKER` | `true` (set in Dockerfile) |
 
-### webApp (build-time ARGs via fly.toml)
+### webApp (build-time ARGs via GitHub secrets + `--build-arg` in CI)
 | Variable | Description |
 |----------|-------------|
-| `VITE_SUPABASE_URL` | Supabase project URL (public) |
-| `VITE_SUPABASE_ANON_KEY` | Supabase anon key (public) |
+| `SUPABASE_URL` | Supabase project URL (public) |
+| `SUPABASE_ANON_KEY` | Supabase anon key (public) |
 | `VITE_API_BASE_URL` | chatServer URL (e.g., `https://clarity-chatserver.fly.dev`) |
 
-**webApp vars are injected at build time** via Docker `ARG` + fly.toml `[build.args]`. Fly resolves `$VAR_NAME` from runtime secrets. These are NOT truly secret — they're baked into the JS bundle.
+**webApp vars are injected at build time** via Docker `ARG` in `.github/workflows/fly-deploy.yml`. These are GitHub repo secrets (not Fly secrets). They are NOT truly secret — they're baked into the JS bundle.
 
 ## Detailed Reference
 
