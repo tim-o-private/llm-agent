@@ -27,7 +27,7 @@ async def test_load_ltm_returns_notes(service):
         return_value=mock_db,
     ), patch.dict(
         "os.environ",
-        {"VITE_SUPABASE_URL": "https://test.supabase.co", "SUPABASE_SERVICE_KEY": "key"},
+        {"SUPABASE_URL": "https://test.supabase.co", "SUPABASE_SERVICE_ROLE_KEY": "key"},
     ):
         result = await service._load_ltm("user-123", "email_digest_agent")
 
@@ -49,7 +49,7 @@ async def test_load_ltm_returns_none_on_missing(service):
         return_value=mock_db,
     ), patch.dict(
         "os.environ",
-        {"VITE_SUPABASE_URL": "https://test.supabase.co", "SUPABASE_SERVICE_KEY": "key"},
+        {"SUPABASE_URL": "https://test.supabase.co", "SUPABASE_SERVICE_ROLE_KEY": "key"},
     ):
         result = await service._load_ltm("user-123", "email_digest_agent")
 

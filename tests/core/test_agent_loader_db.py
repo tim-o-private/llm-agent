@@ -149,7 +149,7 @@ class TestLoadToolsFromDb(unittest.TestCase):
         self.mock_os_getenv = self.patch_os_getenv.start()
         self.mock_os_getenv.side_effect = lambda key, default=None: {
             "SUPABASE_URL": "http://fake.supabase.co",
-            "SUPABASE_SERVICE_KEY": "fake_key",
+            "SUPABASE_SERVICE_ROLE_KEY": "fake_key",
             "GOOGLE_API_KEY": "fake_google_api_key"
         }.get(key, default)
         self.addCleanup(self.patch_os_getenv.stop)
@@ -296,8 +296,8 @@ class TestLoadAgentExecutorDb(unittest.TestCase):
         self.mock_build_prompt.return_value = "## Soul\nYou are a test agent.\n\n## Channel\nweb"
 
         self.patch_getenv = patch.dict(os.environ, {
-            "VITE_SUPABASE_URL": "env_supabase_url",
-            "SUPABASE_SERVICE_KEY": "env_supabase_key",
+            "SUPABASE_URL": "env_supabase_url",
+            "SUPABASE_SERVICE_ROLE_KEY": "env_supabase_key",
             "GOOGLE_API_KEY": "fake_google_api_key"
         })
         self.patch_getenv.start()
@@ -503,8 +503,8 @@ class TestLoadAgentExecutorDb(unittest.TestCase):
             load_agent_executor_db(self.agent_name, self.user_id, self.session_id, use_cache=False)
 
         patch.dict(os.environ, {
-            "VITE_SUPABASE_URL": "env_supabase_url",
-            "SUPABASE_SERVICE_KEY": "env_supabase_key"
+            "SUPABASE_URL": "env_supabase_url",
+            "SUPABASE_SERVICE_ROLE_KEY": "env_supabase_key"
         }).start()
         self.patch_getenv.start()
 

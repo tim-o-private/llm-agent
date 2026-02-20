@@ -46,8 +46,8 @@ class GmailToolProvider:
 
                 from supabase import create_client
 
-                supabase_url = os.getenv("VITE_SUPABASE_URL")
-                supabase_key = os.getenv("SUPABASE_SERVICE_KEY")
+                supabase_url = os.getenv("SUPABASE_URL")
+                supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
                 if not supabase_url or not supabase_key:
                     raise RuntimeError("Supabase configuration missing. Please contact support.")
