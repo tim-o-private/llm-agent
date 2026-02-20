@@ -26,7 +26,7 @@ MOCK_AGENT_CONFIG = {
     "llm_config": {"model": "claude-sonnet-4-20250514"},
 }
 
-ENV_VARS = {"VITE_SUPABASE_URL": "https://test.supabase.co", "SUPABASE_SERVICE_KEY": "test-key"}
+ENV_VARS = {"SUPABASE_URL": "https://test.supabase.co", "SUPABASE_SERVICE_ROLE_KEY": "test-key"}
 
 
 @pytest.mark.asyncio

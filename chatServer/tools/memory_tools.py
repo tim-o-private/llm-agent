@@ -43,8 +43,8 @@ class SaveMemoryTool(BaseTool):
     supabase_key: str = Field(default="", description="Supabase service key")
 
     def _get_client(self) -> SupabaseClient:
-        url = self.supabase_url or os.getenv("VITE_SUPABASE_URL", "")
-        key = self.supabase_key or os.getenv("SUPABASE_SERVICE_KEY", "")
+        url = self.supabase_url or os.getenv("SUPABASE_URL", "")
+        key = self.supabase_key or os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
         if not url or not key:
             raise RuntimeError("Supabase configuration missing for memory tool.")
         return create_client(url, key)
@@ -103,8 +103,8 @@ class ReadMemoryTool(BaseTool):
     supabase_key: str = Field(default="", description="Supabase service key")
 
     def _get_client(self) -> SupabaseClient:
-        url = self.supabase_url or os.getenv("VITE_SUPABASE_URL", "")
-        key = self.supabase_key or os.getenv("SUPABASE_SERVICE_KEY", "")
+        url = self.supabase_url or os.getenv("SUPABASE_URL", "")
+        key = self.supabase_key or os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
         if not url or not key:
             raise RuntimeError("Supabase configuration missing for memory tool.")
         return create_client(url, key)

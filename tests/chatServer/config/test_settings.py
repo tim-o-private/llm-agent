@@ -18,8 +18,8 @@ class TestSettings(unittest.TestCase):
         """Test Settings initialization with all environment variables set."""
         env_vars = {
             "SUPABASE_JWT_SECRET": "test_jwt_secret",
-            "VITE_SUPABASE_URL": "https://test.supabase.co",
-            "SUPABASE_SERVICE_KEY": "test_service_key",
+            "SUPABASE_URL": "https://test.supabase.co",
+            "SUPABASE_SERVICE_ROLE_KEY": "test_service_key",
             "SUPABASE_DB_USER": "test_user",
             "SUPABASE_DB_PASSWORD": "test_password",
             "SUPABASE_DB_HOST": "test_host",
@@ -47,8 +47,8 @@ class TestSettings(unittest.TestCase):
         """Test Settings initialization with default values."""
         minimal_env = {
             "SUPABASE_JWT_SECRET": "test_jwt_secret",
-            "VITE_SUPABASE_URL": "https://test.supabase.co",
-            "SUPABASE_SERVICE_KEY": "test_service_key",
+            "SUPABASE_URL": "https://test.supabase.co",
+            "SUPABASE_SERVICE_ROLE_KEY": "test_service_key",
             "SUPABASE_DB_USER": "test_user",
             "SUPABASE_DB_PASSWORD": "test_password",
             "SUPABASE_DB_HOST": "test_host",
@@ -95,8 +95,8 @@ class TestSettings(unittest.TestCase):
         """Test validate_required_settings with all required settings."""
         env_vars = {
             "SUPABASE_JWT_SECRET": "test_jwt_secret",
-            "VITE_SUPABASE_URL": "https://test.supabase.co",
-            "SUPABASE_SERVICE_KEY": "test_service_key",
+            "SUPABASE_URL": "https://test.supabase.co",
+            "SUPABASE_SERVICE_ROLE_KEY": "test_service_key",
             "SUPABASE_DB_USER": "test_user",
             "SUPABASE_DB_PASSWORD": "test_password",
             "SUPABASE_DB_HOST": "test_host",
@@ -110,8 +110,8 @@ class TestSettings(unittest.TestCase):
     def test_validate_required_settings_missing_jwt_secret(self):
         """Test validate_required_settings with missing JWT secret."""
         env_vars = {
-            "VITE_SUPABASE_URL": "https://test.supabase.co",
-            "SUPABASE_SERVICE_KEY": "test_service_key",
+            "SUPABASE_URL": "https://test.supabase.co",
+            "SUPABASE_SERVICE_ROLE_KEY": "test_service_key",
             "SUPABASE_DB_USER": "test_user",
             "SUPABASE_DB_PASSWORD": "test_password",
             "SUPABASE_DB_HOST": "test_host",
@@ -129,7 +129,7 @@ class TestSettings(unittest.TestCase):
         """Test validate_required_settings with missing Supabase URL."""
         env_vars = {
             "SUPABASE_JWT_SECRET": "test_jwt_secret",
-            "SUPABASE_SERVICE_KEY": "test_service_key",
+            "SUPABASE_SERVICE_ROLE_KEY": "test_service_key",
             "SUPABASE_DB_USER": "test_user",
             "SUPABASE_DB_PASSWORD": "test_password",
             "SUPABASE_DB_HOST": "test_host",
@@ -141,7 +141,7 @@ class TestSettings(unittest.TestCase):
             with self.assertRaises(RuntimeError) as context:
                 settings.validate_required_settings()
 
-            self.assertIn("VITE_SUPABASE_URL is required", str(context.exception))
+            self.assertIn("SUPABASE_URL is required", str(context.exception))
 
     def test_cors_origins_default(self):
         """Test that CORS origins are set correctly."""

@@ -166,8 +166,8 @@ class EmailDigestService:
     async def _load_ltm(self, user_id: str, agent_name: str) -> Optional[str]:
         """Load long-term memory notes for user+agent from the database."""
         try:
-            url = os.getenv("VITE_SUPABASE_URL", "")
-            key = os.getenv("SUPABASE_SERVICE_KEY", "")
+            url = os.getenv("SUPABASE_URL", "")
+            key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
             if not url or not key:
                 return None
 

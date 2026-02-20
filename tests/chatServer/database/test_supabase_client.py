@@ -26,8 +26,8 @@ class TestSupabaseManager(unittest.TestCase):
     def test_supabase_manager_initialization(self):
         """Test SupabaseManager initialization."""
         with patch.dict(os.environ, {
-            "VITE_SUPABASE_URL": "https://test.supabase.co",
-            "SUPABASE_SERVICE_KEY": "test_service_key"
+            "SUPABASE_URL": "https://test.supabase.co",
+            "SUPABASE_SERVICE_ROLE_KEY": "test_service_key"
         }, clear=True):
             supabase_manager = SupabaseManager()
 
@@ -76,8 +76,8 @@ class TestSupabaseManagerAsync:
         from supabase import AsyncClient
 
         with patch.dict(os.environ, {
-            "VITE_SUPABASE_URL": "https://test.supabase.co",
-            "SUPABASE_SERVICE_KEY": "test_service_key"
+            "SUPABASE_URL": "https://test.supabase.co",
+            "SUPABASE_SERVICE_ROLE_KEY": "test_service_key"
         }, clear=True):
             mock_client = MagicMock(spec=AsyncClient)
 
@@ -92,7 +92,7 @@ class TestSupabaseManagerAsync:
     async def test_supabase_manager_initialize_missing_url(self):
         """Test Supabase client initialization with missing URL."""
         with patch.dict(os.environ, {
-            "SUPABASE_SERVICE_KEY": "test_service_key"
+            "SUPABASE_SERVICE_ROLE_KEY": "test_service_key"
         }, clear=True):
             supabase_manager = SupabaseManager()
             await supabase_manager.initialize()
@@ -103,7 +103,7 @@ class TestSupabaseManagerAsync:
     async def test_supabase_manager_initialize_missing_key(self):
         """Test Supabase client initialization with missing service key."""
         with patch.dict(os.environ, {
-            "VITE_SUPABASE_URL": "https://test.supabase.co"
+            "SUPABASE_URL": "https://test.supabase.co"
         }, clear=True):
             supabase_manager = SupabaseManager()
             await supabase_manager.initialize()
@@ -114,8 +114,8 @@ class TestSupabaseManagerAsync:
     async def test_supabase_manager_initialize_wrong_client_type(self):
         """Test Supabase client initialization with wrong client type."""
         with patch.dict(os.environ, {
-            "VITE_SUPABASE_URL": "https://test.supabase.co",
-            "SUPABASE_SERVICE_KEY": "test_service_key"
+            "SUPABASE_URL": "https://test.supabase.co",
+            "SUPABASE_SERVICE_ROLE_KEY": "test_service_key"
         }, clear=True):
             mock_wrong_client = MagicMock()  # Not an AsyncClient
 
@@ -129,8 +129,8 @@ class TestSupabaseManagerAsync:
     async def test_supabase_manager_initialize_exception(self):
         """Test Supabase client initialization with exception."""
         with patch.dict(os.environ, {
-            "VITE_SUPABASE_URL": "https://test.supabase.co",
-            "SUPABASE_SERVICE_KEY": "test_service_key"
+            "SUPABASE_URL": "https://test.supabase.co",
+            "SUPABASE_SERVICE_ROLE_KEY": "test_service_key"
         }, clear=True):
             with patch('chatServer.database.supabase_client.acreate_client', side_effect=Exception("Connection failed")):
                 supabase_manager = SupabaseManager()
@@ -150,8 +150,8 @@ class TestGetSupabaseManager(unittest.TestCase):
     def test_get_supabase_manager_creates_instance(self):
         """Test that get_supabase_manager creates a SupabaseManager instance."""
         with patch.dict(os.environ, {
-            "VITE_SUPABASE_URL": "https://test.supabase.co",
-            "SUPABASE_SERVICE_KEY": "test_service_key"
+            "SUPABASE_URL": "https://test.supabase.co",
+            "SUPABASE_SERVICE_ROLE_KEY": "test_service_key"
         }, clear=True):
             manager = get_supabase_manager()
 
@@ -160,8 +160,8 @@ class TestGetSupabaseManager(unittest.TestCase):
     def test_get_supabase_manager_singleton(self):
         """Test that get_supabase_manager returns the same instance (singleton pattern)."""
         with patch.dict(os.environ, {
-            "VITE_SUPABASE_URL": "https://test.supabase.co",
-            "SUPABASE_SERVICE_KEY": "test_service_key"
+            "SUPABASE_URL": "https://test.supabase.co",
+            "SUPABASE_SERVICE_ROLE_KEY": "test_service_key"
         }, clear=True):
             manager1 = get_supabase_manager()
             manager2 = get_supabase_manager()
