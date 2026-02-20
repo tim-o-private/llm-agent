@@ -23,4 +23,5 @@ uvicorn>=0.34.0
 pydantic-settings>=2.9.0
 croniter>=1.3.0
 langchain-google-community[gmail]
+aiohttp>=3.9.0
 aiogram>=3.4.0
