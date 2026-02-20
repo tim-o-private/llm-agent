@@ -51,6 +51,19 @@ Any feature that invokes an agent MUST:
 | `agent_execution_results` | Stored results from scheduled runs |
 | `agent_schedules` | Cron/interval schedule definitions |
 
+## Recipe: Add a New Channel
+
+Per A7 (cross-channel by default) and A11 (design for N):
+
+1. **Handler:** Create channel-specific handler (like `chatServer/services/telegram_handler.py`)
+2. **Session:** Create/lookup `chat_sessions` row with correct `channel` tag
+3. **Routing:** Route incoming messages through the shared agent execution pipeline
+4. **Notifications:** Register in `NotificationService` for outbound notifications
+5. **User linking:** Add channel-specific user identifier to `user_channels` table
+6. **Cross-channel:** Ensure messages are visible across all linked channels via shared `chat_id`
+
+Reference: Telegram implementation in `chatServer/services/telegram_handler.py`
+
 ## Reference
 
 See `reference.md` in this directory for detailed session lifecycle, message flows, and table relationships.

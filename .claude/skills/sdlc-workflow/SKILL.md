@@ -16,7 +16,9 @@ Required sections: Goal, Acceptance Criteria, Scope, Technical Approach, Testing
 | **backend-dev** | `chatServer/`, `src/` | Services, routers, API |
 | **frontend-dev** | `webApp/src/` | Components, hooks, pages |
 | **deployment-dev** | Dockerfiles, fly.toml, CI/CD | Docker, deploys, env vars |
-| **reviewer** | All (read-only) | Code review |
+| **reviewer** | All (read-only) | Code review (structured VERDICT) |
+| **uat-tester** | `tests/uat/` | Flow tests with AC-ID naming |
+| **spec-writer** | Specs only | Vision → complete spec draft |
 
 Cross-domain flow: `database-dev → backend-dev → frontend-dev`
 

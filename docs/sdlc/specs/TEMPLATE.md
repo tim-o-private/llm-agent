@@ -11,11 +11,11 @@ One paragraph describing what this spec achieves and why it matters.
 
 ## Acceptance Criteria
 
-Testable conditions that must be true when this spec is complete:
+Each criterion has a stable ID for traceability. UAT test functions reference these IDs.
 
-- [ ] AC-1: [Specific, testable criterion]
-- [ ] AC-2: [Specific, testable criterion]
-- [ ] AC-3: [Specific, testable criterion]
+- [ ] **AC-01:** [Specific, testable criterion] [Relevant principles: A8, A1]
+- [ ] **AC-02:** [Specific, testable criterion] [Relevant principles: A4]
+- [ ] **AC-03:** [Specific, testable criterion]
 
 ## Scope
 
@@ -70,6 +70,15 @@ Reference skills and patterns:
 - Invalid input
 - Edge cases listed below
 
+### AC-to-Test Mapping
+
+Every acceptance criterion must have at least one test. UAT test functions use the naming convention `test_ac_NN_description`.
+
+| AC | Test Type | Test Function |
+|----|-----------|--------------|
+| AC-01 | UAT | `test_ac_01_description` |
+| AC-02 | Unit + UAT | `test_ac_02_description` |
+
 ### Manual Verification (UAT)
 
 - [ ] Step-by-step manual test plan for the user
@@ -87,3 +96,16 @@ Each unit gets its own branch and PR:
 2. **Unit 2:** Service layer (`feat/SPEC-NNN-service`)
 3. **Unit 3:** API endpoints + tests (`feat/SPEC-NNN-api`)
 4. **Unit 4:** Frontend components + hooks + tests (`feat/SPEC-NNN-ui`)
+
+## Completeness Checklist
+
+Before submitting this spec for approval:
+
+- [ ] Every AC has a stable ID (AC-01, AC-02, ...)
+- [ ] Every AC maps to at least one functional unit
+- [ ] Every cross-domain boundary has a contract (schema → API → UI)
+- [ ] Technical decisions reference principles from architecture-principles skill
+- [ ] Merge order is explicit and acyclic
+- [ ] Out-of-scope is explicit
+- [ ] Edge cases documented with expected behavior
+- [ ] Testing requirements map to ACs

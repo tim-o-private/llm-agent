@@ -77,6 +77,10 @@ Migration files are named `YYYYMMDDHHMMSS_descriptive_name.sql`. When agents wor
    Then increment by 1.
 3. The `validate-patterns.sh` hook will warn if a collision is detected against the main repo.
 
+## Key Gotchas
+
+1. **PostgREST upsert** — Supabase PostgREST `ON CONFLICT` requires a real UNIQUE constraint (not partial unique indexes). Use select-then-insert if needed.
+
 ## Detailed Reference
 
 For full patterns with examples (RLS testing, JSONB config, index strategy, data access in Python), see [reference.md](reference.md).
