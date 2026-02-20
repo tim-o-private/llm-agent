@@ -7,8 +7,29 @@ on:
       - main
 
 jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      chatserver: ${{ steps.filter.outputs.chatserver }}
+      webapp: ${{ steps.filter.outputs.webapp }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            chatserver:
+              - 'chatServer/**'
+              - 'src/**'
+              - 'requirements.txt'
+            webapp:
+              - 'webApp/**'
+
   deploy-chatserver:
     name: Deploy chatServer
+    needs: changes
+    if: needs.changes.outputs.chatserver == 'true'
     runs-on: ubuntu-latest
     concurrency: deploy-chatserver
     steps:
@@ -20,6 +41,8 @@ jobs:
 
   deploy-webapp:
     name: Deploy webApp
+    needs: changes
+    if: needs.changes.outputs.webapp == 'true'
     runs-on: ubuntu-latest
     concurrency: deploy-webapp
     steps:
