@@ -26,9 +26,9 @@ Full toolset: Read, Write, Edit, Bash, Glob, Grep, TaskList, TaskGet, TaskUpdate
 
 1. Read the spec file the orchestrator referenced
 2. Read the relevant skills listed above
-3. Verify you're in the correct worktree directory: `pwd`
-4. Verify you're on the correct branch: `git branch --show-current`
-5. Review existing migrations: `ls supabase/migrations/`
+3. **Read `supabase/schema.sql`** — the current production DDL. If missing/stale, run `./scripts/dump-schema.sh`
+4. Verify you're in the correct worktree directory: `pwd`
+5. Verify you're on the correct branch: `git branch --show-current`
 
 ## Workflow
 

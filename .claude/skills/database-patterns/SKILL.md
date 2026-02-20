@@ -9,6 +9,17 @@ description: PostgreSQL and Supabase database patterns. Use when writing SQL mig
 
 All data lives in one PostgreSQL database on Supabase. No SQLite, Redis, MongoDB, or additional data stores.
 
+## Step 0: Read the Current Schema
+
+Before any database work, read `supabase/schema.sql` — this is the **single source of truth** for the current production DDL. It contains all tables, functions, indexes, RLS policies, and comments in one file.
+
+If the file is missing or stale, regenerate it:
+```bash
+./scripts/dump-schema.sh
+```
+
+**Always check the existing schema before creating new tables or columns.** The schema file prevents duplicating existing structures or misunderstanding current column types/constraints.
+
 ## Quick Checklist
 
 Before writing database code, verify:
