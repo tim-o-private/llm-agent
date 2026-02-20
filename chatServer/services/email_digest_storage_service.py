@@ -4,10 +4,7 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List
 
-try:
-    from ..database.connection import get_database_manager
-except ImportError:
-    from database.connection import get_database_manager
+from ..database.connection import get_database_manager
 
 logger = logging.getLogger(__name__)
 

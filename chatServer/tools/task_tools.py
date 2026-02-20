@@ -69,12 +69,8 @@ def _format_task_detail(task: dict) -> str:
 
 async def _get_task_service():
     """Get a TaskService instance with the shared async Supabase client."""
-    try:
-        from ..database.supabase_client import get_supabase_client
-        from ..services.task_service import TaskService
-    except ImportError:
-        from database.supabase_client import get_supabase_client
-        from services.task_service import TaskService
+    from ..database.supabase_client import get_supabase_client
+    from ..services.task_service import TaskService
 
     db = await get_supabase_client()
     return TaskService(db)

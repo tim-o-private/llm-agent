@@ -14,17 +14,10 @@ from typing import Any, Dict, Optional
 
 from src.core.agent_loader_db import load_agent_executor_db
 
-try:
-    from ..database.supabase_client import get_supabase_client
-    from ..security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
-    from ..services.audit_service import AuditService
-    from ..services.pending_actions import PendingActionsService
-except ImportError:
-    from database.supabase_client import get_supabase_client
-    from security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
-
-    from services.audit_service import AuditService
-    from services.pending_actions import PendingActionsService
+from ..database.supabase_client import get_supabase_client
+from ..security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
+from ..services.audit_service import AuditService
+from ..services.pending_actions import PendingActionsService
 
 logger = logging.getLogger(__name__)
 
@@ -363,10 +356,7 @@ class ScheduledExecutionService:
     ) -> None:
         """Notify the user about the execution result via NotificationService."""
         try:
-            try:
-                from ..services.notification_service import NotificationService
-            except ImportError:
-                from services.notification_service import NotificationService
+            from ..services.notification_service import NotificationService
 
             notification_service = NotificationService(supabase_client)
             channels = config.get("notify_channels")  # e.g., ["telegram", "web"] or None

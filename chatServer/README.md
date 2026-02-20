@@ -32,7 +32,7 @@ The Chat Server:
 2.  Ensure the project root `.env` file is correctly set up.
 3.  From the **project root directory** (`llm-agent/`), run:
     ```bash
-    python chatServer/main.py
+    python -m chatServer.main
     ```
 4.  The server will start on `http://localhost:3001` by default.
 

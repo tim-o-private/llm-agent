@@ -8,10 +8,7 @@ from fastapi import HTTPException
 
 from supabase import AsyncClient, acreate_client
 
-try:
-    from ..config.settings import get_settings
-except ImportError:
-    from config.settings import get_settings
+from ..config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 

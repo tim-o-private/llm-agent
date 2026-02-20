@@ -15,14 +15,9 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-try:
-    from ..database.supabase_client import get_supabase_client
-    from ..dependencies.auth import get_current_user
-    from ..services.notification_service import NotificationService
-except ImportError:
-    from database.supabase_client import get_supabase_client
-    from dependencies.auth import get_current_user
-    from services.notification_service import NotificationService
+from ..database.supabase_client import get_supabase_client
+from ..dependencies.auth import get_current_user
+from ..services.notification_service import NotificationService
 
 logger = logging.getLogger(__name__)
 

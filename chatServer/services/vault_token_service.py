@@ -6,11 +6,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import psycopg
 
-try:
-    from ..config.constants import DEFAULT_LOG_LEVEL
-    from ..database.connection import get_db_connection
-except ImportError:
-    from database.connection import get_db_connection
+from ..config.constants import DEFAULT_LOG_LEVEL
+from ..database.connection import get_db_connection
 
 logger = logging.getLogger(__name__)
 

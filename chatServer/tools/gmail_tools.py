@@ -15,11 +15,8 @@ except ImportError:
         "Install with: pip install langchain-google-community[gmail]"
     )
 
-try:
-    from ..database.connection import get_db_connection
-    from ..services.vault_token_service import VaultTokenService
-except ImportError:
-    pass
+from ..database.connection import get_db_connection
+from ..services.vault_token_service import VaultTokenService
 
 
 logger = logging.getLogger(__name__)

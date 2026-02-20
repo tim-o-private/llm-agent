@@ -14,10 +14,7 @@ import httpx
 
 from supabase import AsyncClient
 
-try:
-    from ..models.external_api import ExternalAPIConnectionResponse, ServiceName
-except ImportError:
-    from models.external_api import ExternalAPIConnectionResponse, ServiceName
+from ..models.external_api import ExternalAPIConnectionResponse, ServiceName
 
 logger = logging.getLogger(__name__)
 

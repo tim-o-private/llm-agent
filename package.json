@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev:chatServer": ".venv/bin/python chatServer/main.py",
+    "dev:chatServer": ".venv/bin/python -m chatServer.main",
     "dev:webApp": "pnpm --filter clarity-frontend dev",
     "dev:ngrok": "ngrok start chatserver",
     "dev": "concurrently \"pnpm:dev:chatServer\" \"pnpm:dev:webApp\" \"pnpm:dev:ngrok\" --names \"SERVER,WEBAPP,NGROK\" --prefix-colors \"bgMagenta.bold,bgGreen.bold,bgCyan.bold\"",

@@ -77,10 +77,7 @@ class EmailDigestTool(BaseTool):
             logger.info(f"Generating email digest for user {self.user_id}: {hours_back}h back, include_read={include_read}")
 
             # Lazy import to avoid circular dependency
-            try:
-                from ..services.email_digest_service import EmailDigestService
-            except ImportError:
-                from services.email_digest_service import EmailDigestService
+            from ..services.email_digest_service import EmailDigestService
 
             # Create EmailDigestService for on-demand execution
             service = EmailDigestService(self.user_id, context="on-demand")

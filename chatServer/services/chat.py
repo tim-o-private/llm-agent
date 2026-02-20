@@ -10,24 +10,14 @@ from typing import Any, Dict, List, Optional, Tuple
 import psycopg
 from fastapi import HTTPException, Request
 
-try:
-    from ..config.constants import CHAT_MESSAGE_HISTORY_TABLE_NAME, DEFAULT_LOG_LEVEL
-    from ..database.supabase_client import get_supabase_client
-    from ..dependencies.auth import get_jwt_from_request_context
-    from ..models.chat import ChatRequest, ChatResponse
-    from ..protocols.agent_executor import AgentExecutorProtocol
-    from ..security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
-    from ..services.audit_service import AuditService
-    from ..services.pending_actions import PendingActionsService
-except ImportError:
-    from config.constants import CHAT_MESSAGE_HISTORY_TABLE_NAME, DEFAULT_LOG_LEVEL
-    from database.supabase_client import get_supabase_client
-    from models.chat import ChatRequest, ChatResponse
-    from protocols.agent_executor import AgentExecutorProtocol
-    from security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
-
-    from services.audit_service import AuditService
-    from services.pending_actions import PendingActionsService
+from ..config.constants import CHAT_MESSAGE_HISTORY_TABLE_NAME, DEFAULT_LOG_LEVEL
+from ..database.supabase_client import get_supabase_client
+from ..dependencies.auth import get_jwt_from_request_context
+from ..models.chat import ChatRequest, ChatResponse
+from ..protocols.agent_executor import AgentExecutorProtocol
+from ..security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
+from ..services.audit_service import AuditService
+from ..services.pending_actions import PendingActionsService
 
 from langchain.memory import ConversationBufferWindowMemory
 from langchain_core.messages import BaseMessage
@@ -209,10 +199,7 @@ class ChatService:
             return
 
         # 3. Send to Telegram
-        try:
-            from ..channels.telegram_bot import get_telegram_bot_service
-        except ImportError:
-            from channels.telegram_bot import get_telegram_bot_service
+        from ..channels.telegram_bot import get_telegram_bot_service
 
         bot_service = get_telegram_bot_service()
         if bot_service:

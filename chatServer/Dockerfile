@@ -15,14 +15,12 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 # Copy the src directory (core agent logic — available via PYTHONPATH)
 COPY src /app/src
 
-# Copy the entire chatServer package (main.py + all sub-packages)
-# This places config/, routers/, services/, database/, etc. at /app/
-# so bare imports like `from config.constants import ...` resolve correctly.
-COPY chatServer/ /app/
+# Copy chatServer as a proper Python package at /app/chatServer/
+# Preserves the same import structure as local dev: `from chatServer.xxx`
+COPY chatServer/ /app/chatServer/
 
 # Copy agent configuration files (settings.yaml, agents/*.yaml)
-# Merges into /app/config/ alongside chatServer's Python config modules.
-# No file conflicts: repo root has .yaml files, chatServer has .py files.
+# These live at /app/config/ — separate from chatServer/config/ (Python modules)
 COPY config/ /app/config/
 
 # Copy the global_context data
@@ -31,6 +29,5 @@ COPY data/global_context /app/data/global_context
 # Expose the port the app runs on
 EXPOSE 3001
 
-# Command to run the application
-# main.py already calls uvicorn.run, so we just execute the script.
-CMD ["python", "main.py"]
+# Run as a module so chatServer is a proper package and relative imports work
+CMD ["python", "-m", "chatServer.main"]

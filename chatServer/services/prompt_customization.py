@@ -5,10 +5,7 @@ from typing import Any, List, Optional
 
 from fastapi import HTTPException, status
 
-try:
-    from ..models.prompt_customization import PromptCustomization, PromptCustomizationCreate
-except ImportError:
-    from models.prompt_customization import PromptCustomization, PromptCustomizationCreate
+from ..models.prompt_customization import PromptCustomization, PromptCustomizationCreate
 
 logger = logging.getLogger(__name__)
 

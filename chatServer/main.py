@@ -1,64 +1,30 @@
-# @docs memory-bank/patterns/api-patterns.md#pattern-11-fastapi-project-structure
-# @rules memory-bank/rules/api-rules.json#api-001
-# @examples memory-bank/patterns/api-patterns.md#pattern-1-single-database-use-prescribed-connections
-import logging  # Added for log_level
+import logging
 import os
 import sys
-from contextlib import asynccontextmanager  # NEW IMPORT
-from typing import List  # Added Optional and List here, NEW: AsyncIterator
-
-# Add parent directory to path for imports when running directly
-if __name__ == "__main__":
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    parent_dir = os.path.dirname(current_dir)
-    if parent_dir not in sys.path:
-        sys.path.insert(0, parent_dir)
+from contextlib import asynccontextmanager
+from typing import List
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-# Import models and protocols from extracted modules
-try:
-    # Try relative imports first (when imported as a module)
-    from .config.constants import (
-        PROMPT_CUSTOMIZATIONS_TAG,
-    )
-    from .config.settings import get_settings
-    from .database.connection import get_db_connection
-    from .database.supabase_client import get_supabase_client
-    from .dependencies.agent_loader import get_agent_loader
-    from .dependencies.auth import get_current_user
-    from .models.chat import ChatRequest, ChatResponse
-    from .models.prompt_customization import PromptCustomization, PromptCustomizationCreate
-    from .models.webhook import SupabasePayload
-    from .routers.actions import router as actions_router
-    from .routers.email_agent_router import router as email_agent_router
-    from .routers.external_api_router import router as external_api_router
-    from .routers.chat_history_router import router as chat_history_router
-    from .routers.notifications_router import router as notifications_router
-    from .routers.telegram_router import router as telegram_router
-    from .services.chat import get_chat_service
-    from .services.prompt_customization import get_prompt_customization_service
-except ImportError:
-    # Fall back to absolute imports (when run directly)
-    from config.constants import PROMPT_CUSTOMIZATIONS_TAG
-    from config.settings import get_settings
-    from database.connection import get_db_connection
-    from database.supabase_client import get_supabase_client
-    from dependencies.agent_loader import get_agent_loader
-    from dependencies.auth import get_current_user
-    from models.chat import ChatRequest, ChatResponse
-    from models.prompt_customization import PromptCustomization, PromptCustomizationCreate
-    from models.webhook import SupabasePayload
-    from routers.actions import router as actions_router
-    from routers.email_agent_router import router as email_agent_router
-    from routers.external_api_router import router as external_api_router
-    from routers.chat_history_router import router as chat_history_router
-    from routers.notifications_router import router as notifications_router
-    from routers.telegram_router import router as telegram_router
-    from services.chat import get_chat_service
-    from services.prompt_customization import get_prompt_customization_service
+from .config.constants import PROMPT_CUSTOMIZATIONS_TAG
+from .config.settings import get_settings
+from .database.connection import get_db_connection
+from .database.supabase_client import get_supabase_client
+from .dependencies.agent_loader import get_agent_loader
+from .dependencies.auth import get_current_user
+from .models.chat import ChatRequest, ChatResponse
+from .models.prompt_customization import PromptCustomization, PromptCustomizationCreate
+from .models.webhook import SupabasePayload
+from .routers.actions import router as actions_router
+from .routers.email_agent_router import router as email_agent_router
+from .routers.external_api_router import router as external_api_router
+from .routers.chat_history_router import router as chat_history_router
+from .routers.notifications_router import router as notifications_router
+from .routers.telegram_router import router as telegram_router
+from .services.chat import get_chat_service
+from .services.prompt_customization import get_prompt_customization_service
 
 # Correctly import ConfigLoader
 # For V2 Agent Memory System
@@ -130,26 +96,14 @@ SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")  # Set this in your .env 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    try:
-        from .database.connection import get_database_manager
-        from .database.supabase_client import get_supabase_manager
-        from .services.agent_config_cache_service import initialize_agent_config_cache, shutdown_agent_config_cache
-        from .services.background_tasks import get_background_task_service
-        from .services.tool_cache_service import initialize_tool_cache, shutdown_tool_cache
-        from .services.user_instructions_cache_service import (
-            initialize_user_instructions_cache, shutdown_user_instructions_cache,
-        )
-    except ImportError:
-        from database.connection import get_database_manager
-        from database.supabase_client import get_supabase_manager
-        from services.agent_config_cache_service import (
-            initialize_agent_config_cache, shutdown_agent_config_cache,
-        )
-        from services.background_tasks import get_background_task_service
-        from services.tool_cache_service import initialize_tool_cache, shutdown_tool_cache
-        from services.user_instructions_cache_service import (
-            initialize_user_instructions_cache, shutdown_user_instructions_cache,
-        )
+    from .database.connection import get_database_manager
+    from .database.supabase_client import get_supabase_manager
+    from .services.agent_config_cache_service import initialize_agent_config_cache, shutdown_agent_config_cache
+    from .services.background_tasks import get_background_task_service
+    from .services.tool_cache_service import initialize_tool_cache, shutdown_tool_cache
+    from .services.user_instructions_cache_service import (
+        initialize_user_instructions_cache, shutdown_user_instructions_cache,
+    )
 
     global AGENT_EXECUTOR_CACHE
     logger.info("Application startup: Initializing resources...")
@@ -192,10 +146,7 @@ async def lifespan(app: FastAPI):
     # Initialize Telegram bot (optional — only if TELEGRAM_BOT_TOKEN is set)
     telegram_bot = None
     if settings.telegram_bot_token:
-        try:
-            from .channels.telegram_bot import initialize_telegram_bot
-        except ImportError:
-            from channels.telegram_bot import initialize_telegram_bot
+        from .channels.telegram_bot import initialize_telegram_bot
 
         telegram_bot = initialize_telegram_bot(settings.telegram_bot_token)
         # Give the bot access to the database for channel lookups

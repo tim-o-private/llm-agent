@@ -8,22 +8,13 @@ from typing import List
 import psycopg
 from fastapi import APIRouter, Depends, HTTPException, status
 
-try:
-    from ..database.connection import get_db_connection
-    from ..dependencies.auth import get_current_user
-    from ..models.external_api import (
-        ExternalAPIConnectionCreate,
-        ExternalAPIConnectionResponse,
-        ExternalAPIConnectionUpdate,
-    )
-except ImportError:
-    from database.connection import get_db_connection
-    from dependencies.auth import get_current_user
-    from models.external_api import (
-        ExternalAPIConnectionCreate,
-        ExternalAPIConnectionResponse,
-        ExternalAPIConnectionUpdate,
-    )
+from ..database.connection import get_db_connection
+from ..dependencies.auth import get_current_user
+from ..models.external_api import (
+    ExternalAPIConnectionCreate,
+    ExternalAPIConnectionResponse,
+    ExternalAPIConnectionUpdate,
+)
 
 logger = logging.getLogger(__name__)
 
