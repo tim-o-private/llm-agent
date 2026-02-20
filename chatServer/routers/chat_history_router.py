@@ -13,14 +13,9 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
-try:
-    from ..database.supabase_client import get_supabase_client
-    from ..dependencies.auth import get_current_user
-    from ..services.chat_history_service import ChatHistoryService
-except ImportError:
-    from database.supabase_client import get_supabase_client
-    from dependencies.auth import get_current_user
-    from services.chat_history_service import ChatHistoryService
+from ..database.supabase_client import get_supabase_client
+from ..dependencies.auth import get_current_user
+from ..services.chat_history_service import ChatHistoryService
 
 logger = logging.getLogger(__name__)
 

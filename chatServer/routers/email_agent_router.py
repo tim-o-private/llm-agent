@@ -8,13 +8,9 @@ from typing import Any, Dict
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-try:
-    from ..agents.email_digest_agent import EmailDigestAgent
-    from ..config.constants import DEFAULT_LOG_LEVEL
-    from ..dependencies.auth import get_current_user
-except ImportError:
-    from agents.email_digest_agent import EmailDigestAgent
-    from dependencies.auth import get_current_user
+from ..agents.email_digest_agent import EmailDigestAgent
+from ..config.constants import DEFAULT_LOG_LEVEL
+from ..dependencies.auth import get_current_user
 
 # Import existing utilities
 import os
@@ -22,12 +18,8 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../src'))
 
-try:
-    from utils.config_loader import ConfigLoader
-    from utils.logging_utils import get_logger
-except ImportError:
-    from src.utils.config_loader import ConfigLoader
-    from src.utils.logging_utils import get_logger
+from utils.config_loader import ConfigLoader
+from utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
 

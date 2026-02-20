@@ -145,10 +145,7 @@ async def handle_start(message: types.Message) -> None:
     bot_service = get_telegram_bot_service()
     if bot_service and bot_service._db_client:
         try:
-            try:
-                from ..services.telegram_linking_service import link_telegram_account
-            except ImportError:
-                from services.telegram_linking_service import link_telegram_account
+            from ..services.telegram_linking_service import link_telegram_account
 
             success = await link_telegram_account(
                 db_client=bot_service._db_client,
@@ -201,12 +198,8 @@ async def handle_approval_callback(callback: types.CallbackQuery) -> None:
 
         user_id = result.data["user_id"]
 
-        try:
-            from ..services.audit_service import AuditService
-            from ..services.pending_actions import PendingActionsService
-        except ImportError:
-            from services.audit_service import AuditService
-            from services.pending_actions import PendingActionsService
+        from ..services.audit_service import AuditService
+        from ..services.pending_actions import PendingActionsService
 
         audit_service = AuditService(bot_service._db_client)
         pending_service = PendingActionsService(
@@ -276,15 +269,10 @@ async def handle_message(message: types.Message) -> None:
         user_id = result.data["user_id"]
 
         # Route to assistant agent
-        try:
-            from ..security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
-            from ..services.audit_service import AuditService
-            from ..services.pending_actions import PendingActionsService
-        except ImportError:
-            from security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
-            from services.audit_service import AuditService
-            from services.pending_actions import PendingActionsService
-        from core.agent_loader_db import load_agent_executor_db
+        from ..security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
+        from ..services.audit_service import AuditService
+        from ..services.pending_actions import PendingActionsService
+        from src.core.agent_loader_db import load_agent_executor_db
 
         # Cross-channel session sharing: reuse most recent web session if one exists
         web_session_result = (
@@ -353,12 +341,8 @@ async def handle_message(message: types.Message) -> None:
             wrap_tools_with_approval(agent_executor.tools, approval_context)
 
         # Set up persistent memory and invoke agent within a DB connection scope
-        try:
-            from ..database.connection import get_database_manager
-            from ..config.constants import CHAT_MESSAGE_HISTORY_TABLE_NAME
-        except ImportError:
-            from database.connection import get_database_manager
-            from config.constants import CHAT_MESSAGE_HISTORY_TABLE_NAME
+        from ..database.connection import get_database_manager
+        from ..config.constants import CHAT_MESSAGE_HISTORY_TABLE_NAME
 
         db_manager = get_database_manager()
         await db_manager.ensure_initialized()
@@ -367,10 +351,7 @@ async def handle_message(message: types.Message) -> None:
             # Wire up memory so this turn is saved to the shared message store
             from langchain_postgres import PostgresChatMessageHistory
 
-            try:
-                from ..services.chat import AsyncConversationBufferWindowMemory
-            except ImportError:
-                from services.chat import AsyncConversationBufferWindowMemory
+            from ..services.chat import AsyncConversationBufferWindowMemory
 
             pg_history = PostgresChatMessageHistory(
                 CHAT_MESSAGE_HISTORY_TABLE_NAME,

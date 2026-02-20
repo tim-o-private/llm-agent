@@ -3,18 +3,9 @@
 import logging
 from typing import Any, Dict, List, Optional
 
-# Import with fallback for relative vs absolute imports
-try:
-    # Try relative imports first (when imported as a module)
-    from ..database.connection import get_database_manager
-    from .infrastructure_error_handler import handle_cache_errors, handle_database_errors
-    from .ttl_cache_service import TTLCacheService, get_ttl_cache_service, register_ttl_cache_service
-except ImportError:
-    # Fall back to absolute imports (when run directly)
-    from database.connection import get_database_manager
-
-    from services.infrastructure_error_handler import handle_cache_errors, handle_database_errors
-    from services.ttl_cache_service import TTLCacheService, register_ttl_cache_service
+from ..database.connection import get_database_manager
+from .infrastructure_error_handler import handle_cache_errors, handle_database_errors
+from .ttl_cache_service import TTLCacheService, get_ttl_cache_service, register_ttl_cache_service
 
 logger = logging.getLogger(__name__)
 

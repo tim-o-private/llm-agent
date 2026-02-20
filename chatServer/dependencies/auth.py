@@ -9,10 +9,7 @@ from typing import Optional
 from fastapi import HTTPException, Request, status
 from jose import JWTError, jwk, jwt
 
-try:
-    from ..config.settings import get_settings
-except ImportError:
-    from config.settings import get_settings
+from ..config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 

@@ -16,19 +16,20 @@ COPY chatServer/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY src /app/src
-COPY chatServer/ /app/
+COPY chatServer/ /app/chatServer/
 COPY config/ /app/config/
 COPY data/global_context /app/data/global_context
 
 EXPOSE 3001
-CMD ["python", "main.py"]
+CMD ["python", "-m", "chatServer.main"]
 ```
 
 Key points:
 - `PYTHONPATH="/app/src"` so `from core...` and `from utils...` imports work
 - `RUNNING_IN_DOCKER="true"` adjusts sys.path and .env loading in main.py
-- `COPY chatServer/ /app/` copies the entire chatServer package (main.py + all sub-packages)
-- `COPY config/ /app/config/` merges repo root config (agent YAMLs) alongside chatServer's Python config modules — no file conflicts
+- `COPY chatServer/ /app/chatServer/` preserves the package structure — `from chatServer.xxx` works identically to local dev
+- `COPY config/ /app/config/` is the repo-root agent YAML configs — separate from `chatServer/config/` (Python modules)
+- `CMD ["python", "-m", "chatServer.main"]` runs main.py as a module so relative imports work
 - `data/global_context` contains shared context files for agents
 
 ## Docker: webApp
@@ -165,7 +166,7 @@ supabase db push
 
 ## Known Deployment Issues
 
-1. **chatServer Dockerfile copies entire package** — `COPY chatServer/ /app/` then `COPY config/ /app/config/` merges agent YAML configs alongside Python config modules
+1. **chatServer is a proper Python package** — Dockerfile copies it as `/app/chatServer/` and runs `python -m chatServer.main`. All imports use relative (`from .xxx`) within the package. Never run `python -m chatServer.main` directly
 2. **webApp secrets are build-time** — changing VITE_ vars requires a rebuild, not just a restart
 3. **Auto-stop machines** — first request after idle has cold start latency (~2-5s for chatServer)
 4. **CORS** — production CORS origins must be updated in `chatServer/main.py` when domains change
@@ -192,7 +193,7 @@ The `--config` and `--dockerfile` flags must both be specified when running from
 ```bash
 # 1. Start both services locally
 source .venv/bin/activate
-python chatServer/main.py &
+python -m chatServer.main &
 cd webApp && pnpm dev &
 
 # 2. Run Python integration tests

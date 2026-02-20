@@ -11,24 +11,14 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-try:
-    from ..channels.telegram_bot import get_telegram_bot_service
-    from ..database.supabase_client import get_supabase_client
-    from ..dependencies.auth import get_current_user
-    from ..services.telegram_linking_service import (
-        create_linking_token,
-        get_telegram_status,
-        unlink_telegram_account,
-    )
-except ImportError:
-    from channels.telegram_bot import get_telegram_bot_service
-    from database.supabase_client import get_supabase_client
-    from dependencies.auth import get_current_user
-    from services.telegram_linking_service import (
-        create_linking_token,
-        get_telegram_status,
-        unlink_telegram_account,
-    )
+from ..channels.telegram_bot import get_telegram_bot_service
+from ..database.supabase_client import get_supabase_client
+from ..dependencies.auth import get_current_user
+from ..services.telegram_linking_service import (
+    create_linking_token,
+    get_telegram_status,
+    unlink_telegram_account,
+)
 
 logger = logging.getLogger(__name__)
 

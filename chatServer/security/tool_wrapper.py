@@ -11,16 +11,10 @@ from typing import Optional
 
 from langchain_core.tools import BaseTool
 
-try:
-    from ..security.approval_tiers import (
-        ApprovalTier,
-        get_effective_tier,
-    )
-except ImportError:
-    from security.approval_tiers import (
-        ApprovalTier,
-        get_effective_tier,
-    )
+from ..security.approval_tiers import (
+    ApprovalTier,
+    get_effective_tier,
+)
 
 logger = logging.getLogger(__name__)
 

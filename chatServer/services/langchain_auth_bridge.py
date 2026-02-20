@@ -12,10 +12,7 @@ from typing import List, Optional, Tuple
 import psycopg
 from google.oauth2.credentials import Credentials
 
-try:
-    from ..database.connection import get_db_connection
-except ImportError:
-    from database.connection import get_db_connection
+from ..database.connection import get_db_connection
 
 logger = logging.getLogger(__name__)
 

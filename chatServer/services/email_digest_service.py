@@ -5,10 +5,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-try:
-    from .email_digest_storage_service import get_email_digest_storage_service
-except ImportError:
-    from services.email_digest_storage_service import get_email_digest_storage_service
+from .email_digest_storage_service import get_email_digest_storage_service
 from src.core.agent_loader_db import load_agent_executor_db
 from supabase import Client as SupabaseClient
 from supabase import create_client
