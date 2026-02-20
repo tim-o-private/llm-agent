@@ -463,8 +463,8 @@ def load_agent_executor_db(
         agent_name: The name of the agent to load (must match 'agent_name' in DB).
         user_id: The ID of the current user, for data scoping and context.
         session_id: The active session ID, for short-term memory and context.
-        supabase_url: Supabase project URL. Defaults to VITE_SUPABASE_URL env var.
-        supabase_key: Supabase service key. Defaults to SUPABASE_SERVICE_KEY env var.
+        supabase_url: Supabase project URL. Defaults to SUPABASE_URL env var.
+        supabase_key: Supabase service key. Defaults to SUPABASE_SERVICE_ROLE_KEY env var.
         log_level: Desired logging level for the logger instance used by the executor.
         use_cache: Whether to use the tool cache service for improved performance. Defaults to True.
 
@@ -477,10 +477,10 @@ def load_agent_executor_db(
     """
     logger.setLevel(log_level)
 
-    effective_supabase_url = supabase_url or os.getenv("VITE_SUPABASE_URL")
-    effective_supabase_key = supabase_key or os.getenv("SUPABASE_SERVICE_KEY")
+    effective_supabase_url = supabase_url or os.getenv("SUPABASE_URL")
+    effective_supabase_key = supabase_key or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
     if not effective_supabase_url or not effective_supabase_key:
-        raise ValueError("Supabase URL and Service Key must be provided either as arguments or environment variables (VITE_SUPABASE_URL, SUPABASE_SERVICE_KEY).")
+        raise ValueError("Supabase URL and Service Key must be provided either as arguments or environment variables (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY).")
 
     db: SupabaseClient = create_client(effective_supabase_url, effective_supabase_key)
 
@@ -704,8 +704,8 @@ async def load_agent_executor_db_async(
 
     logger.setLevel(log_level)
 
-    effective_supabase_url = supabase_url or os.getenv("VITE_SUPABASE_URL")
-    effective_supabase_key = supabase_key or os.getenv("SUPABASE_SERVICE_KEY")
+    effective_supabase_url = supabase_url or os.getenv("SUPABASE_URL")
+    effective_supabase_key = supabase_key or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
     if not effective_supabase_url or not effective_supabase_key:
         raise ValueError("Supabase URL and Service Key must be provided either as arguments or environment variables.")
 
