@@ -79,6 +79,12 @@ flyctl logs -a clarity-webapp
 
 **webApp vars are injected at build time** via Docker `ARG` in `.github/workflows/fly-deploy.yml`. These are GitHub repo secrets (not Fly secrets). They are NOT truly secret — they're baked into the JS bundle.
 
+## Key Gotchas
+
+1. **Fly deploy from repo root** — `fly.toml` lives in `chatServer/` and `webApp/`. Deploy with `flyctl deploy --config <app>/fly.toml --dockerfile <app>/Dockerfile`.
+2. **CORS** — Both frontend ports must be in `settings.cors_origins` in `chatServer/main.py`.
+3. **Telegram: one bot = one webhook URL** — Running locally with prod bot token steals the webhook from production. Use separate bot tokens per environment.
+
 ## Detailed Reference
 
 For Dockerfiles, fly.toml configs, API routing (dev proxy vs production), Supabase environment management, and CI/CD plans, see [reference.md](reference.md).

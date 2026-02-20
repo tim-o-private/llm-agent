@@ -66,11 +66,48 @@ Two patterns exist for agent tools. Choose based on the resource characteristics
 
 **CRUDTool pattern**: configured entirely via `agent_tools` JSONB. See `src/core/tools/crud_tool.py`. Appropriate for simple flat-table operations.
 
+## Recipe: Add a New Tool (End-to-End)
+
+Per A6 (tools are the unit of agent capability):
+
+1. **DB row:** Insert into `agent_tools` with `agent_id` UUID FK, tool `name` (verb_resource per A10), `description`, `config` JSONB
+2. **Service:** Create `chatServer/services/<resource>_service.py` with business logic (per A1)
+3. **Tool class:** Create `chatServer/tools/<resource>_tools.py` — `BaseTool` subclass calling the service
+4. **Registry:** Register in `chatServer/tools/__init__.py` or via `agent_tools` DB config
+5. **Tests:** `tests/chatServer/tools/test_<resource>_tools.py` + `tests/chatServer/services/test_<resource>_service.py`
+6. **Agent config:** Add tool name to agent's `tool_names` array in `agent_configurations`
+
+Reference implementations: `task_tools.py`/`task_service.py`, `reminder_tools.py`/`reminder_service.py`
+
+## Recipe: Add a New API Endpoint
+
+Per A1 (thin routers, fat services):
+
+1. **Router:** `chatServer/routers/<resource>_router.py` — `Depends(get_current_user)`, delegates to service
+2. **Service:** `chatServer/services/<resource>_service.py` — business logic, DB calls
+3. **Models:** `chatServer/models/<resource>.py` — Pydantic request/response schemas
+4. **Register:** Add router to `chatServer/main.py` with appropriate prefix
+5. **Tests:** `tests/chatServer/routers/test_<resource>_router.py` + service tests
+6. **Frontend hook:** (handed off to frontend-dev) `webApp/src/api/hooks/use<Resource>Hooks.ts`
+
+## Data Plane Guidance (A3)
+
+| Use Supabase REST+RLS when... | Use PostgreSQL (psycopg) when... |
+|-------------------------------|----------------------------------|
+| User CRUD operations | High-volume reads/writes |
+| RLS handles authorization | Framework operations (LangChain message history) |
+| Simple queries (select, insert, update) | Complex joins or CTEs |
+| Frontend-initiated operations | Background/scheduled jobs |
+
 ## Key Gotchas
 
 1. **ES256 tokens** — Supabase issues ES256, not HS256. Don't revert auth.py to HS256-only.
 2. **Content block lists** — Newer `langchain-anthropic` returns `[{"text": "...", "type": "text"}]`. Normalize in chat.py.
 3. **Auth token source** — Frontend must use `supabase.auth.getSession()`, not Zustand.
+4. **Supabase client timing** — May not be initialized when agent tools are first wrapped. Non-fatal warning.
+5. **AgentExecutor.agent must not be replaced** — Use `self.agent.runnable = new_runnable`, not `self.agent = new_runnable_sequence`. Bypasses Pydantic validator, strips `aplan()`.
+6. **Settings created before load_dotenv()** — Call `settings.reload_from_env()` after `load_dotenv()` in main.py.
+7. **PostgREST upsert requires real UNIQUE constraint** — Partial unique indexes don't work with Supabase `ON CONFLICT`. Use select-then-insert if needed.
 
 ## Detailed Reference
 

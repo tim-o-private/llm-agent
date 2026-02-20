@@ -50,6 +50,25 @@ import { Button } from '@radix-ui/themes';  // FORBIDDEN
 
 This app targets users with ADHD. Prioritize: calm & minimal, clear hierarchy, low friction, encouraging tone, predictable behavior.
 
+## Recipe: Add a New Page
+
+Per A10 (naming predictable from domain model) and F2 (architecture makes standards self-evident):
+
+1. **Page component:** `webApp/src/pages/<Name>Page.tsx`
+2. **Route:** Add to router config in `webApp/src/App.tsx` (or equivalent routing file)
+3. **Navigation:** Add to `webApp/src/components/navigation/` nav config
+4. **Hooks:** If new API data needed: `webApp/src/api/hooks/use<Name>Hooks.ts` (React Query, per A4)
+5. **Tests:** `webApp/src/pages/<Name>Page.test.tsx`
+
+Auth guard: wrap with auth check if route requires login (per A5).
+
+## Key Gotchas
+
+1. **Frontend API base URL** — Use `import.meta.env.VITE_API_BASE_URL || ''`, never `VITE_API_URL`.
+2. **Supabase env vars** — Frontend reads `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (VITE_ prefix required).
+3. **Color validation disabled** — `validate-colors.js` exists but is removed from build. Don't re-enable without review.
+4. **`.gitignore` `lib/` rule** — Root `.gitignore` has `lib/`. `webApp/src/lib/` is negated. New `lib/` directories elsewhere need similar negation.
+
 ## Detailed Reference
 
 For full patterns with code examples (color tokens, React Query, auth, forms, accessibility, keyboard shortcuts, animations), see [reference.md](reference.md).
