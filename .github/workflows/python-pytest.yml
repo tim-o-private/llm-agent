@@ -4,6 +4,13 @@ on:
   pull_request:
     branches:
       - main
+    paths:
+      - 'chatServer/**'
+      - 'src/**'
+      - 'tests/**'
+      - 'requirements.txt'
+      - 'chatServer/requirements.txt'
+      - '.github/workflows/python-pytest.yml'
 
 jobs:
   test:

@@ -5,6 +5,10 @@ on:
     branches:
       - main
       - develop
+    paths:
+      - 'webApp/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/ci-tests.yml'
 
 jobs:
   test:
