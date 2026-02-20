@@ -140,7 +140,9 @@ The `get_current_user` dependency extracts `sub` from the JWT payload.
 | `webApp/src/features/auth/useAuthStore.ts` | Auth state (Zustand) |
 | `webApp/src/lib/supabaseClient.ts` | Supabase client singleton |
 | `webApp/tailwind.config.js` | Semantic color tokens |
-| `supabase/migrations/` | Database schema history |
+| `supabase/schema.sql` | **Current production DDL** (auto-generated, gitignored). Read this first for DB work. |
+| `scripts/dump-schema.sh` | Regenerates `supabase/schema.sql` from live Supabase. Run before DB work. |
+| `supabase/migrations/` | Database schema history (incremental diffs, may be incomplete) |
 | `tests/uat/conftest.py` | UAT shared fixtures (authenticated_client, supabase_fixture) |
 | `tests/uat/fixtures/supabase_fixture.py` | Stateful in-memory Supabase mock for flow tests |
 

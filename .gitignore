@@ -190,3 +190,6 @@ node_modules
 
 # Repomix output
 .repomix-output.txt
+
+# Generated schema dump (re-generate: ./scripts/dump-schema.sh)
+supabase/schema.sql

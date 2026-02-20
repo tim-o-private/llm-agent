@@ -32,9 +32,10 @@ Full toolset: Read, Write, Edit, Bash, Glob, Grep, TaskList, TaskGet, TaskUpdate
 
 1. Read the spec file the orchestrator referenced
 2. Read the relevant skills listed above
-3. Read the **contract** in the task description — it tells you what DB schema is available and what API contract to expose
-4. Verify you're in the correct worktree directory: `pwd`
-5. Verify you're on the correct branch: `git branch --show-current`
+3. **Read `supabase/schema.sql`** for current production DDL (tables, columns, types, RLS)
+4. Read the **contract** in the task description — it tells you what DB schema is available and what API contract to expose
+5. Verify you're in the correct worktree directory: `pwd`
+6. Verify you're on the correct branch: `git branch --show-current`
 
 ## Workflow
 
