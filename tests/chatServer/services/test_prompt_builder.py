@@ -20,10 +20,11 @@ class TestBuildAgentPrompt:
         assert "## Soul\nBe helpful." in result
         assert "## Channel" in result
         assert "## Current Time" in result
-        assert "## Memory" in result
         assert "## User Instructions" in result
         # Identity section should be absent when identity is None
         assert "## Identity" not in result
+        # Memory section is gone (replaced with What You Know)
+        assert "## Memory" not in result
 
     def test_all_sections_populated(self):
         """All sections present when every input is provided."""
@@ -122,11 +123,6 @@ class TestBuildAgentPrompt:
         )
         assert "UTC" in result
 
-    def test_memory_section_always_present(self):
-        result = build_agent_prompt(soul="x", identity=None, channel="web", user_instructions=None)
-        assert "read_memory" in result
-        assert "save_memory" in result
-        assert "IMPORTANT" in result
 
     def test_no_user_instructions(self):
         result = build_agent_prompt(soul="x", identity=None, channel="web", user_instructions=None)
@@ -253,7 +249,7 @@ class TestBuildAgentPrompt:
         )
         sections = [
             "## Identity", "## Soul", "## Channel", "## Current Time",
-            "## Memory", "## User Instructions", "## Tool Guidance",
+            "## User Instructions", "## Tool Guidance",
         ]
         positions = [result.index(s) for s in sections]
         assert positions == sorted(positions), "Sections are not in the expected order"
@@ -334,3 +330,79 @@ class TestBuildAgentPrompt:
         guidance_pos = result.index("## Tool Guidance")
         onboarding_pos = result.index("## Onboarding")
         assert onboarding_pos > guidance_pos
+
+    # --- What You Know (pre-loaded memory) ---
+
+    def test_memory_notes_creates_what_you_know_section(self):
+        """build_agent_prompt(memory_notes='...') produces ## What You Know section."""
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="web",
+            user_instructions=None, memory_notes="user likes cats"
+        )
+        assert "## What You Know" in result
+        assert "user likes cats" in result
+        assert "These are your accumulated notes about this user:" in result
+
+    def test_memory_notes_none_no_what_you_know(self):
+        """build_agent_prompt(memory_notes=None) does NOT produce ## What You Know."""
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="web",
+            user_instructions=None, memory_notes=None
+        )
+        assert "## What You Know" not in result
+
+    def test_memory_notes_empty_no_what_you_know(self):
+        """build_agent_prompt(memory_notes='') does NOT produce ## What You Know."""
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="web",
+            user_instructions=None, memory_notes=""
+        )
+        assert "## What You Know" not in result
+
+    def test_onboarding_with_memory_notes(self):
+        """Onboarding not triggered when memory_notes is present."""
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="web",
+            user_instructions=None, memory_notes="notes"
+        )
+        assert "## Onboarding" not in result
+        assert "## What You Know" in result
+
+    def test_onboarding_with_empty_memory_no_instructions_web(self):
+        """Onboarding triggered on web when memory_notes=None and user_instructions=None."""
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="web",
+            user_instructions=None, memory_notes=None
+        )
+        assert "## Onboarding" in result
+        assert "## What You Know" not in result
+
+    def test_memory_section_constant_removed(self):
+        """MEMORY_SECTION constant no longer exists on the module."""
+        from chatServer.services import prompt_builder
+        assert not hasattr(prompt_builder, "MEMORY_SECTION")
+
+    def test_memory_notes_truncated_at_4000(self):
+        """Memory notes truncated at 4000 characters."""
+        long_notes = "a" * 4500 + "MARKER_NOT_IN_TRUNCATED"
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="web",
+            user_instructions=None, memory_notes=long_notes
+        )
+        # First 4000 chars should be present
+        assert "a" * 4000 in result
+        # Marker after position 4000 should not appear
+        assert "MARKER_NOT_IN_TRUNCATED" not in result
+
+    def test_tool_guidance_comes_from_tools_not_memory_section(self):
+        """Memory tool guidance comes from Tool Guidance section, not hardcoded."""
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="web",
+            user_instructions=None, memory_notes=None
+        )
+        # Old MEMORY_SECTION had "read_memory" and "save_memory" strings
+        # But they should no longer appear in a hardcoded memory section
+        # (they may appear from Tool Guidance if tools are provided)
+        assert "## Memory" not in result
+        # The old memory section guidance should be gone
+        assert "IMPORTANT: Before answering any question" not in result

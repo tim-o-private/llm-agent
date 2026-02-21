@@ -31,15 +31,6 @@ ONBOARDING_SECTION = (
     "Keep it conversational — you can learn more over time."
 )
 
-MEMORY_SECTION = (
-    "You have long-term memory via the read_memory and save_memory tools.\n"
-    "IMPORTANT: Before answering any question about the user's preferences, past conversations, "
-    "ongoing projects, or anything you were previously told to remember — call read_memory FIRST. "
-    "Do not guess from the conversation. Check your memory.\n"
-    "When the user tells you something to remember, call save_memory immediately."
-)
-
-
 def build_agent_prompt(
     soul: str,
     identity: dict | None,
@@ -87,8 +78,13 @@ def build_agent_prompt(
     now = _get_current_time(timezone)
     sections.append(f"## Current Time\n{now}")
 
-    # 5. Memory
-    sections.append(f"## Memory\n{MEMORY_SECTION}")
+    # 5. What You Know (pre-loaded memory)
+    if memory_notes:
+        truncated_notes = memory_notes[:4000]
+        sections.append(
+            f"## What You Know\n"
+            f"These are your accumulated notes about this user:\n{truncated_notes}"
+        )
 
     # 6. User Instructions
     if user_instructions:
