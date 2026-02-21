@@ -3,25 +3,13 @@ name: Claude Code Review
 on:
   pull_request:
     types: [opened, synchronize, ready_for_review, reopened]
-    # Optional: Only run on specific file changes
-    # paths:
-    #   - "src/**/*.ts"
-    #   - "src/**/*.tsx"
-    #   - "src/**/*.js"
-    #   - "src/**/*.jsx"
 
 jobs:
   claude-review:
-    # Optional: Filter by PR author
-    # if: |
-    #   github.event.pull_request.user.login == 'external-contributor' ||
-    #   github.event.pull_request.user.login == 'new-developer' ||
-    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
-
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write
       issues: read
       id-token: write
 
@@ -36,9 +24,26 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
-          plugins: 'code-review@claude-code-plugins'
-          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
-          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://code.claude.com/docs/en/cli-reference for available options
+          prompt: |
+            Review this PR against the project's architecture principles and spec.
 
+            Steps:
+            1. Read `.claude/skills/architecture-principles/reference.md` for the full principles (S1-S7, F1-F2, A1-A14).
+            2. Extract the SPEC number from the branch name (e.g. `feat/SPEC-015-*` → SPEC-015). If a matching spec exists in `docs/sdlc/specs/`, read it and check that all Acceptance Criteria are implemented.
+            3. Review the PR diff for violations.
+
+            Check for:
+            - **Spec compliance**: every AC in the spec is addressed (if a spec exists)
+            - **A1**: No business logic or DB queries in routers
+            - **A8**: New tables have RLS enabled and `is_record_owner()` policy
+            - **A9**: No `agent_name TEXT` — use UUID FK references
+            - **A6**: New agent capabilities use `BaseTool` subclass + `agent_tools` DB row
+            - **A10**: File naming follows `entity_service.py`, `entity_router.py`, `useEntityHooks.ts`
+            - **S1**: New service/tool files have corresponding test files
+            - **A3**: User CRUD uses Supabase client (not raw psycopg); framework ops use pg connection
+            - **A5**: Frontend hooks use `supabase.auth.getSession()`, not Zustand store
+
+            Post your findings as a PR review comment using `gh pr review` with:
+            - **APPROVED** if no issues found
+            - **BLOCKERS** listing each violation with its principle ID (e.g. `A8: reminders table missing RLS`)
+            - **NOTES** for non-blocking observations
