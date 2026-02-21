@@ -97,7 +97,7 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({ onConnectionCh
   const getStatusBadge = () => {
     if (isCheckingStatus || disconnectMutation.isPending || revokeAllMutation.isPending) {
       return (
-        <Badge className="flex items-center gap-1 bg-gray-100 text-gray-700">
+        <Badge className="flex items-center gap-1 bg-bg-neutral-subtle text-text-secondary">
           <Loader2 className="h-3 w-3 animate-spin" />
           {disconnectMutation.isPending || revokeAllMutation.isPending ? 'Disconnecting...' : 'Checking...'}
         </Badge>
@@ -106,7 +106,7 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({ onConnectionCh
 
     if (hasAccounts) {
       return (
-        <Badge className="flex items-center gap-1 bg-green-100 text-green-800">
+        <Badge className="flex items-center gap-1 bg-bg-success-subtle text-text-success-strong">
           <CheckCircle className="h-3 w-3" />
           {accountCount} of {MAX_GMAIL_ACCOUNTS} connected
         </Badge>
@@ -114,7 +114,7 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({ onConnectionCh
     }
 
     return (
-      <Badge className="flex items-center gap-1 bg-yellow-100 text-yellow-800">
+      <Badge className="flex items-center gap-1 bg-bg-warning-subtle text-text-warning-strong">
         <AlertCircle className="h-3 w-3" />
         Not Connected
       </Badge>
@@ -130,19 +130,19 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({ onConnectionCh
       <div className="mb-4">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
-            <Mail className="h-5 w-5 text-blue-600" />
-            <h3 className="text-lg font-semibold">Gmail Accounts</h3>
+            <Mail className="h-5 w-5 text-text-accent" />
+            <h3 className="text-lg font-semibold text-text-primary">Gmail Accounts</h3>
           </div>
           {getStatusBadge()}
         </div>
-        <p className="text-gray-600 text-sm">
+        <p className="text-text-secondary text-sm">
           Connect up to {MAX_GMAIL_ACCOUNTS} Gmail accounts for comprehensive email digest and search.
         </p>
       </div>
 
       <div className="space-y-4">
         {hasError && (
-          <div className="p-4 rounded-lg border border-red-200 bg-red-50 text-red-800 flex items-start gap-3">
+          <div className="p-4 rounded-lg border border-border-destructive bg-bg-destructive-subtle text-text-destructive flex items-start gap-3">
             <AlertCircle className="h-4 w-4 mt-0.5" />
             <div className="text-sm">{errorMessage}</div>
           </div>
@@ -154,13 +154,13 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({ onConnectionCh
             {gmailAccounts.map((account) => (
               <div
                 key={account.id}
-                className="flex items-center justify-between p-3 rounded-lg border border-gray-200 bg-gray-50"
+                className="flex items-center justify-between p-3 rounded-lg border border-ui-border bg-ui-bg-alt"
               >
                 <div className="flex items-center gap-2">
-                  <Mail className="h-4 w-4 text-gray-500" />
+                  <Mail className="h-4 w-4 text-text-muted" />
                   <div>
-                    <div className="text-sm font-medium">{account.service_user_email || 'Unknown email'}</div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-sm font-medium text-text-primary">{account.service_user_email || 'Unknown email'}</div>
+                    <div className="text-xs text-text-muted">
                       Connected {new Date(account.created_at).toLocaleDateString()}
                     </div>
                   </div>
@@ -185,7 +185,7 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({ onConnectionCh
 
         {/* Loading state */}
         {isLoadingAccounts && hasAccounts && (
-          <div className="flex items-center gap-2 text-sm text-gray-500">
+          <div className="flex items-center gap-2 text-sm text-text-muted">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading accounts...
           </div>
