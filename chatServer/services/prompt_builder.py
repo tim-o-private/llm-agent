@@ -4,16 +4,30 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 CHANNEL_GUIDANCE = {
-    "web": "User is on the web app. Markdown formatting is supported.",
-    "telegram": "User is on Telegram. Keep responses concise. No complex markdown.",
+    "web": (
+        "User is on the web app. Markdown formatting is supported. "
+        "This is an interactive conversation — respond to what the user says, "
+        "ask clarifying questions when needed."
+    ),
+    "telegram": (
+        "User is on Telegram. Keep responses concise — under 4096 characters. "
+        "Use simple markdown (bold, italic, code). No tables or complex formatting. "
+        "This is an interactive conversation."
+    ),
     "scheduled": (
-        "This is an automated scheduled run. No one is waiting for a response. "
-        "Be thorough but don't ask follow-up questions — just do the work and report results."
+        "This is an automated scheduled run. No one is waiting for a response.\n"
+        "- Do the work described in the prompt thoroughly.\n"
+        "- Use all available tools to gather information before composing your response.\n"
+        "- Don't ask follow-up questions — make reasonable assumptions.\n"
+        "- Your response will be delivered as a notification, so make it self-contained."
     ),
     "heartbeat": (
-        "This is an automated heartbeat check. No one is waiting for a response. "
-        "Check each item on your checklist using tools. If nothing needs attention, "
-        "respond with exactly: HEARTBEAT_OK. Otherwise, report only what needs action."
+        "This is an automated heartbeat check. No one is waiting for a response.\n"
+        "Your job: check each area using your tools, then decide if anything needs the user's attention.\n"
+        "- Use tools to actively check state (tasks, emails, reminders) — don't guess.\n"
+        "- If everything is fine, respond with exactly: HEARTBEAT_OK\n"
+        "- If something needs attention, report ONLY what needs action — no filler.\n"
+        "- Never fabricate information. If a tool fails, skip that check and note the failure."
     ),
 }
 

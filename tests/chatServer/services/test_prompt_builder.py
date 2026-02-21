@@ -98,7 +98,7 @@ class TestBuildAgentPrompt:
     def test_channel_scheduled(self):
         result = build_agent_prompt(soul="x", identity=None, channel="scheduled", user_instructions=None)
         assert "automated scheduled run" in result
-        assert "don't ask follow-up" in result
+        assert "Don't ask follow-up questions" in result
 
     def test_channel_unknown_falls_back_to_web(self):
         result = build_agent_prompt(soul="x", identity=None, channel="unknown_channel", user_instructions=None)
@@ -406,3 +406,35 @@ class TestBuildAgentPrompt:
         assert "## Memory" not in result
         # The old memory section guidance should be gone
         assert "IMPORTANT: Before answering any question" not in result
+
+    # --- Channel Guidance (FU-4) ---
+
+    def test_channel_guidance_heartbeat_contains_heartbeat_ok(self):
+        """CHANNEL_GUIDANCE['heartbeat'] contains 'HEARTBEAT_OK'."""
+        from chatServer.services.prompt_builder import CHANNEL_GUIDANCE
+        assert "HEARTBEAT_OK" in CHANNEL_GUIDANCE["heartbeat"]
+
+    def test_channel_guidance_heartbeat_contains_use_tools(self):
+        """CHANNEL_GUIDANCE['heartbeat'] contains 'Use tools'."""
+        from chatServer.services.prompt_builder import CHANNEL_GUIDANCE
+        assert "Use tools" in CHANNEL_GUIDANCE["heartbeat"]
+
+    def test_channel_guidance_scheduled_contains_notification(self):
+        """CHANNEL_GUIDANCE['scheduled'] contains 'notification'."""
+        from chatServer.services.prompt_builder import CHANNEL_GUIDANCE
+        assert "notification" in CHANNEL_GUIDANCE["scheduled"]
+
+    def test_channel_guidance_scheduled_contains_dont_ask_follow_up(self):
+        """CHANNEL_GUIDANCE['scheduled'] contains 'Don't ask follow-up questions'."""
+        from chatServer.services.prompt_builder import CHANNEL_GUIDANCE
+        assert "Don't ask follow-up questions" in CHANNEL_GUIDANCE["scheduled"]
+
+    def test_channel_guidance_web_contains_interactive(self):
+        """CHANNEL_GUIDANCE['web'] contains 'interactive'."""
+        from chatServer.services.prompt_builder import CHANNEL_GUIDANCE
+        assert "interactive" in CHANNEL_GUIDANCE["web"]
+
+    def test_channel_guidance_telegram_contains_4096(self):
+        """CHANNEL_GUIDANCE['telegram'] contains '4096'."""
+        from chatServer.services.prompt_builder import CHANNEL_GUIDANCE
+        assert "4096" in CHANNEL_GUIDANCE["telegram"]
