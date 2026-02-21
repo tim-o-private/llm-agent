@@ -4,19 +4,9 @@ import sys
 from contextlib import asynccontextmanager
 from typing import List
 
-# Correctly import ConfigLoader
-# For V2 Agent Memory System
-import psycopg
-
-# NEW: Agent Executor Cache
-from cachetools import TTLCache
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-
-# Import agent_loader
-from core.agents.customizable_agent import CustomizableAgentExecutor  # Added import
-from utils.config_loader import ConfigLoader
 
 from .config.constants import PROMPT_CUSTOMIZATIONS_TAG
 from .config.settings import get_settings
@@ -28,14 +18,25 @@ from .models.chat import ChatRequest, ChatResponse
 from .models.prompt_customization import PromptCustomization, PromptCustomizationCreate
 from .models.webhook import SupabasePayload
 from .routers.actions import router as actions_router
-from .routers.chat_history_router import router as chat_history_router
 from .routers.email_agent_router import router as email_agent_router
 from .routers.external_api_router import router as external_api_router
+from .routers.chat_history_router import router as chat_history_router
 from .routers.notifications_router import router as notifications_router
 from .routers.oauth_router import router as oauth_router
 from .routers.telegram_router import router as telegram_router
 from .services.chat import get_chat_service
 from .services.prompt_customization import get_prompt_customization_service
+
+# Correctly import ConfigLoader
+# For V2 Agent Memory System
+import psycopg
+
+# NEW: Agent Executor Cache
+from cachetools import TTLCache
+
+# Import agent_loader
+from core.agents.customizable_agent import CustomizableAgentExecutor  # Added import
+from utils.config_loader import ConfigLoader
 
 # Cache for (user_id, agent_name) -> CustomizableAgentExecutor
 AGENT_EXECUTOR_CACHE: TTLCache[tuple[str, str], CustomizableAgentExecutor] = TTLCache(maxsize=100, ttl=900)
@@ -64,11 +65,7 @@ else:
     project_root_for_env = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     dotenv_path = os.path.join(project_root_for_env, '.env')
     if os.path.exists(dotenv_path):
-        try:
-            load_dotenv(dotenv_path, override=True)
-        except PermissionError:
-            # If .env file is not readable, continue without it (e.g., in test environments)
-            pass
+        load_dotenv(dotenv_path, override=True)
     add_project_root_to_path_for_local_dev()
 
 # Re-read settings now that .env has been loaded (Settings was created before load_dotenv)
@@ -106,8 +103,7 @@ async def lifespan(app: FastAPI):
     from .services.background_tasks import get_background_task_service
     from .services.tool_cache_service import initialize_tool_cache, shutdown_tool_cache
     from .services.user_instructions_cache_service import (
-        initialize_user_instructions_cache,
-        shutdown_user_instructions_cache,
+        initialize_user_instructions_cache, shutdown_user_instructions_cache,
     )
 
     global AGENT_EXECUTOR_CACHE
@@ -223,7 +219,7 @@ app.include_router(telegram_router)
 # --- Logger setup ---
 # Ensure logger is available if not already globally configured
 # This can be more sophisticated, e.g., using utils.logging_utils.get_logger
-from utils.logging_utils import get_logger  # noqa: E402
+from utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
 
@@ -274,7 +270,7 @@ async def create_prompt_customization(
         supabase_client=db
     )
 
-@app.get("/api/agent/prompt_customizations/{agent_name}", response_model=List[PromptCustomization], tags=[PROMPT_CUSTOMIZATIONS_TAG])  # noqa: E501
+@app.get("/api/agent/prompt_customizations/{agent_name}", response_model=List[PromptCustomization], tags=[PROMPT_CUSTOMIZATIONS_TAG])
 async def get_prompt_customizations_for_agent(
     agent_name: str,
     user_id: str = Depends(get_current_user),
@@ -288,7 +284,7 @@ async def get_prompt_customizations_for_agent(
         supabase_client=db
     )
 
-@app.put("/api/agent/prompt_customizations/{customization_id}", response_model=PromptCustomization, tags=[PROMPT_CUSTOMIZATIONS_TAG])  # noqa: E501
+@app.put("/api/agent/prompt_customizations/{customization_id}", response_model=PromptCustomization, tags=[PROMPT_CUSTOMIZATIONS_TAG])
 async def update_prompt_customization(
     customization_id: str,
     customization_data: PromptCustomizationCreate, # Re-use create model, user_id is fixed by RLS
@@ -329,7 +325,7 @@ async def get_tasks(request: Request, db = Depends(get_supabase_client)): # This
             # This handles cases where the query was successful but returned no data or unexpected structure
             if hasattr(response, 'error') and response.error:
                  print(f"Error fetching tasks: {response.error}")
-                 raise HTTPException(status_code=500, detail=str(response.error.message if response.error.message else "Error fetching tasks"))  # noqa: E501
+                 raise HTTPException(status_code=500, detail=str(response.error.message if response.error.message else "Error fetching tasks"))
             return [] # Return empty list if no data and no specific error
 
     except HTTPException as e:
