@@ -84,7 +84,7 @@ class EmailDigestTool(BaseTool):
             Email digest summary as formatted string
         """
         try:
-            logger.info(f"Generating email digest for user {self.user_id}: {hours_back}h back, include_read={include_read}")
+            logger.info(f"Generating email digest for user {self.user_id}: {hours_back}h back, include_read={include_read}")  # noqa: E501
 
             # Lazy import to avoid circular dependency
             from ..services.email_digest_service import EmailDigestService
