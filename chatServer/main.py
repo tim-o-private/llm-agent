@@ -65,7 +65,11 @@ else:
     project_root_for_env = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     dotenv_path = os.path.join(project_root_for_env, '.env')
     if os.path.exists(dotenv_path):
-        load_dotenv(dotenv_path, override=True)
+        try:
+            load_dotenv(dotenv_path, override=True)
+        except PermissionError:
+            # If .env file is not readable, continue without it (e.g., in test environments)
+            pass
     add_project_root_to_path_for_local_dev()
 
 # Re-read settings now that .env has been loaded (Settings was created before load_dotenv)
