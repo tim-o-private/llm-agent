@@ -46,7 +46,7 @@ def build_agent_prompt(
     channel: str,
     user_instructions: str | None,
     timezone: str | None = None,
-    tool_names: list[str] | None = None,
+    tools: list | None = None,
     memory_notes: str | None = None,
 ) -> str:
     """Assemble the agent system prompt from layered sections.
@@ -57,7 +57,7 @@ def build_agent_prompt(
         channel: "web", "telegram", or "scheduled".
         user_instructions: Free-text user instructions or None.
         timezone: IANA timezone string (e.g. "America/New_York") or None.
-        tool_names: List of available tool names for reference.
+        tools: List of instantiated tool objects (will call prompt_section() on each).
         memory_notes: LTM notes string or None. Used for onboarding detection.
 
     Returns:
@@ -105,13 +105,24 @@ def build_agent_prompt(
     )
     sections.append(f"## User Instructions\n{instructions_text}")
 
-    # 7. Tools
-    if tool_names:
-        tools_list = ", ".join(tool_names)
-        sections.append(
-            f"## Tools\nAvailable tools: {tools_list}\n"
-            "Use tools when they help. Don't narrate routine tool calls."
-        )
+    # 7. Tool Guidance
+    if tools:
+        seen_classes = set()
+        guidance_lines = []
+        for tool in tools:
+            tool_cls = type(tool)
+            if tool_cls in seen_classes:
+                continue
+            seen_classes.add(tool_cls)
+            try:
+                if hasattr(tool_cls, "prompt_section"):
+                    section = tool_cls.prompt_section(channel)
+                    if section:
+                        guidance_lines.append(section)
+            except Exception:
+                pass  # Never fail the prompt build for a single tool
+        if guidance_lines:
+            sections.append("## Tool Guidance\n" + "\n".join(guidance_lines))
 
     # 8. Onboarding (interactive channels only, when memory + instructions are empty)
     is_interactive = channel in ("web", "telegram")

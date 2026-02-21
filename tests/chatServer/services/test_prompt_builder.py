@@ -1,5 +1,7 @@
 """Tests for prompt builder service."""
 
+from unittest.mock import Mock
+
 from chatServer.services.prompt_builder import (
     MAX_INSTRUCTIONS_LENGTH,
     build_agent_prompt,
@@ -25,13 +27,21 @@ class TestBuildAgentPrompt:
 
     def test_all_sections_populated(self):
         """All sections present when every input is provided."""
+        # Create mock tools
+        tool1 = Mock()
+        tool1.name = "read_memory"
+        tool2 = Mock()
+        tool2.name = "save_memory"
+        tool3 = Mock()
+        tool3.name = "update_instructions"
+
         result = build_agent_prompt(
             soul="Be concise.",
             identity={"name": "Jarvis", "description": "a personal assistant", "vibe": "Calm and direct."},
             channel="web",
             user_instructions="Always respond in bullet points.",
             timezone="America/New_York",
-            tool_names=["read_memory", "save_memory", "update_instructions"],
+            tools=[tool1, tool2, tool3],
         )
         assert "## Identity" in result
         assert "You are Jarvis" in result
@@ -41,7 +51,6 @@ class TestBuildAgentPrompt:
         assert "web" in result
         assert "America/New_York" in result
         assert "Always respond in bullet points." in result
-        assert "read_memory, save_memory, update_instructions" in result
 
     def test_missing_identity_no_identity_section(self):
         """Identity section omitted when identity is None."""
@@ -140,24 +149,85 @@ class TestBuildAgentPrompt:
         result = build_agent_prompt(soul="x", identity=None, channel="web", user_instructions="")
         assert "(No custom instructions set.)" in result
 
-    def test_tool_names_listed(self):
+    def test_no_tools_no_tool_guidance_section(self):
+        result = build_agent_prompt(soul="x", identity=None, channel="web", user_instructions=None, tools=None)
+        assert "## Tool Guidance" not in result
+
+    def test_empty_tools_no_tool_guidance_section(self):
+        result = build_agent_prompt(soul="x", identity=None, channel="web", user_instructions=None, tools=[])
+        assert "## Tool Guidance" not in result
+        assert "Available tools:" not in result
+
+    def test_tools_with_prompt_section_collected(self):
+        """Tools with prompt_section() classmethod are collected."""
+        tool = Mock()
+        tool_cls = Mock()
+        tool_cls.prompt_section = Mock(return_value="Use this tool when needed.")
+        type(tool).__name__ = "MockTool"
+        type(tool).prompt_section = classmethod(lambda cls, ch: "Use this tool when needed.")
+
+        # Create a real mock that tracks type(tool)
+        class MockToolClass:
+            @classmethod
+            def prompt_section(cls, channel):
+                return "Use this tool when needed."
+
+        tool = MockToolClass()
         result = build_agent_prompt(
-            soul="x",
-            identity=None,
-            channel="web",
-            user_instructions=None,
-            tool_names=["tool_a", "tool_b"],
+            soul="x", identity=None, channel="web", user_instructions=None,
+            tools=[tool],
         )
-        assert "## Tools" in result
-        assert "tool_a, tool_b" in result
+        assert "## Tool Guidance" in result
+        assert "Use this tool when needed." in result
 
-    def test_no_tool_names_no_tools_section(self):
-        result = build_agent_prompt(soul="x", identity=None, channel="web", user_instructions=None, tool_names=None)
-        assert "## Tools" not in result
+    def test_tools_without_prompt_section_ignored(self):
+        """Tools without prompt_section() don't crash the builder."""
+        tool = Mock(spec=[])  # No methods
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="web", user_instructions=None,
+            tools=[tool],
+        )
+        # Should not crash and should not add guidance section if no tools produce guidance
+        assert "## Tool Guidance" not in result
 
-    def test_empty_tool_names_no_tools_section(self):
-        result = build_agent_prompt(soul="x", identity=None, channel="web", user_instructions=None, tool_names=[])
-        assert "## Tools" not in result
+    def test_tools_prompt_section_returns_none_omitted(self):
+        """Tools that return None from prompt_section() are omitted."""
+        class MockTool:
+            @classmethod
+            def prompt_section(cls, channel):
+                return None
+
+        tool = MockTool()
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="web", user_instructions=None,
+            tools=[tool],
+        )
+        assert "## Tool Guidance" not in result
+
+    def test_tool_deduplication_by_class(self):
+        """Two instances of the same class produce only one guidance line."""
+        class MockTool:
+            @classmethod
+            def prompt_section(cls, channel):
+                return "Use this tool."
+
+        tool1 = MockTool()
+        tool2 = MockTool()
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="web", user_instructions=None,
+            tools=[tool1, tool2],
+        )
+        assert "## Tool Guidance" in result
+        # Count occurrences of the guidance line - should appear only once
+        assert result.count("Use this tool.") == 1
+
+    def test_tools_no_available_tools_string(self):
+        """The old 'Available tools:' string should never appear."""
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="web", user_instructions=None,
+            tools=[],
+        )
+        assert "Available tools:" not in result
 
     def test_empty_soul_uses_default(self):
         result = build_agent_prompt(soul="", identity=None, channel="web", user_instructions=None)
@@ -169,16 +239,21 @@ class TestBuildAgentPrompt:
 
     def test_section_ordering(self):
         """Sections appear in the correct order."""
+        class MockTool:
+            @classmethod
+            def prompt_section(cls, channel):
+                return "Tool guidance"
+
         result = build_agent_prompt(
             soul="Be helpful.",
             identity={"name": "Test", "description": "test agent", "vibe": "cool"},
             channel="web",
             user_instructions="Some instructions.",
-            tool_names=["tool_a"],
+            tools=[MockTool()],
         )
         sections = [
             "## Identity", "## Soul", "## Channel", "## Current Time",
-            "## Memory", "## User Instructions", "## Tools",
+            "## Memory", "## User Instructions", "## Tool Guidance",
         ]
         positions = [result.index(s) for s in sections]
         assert positions == sorted(positions), "Sections are not in the expected order"
@@ -243,14 +318,19 @@ class TestBuildAgentPrompt:
         )
         assert "## Onboarding" not in result
 
-    def test_onboarding_after_tools_section(self):
-        """Onboarding section appears after Tools section when both present."""
+    def test_onboarding_after_tool_guidance_section(self):
+        """Onboarding section appears after Tool Guidance section when both present."""
+        class MockTool:
+            @classmethod
+            def prompt_section(cls, channel):
+                return "Tool guidance"
+
         result = build_agent_prompt(
             soul="x", identity=None, channel="web",
             user_instructions=None, memory_notes=None,
-            tool_names=["tool_a"],
+            tools=[MockTool()],
         )
         assert "## Onboarding" in result
-        tools_pos = result.index("## Tools")
+        guidance_pos = result.index("## Tool Guidance")
         onboarding_pos = result.index("## Onboarding")
-        assert onboarding_pos > tools_pos
+        assert onboarding_pos > guidance_pos

@@ -645,9 +645,6 @@ def load_agent_executor_db(
     # Fetch LTM notes for onboarding detection
     memory_notes = _fetch_memory_notes(db, user_id, agent_name)
 
-    # Collect tool names for the prompt
-    tool_names = [getattr(t, "name", None) for t in instantiated_tools if getattr(t, "name", None)]
-
     # Assemble the system prompt via the prompt builder
     from chatServer.services.prompt_builder import build_agent_prompt
     assembled_prompt = build_agent_prompt(
@@ -655,7 +652,7 @@ def load_agent_executor_db(
         identity=identity,
         channel=channel,
         user_instructions=user_instructions,
-        tool_names=tool_names,
+        tools=instantiated_tools,
         memory_notes=memory_notes,
     )
 
@@ -764,7 +761,6 @@ async def load_agent_executor_db_async(
 
     soul = agent_db_config.get("soul") or ""
     identity = agent_db_config.get("identity")
-    tool_names = [getattr(t, "name", None) for t in instantiated_tools if getattr(t, "name", None)]
 
     from chatServer.services.prompt_builder import build_agent_prompt
 
@@ -773,7 +769,7 @@ async def load_agent_executor_db_async(
         identity=identity,
         channel=channel,
         user_instructions=user_instructions,
-        tool_names=tool_names,
+        tools=instantiated_tools,
         memory_notes=memory_notes,
     )
 
