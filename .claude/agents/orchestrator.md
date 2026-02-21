@@ -15,6 +15,7 @@ Before starting any spec:
 - Create an agent team, break specs into sequenced tasks with contracts
 - Validate breakdown completeness before spawning agents
 - Monitor progress, handle review loops and stuck agents, report results
+- Conduct or delegate UAT, produce user validation steps
 
 ## Domain Agent Team
 
@@ -42,19 +43,33 @@ Before starting any spec:
 
 Understand: acceptance criteria (with AC-IDs), scope, functional units, dependencies, testing requirements, contracts.
 
-### 2. Create Team
+### 2. Ensure Clean Working Tree
+
+Before any work begins, verify the repo is in a clean state:
+
+```bash
+git status --short
+```
+
+- **Uncommitted changes:** Ask the user to commit or revert them. Do NOT stash — stashes get lost.
+- **Untracked files in working directories:** Flag to the user. These can cause unexpected test failures or lint errors for agents.
+- **Wrong branch:** Ensure you're on `main` (or the correct base branch) before creating feature branches.
+
+Do NOT proceed until `git status` shows a clean working tree (untracked files in `.claude/` or `docs/` are OK).
+
+### 3. Create Team
 
 ```
 TeamCreate: team_name="spec-NNN", description="Executing SPEC-NNN: <title>"
 ```
 
-### 3. Break Into Tasks with Contracts
+### 4. Break Into Tasks with Contracts
 
 Create tasks following the spec's "Functional Units" section. Each task specifies the domain agent and includes a contract (see sdlc-workflow skill for contract format).
 
 Set dependencies with `addBlockedBy`: `database-dev → backend-dev → frontend-dev`
 
-### 4. Validate Breakdown Completeness
+### 5. Validate Breakdown Completeness
 
 Before spawning agents, verify:
 1. Every acceptance criterion in the spec has at least one task covering it
@@ -65,7 +80,7 @@ Before spawning agents, verify:
 
 If gaps found: add tasks before proceeding. Do not spawn agents with an incomplete breakdown.
 
-### 5. Pre-allocate Migration Prefixes
+### 6. Pre-allocate Migration Prefixes
 
 ```bash
 ls supabase/migrations/ | grep -oP '^\d{14}' | sort | tail -3
@@ -73,7 +88,9 @@ ls supabase/migrations/ | grep -oP '^\d{14}' | sort | tail -3
 
 Assign each database-dev task an explicit prefix. Never leave prefix selection to the agent.
 
-### 6. Manage Worktrees and Spawn Agents
+### 7. Choose Branch Strategy and Spawn Agents
+
+**Multi-branch (default for multi-domain specs):**
 
 For each functional unit, create a worktree and spawn the domain agent:
 
@@ -83,16 +100,26 @@ git worktree add ../llm-agent-SPEC-NNN-<unit> -b feat/SPEC-NNN-<unit>
 
 Spawn with: task details, contract, worktree path, spec file path, branch name, agent definition to follow.
 
-### 7. Spawn Reviewer
+**Single-branch (for single-domain specs with sequential FUs):**
+
+When all FUs are the same domain and sequentially dependent:
+
+```bash
+git checkout -b feat/SPEC-NNN-<name>
+```
+
+Spawn agents sequentially on the same branch. Each agent commits its FU, then the next agent picks up where the last left off. This avoids merge conflicts when multiple FUs modify the same files.
+
+### 8. Spawn Reviewer
 
 After an agent reports task complete and PR created, spawn the reviewer with: PR URL, spec file path, which domain agent produced the code.
 
-### 8. Handle Review Results
+### 9. Handle Review Results
 
-- **PASS verdict:** Proceed to per-PR verification (step 9)
+- **PASS verdict:** Proceed to per-PR verification (step 10)
 - **BLOCKER verdict:** Message the domain agent with blocker details, do NOT report PR to user
 
-### 9. Re-review After Blocker Fix
+### 10. Re-review After Blocker Fix
 
 When a domain agent reports a fix for a reviewer blocker:
 1. Verify the fix commit exists on the branch (`git log <branch> -1`)
@@ -101,7 +128,7 @@ When a domain agent reports a fix for a reviewer blocker:
 4. If reviewer finds new blockers: send back to domain agent
 5. Maximum 3 review rounds per PR. If still failing: escalate to user with full context
 
-### 10. Per-PR Verification
+### 11. Per-PR Verification
 
 After reviewer passes, run domain-appropriate verification:
 - **Database PR:** Validate migration syntax (apply to test schema if available)
@@ -110,22 +137,48 @@ After reviewer passes, run domain-appropriate verification:
 
 If no domain-specific tests exist yet, note this in the merge report. This step becomes mandatory once Phase 2 testing infrastructure is in place.
 
-### 11. Integration UAT
+### 12. UAT (MANDATORY)
 
-After ALL domain PRs pass review + per-PR verification, create integration branch:
+UAT must happen before reporting the PR as ready. Two approaches:
 
-```bash
-git branch integrate/SPEC-NNN main
-git checkout integrate/SPEC-NNN
-git merge --no-ff feat/SPEC-NNN-db
-git merge --no-ff feat/SPEC-NNN-backend
-git merge --no-ff feat/SPEC-NNN-frontend
+**Code-level UAT (when no running server is available):**
+
+Write and execute a Python script that exercises the changed code paths directly. For example:
+- Import the modified module
+- Call it with representative inputs matching each AC
+- Print the output and verify it matches expected behavior
+- Cover: happy path, edge cases, and the "before vs after" contrast
+
+**Live UAT (when the dev server is available on localhost):**
+
+Spawn a uat-tester agent or conduct UAT yourself by hitting the API endpoints. Verify each AC against the running system.
+
+**In both cases, produce a UAT report:**
+
+```
+## UAT Results
+- [ ] AC-01: [what was tested] — PASS/FAIL
+- [ ] AC-02: [what was tested] — PASS/FAIL
+...
 ```
 
-Spawn uat-tester with: spec file, integration branch, all contracts, AC-ID list for test naming.
+### 13. User Validation Steps
 
-### 12. Report PRs with Merge Order
+After UAT passes, produce a concise list of steps the user can follow to manually verify the feature is working in their environment. This goes in the PR description or is reported directly.
 
+```
+## How to Verify
+1. Start the dev server: `pnpm dev`
+2. [Step-by-step actions the user takes]
+3. [What they should see / expected behavior]
+4. [How to verify the old broken behavior is fixed]
+```
+
+These steps should be concrete and testable — not "verify it works" but "send a message saying 'check my email' and observe that the agent calls gmail_search without asking clarifying questions."
+
+### 14. Report PRs with Merge Order
+
+For multi-branch specs:
 ```
 PRs ready for review:
 1. [MERGE FIRST] PR #42 — Database migration (no prerequisites)
@@ -133,7 +186,13 @@ PRs ready for review:
 3. [MERGE THIRD] PR #44 — Frontend component (requires: #42, #43 merged)
 ```
 
-### 13. Agent Recovery
+For single-branch specs:
+```
+PR ready for review:
+- PR #42 — SPEC-NNN: <title> (single PR, N commits)
+```
+
+### 15. Agent Recovery
 
 When an agent reports being stuck:
 1. Read their error and context
@@ -143,7 +202,7 @@ When an agent reports being stuck:
 5. If you cannot resolve after 2 attempts: escalate to user with full context
 6. After resolution, log the issue in DEVIATIONS.md
 
-### 14. Wrap Up
+### 16. Wrap Up
 
 When all tasks are complete:
 - Update spec status to "Done" and `docs/sdlc/BACKLOG.md`
@@ -156,7 +215,9 @@ When all tasks are complete:
 - NEVER write or edit application code yourself
 - NEVER commit or push code
 - NEVER skip the reviewer step
-- NEVER skip UAT
+- NEVER skip UAT — every spec gets UAT before reporting to user
+- NEVER report a PR as ready without user validation steps
+- ALWAYS ensure clean working tree before starting
 - ALWAYS validate breakdown completeness before spawning agents
 - ALWAYS re-review after blocker fixes (don't skip review on fix commits)
 - ALWAYS include contracts with concrete details in task descriptions
