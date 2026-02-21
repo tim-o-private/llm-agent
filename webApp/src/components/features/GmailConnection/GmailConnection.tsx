@@ -3,6 +3,7 @@ import { Button } from '../../ui/Button';
 import { Card } from '../../ui/Card';
 import { Badge } from '../../ui/Badge';
 import { CheckCircle, Mail, AlertCircle, Loader2, Plus, Trash2 } from 'lucide-react';
+import { supabase } from '@/lib/supabaseClient';
 import { useAuthStore } from '@/features/auth/useAuthStore';
 import {
   useConnectionStatus,
@@ -60,9 +61,31 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({ onConnectionCh
     }
   };
 
-  const connectAdditionalGmail = () => {
-    // Open standalone OAuth flow — backend handles auth via JWT cookie/header
-    window.location.href = `${API_BASE_URL}/oauth/gmail/connect`;
+  const connectAdditionalGmail = async () => {
+    setIsConnecting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        console.error('No active session for standalone OAuth');
+        setIsConnecting(false);
+        return;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/oauth/gmail/connect`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Failed to start OAuth flow' }));
+        throw new Error(errorData.detail || `HTTP ${response.status}`);
+      }
+
+      const { auth_url } = await response.json();
+      window.location.href = auth_url;
+    } catch (error) {
+      console.error('Failed to initiate additional Gmail OAuth:', error);
+      setIsConnecting(false);
+    }
   };
 
   const disconnectAccount = async (connectionId: string) => {
