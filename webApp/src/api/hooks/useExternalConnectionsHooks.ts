@@ -19,6 +19,7 @@ interface StoreTokensParams {
 
 interface ConnectionStatusResponse {
   connected: boolean;
+  count: number;
   service: string;
 }
 
@@ -147,7 +148,7 @@ export function useListConnections() {
 }
 
 /**
- * Hook to revoke tokens for a service
+ * Hook to revoke tokens for a service (all connections)
  */
 export function useRevokeTokens() {
   const queryClient = useQueryClient();
@@ -172,6 +173,65 @@ export function useRevokeTokens() {
     },
     onError: (error) => {
       toast.error('Failed to revoke tokens', error.message);
+    },
+  });
+}
+
+/**
+ * Hook to list all Gmail connections for the current user.
+ * Filters list_user_connections to service_name='gmail'.
+ */
+export function useGmailConnections() {
+  const user = useAuthStore((state) => state.user);
+
+  return useQuery<ExternalConnection[], Error>({
+    queryKey: [EXTERNAL_CONNECTIONS_QUERY_KEY, user?.id, 'gmail', 'all'],
+    queryFn: async () => {
+      if (!user) throw new Error('User not authenticated');
+
+      const { data, error } = await supabase.rpc('list_user_connections', {
+        p_user_id: user.id,
+      });
+
+      if (error) throw error;
+
+      const response = data as ListConnectionsResponse;
+      return (response.connections || []).filter(
+        (c) => c.service_name === 'gmail' && c.is_active
+      );
+    },
+    enabled: !!user,
+    staleTime: 30000,
+  });
+}
+
+/**
+ * Hook to disconnect a specific connection by ID.
+ * Used for multi-account services like Gmail.
+ */
+export function useDisconnectConnection() {
+  const queryClient = useQueryClient();
+  const user = useAuthStore((state) => state.user);
+
+  return useMutation<any, Error, string>({
+    mutationFn: async (connectionId) => {
+      if (!user) throw new Error('User not authenticated');
+
+      const { data, error } = await supabase.rpc('revoke_oauth_tokens', {
+        p_user_id: user.id,
+        p_service_name: 'gmail',
+        p_connection_id: connectionId,
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('Gmail account disconnected');
+      queryClient.invalidateQueries({ queryKey: [EXTERNAL_CONNECTIONS_QUERY_KEY, user?.id] });
+    },
+    onError: (error) => {
+      toast.error('Failed to disconnect account', error.message);
     },
   });
 }

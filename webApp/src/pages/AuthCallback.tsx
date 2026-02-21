@@ -40,13 +40,47 @@ export const AuthCallback: React.FC = () => {
 
     try {
       const service = searchParams.get('service');
+      const source = searchParams.get('source');
+      const callbackStatus = searchParams.get('status');
+      const errorMessage = searchParams.get('error_message');
 
       setStatus((prev) => ({
         ...prev,
         message: 'Verifying authentication...',
       }));
 
-      // Handle Gmail OAuth callback
+      // Handle standalone OAuth callback (additional Gmail accounts via backend flow)
+      if (service === 'gmail' && source === 'standalone') {
+        setStatus((prev) => ({
+          ...prev,
+          message: 'Processing Gmail account connection...',
+          service: 'gmail',
+        }));
+
+        if (callbackStatus === 'success') {
+          setStatus({
+            isProcessing: false,
+            isComplete: true,
+            isError: false,
+            message: 'Gmail account connected successfully!',
+            service: 'gmail',
+          });
+        } else {
+          throw new Error(
+            errorMessage
+              ? decodeURIComponent(errorMessage)
+              : 'Failed to connect Gmail account. Please try again.'
+          );
+        }
+
+        setTimeout(() => {
+          navigate('/today');
+        }, 2000);
+
+        return;
+      }
+
+      // Handle Gmail OAuth callback (first account via Supabase OAuth)
       if (service === 'gmail') {
         setStatus((prev) => ({
           ...prev,
