@@ -85,6 +85,28 @@ These affect ALL domains. Domain-specific gotchas live in their respective skill
 4. **ES256 JWT tokens** — Supabase issues ES256, not HS256. Don't revert `auth.py` to HS256-only.
 5. **`os.getenv()` is scattered** — Env vars read in `settings.py`, `agent_loader_db.py`, `gmail_tools.py`, `memory_tools.py`, `update_instructions_tool.py`, `email_digest_service.py`. Renaming requires full grep.
 
+## Dangerously-Skip-Permissions Instructions
+
+You may be running with `--dangerously-skip-permissions`. This means tool calls execute without asking for approval. That's OK — you're sandboxed.
+
+**You are running as a restricted Linux user (`claude-sandbox`), not the developer's main account.** The operating system enforces these limits — they are not optional and cannot be bypassed:
+
+**What works:**
+- Read, write, and execute anything under `/home/tim/github/`
+- Git operations: commit, branch, diff, merge, rebase
+- Run dev servers, tests, and linters locally
+- Access localhost/loopback (local services)
+
+**What is blocked (will fail silently or error):**
+- **No network access** — `curl`, `wget`, `npm install`, `pip install`, `gh`, `flyctl`, and any outbound HTTP/HTTPS requests will fail. The only allowed destination is the Anthropic API (so you can function).
+- **No filesystem access outside the repo** — you cannot read SSH keys, browser data, other users' files, or anything outside `/home/tim/github/`.
+- **No `.env` files** — access is explicitly blocked. You cannot read secrets.
+- **No `sudo`** — you have no elevated privileges.
+- **No `git push`** — network restrictions prevent it. The `main` branch also has GitHub branch protection (no force pushes, no direct pushes, PRs require approval).
+
+**What to do when you hit a wall:**
+If a task requires network access (pushing code, installing packages, deploying, creating PRs) or reading secrets, stop and tell the human operator. They will handle it from their main session.
+
 ## Resolving Bugs
 
 Every bug fix MUST update documentation: CLAUDE.md gotchas, skills, or hooks. Code fixes alone are insufficient. See the relevant domain skill for the update target.
