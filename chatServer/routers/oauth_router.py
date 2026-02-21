@@ -64,7 +64,7 @@ async def gmail_oauth_callback(
     Validates state, exchanges code for tokens, stores tokens, and redirects
     to the frontend with success/error status.
     """
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
     result = await oauth_service.handle_gmail_callback(code, state)
 
