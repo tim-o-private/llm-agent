@@ -34,16 +34,18 @@ def client(mock_oauth_service):
     return TestClient(app, follow_redirects=False)
 
 
-def test_initiate_connect_redirects_to_google(client, mock_oauth_service):
-    """GET /oauth/gmail/connect should redirect to Google OAuth URL."""
+def test_initiate_connect_returns_auth_url(client, mock_oauth_service):
+    """GET /oauth/gmail/connect should return Google OAuth URL as JSON."""
     mock_oauth_service.create_gmail_auth_url.return_value = (
         "https://accounts.google.com/o/oauth2/v2/auth?client_id=test"
     )
 
     response = client.get("/oauth/gmail/connect")
 
-    assert response.status_code == status.HTTP_302_FOUND
-    assert "accounts.google.com" in response.headers["location"]
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert "auth_url" in data
+    assert "accounts.google.com" in data["auth_url"]
     mock_oauth_service.create_gmail_auth_url.assert_called_once_with("test-user-id")
 
 

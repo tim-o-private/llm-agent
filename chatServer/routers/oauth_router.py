@@ -5,7 +5,7 @@ import os
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from ..dependencies.auth import get_current_user
 from ..services.oauth_service import OAuthService
@@ -39,11 +39,12 @@ async def initiate_gmail_connect(
 ):
     """Initiate OAuth flow for connecting an additional Gmail account.
 
-    Redirects the user to Google's OAuth consent screen with account picker.
+    Returns the Google OAuth consent URL as JSON. The frontend fetches this
+    with an Authorization header, then navigates the browser to the URL.
     """
     try:
         auth_url = await oauth_service.create_gmail_auth_url(user_id)
-        return RedirectResponse(url=auth_url, status_code=status.HTTP_302_FOUND)
+        return JSONResponse(content={"auth_url": auth_url})
     except RuntimeError as e:
         logger.error(f"Failed to initiate Gmail OAuth: {e}")
         raise HTTPException(
