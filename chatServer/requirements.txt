@@ -22,6 +22,7 @@ asyncpg>=0.30.0
 
 # HTTP / networking
 httpx
+aiohttp>=3.9.0
 aiogram>=3.4.0
 
 # Auth
