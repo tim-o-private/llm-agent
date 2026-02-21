@@ -127,7 +127,7 @@ def _create_dynamic_crud_tool_class(
 
     for field_name, field_config in runtime_schema_config.items():
         if not isinstance(field_config, dict):
-            logger.warning(f"Dynamic schema for tool '{tool_name_from_db}': Field config for '{field_name}' is not a dict. Skipping.")
+            logger.warning(f"Dynamic schema for tool '{tool_name_from_db}': Field config for '{field_name}' is not a dict. Skipping.")  # noqa: E501
             continue
 
         description = field_config.get("description", f"Argument '{field_name}' for tool '{tool_name_from_db}'.")
@@ -138,15 +138,15 @@ def _create_dynamic_crud_tool_class(
         if field_type_str == "dict":
             nested_properties = field_config.get("properties")
             if isinstance(nested_properties, dict) and nested_properties:
-                nested_model_name = f"{tool_name_from_db.capitalize().replace('_','')}{field_name.capitalize()}PropsModel"
+                nested_model_name = f"{tool_name_from_db.capitalize().replace('_','')}{field_name.capitalize()}PropsModel"  # noqa: E501
                 NestedModel = _create_dynamic_args_model(nested_model_name, nested_properties)
                 actual_field_type = NestedModel
             else:
                 actual_field_type = Dict[str, Any]
-        elif field_type_str == "str": actual_field_type = str
-        elif field_type_str == "int": actual_field_type = int
-        elif field_type_str == "bool": actual_field_type = bool
-        elif field_type_str == "list": actual_field_type = List[Any]
+        elif field_type_str == "str": actual_field_type = str  # noqa: E701
+        elif field_type_str == "int": actual_field_type = int  # noqa: E701
+        elif field_type_str == "bool": actual_field_type = bool  # noqa: E701
+        elif field_type_str == "list": actual_field_type = List[Any]  # noqa: E701
         # Add more type mappings (e.g., float, enums from strings) as needed.
 
         if is_optional:
@@ -157,7 +157,7 @@ def _create_dynamic_crud_tool_class(
         fields_for_args_model[field_name] = pydantic_field_definition
 
     if not fields_for_args_model:
-        logger.warning(f"Dynamic schema for tool '{tool_name_from_db}': No valid fields parsed from runtime_args_schema. Will use default args_schema from base class '{base_tool_class.__name__}'.")
+        logger.warning(f"Dynamic schema for tool '{tool_name_from_db}': No valid fields parsed from runtime_args_schema. Will use default args_schema from base class '{base_tool_class.__name__}'.")  # noqa: E501
         return base_tool_class
 
     args_model_name = f"{tool_name_from_db.capitalize().replace('_', '')}ArgsSchemaModel"
@@ -180,7 +180,7 @@ def _create_dynamic_crud_tool_class(
         (base_tool_class,),
         class_dict
     )
-    logger.info(f"Created dynamic tool class '{DynamicToolClass.__name__}' with args_schema '{SpecificArgsModel.__name__}' for tool instance '{tool_name_from_db}'.")
+    logger.info(f"Created dynamic tool class '{DynamicToolClass.__name__}' with args_schema '{SpecificArgsModel.__name__}' for tool instance '{tool_name_from_db}'.")  # noqa: E501
     return DynamicToolClass
 
 def _create_dynamic_args_model(model_name: str, properties_config: Dict[str, Any]) -> Type[BaseModel]:
@@ -200,7 +200,7 @@ def _create_dynamic_args_model(model_name: str, properties_config: Dict[str, Any
     fields: Dict[str, Any] = {}
     for prop_name, prop_config in properties_config.items():
         if not isinstance(prop_config, dict):
-            logger.warning(f"Dynamic nested model '{model_name}': Property config for '{prop_name}' is not a dict. Skipping.")
+            logger.warning(f"Dynamic nested model '{model_name}': Property config for '{prop_name}' is not a dict. Skipping.")  # noqa: E501
             continue
 
         description = prop_config.get("description", f"Property '{prop_name}' of {model_name}.")
@@ -208,11 +208,11 @@ def _create_dynamic_args_model(model_name: str, properties_config: Dict[str, Any
         prop_type_str = prop_config.get("type", "any").lower()
 
         actual_prop_type: Type = Any
-        if prop_type_str == "str": actual_prop_type = str
-        elif prop_type_str == "int": actual_prop_type = int
-        elif prop_type_str == "bool": actual_prop_type = bool
-        elif prop_type_str == "dict": actual_prop_type = Dict[str, Any]
-        elif prop_type_str == "list": actual_prop_type = List[Any]
+        if prop_type_str == "str": actual_prop_type = str  # noqa: E701
+        elif prop_type_str == "int": actual_prop_type = int  # noqa: E701
+        elif prop_type_str == "bool": actual_prop_type = bool  # noqa: E701
+        elif prop_type_str == "dict": actual_prop_type = Dict[str, Any]  # noqa: E701
+        elif prop_type_str == "list": actual_prop_type = List[Any]  # noqa: E701
         # Add more type mappings as needed.
 
         if is_optional:
@@ -221,7 +221,7 @@ def _create_dynamic_args_model(model_name: str, properties_config: Dict[str, Any
             fields[prop_name] = (actual_prop_type, Field(..., description=description))
 
     if not fields:
-        logger.warning(f"Dynamic nested model '{model_name}': No valid properties found in config. Creating a fallback model with no fields.")
+        logger.warning(f"Dynamic nested model '{model_name}': No valid properties found in config. Creating a fallback model with no fields.")  # noqa: E501
         # Create a fallback model that can be instantiated but has no specific fields, rather than erroring.
         class EmptyNestedModel(BaseModel):
             model_config = ConfigDict(extra='allow') # Allow extra fields if agent sends them unexpectedly
@@ -279,7 +279,7 @@ def load_tools_from_db(
             logger.error(f"DB entry for tool type '{db_tool_type_str}' is missing 'name'. Skipping. Row: {tool_row}")
             continue
         if not db_tool_description:
-            logger.error(f"DB entry for tool '{db_tool_name}' (type '{db_tool_type_str}') is missing 'description'. Skipping. Row: {tool_row}")
+            logger.error(f"DB entry for tool '{db_tool_name}' (type '{db_tool_type_str}') is missing 'description'. Skipping. Row: {tool_row}")  # noqa: E501
             continue
 
         # Convert to strings after validation
@@ -288,7 +288,7 @@ def load_tools_from_db(
 
         original_python_tool_class = TOOL_REGISTRY.get(db_tool_type_str)
         if db_tool_type_str not in TOOL_REGISTRY:
-            logger.warning(f"Tool type '{db_tool_type_str}' (for tool name '{db_tool_name}') not found in TOOL_REGISTRY. Skipping tool.")
+            logger.warning(f"Tool type '{db_tool_type_str}' (for tool name '{db_tool_name}') not found in TOOL_REGISTRY. Skipping tool.")  # noqa: E501
             continue
 
         # Special handling for GmailTool type - use tool_class config to determine specific class
@@ -300,7 +300,7 @@ def load_tools_from_db(
 
             specific_gmail_tool_class = GMAIL_TOOL_CLASSES.get(tool_class_name)
             if not specific_gmail_tool_class:
-                logger.error(f"GmailTool instance '{db_tool_name}' has unknown tool_class '{tool_class_name}'. Available: {list(GMAIL_TOOL_CLASSES.keys())}. Skipping.")
+                logger.error(f"GmailTool instance '{db_tool_name}' has unknown tool_class '{tool_class_name}'. Available: {list(GMAIL_TOOL_CLASSES.keys())}. Skipping.")  # noqa: E501
                 continue
 
             original_python_tool_class = specific_gmail_tool_class
@@ -339,7 +339,7 @@ def load_tools_from_db(
             tool_constructor_kwargs["method"] = crud_method
             tool_constructor_kwargs["field_map"] = crud_field_map
             # Example for future config-driven agent_name filtering for CRUDTool:
-            # tool_constructor_kwargs["apply_agent_name_filter"] = db_tool_config_json.get("apply_agent_name_filter", False)
+            # tool_constructor_kwargs["apply_agent_name_filter"] = db_tool_config_json.get("apply_agent_name_filter", False)  # noqa: E501
 
             raw_runtime_schema_from_db = db_tool_config_json.get("runtime_args_schema")
             parsed_runtime_schema_dict: Optional[Dict[str, Any]] = None
@@ -347,7 +347,7 @@ def load_tools_from_db(
                 try:
                     parsed_runtime_schema_dict = json.loads(raw_runtime_schema_from_db)
                 except json.JSONDecodeError:
-                    logger.error(f"CRUDTool instance '{db_tool_name}': 'runtime_args_schema' in DB config is malformed JSON. Will use default args_schema.")
+                    logger.error(f"CRUDTool instance '{db_tool_name}': 'runtime_args_schema' in DB config is malformed JSON. Will use default args_schema.")  # noqa: E501
             elif isinstance(raw_runtime_schema_from_db, dict):
                 parsed_runtime_schema_dict = raw_runtime_schema_from_db
 
@@ -359,18 +359,18 @@ def load_tools_from_db(
                         parsed_runtime_schema_dict
                     )
                 except Exception as e:
-                    logger.error(f"CRUDTool instance '{db_tool_name}': Failed to create dynamic class from runtime_args_schema. Error: {e}. Will use default '{CRUDTool.__name__}' args_schema.", exc_info=True)
+                    logger.error(f"CRUDTool instance '{db_tool_name}': Failed to create dynamic class from runtime_args_schema. Error: {e}. Will use default '{CRUDTool.__name__}' args_schema.", exc_info=True)  # noqa: E501
             else:
-                logger.info(f"CRUDTool instance '{db_tool_name}': No 'runtime_args_schema' found or parsed in DB config. Will use default '{CRUDTool.__name__}' args_schema ('{CRUDToolInput.__name__}').")
+                logger.info(f"CRUDTool instance '{db_tool_name}': No 'runtime_args_schema' found or parsed in DB config. Will use default '{CRUDTool.__name__}' args_schema ('{CRUDToolInput.__name__}').")  # noqa: E501
 
         else: # For non-CRUD tools registered in TOOL_REGISTRY
             # Merge their entire DB config JSON into constructor args.
             # These tools must handle these kwargs in their __init__ or have them as Pydantic fields.
             if db_tool_config_json:
-                logger.info(f"For non-CRUD tool '{db_tool_name}' (type '{db_tool_type_str}'), merging its DB config keys ({list(db_tool_config_json.keys())}) into constructor arguments.")
+                logger.info(f"For non-CRUD tool '{db_tool_name}' (type '{db_tool_type_str}'), merging its DB config keys ({list(db_tool_config_json.keys())}) into constructor arguments.")  # noqa: E501
                 tool_constructor_kwargs.update(db_tool_config_json)
 
-        logger.debug(f"Attempting to instantiate tool '{db_tool_name}' (effective class '{effective_tool_class_to_instantiate.__name__}') with kwargs: {list(tool_constructor_kwargs.keys())}")
+        logger.debug(f"Attempting to instantiate tool '{db_tool_name}' (effective class '{effective_tool_class_to_instantiate.__name__}') with kwargs: {list(tool_constructor_kwargs.keys())}")  # noqa: E501
 
         try:
             tool_instance = effective_tool_class_to_instantiate(**tool_constructor_kwargs)
@@ -378,18 +378,18 @@ def load_tools_from_db(
 
             # Sanity check for Langchain compatibility after instantiation
             if not getattr(tool_instance, 'name', None) or not getattr(tool_instance, 'description', None):
-                 logger.warning(f"Instantiated tool '{db_tool_name}' appears to be missing standard 'name' or 'description' attributes post-init. This might cause issues with Langchain.")
+                 logger.warning(f"Instantiated tool '{db_tool_name}' appears to be missing standard 'name' or 'description' attributes post-init. This might cause issues with Langchain.")  # noqa: E501
 
             if isinstance(tool_instance, CRUDTool):
-                effective_args_schema_name = type(tool_instance.args_schema).__name__ if tool_instance.args_schema else "None"
-                if effective_args_schema_name != CRUDToolInput.__name__ and tool_instance.args_schema is not CRUDToolInput:
-                    logger.info(f"CRUDTool instance '{tool_instance.name}' was instantiated with a dynamic args_schema: '{effective_args_schema_name}'.")
+                effective_args_schema_name = type(tool_instance.args_schema).__name__ if tool_instance.args_schema else "None"  # noqa: E501
+                if effective_args_schema_name != CRUDToolInput.__name__ and tool_instance.args_schema is not CRUDToolInput:  # noqa: E501
+                    logger.info(f"CRUDTool instance '{tool_instance.name}' was instantiated with a dynamic args_schema: '{effective_args_schema_name}'.")  # noqa: E501
                 else:
-                    logger.info(f"CRUDTool instance '{tool_instance.name}' was instantiated with the default args_schema: '{CRUDToolInput.__name__}'.")
+                    logger.info(f"CRUDTool instance '{tool_instance.name}' was instantiated with the default args_schema: '{CRUDToolInput.__name__}'.")  # noqa: E501
 
-            logger.info(f"Successfully instantiated tool: '{getattr(tool_instance, 'name', db_tool_name)}' (Python class '{type(tool_instance).__name__}')")
+            logger.info(f"Successfully instantiated tool: '{getattr(tool_instance, 'name', db_tool_name)}' (Python class '{type(tool_instance).__name__}')")  # noqa: E501
         except Exception as e:
-            logger.error(f"Failed to instantiate tool class '{db_tool_type_str}' (intended name '{db_tool_name}', effective Python class '{effective_tool_class_to_instantiate.__name__}'): {e}", exc_info=True)
+            logger.error(f"Failed to instantiate tool class '{db_tool_type_str}' (intended name '{db_tool_name}', effective Python class '{effective_tool_class_to_instantiate.__name__}'): {e}", exc_info=True)  # noqa: E501
     return tools
 
 def _fetch_user_instructions(db: SupabaseClient, user_id: str, agent_name: str) -> Optional[str]:
@@ -480,12 +480,12 @@ def load_agent_executor_db(
     effective_supabase_url = supabase_url or os.getenv("SUPABASE_URL")
     effective_supabase_key = supabase_key or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
     if not effective_supabase_url or not effective_supabase_key:
-        raise ValueError("Supabase URL and Service Key must be provided either as arguments or environment variables (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY).")
+        raise ValueError("Supabase URL and Service Key must be provided either as arguments or environment variables (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY).")  # noqa: E501
 
     db: SupabaseClient = create_client(effective_supabase_url, effective_supabase_key)
 
     cache_status = "cached" if use_cache else "non-cached"
-    logger.info(f"Loading agent executor for agent_name='{agent_name}', user_id='{user_id}' using {cache_status} database-driven agent loading.")
+    logger.info(f"Loading agent executor for agent_name='{agent_name}', user_id='{user_id}' using {cache_status} database-driven agent loading.")  # noqa: E501
 
     # 1. Fetch agent config (not cached as it's infrequent and small)
     agent_resp = db.table("agent_configurations").select("*, id").eq("agent_name", agent_name).single().execute()
@@ -495,7 +495,7 @@ def load_agent_executor_db(
     agent_db_config = agent_resp.data
     agent_id = agent_db_config.get("id")
     if not agent_id:
-        raise ValueError(f"Agent '{agent_name}' found, but its ID (UUID from agent_configurations table) is missing. This is unexpected.")
+        raise ValueError(f"Agent '{agent_name}' found, but its ID (UUID from agent_configurations table) is missing. This is unexpected.")  # noqa: E501
     logger.info(f"Loaded agent config for '{agent_name}' (ID: {agent_id}) from DB.")
 
     # 2. Fetch tools - use cache if requested and available
@@ -569,13 +569,13 @@ def load_agent_executor_db(
             logger.info("Falling back to Supabase client with separate queries")
 
             # First get agent tool assignments
-            assignments_resp = db.table("agent_tools").select("*").eq("agent_id", str(agent_id)).eq("is_active", True).eq("is_deleted", False).execute()
+            assignments_resp = db.table("agent_tools").select("*").eq("agent_id", str(agent_id)).eq("is_active", True).eq("is_deleted", False).execute()  # noqa: E501
             assignments = assignments_resp.data or []
 
             # Then get tool details for each assignment
             raw_tools_data = []
             for assignment in assignments:
-                tool_resp = db.table("tools").select("*").eq("id", assignment["tool_id"]).eq("is_active", True).eq("is_deleted", False).single().execute()
+                tool_resp = db.table("tools").select("*").eq("id", assignment["tool_id"]).eq("is_active", True).eq("is_deleted", False).single().execute()  # noqa: E501
                 if tool_resp.data:
                     tool_data = tool_resp.data
                     # Merge assignment and tool data
@@ -592,7 +592,7 @@ def load_agent_executor_db(
                     }
                     raw_tools_data.append(merged_data)
 
-        logger.info(f"Found {len(raw_tools_data)} active tools linked to agent '{agent_name}' (agent_id: {agent_id}) via normalized schema.")
+        logger.info(f"Found {len(raw_tools_data)} active tools linked to agent '{agent_name}' (agent_id: {agent_id}) via normalized schema.")  # noqa: E501
 
         # Transform the joined data to match the expected format for load_tools_from_db
         # Merge tool config with config_override from agent_tools
@@ -633,7 +633,7 @@ def load_agent_executor_db(
     llm_config_from_db = agent_db_config.get("llm_config")
 
     if not llm_config_from_db:
-        logger.warning(f"Agent '{agent_name}' is missing 'llm_config' in its DB configuration. LLM behavior might be undefined.")
+        logger.warning(f"Agent '{agent_name}' is missing 'llm_config' in its DB configuration. LLM behavior might be undefined.")  # noqa: E501
 
     # Fetch soul (was system_prompt) and identity from agent config
     soul = agent_db_config.get("soul") or ""
@@ -645,9 +645,6 @@ def load_agent_executor_db(
     # Fetch LTM notes for onboarding detection
     memory_notes = _fetch_memory_notes(db, user_id, agent_name)
 
-    # Collect tool names for the prompt
-    tool_names = [getattr(t, "name", None) for t in instantiated_tools if getattr(t, "name", None)]
-
     # Assemble the system prompt via the prompt builder
     from chatServer.services.prompt_builder import build_agent_prompt
     assembled_prompt = build_agent_prompt(
@@ -655,7 +652,7 @@ def load_agent_executor_db(
         identity=identity,
         channel=channel,
         user_instructions=user_instructions,
-        tool_names=tool_names,
+        tools=instantiated_tools,
         memory_notes=memory_notes,
     )
 
@@ -674,10 +671,10 @@ def load_agent_executor_db(
             session_id=session_id,
             logger_instance=logger
         )
-        logger.info(f"Successfully created CustomizableAgentExecutor for agent '{agent_db_config['agent_name']}' using {cache_status} DB data.")
+        logger.info(f"Successfully created CustomizableAgentExecutor for agent '{agent_db_config['agent_name']}' using {cache_status} DB data.")  # noqa: E501
         return agent_executor
     except Exception as e:
-        logger.error(f"Failed to create CustomizableAgentExecutor for agent '{agent_db_config['agent_name']}': {e}", exc_info=True)
+        logger.error(f"Failed to create CustomizableAgentExecutor for agent '{agent_db_config['agent_name']}': {e}", exc_info=True)  # noqa: E501
         raise
 
 
@@ -764,7 +761,6 @@ async def load_agent_executor_db_async(
 
     soul = agent_db_config.get("soul") or ""
     identity = agent_db_config.get("identity")
-    tool_names = [getattr(t, "name", None) for t in instantiated_tools if getattr(t, "name", None)]
 
     from chatServer.services.prompt_builder import build_agent_prompt
 
@@ -773,7 +769,7 @@ async def load_agent_executor_db_async(
         identity=identity,
         channel=channel,
         user_instructions=user_instructions,
-        tool_names=tool_names,
+        tools=instantiated_tools,
         memory_notes=memory_notes,
     )
 

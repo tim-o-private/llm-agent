@@ -58,13 +58,13 @@ class SupabaseChatMessageHistory(BaseChatMessageHistory):
                     items.append(message_dict)
 
                 loaded_messages = messages_from_dict(items)
-                logger.info(f"Successfully retrieved and parsed {len(loaded_messages)} messages for session_id: {self.session_id}")
+                logger.info(f"Successfully retrieved and parsed {len(loaded_messages)} messages for session_id: {self.session_id}")  # noqa: E501
                 return loaded_messages
             else:
                 logger.info(f"No messages found in DB for session_id: {self.session_id}")
                 return []
         except Exception as e:
-            logger.error(f"Error retrieving messages from Supabase for session_id {self.session_id}: {e}", exc_info=True)
+            logger.error(f"Error retrieving messages from Supabase for session_id {self.session_id}: {e}", exc_info=True)  # noqa: E501
             return [] # Return empty list on error to prevent breaking agent flow
 
     async def add_message(self, message: BaseMessage) -> None:
@@ -73,7 +73,7 @@ class SupabaseChatMessageHistory(BaseChatMessageHistory):
         # Determine the next message index by fetching current messages asynchronously
         current_messages = await self.aget_messages() # Use the new async method
         next_idx = len(current_messages)
-        logger.debug(f"Current message count for session {self.session_id} is {next_idx}. Adding new message at this index.")
+        logger.debug(f"Current message count for session {self.session_id} is {next_idx}. Adding new message at this index.")  # noqa: E501
 
         message_dict = messages_to_dict([message])[0]
 
@@ -93,7 +93,7 @@ class SupabaseChatMessageHistory(BaseChatMessageHistory):
         }
 
         try:
-            logger.info(f"Attempting to save message to DB. Session ID: {self.session_id}, Index: {next_idx}, Role: {role}, Payload: {insert_payload}")
+            logger.info(f"Attempting to save message to DB. Session ID: {self.session_id}, Index: {next_idx}, Role: {role}, Payload: {insert_payload}")  # noqa: E501
             response = await self.client.table(self.table_name).insert(insert_payload).execute()
             logger.info(f"Message saved for session_id={self.session_id}, idx={next_idx}. Response: {response}")
             if response.data:
@@ -102,12 +102,12 @@ class SupabaseChatMessageHistory(BaseChatMessageHistory):
                  logger.error(f"Supabase insert returned an error: {response.error}")
 
         except Exception as e:
-            logger.error(f"Error adding message to Supabase for session_id={self.session_id}, idx={next_idx}: {e}", exc_info=True)
+            logger.error(f"Error adding message to Supabase for session_id={self.session_id}, idx={next_idx}: {e}", exc_info=True)  # noqa: E501
             # No longer using traceback.print_exc() as logger.error with exc_info=True handles it
 
     def clear(self) -> None:
         """Clear session messages from Supabase"""
-        # print("WARNING: SupabaseChatMessageHistory.clear is currently synchronous and will likely fail with AsyncClient.")
+        # print("WARNING: SupabaseChatMessageHistory.clear is currently synchronous and will likely fail with AsyncClient.")  # noqa: E501
         raise NotImplementedError("Synchronous clear method is not compatible with AsyncClient. Refactor needed.")
         # try:
         #     self.client.table(self.table_name).delete().eq( # This would need await

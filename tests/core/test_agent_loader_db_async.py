@@ -1,7 +1,6 @@
 """Tests for async agent loader (load_agent_executor_db_async)."""
 
 import asyncio
-import importlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -33,17 +32,17 @@ ENV_VARS = {"SUPABASE_URL": "https://test.supabase.co", "SUPABASE_SERVICE_ROLE_K
 async def test_load_agent_executor_db_async_cache_hit():
     """Test async loader with all caches warm."""
     mock_tools_data = [
-        {"name": "read_memory", "type": "ReadMemoryTool", "description": "Read memory", "config": {}, "is_active": True},
+        {"name": "read_memory", "type": "ReadMemoryTool", "description": "Read memory", "config": {}, "is_active": True},  # noqa: E501
     ]
 
     mock_executor = _make_mock_executor()
 
     with (
         patch.dict("os.environ", ENV_VARS),
-        patch("chatServer.services.agent_config_cache_service.get_cached_agent_config", new_callable=AsyncMock, return_value=MOCK_AGENT_CONFIG) as mock_config,
-        patch("chatServer.services.tool_cache_service.get_cached_tools_for_agent", new_callable=AsyncMock, return_value=mock_tools_data),
-        patch("chatServer.services.user_instructions_cache_service.get_cached_user_instructions", new_callable=AsyncMock, return_value="Be concise"),
-        patch("core.agent_loader_db.load_tools_from_db", return_value=[type("MockTool", (), {"name": "read_memory"})()]),
+        patch("chatServer.services.agent_config_cache_service.get_cached_agent_config", new_callable=AsyncMock, return_value=MOCK_AGENT_CONFIG) as mock_config,  # noqa: E501, F841
+        patch("chatServer.services.tool_cache_service.get_cached_tools_for_agent", new_callable=AsyncMock, return_value=mock_tools_data),  # noqa: E501
+        patch("chatServer.services.user_instructions_cache_service.get_cached_user_instructions", new_callable=AsyncMock, return_value="Be concise"),  # noqa: E501
+        patch("core.agent_loader_db.load_tools_from_db", return_value=[type("MockTool", (), {"name": "read_memory"})()]),  # noqa: E501
         patch("core.agent_loader_db.CustomizableAgentExecutor") as mock_executor_class,
     ):
         mock_executor_class.from_agent_config.return_value = mock_executor
@@ -68,10 +67,10 @@ async def test_load_agent_executor_db_async_config_cache_miss():
 
     with (
         patch.dict("os.environ", ENV_VARS),
-        patch("chatServer.services.agent_config_cache_service.get_cached_agent_config", new_callable=AsyncMock, return_value=None),
-        patch("core.agent_loader_db._fetch_agent_config_from_db_async", new_callable=AsyncMock, return_value=MOCK_AGENT_CONFIG),
-        patch("chatServer.services.tool_cache_service.get_cached_tools_for_agent", new_callable=AsyncMock, return_value=[]),
-        patch("chatServer.services.user_instructions_cache_service.get_cached_user_instructions", new_callable=AsyncMock, return_value=None),
+        patch("chatServer.services.agent_config_cache_service.get_cached_agent_config", new_callable=AsyncMock, return_value=None),  # noqa: E501
+        patch("core.agent_loader_db._fetch_agent_config_from_db_async", new_callable=AsyncMock, return_value=MOCK_AGENT_CONFIG),  # noqa: E501
+        patch("chatServer.services.tool_cache_service.get_cached_tools_for_agent", new_callable=AsyncMock, return_value=[]),  # noqa: E501
+        patch("chatServer.services.user_instructions_cache_service.get_cached_user_instructions", new_callable=AsyncMock, return_value=None),  # noqa: E501
         patch("core.agent_loader_db.load_tools_from_db", return_value=[]),
         patch("core.agent_loader_db.CustomizableAgentExecutor") as mock_executor_class,
     ):
@@ -93,7 +92,7 @@ async def test_load_agent_executor_db_async_agent_not_found():
     """Test async loader raises ValueError when agent not found."""
     with (
         patch.dict("os.environ", ENV_VARS),
-        patch("chatServer.services.agent_config_cache_service.get_cached_agent_config", new_callable=AsyncMock, return_value=None),
+        patch("chatServer.services.agent_config_cache_service.get_cached_agent_config", new_callable=AsyncMock, return_value=None),  # noqa: E501
         patch("core.agent_loader_db._fetch_agent_config_from_db_async", new_callable=AsyncMock, return_value=None),
     ):
         from core.agent_loader_db import load_agent_executor_db_async
@@ -141,9 +140,9 @@ async def test_load_agent_executor_db_async_parallelizes_fetch():
 
     with (
         patch.dict("os.environ", ENV_VARS),
-        patch("chatServer.services.agent_config_cache_service.get_cached_agent_config", new_callable=AsyncMock, return_value=MOCK_AGENT_CONFIG),
+        patch("chatServer.services.agent_config_cache_service.get_cached_agent_config", new_callable=AsyncMock, return_value=MOCK_AGENT_CONFIG),  # noqa: E501
         patch("chatServer.services.tool_cache_service.get_cached_tools_for_agent", side_effect=mock_get_tools),
-        patch("chatServer.services.user_instructions_cache_service.get_cached_user_instructions", side_effect=mock_get_instructions),
+        patch("chatServer.services.user_instructions_cache_service.get_cached_user_instructions", side_effect=mock_get_instructions),  # noqa: E501
         patch("core.agent_loader_db.load_tools_from_db", return_value=[]),
         patch("core.agent_loader_db.CustomizableAgentExecutor") as mock_executor_class,
     ):

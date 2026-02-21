@@ -82,7 +82,7 @@ def _setup_agent_validation(db_client, exists=True):
 async def test_create_schedule_success(service, db_client):
     """Verify create_schedule inserts a row and returns it."""
     # First call: agent_configurations lookup; second call: insert
-    call_count = 0
+    call_count = 0  # noqa: F841
     agent_data = {"id": "agent-uuid-1"}
     schedule_data = [
         {

@@ -22,7 +22,7 @@ TEST_USER_ID = "test-user-123"
 MOCK_JWT_SECRET = "test-super-secret-key-for-testing-only"
 MOCK_JWT_PAYLOAD = {"sub": TEST_USER_ID, "aud": "authenticated"}
 
-def create_mock_jwt(payload: Dict[str, Any] = MOCK_JWT_PAYLOAD, secret: str = MOCK_JWT_SECRET, algorithm: str = "HS256") -> str:
+def create_mock_jwt(payload: Dict[str, Any] = MOCK_JWT_PAYLOAD, secret: str = MOCK_JWT_SECRET, algorithm: str = "HS256") -> str:  # noqa: E501
     return f"mock_jwt_for_{payload.get('sub', 'unknown_user')}"
 
 # Define a Fake CustomizableAgentExecutor for testing
@@ -101,12 +101,12 @@ class TestChatEndpoint(unittest.IsolatedAsyncioTestCase):
         p4 = patch('chatServer.services.tool_cache_service.shutdown_tool_cache', new_callable=AsyncMock)
 
         # Mock agent config cache
-        p3a = patch('chatServer.services.agent_config_cache_service.initialize_agent_config_cache', new_callable=AsyncMock)
-        p4a = patch('chatServer.services.agent_config_cache_service.shutdown_agent_config_cache', new_callable=AsyncMock)
+        p3a = patch('chatServer.services.agent_config_cache_service.initialize_agent_config_cache', new_callable=AsyncMock)  # noqa: E501
+        p4a = patch('chatServer.services.agent_config_cache_service.shutdown_agent_config_cache', new_callable=AsyncMock)  # noqa: E501
 
         # Mock user instructions cache
-        p3b = patch('chatServer.services.user_instructions_cache_service.initialize_user_instructions_cache', new_callable=AsyncMock)
-        p4b = patch('chatServer.services.user_instructions_cache_service.shutdown_user_instructions_cache', new_callable=AsyncMock)
+        p3b = patch('chatServer.services.user_instructions_cache_service.initialize_user_instructions_cache', new_callable=AsyncMock)  # noqa: E501
+        p4b = patch('chatServer.services.user_instructions_cache_service.shutdown_user_instructions_cache', new_callable=AsyncMock)  # noqa: E501
 
         # Mock background task service
         mock_bg_service = MagicMock()
@@ -148,13 +148,13 @@ class TestChatEndpoint(unittest.IsolatedAsyncioTestCase):
         self.client = TestClient(app)
 
         # Patch PostgresChatMessageHistory class and its instance
-        self.patch_chat_message_history_class = patch('chatServer.services.chat.PostgresChatMessageHistory', autospec=True)
-        self.mock_postgres_chat_history_class = self.patch_chat_message_history_class.start() # This is the mock of the CLASS
+        self.patch_chat_message_history_class = patch('chatServer.services.chat.PostgresChatMessageHistory', autospec=True)  # noqa: E501
+        self.mock_postgres_chat_history_class = self.patch_chat_message_history_class.start() # This is the mock of the CLASS  # noqa: E501
         self.addAsyncCleanup(self.patch_chat_message_history_class.stop)
 
         # Create an instance mock that *is an instance of* PostgresChatMessageHistory (due to autospec on class)
         # or by explicit spec here.
-        self.mock_chat_history_instance = MagicMock(spec_set=PostgresChatMessageHistory) # Use spec_set for stricter instance checking
+        self.mock_chat_history_instance = MagicMock(spec_set=PostgresChatMessageHistory) # Use spec_set for stricter instance checking  # noqa: E501
         self.mock_chat_history_instance.aget_messages = AsyncMock(return_value=[])
         self.mock_chat_history_instance.aadd_messages = AsyncMock()
         # Ensure the mocked CLASS returns our mocked INSTANCE

@@ -45,7 +45,7 @@ class ConfigLoader:
         # Load YAML config using the absolute path
         try:
             # Ensure the config directory (relative to base_path) exists if needed
-            config_dir = os.path.dirname(self.settings_path)
+            config_dir = os.path.dirname(self.settings_path)  # noqa: F841
             # PyInstaller bundles config, so we don't need to create it.
             # if not os.path.exists(config_dir):
             #    os.makedirs(config_dir, exist_ok=True)

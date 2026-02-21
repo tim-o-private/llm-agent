@@ -4,16 +4,30 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 CHANNEL_GUIDANCE = {
-    "web": "User is on the web app. Markdown formatting is supported.",
-    "telegram": "User is on Telegram. Keep responses concise. No complex markdown.",
+    "web": (
+        "User is on the web app. Markdown formatting is supported. "
+        "This is an interactive conversation — respond to what the user says, "
+        "ask clarifying questions when needed."
+    ),
+    "telegram": (
+        "User is on Telegram. Keep responses concise — under 4096 characters. "
+        "Use simple markdown (bold, italic, code). No tables or complex formatting. "
+        "This is an interactive conversation."
+    ),
     "scheduled": (
-        "This is an automated scheduled run. No one is waiting for a response. "
-        "Be thorough but don't ask follow-up questions — just do the work and report results."
+        "This is an automated scheduled run. No one is waiting for a response.\n"
+        "- Do the work described in the prompt thoroughly.\n"
+        "- Use all available tools to gather information before composing your response.\n"
+        "- Don't ask follow-up questions — make reasonable assumptions.\n"
+        "- Your response will be delivered as a notification, so make it self-contained."
     ),
     "heartbeat": (
-        "This is an automated heartbeat check. No one is waiting for a response. "
-        "Check each item on your checklist using tools. If nothing needs attention, "
-        "respond with exactly: HEARTBEAT_OK. Otherwise, report only what needs action."
+        "This is an automated heartbeat check. No one is waiting for a response.\n"
+        "Your job: check each area using your tools, then decide if anything needs the user's attention.\n"
+        "- Use tools to actively check state (tasks, emails, reminders) — don't guess.\n"
+        "- If everything is fine, respond with exactly: HEARTBEAT_OK\n"
+        "- If something needs attention, report ONLY what needs action — no filler.\n"
+        "- Never fabricate information. If a tool fails, skip that check and note the failure."
     ),
 }
 
@@ -31,22 +45,13 @@ ONBOARDING_SECTION = (
     "Keep it conversational — you can learn more over time."
 )
 
-MEMORY_SECTION = (
-    "You have long-term memory via the read_memory and save_memory tools.\n"
-    "IMPORTANT: Before answering any question about the user's preferences, past conversations, "
-    "ongoing projects, or anything you were previously told to remember — call read_memory FIRST. "
-    "Do not guess from the conversation. Check your memory.\n"
-    "When the user tells you something to remember, call save_memory immediately."
-)
-
-
 def build_agent_prompt(
     soul: str,
     identity: dict | None,
     channel: str,
     user_instructions: str | None,
     timezone: str | None = None,
-    tool_names: list[str] | None = None,
+    tools: list | None = None,
     memory_notes: str | None = None,
 ) -> str:
     """Assemble the agent system prompt from layered sections.
@@ -57,7 +62,7 @@ def build_agent_prompt(
         channel: "web", "telegram", or "scheduled".
         user_instructions: Free-text user instructions or None.
         timezone: IANA timezone string (e.g. "America/New_York") or None.
-        tool_names: List of available tool names for reference.
+        tools: List of instantiated tool objects (will call prompt_section() on each).
         memory_notes: LTM notes string or None. Used for onboarding detection.
 
     Returns:
@@ -87,8 +92,13 @@ def build_agent_prompt(
     now = _get_current_time(timezone)
     sections.append(f"## Current Time\n{now}")
 
-    # 5. Memory
-    sections.append(f"## Memory\n{MEMORY_SECTION}")
+    # 5. What You Know (pre-loaded memory)
+    if memory_notes:
+        truncated_notes = memory_notes[:4000]
+        sections.append(
+            f"## What You Know\n"
+            f"These are your accumulated notes about this user:\n{truncated_notes}"
+        )
 
     # 6. User Instructions
     if user_instructions:
@@ -105,13 +115,24 @@ def build_agent_prompt(
     )
     sections.append(f"## User Instructions\n{instructions_text}")
 
-    # 7. Tools
-    if tool_names:
-        tools_list = ", ".join(tool_names)
-        sections.append(
-            f"## Tools\nAvailable tools: {tools_list}\n"
-            "Use tools when they help. Don't narrate routine tool calls."
-        )
+    # 7. Tool Guidance
+    if tools:
+        seen_classes = set()
+        guidance_lines = []
+        for tool in tools:
+            tool_cls = type(tool)
+            if tool_cls in seen_classes:
+                continue
+            seen_classes.add(tool_cls)
+            try:
+                if hasattr(tool_cls, "prompt_section"):
+                    section = tool_cls.prompt_section(channel)
+                    if section:
+                        guidance_lines.append(section)
+            except Exception:
+                pass  # Never fail the prompt build for a single tool
+        if guidance_lines:
+            sections.append("## Tool Guidance\n" + "\n".join(guidance_lines))
 
     # 8. Onboarding (interactive channels only, when memory + instructions are empty)
     is_interactive = channel in ("web", "telegram")

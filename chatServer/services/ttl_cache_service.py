@@ -162,7 +162,7 @@ class TTLCacheService(Generic[T]):
 
     def get_cache_stats(self) -> Dict[str, Any]:
         """Get cache statistics."""
-        now = time.time()
+        now = time.time()  # noqa: F841
         valid_entries = sum(1 for key in self._cache.keys() if self._is_cache_valid(key))
 
         return {
@@ -172,7 +172,7 @@ class TTLCacheService(Generic[T]):
             "expired_entries": len(self._cache) - valid_entries,
             "ttl_seconds": self.ttl_seconds,
             "refresh_interval_seconds": self.refresh_interval,
-            "last_refresh_check": datetime.fromtimestamp(self._last_refresh_check, tz=timezone.utc).isoformat() if self._last_refresh_check else None,
+            "last_refresh_check": datetime.fromtimestamp(self._last_refresh_check, tz=timezone.utc).isoformat() if self._last_refresh_check else None,  # noqa: E501
             "is_running": self._is_running
         }
 

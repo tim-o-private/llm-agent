@@ -86,6 +86,14 @@ class CreateScheduleTool(BaseTool):
     supabase_url: Optional[str] = None
     supabase_key: Optional[str] = None
 
+    @classmethod
+    def prompt_section(cls, channel: str) -> str | None:
+        """Return behavioral guidance for the agent prompt, or None to omit."""
+        if channel in ("web", "telegram"):
+            return "Schedules: When the user wants recurring work (daily summaries, weekly reports), use create_schedule with a cron expression. Use list_schedules to show existing schedules."  # noqa: E501
+        else:
+            return None
+
     def _run(
         self,
         prompt: str,

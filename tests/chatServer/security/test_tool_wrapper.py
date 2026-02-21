@@ -213,7 +213,7 @@ class TestSecurityInvariants:
             # Attacker tries to modify the tool's approval tier after wrapping
             tool.approval_tier = ApprovalTier.AUTO_APPROVE
 
-            result = await wrapped_tool._arun(to="test@example.com")
+            result = await wrapped_tool._arun(to="test@example.com")  # noqa: F841
 
         assert tool._arun_called is False
         mock_pending_service.queue_action.assert_called_once()

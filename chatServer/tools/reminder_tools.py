@@ -48,6 +48,14 @@ class CreateReminderTool(BaseTool):
     supabase_url: Optional[str] = None
     supabase_key: Optional[str] = None
 
+    @classmethod
+    def prompt_section(cls, channel: str) -> str | None:
+        """Return behavioral guidance for the agent prompt, or None to omit."""
+        if channel in ("web", "telegram"):
+            return "Reminders: When the user mentions a deadline or wants to be reminded, use create_reminder with an ISO datetime. Use list_reminders to show upcoming reminders."  # noqa: E501
+        else:
+            return None
+
     def _run(self, title: str, remind_at: str, body: Optional[str] = None, recurrence: Optional[str] = None) -> str:
         return "create_reminder requires async execution. Use _arun."
 

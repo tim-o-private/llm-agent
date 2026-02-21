@@ -5,10 +5,11 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from .email_digest_storage_service import get_email_digest_storage_service
 from src.core.agent_loader_db import load_agent_executor_db
 from supabase import Client as SupabaseClient
 from supabase import create_client
+
+from .email_digest_storage_service import get_email_digest_storage_service
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,7 @@ class EmailDigestService:
         generated_at = datetime.now(timezone.utc)
 
         try:
-            logger.info(f"Generating email digest for user {self.user_id} (context: {self.context}, hours_back: {hours_back})")
+            logger.info(f"Generating email digest for user {self.user_id} (context: {self.context}, hours_back: {hours_back})")  # noqa: E501
 
             # Load the email_digest_agent from database
             # This automatically loads the agent's system prompt and Gmail tools
@@ -127,7 +128,7 @@ class EmailDigestService:
                 })
 
                 if not storage_success:
-                    logger.warning(f"Failed to store digest result for user {self.user_id}, but digest generation succeeded")
+                    logger.warning(f"Failed to store digest result for user {self.user_id}, but digest generation succeeded")  # noqa: E501
 
             logger.info(f"Successfully generated email digest for user {self.user_id} (context: {self.context})")
             return result_data

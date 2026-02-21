@@ -42,6 +42,14 @@ class SaveMemoryTool(BaseTool):
     supabase_url: str = Field(default="", description="Supabase URL")
     supabase_key: str = Field(default="", description="Supabase service key")
 
+    @classmethod
+    def prompt_section(cls, channel: str) -> str | None:
+        """Return behavioral guidance for the agent prompt, or None to omit."""
+        if channel in ("web", "telegram"):
+            return "Memory: Before answering questions about the user's preferences, past conversations, or projects, call read_memory first. When the user shares something worth remembering, call save_memory immediately."  # noqa: E501
+        else:
+            return None
+
     def _get_client(self) -> SupabaseClient:
         url = self.supabase_url or os.getenv("SUPABASE_URL", "")
         key = self.supabase_key or os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")

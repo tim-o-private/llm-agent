@@ -269,10 +269,11 @@ async def handle_message(message: types.Message) -> None:
         user_id = result.data["user_id"]
 
         # Route to assistant agent
+        from src.core.agent_loader_db import load_agent_executor_db
+
         from ..security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
         from ..services.audit_service import AuditService
         from ..services.pending_actions import PendingActionsService
-        from src.core.agent_loader_db import load_agent_executor_db
 
         # Cross-channel session sharing: reuse most recent web session if one exists
         web_session_result = (
@@ -341,8 +342,8 @@ async def handle_message(message: types.Message) -> None:
             wrap_tools_with_approval(agent_executor.tools, approval_context)
 
         # Set up persistent memory and invoke agent within a DB connection scope
-        from ..database.connection import get_database_manager
         from ..config.constants import CHAT_MESSAGE_HISTORY_TABLE_NAME
+        from ..database.connection import get_database_manager
 
         db_manager = get_database_manager()
         await db_manager.ensure_initialized()

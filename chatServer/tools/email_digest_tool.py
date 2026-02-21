@@ -41,6 +41,16 @@ class EmailDigestTool(BaseTool):
     supabase_url: Optional[str] = None
     supabase_key: Optional[str] = None
 
+    @classmethod
+    def prompt_section(cls, channel: str) -> str | None:
+        """Return behavioral guidance for the agent prompt, or None to omit."""
+        if channel in ("web", "telegram"):
+            return "Email Digest: Use email_digest for comprehensive email summaries. Prefer this over manual gmail_search when the user wants an overview of recent email activity."  # noqa: E501
+        elif channel == "scheduled":
+            return "Email Digest: Generate the digest using email_digest. Include the full summary in your response for notification delivery."  # noqa: E501
+        else:
+            return None
+
     def __init__(self, user_id: str, agent_name: Optional[str] = None,
                  supabase_url: Optional[str] = None, supabase_key: Optional[str] = None, **kwargs):
         """Initialize email digest tool.
@@ -74,7 +84,7 @@ class EmailDigestTool(BaseTool):
             Email digest summary as formatted string
         """
         try:
-            logger.info(f"Generating email digest for user {self.user_id}: {hours_back}h back, include_read={include_read}")
+            logger.info(f"Generating email digest for user {self.user_id}: {hours_back}h back, include_read={include_read}")  # noqa: E501
 
             # Lazy import to avoid circular dependency
             from ..services.email_digest_service import EmailDigestService

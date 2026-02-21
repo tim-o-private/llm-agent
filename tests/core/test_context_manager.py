@@ -44,17 +44,17 @@ def temp_dirs(): # Renamed fixture to reflect multiple base dirs
     os.makedirs(data_agent_b_dir)
 
     # Create global context files (in data dir)
-    with open(os.path.join(data_global_dir, 'bio.md'), 'w') as f: f.write(GLOBAL_BIO_CONTENT)
-    with open(os.path.join(data_global_dir, 'prefs.yaml'), 'w') as f: yaml.dump(GLOBAL_PREFS_CONTENT, f)
+    with open(os.path.join(data_global_dir, 'bio.md'), 'w') as f: f.write(GLOBAL_BIO_CONTENT)  # noqa: E701
+    with open(os.path.join(data_global_dir, 'prefs.yaml'), 'w') as f: yaml.dump(GLOBAL_PREFS_CONTENT, f)  # noqa: E701
 
     # Create agent A static context files (in config dir)
-    with open(os.path.join(config_agent_a_dir, 'notes.md'), 'w') as f: f.write(AGENT_A_NOTES_CONTENT)
-    with open(os.path.join(config_agent_a_dir, 'tasks.yaml'), 'w') as f: yaml.dump(AGENT_A_TASKS_CONTENT, f)
+    with open(os.path.join(config_agent_a_dir, 'notes.md'), 'w') as f: f.write(AGENT_A_NOTES_CONTENT)  # noqa: E701
+    with open(os.path.join(config_agent_a_dir, 'tasks.yaml'), 'w') as f: yaml.dump(AGENT_A_TASKS_CONTENT, f)  # noqa: E701
 
     # Create agent B static context files (in config dir)
-    with open(os.path.join(config_agent_b_dir, 'readme.md'), 'w') as f: f.write(AGENT_B_README_CONTENT)
+    with open(os.path.join(config_agent_b_dir, 'readme.md'), 'w') as f: f.write(AGENT_B_README_CONTENT)  # noqa: E701
     # Add an ignored file type (in config dir)
-    with open(os.path.join(config_agent_b_dir, 'image.png'), 'w') as f: f.write("PNGDATA")
+    with open(os.path.join(config_agent_b_dir, 'image.png'), 'w') as f: f.write("PNGDATA")  # noqa: E701
 
     yield base_config_dir, base_data_dir # Return paths to both temp roots
 
@@ -149,8 +149,8 @@ def test_context_manager_missing_agent(mock_config, caplog):
 
     # Check formatted string (global ONLY)
     assert "## Global Context" in formatted_context
-    assert "## Agent Definition: non_existent_agent" not in formatted_context # This section is no longer added by ContextManager
-    # The following assertion is no longer relevant as ContextManager doesn't attempt to load or format agent static context
+    assert "## Agent Definition: non_existent_agent" not in formatted_context # This section is no longer added by ContextManager  # noqa: E501
+    # The following assertion is no longer relevant as ContextManager doesn't attempt to load or format agent static context  # noqa: E501
     # assert "No static context files found for this agent definition." in formatted_context
 
     # Check for the specific warning log for providing agent_name
@@ -164,7 +164,7 @@ def test_context_manager_missing_agent(mock_config, caplog):
         if "Context directory not found" in record.message and specific_agent_config_path_part in record.message:
             found_missing_dir_log_for_agent = True
             break
-    assert not found_missing_dir_log_for_agent, "ContextManager should not log missing config dir for an agent it ignores"
+    assert not found_missing_dir_log_for_agent, "ContextManager should not log missing config dir for an agent it ignores"  # noqa: E501
 
 def test_context_manager_missing_global(mock_config, temp_dirs, caplog):
     """Test loading when the global context data directory is missing."""
@@ -192,7 +192,7 @@ def test_context_manager_missing_global(mock_config, temp_dirs, caplog):
     assert "Context directory not found" in caplog.text # This is from _read_context_files for global_context_dir
     assert "global_context" in caplog.text
     # Make the base_data_dir check more robust against trailing slashes
-    assert os.path.normpath(base_data_dir) in os.path.normpath(caplog.records[-1].pathname) or base_data_dir in caplog.text
+    assert os.path.normpath(base_data_dir) in os.path.normpath(caplog.records[-1].pathname) or base_data_dir in caplog.text  # noqa: E501
 
     # Check for the warning log about agent_name being passed
     assert "ContextManager.get_context called with agent_name, but it now only loads global context" in caplog.text
@@ -205,4 +205,4 @@ def test_context_manager_missing_global(mock_config, temp_dirs, caplog):
         if "Context directory not found" in record.message and specific_agent_config_path_part in record.message:
             found_missing_dir_log_for_agent = True
             break
-    assert not found_missing_dir_log_for_agent, "ContextManager should not log missing config dir for an agent it ignores"
+    assert not found_missing_dir_log_for_agent, "ContextManager should not log missing config dir for an agent it ignores"  # noqa: E501

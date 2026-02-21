@@ -6,8 +6,6 @@ import pytest
 
 from chatServer.services.user_instructions_cache_service import (
     UserInstructionsCacheService,
-    get_cached_user_instructions,
-    get_user_instructions_cache_service,
 )
 
 

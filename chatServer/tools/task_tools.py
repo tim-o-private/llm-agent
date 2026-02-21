@@ -116,6 +116,18 @@ class GetTasksTool(BaseTool):
     supabase_url: Optional[str] = None
     supabase_key: Optional[str] = None
 
+    @classmethod
+    def prompt_section(cls, channel: str) -> str | None:
+        """Return behavioral guidance for the agent prompt, or None to omit."""
+        if channel in ("web", "telegram"):
+            return "Tasks: Check get_tasks at conversation start to see what the user is working on. When they mention something actionable, use create_task. Update status as work progresses."  # noqa: E501
+        elif channel == "heartbeat":
+            return "Tasks: Call get_tasks to check for overdue or stale tasks. Report any that need attention."
+        elif channel == "scheduled":
+            return None
+        else:
+            return "Tasks: Check get_tasks at conversation start to see what the user is working on. When they mention something actionable, use create_task. Update status as work progresses."  # noqa: E501
+
     def _run(self, **kwargs) -> str:
         return "get_tasks requires async execution. Use _arun."
 

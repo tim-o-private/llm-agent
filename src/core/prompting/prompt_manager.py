@@ -42,14 +42,14 @@ class PromptManagerService:
             response.raise_for_status() # Raise an exception for HTTP errors
             return response.json()
         except httpx.HTTPStatusError:
-            # print(f"HTTP error fetching customizations for {agent_name}: {e.response.status_code} - {e.response.text}") # Proper logging
+            # print(f"HTTP error fetching customizations for {agent_name}: {e.response.status_code} - {e.response.text}") # Proper logging  # noqa: E501
             # Depending on desired behavior, could return empty list or re-raise a custom exception
             return []
         except Exception:
             # print(f"Error fetching customizations for {agent_name}: {e}") # Proper logging
             return []
 
-    async def add_customization(self, agent_name: str, customization_type: str, content: Dict[str, Any], priority: int = 0, is_active: bool = True) -> Optional[PromptCustomization]:
+    async def add_customization(self, agent_name: str, customization_type: str, content: Dict[str, Any], priority: int = 0, is_active: bool = True) -> Optional[PromptCustomization]:  # noqa: E501
         """Adds a new prompt customization for the agent and user."""
         payload = {
             "agent_name": agent_name,
@@ -74,7 +74,7 @@ class PromptManagerService:
             # print(f"Error adding customization for {agent_name}: {e}")
             return None
 
-    async def update_customization(self, customization_id: str, agent_name: str, customization_type: str, content: Dict[str, Any], priority: int, is_active: bool) -> Optional[PromptCustomization]:
+    async def update_customization(self, customization_id: str, agent_name: str, customization_type: str, content: Dict[str, Any], priority: int, is_active: bool) -> Optional[PromptCustomization]:  # noqa: E501
         """Updates an existing prompt customization."""
         payload = {
             "agent_name": agent_name, # Though agent_name is part of URL, sending in body for Pydantic model
@@ -93,7 +93,7 @@ class PromptManagerService:
             response.raise_for_status()
             return response.json()
         except httpx.HTTPStatusError:
-            # print(f"HTTP error updating customization {customization_id}: {e.response.status_code} - {e.response.text}")
+            # print(f"HTTP error updating customization {customization_id}: {e.response.status_code} - {e.response.text}")  # noqa: E501
             return None
         except Exception:
             # print(f"Error updating customization {customization_id}: {e}")

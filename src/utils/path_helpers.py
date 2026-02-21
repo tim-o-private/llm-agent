@@ -31,7 +31,7 @@ def get_agent_data_dir(agent_name: str, config_loader: 'ConfigLoader', user_id: 
         # Path for user-specific agent data: data/users/<user_id>/agents/<agent_name>
         users_data_subdir = config_loader.get('data.users_dir', 'users/') # New config option
         agents_subdir_within_user = config_loader.get('data.agents_dir_user_scope', 'agents/') # New config option
-        return os.path.join(project_base_path, base_data_dir_rel, users_data_subdir, user_id, agents_subdir_within_user, agent_name)
+        return os.path.join(project_base_path, base_data_dir_rel, users_data_subdir, user_id, agents_subdir_within_user, agent_name)  # noqa: E501
     else:
         # Path for general agent data (CLI or system agents): data/agents/<agent_name>
         agents_data_subdir = config_loader.get('data.agents_dir', 'agents/')

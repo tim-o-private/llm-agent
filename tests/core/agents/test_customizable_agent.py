@@ -73,7 +73,7 @@ class TestCustomizableAgentExecutorFactory(unittest.TestCase):
         self.mock_llm_with_tools = MagicMock()
         self.mock_llm_instance.bind_tools = MagicMock(return_value=self.mock_llm_with_tools)
 
-        self.patch_chat_google = patch('langchain_google_genai.ChatGoogleGenerativeAI', return_value=self.mock_llm_instance)
+        self.patch_chat_google = patch('langchain_google_genai.ChatGoogleGenerativeAI', return_value=self.mock_llm_instance)  # noqa: E501
         self.mock_chat_google_class = self.patch_chat_google.start()
         self.addCleanup(self.patch_chat_google.stop)
 

@@ -165,7 +165,7 @@ class TestVaultToLangChainCredentialAdapter:
                 await adapter.create_google_credentials('user123', 'gmail')
 
     @pytest.mark.asyncio
-    async def test_create_google_credentials_expired_with_refresh(self, adapter, mock_db_connection, sample_tokens, mock_env_vars):
+    async def test_create_google_credentials_expired_with_refresh(self, adapter, mock_db_connection, sample_tokens, mock_env_vars):  # noqa: E501
         """Test credentials creation with expired token that gets refreshed."""
         mock_conn, mock_cursor = mock_db_connection
         mock_cursor.fetchone.side_effect = [
@@ -189,7 +189,7 @@ class TestVaultToLangChainCredentialAdapter:
                 mock_refresh.assert_called_once_with('user123', 'gmail', mock_creds)
 
     @pytest.mark.asyncio
-    async def test_create_google_credentials_expired_no_refresh(self, adapter, mock_db_connection, sample_tokens, mock_env_vars):
+    async def test_create_google_credentials_expired_no_refresh(self, adapter, mock_db_connection, sample_tokens, mock_env_vars):  # noqa: E501
         """Test credentials creation with expired token and no refresh token."""
         mock_conn, mock_cursor = mock_db_connection
         mock_cursor.fetchone.side_effect = [
@@ -219,7 +219,7 @@ class TestVaultToLangChainCredentialAdapter:
         mock_creds.token = 'new_access_token'
         mock_creds.expiry = datetime.now() + timedelta(hours=1)
 
-        with patch('google.auth.transport.requests.Request') as mock_request:
+        with patch('google.auth.transport.requests.Request') as mock_request:  # noqa: F841
             with patch('asyncio.get_event_loop') as mock_loop:
                 # Mock the executor to actually call the function
                 async def mock_executor(executor, func):

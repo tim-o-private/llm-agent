@@ -49,6 +49,14 @@ class UpdateInstructionsTool(BaseTool):
     supabase_url: str = Field(default="", description="Supabase URL")
     supabase_key: str = Field(default="", description="Supabase service key")
 
+    @classmethod
+    def prompt_section(cls, channel: str) -> str | None:
+        """Return behavioral guidance for the agent prompt, or None to omit."""
+        if channel in ("web", "telegram"):
+            return "Instructions: When the user says 'always do X' or 'never do Y', use update_instructions to persist the preference. This is a full replace — include existing instructions you want to keep."  # noqa: E501
+        else:
+            return None
+
     def _get_client(self) -> SupabaseClient:
         url = self.supabase_url or os.getenv("SUPABASE_URL", "")
         key = self.supabase_key or os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")

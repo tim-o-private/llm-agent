@@ -10,7 +10,6 @@ from croniter import croniter
 from ..config.constants import SCHEDULED_TASK_INTERVAL_SECONDS, SESSION_INSTANCE_TTL_SECONDS
 from ..database.connection import get_database_manager
 from ..database.supabase_client import get_supabase_client
-from ..services.vault_token_service import get_vault_token_service_for_scheduler
 
 logger = logging.getLogger(__name__)
 

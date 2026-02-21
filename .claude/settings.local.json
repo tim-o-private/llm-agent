@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash",
+      "Write",
+      "Edit",
+      "WebFetch(domain:developers.google.com)",
+      "WebFetch(domain:googleapis.dev)",
+      "WebFetch(domain:supabase.com)",
+      "WebFetch(domain:docs.authlib.org)",
+      "mcp__memory__store_memory",
+      "WebFetch(domain:blog.emilburzo.com)"
+    ]
+  },
+  "prefersReducedMotion": true
+}

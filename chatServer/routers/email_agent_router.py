@@ -2,6 +2,9 @@
 # @docs memory-bank/patterns/api-patterns.md#pattern-11-fastapi-project-structure
 # @rules memory-bank/rules/api-rules.json#api-004
 
+# Import existing utilities
+import os
+import sys
 from datetime import datetime
 from typing import Any, Dict
 
@@ -9,12 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from ..agents.email_digest_agent import EmailDigestAgent
-from ..config.constants import DEFAULT_LOG_LEVEL
 from ..dependencies.auth import get_current_user
-
-# Import existing utilities
-import os
-import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../src'))
 

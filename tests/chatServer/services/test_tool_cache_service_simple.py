@@ -78,11 +78,11 @@ async def test_fetch_all_tools_with_mock():
     async def mock_fetch_all():
         return {
             "agent1": [
-                {"name": "gmail_search", "tool_class": "GmailSearchTool", "config": {}, "runtime_args_schema": {}, "is_active": True},
-                {"name": "gmail_digest", "tool_class": "GmailDigestTool", "config": {}, "runtime_args_schema": {}, "is_active": True}
+                {"name": "gmail_search", "tool_class": "GmailSearchTool", "config": {}, "runtime_args_schema": {}, "is_active": True},  # noqa: E501
+                {"name": "gmail_digest", "tool_class": "GmailDigestTool", "config": {}, "runtime_args_schema": {}, "is_active": True}  # noqa: E501
             ],
             "agent2": [
-                {"name": "crud_tool", "tool_class": "CRUDTool", "config": {}, "runtime_args_schema": {}, "is_active": True}
+                {"name": "crud_tool", "tool_class": "CRUDTool", "config": {}, "runtime_args_schema": {}, "is_active": True}  # noqa: E501
             ]
         }
 
@@ -107,8 +107,8 @@ async def test_fetch_tools_for_agent_with_mock():
     async def mock_fetch_single(agent_id: str):
         if agent_id == "agent1":
             return [
-                {"name": "gmail_search", "tool_class": "GmailSearchTool", "config": {}, "runtime_args_schema": {}, "is_active": True},
-                {"name": "gmail_digest", "tool_class": "GmailDigestTool", "config": {}, "runtime_args_schema": {}, "is_active": True}
+                {"name": "gmail_search", "tool_class": "GmailSearchTool", "config": {}, "runtime_args_schema": {}, "is_active": True},  # noqa: E501
+                {"name": "gmail_digest", "tool_class": "GmailDigestTool", "config": {}, "runtime_args_schema": {}, "is_active": True}  # noqa: E501
             ]
         return []
 
@@ -132,8 +132,8 @@ async def test_get_tools_for_agent_with_cache():
     # Pre-populate cache
     service.cache_service._cache = {
         "agent1": [
-            {"name": "gmail_search", "tool_class": "GmailSearchTool", "config": {}, "runtime_args_schema": {}, "is_active": True},
-            {"name": "gmail_digest", "tool_class": "GmailDigestTool", "config": {}, "runtime_args_schema": {}, "is_active": True}
+            {"name": "gmail_search", "tool_class": "GmailSearchTool", "config": {}, "runtime_args_schema": {}, "is_active": True},  # noqa: E501
+            {"name": "gmail_digest", "tool_class": "GmailDigestTool", "config": {}, "runtime_args_schema": {}, "is_active": True}  # noqa: E501
         ]
     }
     service.cache_service._timestamps = {"agent1": 1000000000}

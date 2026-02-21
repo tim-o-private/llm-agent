@@ -148,7 +148,7 @@ class TestVaultTokenServiceIntegration:
                         auth_uid_result = await cur.fetchone()
 
                         if not auth_uid_result or str(auth_uid_result[0]) != self.user_id:
-                            raise Exception(f"Failed to set JWT context: auth.uid() returned {auth_uid_result[0]}, expected {self.user_id}")
+                            raise Exception(f"Failed to set JWT context: auth.uid() returned {auth_uid_result[0]}, expected {self.user_id}")  # noqa: E501
 
                         # Verify we're now running as authenticated role
                         await cur.execute("SELECT current_user")
@@ -292,7 +292,7 @@ class TestVaultTokenServiceIntegration:
         async with db_pool.connection() as conn:
             async with with_user_context(conn, user_a_id) as user_conn:
                 async with user_conn.cursor() as cur:
-                    result_a = await cur.execute(
+                    result_a = await cur.execute(  # noqa: F841
                         "SELECT store_oauth_tokens(%s, %s, %s, %s, %s, %s, %s, %s)",
                         (user_a_id, 'gmail', 'user_a_access_token', 'user_a_refresh_token',
                          None, ['https://www.googleapis.com/auth/gmail.readonly'],
@@ -305,7 +305,7 @@ class TestVaultTokenServiceIntegration:
         async with db_pool.connection() as conn:
             async with with_user_context(conn, user_b_id) as user_conn:
                 async with user_conn.cursor() as cur:
-                    result_b = await cur.execute(
+                    result_b = await cur.execute(  # noqa: F841
                         "SELECT store_oauth_tokens(%s, %s, %s, %s, %s, %s, %s, %s)",
                         (user_b_id, 'gmail', 'user_b_access_token', 'user_b_refresh_token',
                          None, ['https://www.googleapis.com/auth/gmail.readonly'],
@@ -437,7 +437,7 @@ class TestVaultTokenServiceIntegration:
                 service_user_id='debug_user_a',
                 service_user_email='debug_a@gmail.com'
             )
-            connection_a_id = connection_a['connection_id']
+            connection_a_id = connection_a['connection_id']  # noqa: F841
 
         async with vault_service_for_user(user_b_id) as service_b:
             connection_b = await service_b.store_tokens(
@@ -449,7 +449,7 @@ class TestVaultTokenServiceIntegration:
                 service_user_id='debug_user_b',
                 service_user_email='debug_b@gmail.com'
             )
-            connection_b_id = connection_b['connection_id']
+            connection_b_id = connection_b['connection_id']  # noqa: F841
 
         # Test 1: User A can access their own tokens
         async with vault_service_for_user(user_a_id) as service_a:

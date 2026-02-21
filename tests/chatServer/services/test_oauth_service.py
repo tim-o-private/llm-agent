@@ -1,13 +1,11 @@
 """Tests for the OAuth service (SPEC-008 FU-2)."""
 
-import base64
-import json
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from chatServer.services.oauth_service import OAuthService, _encode_state, _decode_state
+from chatServer.services.oauth_service import OAuthService, _decode_state, _encode_state
 
 
 @pytest.fixture
@@ -92,7 +90,7 @@ async def test_handle_callback_exchanges_code(oauth_service, mock_supabase):
     )
 
     # No existing connections
-    mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
+    mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.eq.return_value.execute.return_value = MagicMock(data=[])  # noqa: E501
 
     # store_oauth_tokens RPC success
     mock_supabase.rpc.return_value.execute.return_value = MagicMock(
@@ -135,8 +133,8 @@ async def test_handle_callback_enforces_max_5(oauth_service, mock_supabase):
     five_connections = MagicMock(data=[{"id": f"conn-{i}"} for i in range(5)])
 
     # We need to handle multiple table() calls with different args
-    call_count = {"value": 0}
-    original_table = mock_supabase.table
+    call_count = {"value": 0}  # noqa: F841
+    original_table = mock_supabase.table  # noqa: F841
 
     def table_side_effect(name):
         mock_table = MagicMock()
@@ -144,7 +142,7 @@ async def test_handle_callback_enforces_max_5(oauth_service, mock_supabase):
             mock_table.select.return_value.eq.return_value.execute.return_value = nonce_result
             mock_table.delete.return_value.eq.return_value.execute.return_value = MagicMock()
         elif name == "external_api_connections":
-            mock_table.select.return_value.eq.return_value.eq.return_value.eq.return_value.execute.return_value = five_connections
+            mock_table.select.return_value.eq.return_value.eq.return_value.eq.return_value.execute.return_value = five_connections  # noqa: E501
         return mock_table
 
     mock_supabase.table.side_effect = table_side_effect
@@ -178,7 +176,7 @@ async def test_nonce_single_use(oauth_service, mock_supabase):
             mock_table.select.return_value.eq.return_value.execute.return_value = nonce_result
             mock_table.delete.return_value.eq.return_value.execute.return_value = delete_mock
         elif name == "external_api_connections":
-            mock_table.select.return_value.eq.return_value.eq.return_value.eq.return_value.execute.return_value = no_connections
+            mock_table.select.return_value.eq.return_value.eq.return_value.eq.return_value.execute.return_value = no_connections  # noqa: E501
         return mock_table
 
     mock_supabase.table.side_effect = table_side_effect

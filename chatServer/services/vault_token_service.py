@@ -6,7 +6,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import psycopg
 
-from ..config.constants import DEFAULT_LOG_LEVEL
 from ..database.connection import get_db_connection
 
 logger = logging.getLogger(__name__)
@@ -164,7 +163,7 @@ class VaultTokenService:
                 if not access_token:
                     raise ValueError(f"No valid access token found for user {user_id} service {service_name}")
 
-                logger.debug(f"Successfully retrieved tokens for user {user_id} service {service_name} (context: {self.context})")
+                logger.debug(f"Successfully retrieved tokens for user {user_id} service {service_name} (context: {self.context})")  # noqa: E501
                 return access_token, refresh_token
 
         except ValueError:

@@ -346,6 +346,18 @@ class GmailSearchTool(BaseGmailTool):
     )
     args_schema: Type[BaseModel] = GmailSearchInput
 
+    @classmethod
+    def prompt_section(cls, channel: str) -> str | None:
+        """Return behavioral guidance for the agent prompt, or None to omit."""
+        if channel in ("web", "telegram"):
+            return "Gmail: Use gmail_search, gmail_get_message, and gmail_digest for email tasks. When the user asks about email, use the tools — don't ask clarifying questions first."  # noqa: E501
+        elif channel == "heartbeat":
+            return "Gmail: Check for important unread emails using gmail_search with 'is:unread newer_than:4h'. Report subjects and senders of anything urgent. Skip newsletters and automated notifications."  # noqa: E501
+        elif channel == "scheduled":
+            return None
+        else:
+            return "Gmail: Use gmail_search, gmail_get_message, and gmail_digest for email tasks. When the user asks about email, use the tools — don't ask clarifying questions first."  # noqa: E501
+
     def _run(self, query: str, max_results: int = 10, account: Optional[str] = None) -> str:
         return "Gmail search tool requires async execution. Use the async version (_arun)."
 
@@ -489,7 +501,7 @@ class GmailDigestTool(BaseGmailTool):
     )
     args_schema: Type[BaseModel] = GmailDigestInput
 
-    def _run(self, hours_back: int = 24, include_read: bool = False, max_emails: int = 20, account: Optional[str] = None) -> str:
+    def _run(self, hours_back: int = 24, include_read: bool = False, max_emails: int = 20, account: Optional[str] = None) -> str:  # noqa: E501
         return "Gmail digest tool requires async execution. Use the async version (_arun)."
 
     async def _arun(
@@ -529,7 +541,6 @@ class GmailDigestTool(BaseGmailTool):
                             f"Could not retrieve digest: {e}"
                         )
 
-                read_status = "read and unread" if include_read else "unread"
                 header = f"Email Digest - Last {hours_back} Hours ({len(providers)} accounts)\n\n"
                 return header + "\n\n".join(parts)
 
@@ -584,7 +595,7 @@ class GmailDigestTool(BaseGmailTool):
                     elif "From:" in line:
                         senders.append(line.split("From:")[1].strip())
                 if email_count == 0 and lines:
-                    email_count = len([l for l in lines if l.strip()])
+                    email_count = len([line for line in lines if line.strip()])
 
             read_status = "read and unread" if include_read else "unread"
             account_label = f" ({account})" if account else ""

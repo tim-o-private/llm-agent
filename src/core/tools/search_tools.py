@@ -16,7 +16,7 @@ class SafeDuckDuckGoSearchRun(DuckDuckGoSearchRun):
         except DuckDuckGoSearchException as e:
             logger.error(f"DuckDuckGoSearchRun failed: {e}")
             # Return a friendly message to the LLM
-            return "DuckDuckGo search failed due to a technical issue (e.g., rate limit or network problem). Please try again later or ask for something else."
+            return "DuckDuckGo search failed due to a technical issue (e.g., rate limit or network problem). Please try again later or ask for something else."  # noqa: E501
         except Exception as e:
             # Catch any other unexpected errors from the tool
             logger.error(f"An unexpected error occurred in DuckDuckGoSearchRun: {e}", exc_info=True)
@@ -28,7 +28,7 @@ class SafeDuckDuckGoSearchRun(DuckDuckGoSearchRun):
     #         return await super()._arun(query)
     #     except DuckDuckGoSearchException as e:
     #         logger.error(f"DuckDuckGoSearchRun (async) failed: {e}")
-    #         return "DuckDuckGo search failed due to a technical issue (e.g., rate limit or network problem). Please try again later or ask for something else."
+    #         return "DuckDuckGo search failed due to a technical issue (e.g., rate limit or network problem). Please try again later or ask for something else."  # noqa: E501
     #     except Exception as e:
     #         logger.error(f"An unexpected error occurred in DuckDuckGoSearchRun (async): {e}", exc_info=True)
     #         return "An unexpected error occurred while trying to search with DuckDuckGo. Please inform the user."

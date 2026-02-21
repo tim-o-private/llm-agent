@@ -132,7 +132,7 @@ class TestSupabaseManagerAsync:
             "SUPABASE_URL": "https://test.supabase.co",
             "SUPABASE_SERVICE_ROLE_KEY": "test_service_key"
         }, clear=True):
-            with patch('chatServer.database.supabase_client.acreate_client', side_effect=Exception("Connection failed")):
+            with patch('chatServer.database.supabase_client.acreate_client', side_effect=Exception("Connection failed")):  # noqa: E501
                 supabase_manager = SupabaseManager()
                 await supabase_manager.initialize()
 

@@ -92,7 +92,7 @@ class EmailDigestAgent:
         try:
             # Delegate to EmailDigestService with custom prompt
             service = EmailDigestService(self.user_id, context="on-demand")
-            custom_prompt = f"Search my Gmail for: {query}. Show up to {max_results} results. Provide a clear summary of the search results."
+            custom_prompt = f"Search my Gmail for: {query}. Show up to {max_results} results. Provide a clear summary of the search results."  # noqa: E501
 
             result = await service.generate_digest(
                 hours_back=168,  # Search last week by default
