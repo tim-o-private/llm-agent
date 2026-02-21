@@ -501,7 +501,7 @@ class GmailDigestTool(BaseGmailTool):
     )
     args_schema: Type[BaseModel] = GmailDigestInput
 
-    def _run(self, hours_back: int = 24, include_read: bool = False, max_emails: int = 20, account: Optional[str] = None) -> str:
+    def _run(self, hours_back: int = 24, include_read: bool = False, max_emails: int = 20, account: Optional[str] = None) -> str:  # noqa: E501
         return "Gmail digest tool requires async execution. Use the async version (_arun)."
 
     async def _arun(
