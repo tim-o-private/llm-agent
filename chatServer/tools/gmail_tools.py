@@ -541,7 +541,6 @@ class GmailDigestTool(BaseGmailTool):
                             f"Could not retrieve digest: {e}"
                         )
 
-                read_status = "read and unread" if include_read else "unread"
                 header = f"Email Digest - Last {hours_back} Hours ({len(providers)} accounts)\n\n"
                 return header + "\n\n".join(parts)
 
@@ -596,7 +595,7 @@ class GmailDigestTool(BaseGmailTool):
                     elif "From:" in line:
                         senders.append(line.split("From:")[1].strip())
                 if email_count == 0 and lines:
-                    email_count = len([l for l in lines if l.strip()])
+                    email_count = len([line for line in lines if line.strip()])
 
             read_status = "read and unread" if include_read else "unread"
             account_label = f" ({account})" if account else ""
