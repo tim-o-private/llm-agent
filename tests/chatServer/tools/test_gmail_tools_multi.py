@@ -152,6 +152,37 @@ async def test_token_refresh_not_triggered_when_valid():
             mock_creds.refresh.assert_not_called()
 
 
+@pytest.mark.asyncio
+async def test_token_refresh_no_refresh_token_logs_warning():
+    """Expired token with no refresh token should log warning, not crash."""
+    expired_token_data = {
+        "connection_id": "conn-1",
+        "service_user_email": "work@gmail.com",
+        "access_token": "ya29.expired",
+        "refresh_token": None,
+        "expires_at": (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat(),
+    }
+
+    provider = GmailToolProvider("user-1", "conn-1")
+    provider._token_data = expired_token_data
+
+    with patch.dict("os.environ", {
+        "GOOGLE_CLIENT_ID": "test-client-id",
+        "GOOGLE_CLIENT_SECRET": "test-client-secret",
+    }):
+        with patch("chatServer.tools.gmail_tools.Credentials") as mock_creds_cls:
+            mock_creds = MagicMock()
+            mock_creds.expired = True
+            mock_creds.token = "ya29.expired"
+            mock_creds_cls.return_value = mock_creds
+
+            # Should not crash — returns credentials as-is and logs warning
+            creds = await provider._get_google_credentials()
+
+            mock_creds.refresh.assert_not_called()
+            assert creds is mock_creds
+
+
 # --- GmailSearchTool tests ---
 
 

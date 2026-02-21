@@ -240,17 +240,20 @@ class GmailToolProvider:
             supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
             supabase = create_client(supabase_url, supabase_key)
 
-            # Get the access_token_secret_id for this connection
+            # Get connection details to reconstruct the vault secret name
             conn = supabase.table("external_api_connections").select(
-                "access_token_secret_id"
+                "user_id, service_name, service_user_id"
             ).eq("id", self.connection_id).execute()
 
-            if conn.data and conn.data[0].get("access_token_secret_id"):
-                secret_id = conn.data[0]["access_token_secret_id"]
-                # Update the vault secret
-                supabase.rpc("vault.update_secret", {
-                    "secret_id": str(secret_id),
-                    "new_secret": new_token,
+            if conn.data and conn.data[0]:
+                row = conn.data[0]
+                service_user_id = row.get("service_user_id") or "default"
+                secret_name = f"{row['user_id']}_{row['service_name']}_{service_user_id}_access"
+                # store_secret upserts by name — updates if exists, creates if not
+                supabase.rpc("store_secret", {
+                    "p_secret": new_token,
+                    "p_name": secret_name,
+                    "p_description": f"Access token for {row['service_name']}",
                 }).execute()
 
                 # Update expires_at on the connection record
