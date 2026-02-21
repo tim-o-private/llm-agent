@@ -346,6 +346,18 @@ class GmailSearchTool(BaseGmailTool):
     )
     args_schema: Type[BaseModel] = GmailSearchInput
 
+    @classmethod
+    def prompt_section(cls, channel: str) -> str | None:
+        """Return behavioral guidance for the agent prompt, or None to omit."""
+        if channel in ("web", "telegram"):
+            return "Gmail: Use gmail_search, gmail_get_message, and gmail_digest for email tasks. When the user asks about email, use the tools — don't ask clarifying questions first."
+        elif channel == "heartbeat":
+            return "Gmail: Check for important unread emails using gmail_search with 'is:unread newer_than:4h'. Report subjects and senders of anything urgent. Skip newsletters and automated notifications."
+        elif channel == "scheduled":
+            return None
+        else:
+            return "Gmail: Use gmail_search, gmail_get_message, and gmail_digest for email tasks. When the user asks about email, use the tools — don't ask clarifying questions first."
+
     def _run(self, query: str, max_results: int = 10, account: Optional[str] = None) -> str:
         return "Gmail search tool requires async execution. Use the async version (_arun)."
 
