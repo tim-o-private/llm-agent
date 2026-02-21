@@ -46,7 +46,7 @@ class SaveMemoryTool(BaseTool):
     def prompt_section(cls, channel: str) -> str | None:
         """Return behavioral guidance for the agent prompt, or None to omit."""
         if channel in ("web", "telegram"):
-            return "Memory: Before answering questions about the user's preferences, past conversations, or projects, call read_memory first. When the user shares something worth remembering, call save_memory immediately."
+            return "Memory: Before answering questions about the user's preferences, past conversations, or projects, call read_memory first. When the user shares something worth remembering, call save_memory immediately."  # noqa: E501
         else:
             return None
 

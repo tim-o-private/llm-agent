@@ -45,9 +45,9 @@ class EmailDigestTool(BaseTool):
     def prompt_section(cls, channel: str) -> str | None:
         """Return behavioral guidance for the agent prompt, or None to omit."""
         if channel in ("web", "telegram"):
-            return "Email Digest: Use email_digest for comprehensive email summaries. Prefer this over manual gmail_search when the user wants an overview of recent email activity."
+            return "Email Digest: Use email_digest for comprehensive email summaries. Prefer this over manual gmail_search when the user wants an overview of recent email activity."  # noqa: E501
         elif channel == "scheduled":
-            return "Email Digest: Generate the digest using email_digest. Include the full summary in your response for notification delivery."
+            return "Email Digest: Generate the digest using email_digest. Include the full summary in your response for notification delivery."  # noqa: E501
         else:
             return None
 
