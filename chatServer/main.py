@@ -17,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # Import agent_loader
 from core.agents.customizable_agent import CustomizableAgentExecutor  # Added import
 from utils.config_loader import ConfigLoader
+from utils.logging_utils import get_logger
 
 from .config.constants import PROMPT_CUSTOMIZATIONS_TAG
 from .config.settings import get_settings
@@ -220,10 +221,6 @@ app.include_router(notifications_router)
 app.include_router(telegram_router)
 
 # --- Logger setup ---
-# Ensure logger is available if not already globally configured
-# This can be more sophisticated, e.g., using utils.logging_utils.get_logger
-from utils.logging_utils import get_logger
-
 logger = get_logger(__name__)
 
 @app.post("/api/chat", response_model=ChatResponse)
