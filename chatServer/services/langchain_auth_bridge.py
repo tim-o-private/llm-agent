@@ -248,7 +248,7 @@ class VaultToLangChainCredentialAdapter:
             else:
                 raise RuntimeError(f"Token refresh failed: {error_msg}")
 
-    async def _update_access_token_in_vault(self, user_id: str, service_name: str, new_access_token: str, expires_at: Optional[datetime] = None) -> None:
+    async def _update_access_token_in_vault(self, user_id: str, service_name: str, new_access_token: str, expires_at: Optional[datetime] = None) -> None:  # noqa: E501
         """Update access token in vault after refresh.
 
         Args:
@@ -420,7 +420,7 @@ class VaultToLangChainCredentialAdapter:
 
 
 # Factory function for creating adapter instances
-async def create_auth_bridge(db_connection: Optional[psycopg.AsyncConnection] = None) -> VaultToLangChainCredentialAdapter:
+async def create_auth_bridge(db_connection: Optional[psycopg.AsyncConnection] = None) -> VaultToLangChainCredentialAdapter:  # noqa: E501
     """Create a VaultToLangChainCredentialAdapter instance.
 
     Args:

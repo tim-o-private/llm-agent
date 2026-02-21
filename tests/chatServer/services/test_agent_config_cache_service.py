@@ -6,8 +6,6 @@ import pytest
 
 from chatServer.services.agent_config_cache_service import (
     AgentConfigCacheService,
-    get_agent_config_cache_service,
-    get_cached_agent_config,
 )
 
 

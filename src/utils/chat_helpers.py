@@ -58,7 +58,7 @@ def get_or_create_memory(
             logger.error(f"Failed to read memory file {memory_file}: {e}. Starting with empty history.")
             loaded_messages = [] # Reset on error
         except Exception as e: # Catch other potential errors during loading/conversion
-             logger.error(f"Unexpected error loading memory from {memory_file}: {e}. Starting with empty history.", exc_info=True)
+             logger.error(f"Unexpected error loading memory from {memory_file}: {e}. Starting with empty history.", exc_info=True)  # noqa: E501
              loaded_messages = [] # Reset on error
     else:
          logger.info(f"No memory file found at {memory_file} for agent '{agent_name}'. Starting with empty history.")
@@ -187,7 +187,7 @@ def process_user_command(
 
         except (FileNotFoundError, ValueError) as e:
             logger.warning(f"Failed to switch agent to '{new_agent_name}': {e}")
-            click.echo(f"Error: Could not load agent '{new_agent_name}'. Staying with '{current_agent_name}'.", err=True)
+            click.echo(f"Error: Could not load agent '{new_agent_name}'. Staying with '{current_agent_name}'.", err=True)  # noqa: E501
         except Exception as e:
             logger.error(f"Unexpected error switching to agent '{new_agent_name}': {e}", exc_info=True)
             click.echo(f"Error: An unexpected error occurred switching to agent '{new_agent_name}'.", err=True)
@@ -233,7 +233,7 @@ def process_user_command(
                 click.secho(f"[Tokens: {usage_str}]", fg='bright_black') # Use dim color
             else:
                  # Log if usage info wasn't found where expected
-                 logger.debug("Token usage information not found in response['llm_output']['token_usage'] or response['usage_metadata'].")
+                 logger.debug("Token usage information not found in response['llm_output']['token_usage'] or response['usage_metadata'].")  # noqa: E501
 
         # Agent processing complete, continue REPL loop
         return current_agent_name, agent_executor, current_memory, False

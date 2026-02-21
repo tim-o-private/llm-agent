@@ -75,7 +75,7 @@ class TestDatabaseManagerAsync:
             "SUPABASE_DB_PASSWORD": "test_password",
             "SUPABASE_DB_HOST": "test_host"
         }, clear=True):
-            with patch('chatServer.database.connection.AsyncConnectionPool', side_effect=Exception("Connection failed")):
+            with patch('chatServer.database.connection.AsyncConnectionPool', side_effect=Exception("Connection failed")):  # noqa: E501
                 db_manager = DatabaseManager()
 
                 with pytest.raises(Exception):

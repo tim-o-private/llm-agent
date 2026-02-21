@@ -12,7 +12,7 @@ class Settings:
         # Supabase configuration
         self.supabase_jwt_secret: Optional[str] = os.getenv("SUPABASE_JWT_SECRET")
         self.supabase_url: Optional[str] = os.getenv("SUPABASE_URL") or os.getenv("VITE_SUPABASE_URL")
-        self.supabase_service_key: Optional[str] = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_SERVICE_KEY")
+        self.supabase_service_key: Optional[str] = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_SERVICE_KEY")  # noqa: E501
 
         # Database configuration
         self.db_user: Optional[str] = os.getenv("SUPABASE_DB_USER")

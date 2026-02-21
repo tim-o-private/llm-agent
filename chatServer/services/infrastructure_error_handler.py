@@ -69,7 +69,7 @@ class InfrastructureErrorHandler:
 
             except Exception as recovery_error:
                 logger.error(f"Failed to recover from database error in operation '{operation}': {recovery_error}")
-                raise DatabaseConnectionError(f"Database connection failed for operation '{operation}' and recovery failed: {recovery_error}")
+                raise DatabaseConnectionError(f"Database connection failed for operation '{operation}' and recovery failed: {recovery_error}")  # noqa: E501
 
             raise DatabaseConnectionError(f"Database connection failed for operation '{operation}': {error}")
 

@@ -55,7 +55,7 @@ class EmailDigestStorageService:
             # Ensure generated_at is a datetime object
             if isinstance(digest_data["generated_at"], str):
                 try:
-                    digest_data["generated_at"] = datetime.fromisoformat(digest_data["generated_at"].replace('Z', '+00:00'))
+                    digest_data["generated_at"] = datetime.fromisoformat(digest_data["generated_at"].replace('Z', '+00:00'))  # noqa: E501
                 except ValueError as e:
                     logger.error(f"Invalid generated_at format: {digest_data['generated_at']}: {e}")
                     return False
@@ -67,7 +67,7 @@ class EmailDigestStorageService:
             context = digest_data.get("context", "unknown")
             email_count = digest_data.get("email_count", None)
 
-            logger.info(f"Storing email digest for user {digest_data['user_id']} (context: {context}, status: {digest_data['status']})")
+            logger.info(f"Storing email digest for user {digest_data['user_id']} (context: {context}, status: {digest_data['status']})")  # noqa: E501
 
             # Get database manager and store
             db_manager = get_database_manager()

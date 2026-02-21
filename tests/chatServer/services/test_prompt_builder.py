@@ -2,7 +2,6 @@
 
 from chatServer.services.prompt_builder import (
     MAX_INSTRUCTIONS_LENGTH,
-    ONBOARDING_SECTION,
     build_agent_prompt,
 )
 

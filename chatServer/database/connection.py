@@ -58,7 +58,7 @@ class DatabaseManager:
                 await self.initialize()
             except Exception as e:
                 logger.error(f"Auto-initialization of database pool failed: {e}")
-                raise HTTPException(status_code=503, detail="Database service not available. Failed to initialize connection pool.")
+                raise HTTPException(status_code=503, detail="Database service not available. Failed to initialize connection pool.")  # noqa: E501
         elif self.pool is None and self._initialization_attempted:
             logger.error("Database pool initialization was attempted but failed")
             raise HTTPException(status_code=503, detail="Database service not available. Pool initialization failed.")

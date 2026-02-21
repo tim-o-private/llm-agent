@@ -9,19 +9,17 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import psycopg
 from fastapi import HTTPException, Request
+from langchain.memory import ConversationBufferWindowMemory
+from langchain_core.messages import BaseMessage
+from langchain_postgres import PostgresChatMessageHistory
 
 from ..config.constants import CHAT_MESSAGE_HISTORY_TABLE_NAME, DEFAULT_LOG_LEVEL
 from ..database.supabase_client import get_supabase_client
-from ..dependencies.auth import get_jwt_from_request_context
 from ..models.chat import ChatRequest, ChatResponse
 from ..protocols.agent_executor import AgentExecutorProtocol
 from ..security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
 from ..services.audit_service import AuditService
 from ..services.pending_actions import PendingActionsService
-
-from langchain.memory import ConversationBufferWindowMemory
-from langchain_core.messages import BaseMessage
-from langchain_postgres import PostgresChatMessageHistory
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +64,7 @@ class ChatService:
         self.agent_executor_cache = agent_executor_cache
         self._load_locks: Dict[Tuple[str, str], asyncio.Lock] = {}
 
-    def create_chat_memory(self, session_id: str, pg_connection: psycopg.AsyncConnection) -> AsyncConversationBufferWindowMemory:
+    def create_chat_memory(self, session_id: str, pg_connection: psycopg.AsyncConnection) -> AsyncConversationBufferWindowMemory:  # noqa: E501
         """Create chat memory for a session.
 
         Args:
@@ -252,7 +250,7 @@ class ChatService:
         Raises:
             HTTPException: For various error conditions
         """
-        logger.debug(f"Processing chat request for agent {chat_input.agent_name} with session_id: {chat_input.session_id} from user {user_id}")
+        logger.debug(f"Processing chat request for agent {chat_input.agent_name} with session_id: {chat_input.session_id} from user {user_id}")  # noqa: E501
 
         if not chat_input.session_id:
             logger.error("session_id missing from chat_input")
@@ -318,7 +316,7 @@ class ChatService:
                     tool_input=invoked_tool_input,
                     error=None
                 )
-                logger.info(f"Successfully processed chat. Returning to client: {chat_response_payload.model_dump_json(indent=2)}")
+                logger.info(f"Successfully processed chat. Returning to client: {chat_response_payload.model_dump_json(indent=2)}")  # noqa: E501
 
                 # Push to Telegram if this is the linked session (best-effort)
                 try:
@@ -338,11 +336,11 @@ class ChatService:
                     response="An error occurred processing your request.",
                     error=str(e)
                 )
-                logger.info(f"Error during agent execution. Returning to client: {error_response_payload.model_dump_json(indent=2)}")
+                logger.info(f"Error during agent execution. Returning to client: {error_response_payload.model_dump_json(indent=2)}")  # noqa: E501
                 return error_response_payload
 
         except psycopg.Error as pe:
-            logger.error(f"Database error (psycopg.Error) during chat_memory setup for session {session_id_for_history}: {pe}", exc_info=True)
+            logger.error(f"Database error (psycopg.Error) during chat_memory setup for session {session_id_for_history}: {pe}", exc_info=True)  # noqa: E501
             db_error_payload = ChatResponse(
                 session_id=session_id_for_history,
                 response="A database error occurred during chat setup.",
@@ -352,7 +350,7 @@ class ChatService:
             raise HTTPException(status_code=503, detail=f"Database error during chat setup: {pe}")
 
         except Exception as e:
-            logger.error(f"Failed to process chat request before agent execution for session {session_id_for_history}: {e}", exc_info=True)
+            logger.error(f"Failed to process chat request before agent execution for session {session_id_for_history}: {e}", exc_info=True)  # noqa: E501
             setup_error_payload = ChatResponse(
                 session_id=session_id_for_history,
                 response="An error occurred setting up the chat environment.",

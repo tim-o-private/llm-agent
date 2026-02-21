@@ -19,11 +19,11 @@ class CRUDToolInput(BaseModel):
     """
     data: Optional[Dict[str, Any]] = Field(
         default=None,
-        description="Data for 'create' or 'update' operations. The expected structure of this dictionary is defined by the specific tool instance's 'runtime_args_schema' in the database."
+        description="Data for 'create' or 'update' operations. The expected structure of this dictionary is defined by the specific tool instance's 'runtime_args_schema' in the database."  # noqa: E501
     )
     filters: Optional[Dict[str, Any]] = Field(
         default=None,
-        description="Filters for 'fetch', 'update', or 'delete' operations. The expected structure of this dictionary is defined by the specific tool instance's 'runtime_args_schema' in the database."
+        description="Filters for 'fetch', 'update', or 'delete' operations. The expected structure of this dictionary is defined by the specific tool instance's 'runtime_args_schema' in the database."  # noqa: E501
     )
 
 # @docs memory-bank/patterns/agent-patterns.md#pattern-1-generic-crudtool-configuration
@@ -51,20 +51,20 @@ class CRUDTool(BaseTool):
     model_config = ConfigDict(extra='ignore', arbitrary_types_allowed=True)
 
     # --- Fields populated by Pydantic from constructor_kwargs in agent_loader_db.py ---
-    user_id: str = Field(description="The ID of the user performing the operation. Automatically applied for data scoping.")
-    agent_name: str = Field(description="The name of the agent invoking the tool. Used for logging and potentially for agent-specific data scoping.")
+    user_id: str = Field(description="The ID of the user performing the operation. Automatically applied for data scoping.")  # noqa: E501
+    agent_name: str = Field(description="The name of the agent invoking the tool. Used for logging and potentially for agent-specific data scoping.")  # noqa: E501
     supabase_url: str = Field(description="The Supabase project URL, injected at instantiation.")
-    supabase_key: str = Field(description="The Supabase service key (or anon key if appropriate), injected at instantiation.")
+    supabase_key: str = Field(description="The Supabase service key (or anon key if appropriate), injected at instantiation.")  # noqa: E501
 
     table_name: str = Field(description="The target Supabase table name, specified in the DB tool config.")
-    method: str = Field(description="The CRUD method ('create', 'fetch', 'update', 'delete'), specified in the DB tool config.")
+    method: str = Field(description="The CRUD method ('create', 'fetch', 'update', 'delete'), specified in the DB tool config.")  # noqa: E501
     field_map: Dict[str, str] = Field(
         default_factory=dict,
-        description="A mapping from keys in the LLM-provided 'data' argument to actual database column names. Used for 'create' and 'update' methods. Specified in the DB tool config."
+        description="A mapping from keys in the LLM-provided 'data' argument to actual database column names. Used for 'create' and 'update' methods. Specified in the DB tool config."  # noqa: E501
     )
     # apply_agent_name_filter: bool = Field(
     #     default=False,
-    #     description="If true, 'agent_name' will be added as a filter for non-LTM tables. Configured in DB tool config."
+    #     description="If true, 'agent_name' will be added as a filter for non-LTM tables. Configured in DB tool config."  # noqa: E501
     # ) # Re-add if making agent_name filtering fully config-driven
 
     # args_schema is a ClassVar in BaseTool. Specific instances are typically of a dynamically
@@ -92,7 +92,7 @@ class CRUDTool(BaseTool):
         super().__init__(**kwargs)
 
         logger.debug(
-            f"CRUDTool '{self.name}' (instance of {self.__class__.__name__}) initialized. Method: '{self.method}', Table: '{self.table_name}'. "
+            f"CRUDTool '{self.name}' (instance of {self.__class__.__name__}) initialized. Method: '{self.method}', Table: '{self.table_name}'. "  # noqa: E501
             f"Effective args_schema: '{type(self).args_schema.__name__}'. Field map: {self.field_map}"
         )
 
@@ -101,7 +101,7 @@ class CRUDTool(BaseTool):
             self._init_db_client()
         except Exception as e:
             # Log and allow continuation; _run will check _db_client and raise if still None.
-            logger.error(f"CRUDTool '{self.name}': Supabase client initialization failed during __init__: {e}", exc_info=True)
+            logger.error(f"CRUDTool '{self.name}': Supabase client initialization failed during __init__: {e}", exc_info=True)  # noqa: E501
 
     def _init_db_client(self):
         """Initializes the Supabase client instance for the tool."""
@@ -111,7 +111,7 @@ class CRUDTool(BaseTool):
             return
         try:
             self._db_client = create_client(self.supabase_url, self.supabase_key)
-            logger.debug(f"CRUDTool '{self.name}': Supabase client initialized successfully for table '{self.table_name}'.")
+            logger.debug(f"CRUDTool '{self.name}': Supabase client initialized successfully for table '{self.table_name}'.")  # noqa: E501
         except Exception as e:
             logger.error(f"CRUDTool '{self.name}': Supabase client initialization failed: {e}", exc_info=True)
             self._db_client = None # Ensure client is None if initialization fails
@@ -134,13 +134,13 @@ class CRUDTool(BaseTool):
             ToolException: If `input_val` is not a BaseModel, dict, or None.
         """
         if isinstance(input_val, BaseModel):
-            logger.debug(f"CRUDTool '{self.name}': Converting argument '{arg_name}' from Pydantic model ({type(input_val).__name__}) to dict.")
+            logger.debug(f"CRUDTool '{self.name}': Converting argument '{arg_name}' from Pydantic model ({type(input_val).__name__}) to dict.")  # noqa: E501
             return input_val.model_dump(exclude_unset=True)
         elif isinstance(input_val, dict) or input_val is None:
             return input_val
         else:
             raise ToolException(
-                f"Agent Error: For tool '{self.name}', argument '{arg_name}' must be a dictionary, Pydantic model, or None. Received type: {type(input_val).__name__}"
+                f"Agent Error: For tool '{self.name}', argument '{arg_name}' must be a dictionary, Pydantic model, or None. Received type: {type(input_val).__name__}"  # noqa: E501
             )
 
     def _validate_runtime_inputs(self, data: Optional[Any], filters: Optional[Any] = None):
@@ -162,21 +162,21 @@ class CRUDTool(BaseTool):
         Raises:
             ToolException: If validation rules are violated.
         """
-        logger.debug(f"CRUDTool '{self.name}': Validating runtime inputs (now dicts or None). Method: '{self.method}'. Data: {data}, Filters: {filters}")
+        logger.debug(f"CRUDTool '{self.name}': Validating runtime inputs (now dicts or None). Method: '{self.method}'. Data: {data}, Filters: {filters}")  # noqa: E501
 
         data_dict = self._ensure_dict_input(data, "data") # Should already be dicts from _run, but safe to re-ensure
         filters_dict = self._ensure_dict_input(filters, "filters")
 
         if self.method in ["create", "update"]:
             if data_dict is None:
-                raise ToolException(f"Agent Error: Input 'data' (a dictionary) is required for '{self.method}' operation using tool '{self.name}'.")
+                raise ToolException(f"Agent Error: Input 'data' (a dictionary) is required for '{self.method}' operation using tool '{self.name}'.")  # noqa: E501
             if not data_dict: # Checks if the dictionary is empty
-                raise ToolException(f"Agent Error: Input 'data' for '{self.method}' operation using tool '{self.name}' cannot be an empty dictionary.")
+                raise ToolException(f"Agent Error: Input 'data' for '{self.method}' operation using tool '{self.name}' cannot be an empty dictionary.")  # noqa: E501
 
         if self.method in ["update", "delete"]:
             if filters_dict is None or filters_dict.get("id") is None:
                 raise ToolException(
-                    f"Agent Error: For '{self.method}' operations with tool '{self.name}', the 'filters' argument must be a dictionary "
+                    f"Agent Error: For '{self.method}' operations with tool '{self.name}', the 'filters' argument must be a dictionary "  # noqa: E501
                     f"containing an 'id' key to target the specific record for modification or deletion."
                 )
 
@@ -230,7 +230,7 @@ class CRUDTool(BaseTool):
         # prepared_data["user_id"] = self.user_id
         # if hasattr(self, 'agent_name') and self.agent_name:
         #     prepared_data["agent_name"] = self.agent_name
-        logger.debug(f"CRUDTool '{self.name}': (_apply_mandatory_fields) Conceptual mandatory fields processing. Input: {agent_data}, Output: {prepared_data}")
+        logger.debug(f"CRUDTool '{self.name}': (_apply_mandatory_fields) Conceptual mandatory fields processing. Input: {agent_data}, Output: {prepared_data}")  # noqa: E501
         return prepared_data
 
     def _prepare_data_payload(self, agent_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -253,7 +253,7 @@ class CRUDTool(BaseTool):
                            database fields, or if no meaningful data is left after mapping.
         """
         if not agent_data:
-            raise ToolException(f"Internal Error: '_prepare_data_payload' called with empty 'agent_data' for '{self.method}' operation in tool '{self.name}'.")
+            raise ToolException(f"Internal Error: '_prepare_data_payload' called with empty 'agent_data' for '{self.method}' operation in tool '{self.name}'.")  # noqa: E501
 
         db_payload: Dict[str, Any]
         if self.field_map:
@@ -270,7 +270,7 @@ class CRUDTool(BaseTool):
                 )
         else:
             db_payload = agent_data.copy()
-            logger.debug(f"CRUDTool '{self.name}': No field_map provided. Using agent data keys directly for DB payload: {list(db_payload.keys())}")
+            logger.debug(f"CRUDTool '{self.name}': No field_map provided. Using agent data keys directly for DB payload: {list(db_payload.keys())}")  # noqa: E501
 
         db_payload["user_id"] = self.user_id
 
@@ -306,8 +306,8 @@ class CRUDTool(BaseTool):
 
         if not intended_payload_columns:
             logger.error(
-                f"CRUDTool '{self.name}' (data preparation): No meaningful data fields after mapping/direct use and scoping ID enforcement. "
-                f"Original agent_data keys: {list(agent_data.keys())}, Current DB Payload keys: {list(db_payload.keys())}, Field map: {self.field_map}"
+                f"CRUDTool '{self.name}' (data preparation): No meaningful data fields after mapping/direct use and scoping ID enforcement. "  # noqa: E501
+                f"Original agent_data keys: {list(agent_data.keys())}, Current DB Payload keys: {list(db_payload.keys())}, Field map: {self.field_map}"  # noqa: E501
             )
             raise ToolException(
                 f"Agent Error: Data provided for tool '{self.name}' (input keys: {list(agent_data.keys())}) "
@@ -342,15 +342,15 @@ class CRUDTool(BaseTool):
         Raises:
             ToolException: For validation errors, internal errors, or database operation failures.
         """
-        logger.debug(f"CRUDTool '{self.name}': _run invoked. Original Data type: {type(data)}, Original Filters type: {type(filters)}")
+        logger.debug(f"CRUDTool '{self.name}': _run invoked. Original Data type: {type(data)}, Original Filters type: {type(filters)}")  # noqa: E501
         if self._db_client is None:
-            logger.error(f"CRUDTool '{self.name}': Supabase client not initialized. Cannot execute method '{self.method}'.")
+            logger.error(f"CRUDTool '{self.name}': Supabase client not initialized. Cannot execute method '{self.method}'.")  # noqa: E501
             raise ToolException(f"Internal Error: Supabase client not initialized for tool '{self.name}'.")
 
         data_for_processing = self._ensure_dict_input(data, "data")
         filters_for_processing = self._ensure_dict_input(filters, "filters")
 
-        logger.debug(f"CRUDTool '{self.name}' in _run: Processed data_for_processing type: {type(data_for_processing)}, filters_for_processing type: {type(filters_for_processing)}")
+        logger.debug(f"CRUDTool '{self.name}' in _run: Processed data_for_processing type: {type(data_for_processing)}, filters_for_processing type: {type(filters_for_processing)}")  # noqa: E501
 
         try:
             self._validate_runtime_inputs(data_for_processing, filters_for_processing)
@@ -365,13 +365,13 @@ class CRUDTool(BaseTool):
             try:
                 final_data_payload = self._prepare_data_payload(data_for_processing)
             except ToolException as e:
-                logger.info(f"CRUDTool '{self.name}': Data payload preparation failed: {e}") # Log as info, error will be propagated
+                logger.info(f"CRUDTool '{self.name}': Data payload preparation failed: {e}") # Log as info, error will be propagated  # noqa: E501
                 raise
 
         try:
             logger.info(
                 f"CRUDTool '{self.name}': Executing method '{self.method}' on table '{self.table_name}'. "
-                f"\nFinal Data Payload (for create/update): {final_data_payload if self.method in ['create', 'update'] else 'N/A'}"
+                f"\nFinal Data Payload (for create/update): {final_data_payload if self.method in ['create', 'update'] else 'N/A'}"  # noqa: E501
                 f"\nFinal Filters: {final_filters}"
             )
 
@@ -387,7 +387,7 @@ class CRUDTool(BaseTool):
                 # _apply_filters_to_supabase_query was reverted by user, applying manually
                 for k, v_val in final_filters.items():
                     query_builder = query_builder.eq(k, v_val)
-                query_builder = query_builder.limit(DEFAULT_FETCH_LIMIT).order("updated_at", desc=True) # Assumes 'updated_at' exists
+                query_builder = query_builder.limit(DEFAULT_FETCH_LIMIT).order("updated_at", desc=True) # Assumes 'updated_at' exists  # noqa: E501
                 query_response = query_builder.execute()
 
             elif self.method == "update":
@@ -403,12 +403,12 @@ class CRUDTool(BaseTool):
                 query_response = query_builder.execute()
 
             else:
-                raise ToolException(f"Internal Error: Unhandled method '{self.method}' during execution for tool '{self.name}'. Should be caught by earlier validation if method name is constrained (e.g., Enum).")
+                raise ToolException(f"Internal Error: Unhandled method '{self.method}' during execution for tool '{self.name}'. Should be caught by earlier validation if method name is constrained (e.g., Enum).")  # noqa: E501
 
             response_data = query_response.data
 
             if self.method == "fetch" and not response_data:
-                return f"No records found matching your criteria in table '{self.table_name}'." # More specific table name
+                return f"No records found matching your criteria in table '{self.table_name}'." # More specific table name  # noqa: E501
 
             action_map = {
                 "create": "Created",
@@ -422,7 +422,7 @@ class CRUDTool(BaseTool):
 
         except Exception as e:
             # More detailed logging for database errors
-            logger.error(f"CRUDTool '{self.name}': Database operation error during '{self.method}' on table '{self.table_name}'. Filters: {final_filters}, Payload: {final_data_payload}. Error: {e}", exc_info=True)
+            logger.error(f"CRUDTool '{self.name}': Database operation error during '{self.method}' on table '{self.table_name}'. Filters: {final_filters}, Payload: {final_data_payload}. Error: {e}", exc_info=True)  # noqa: E501
             error_message_prefix = f"Database operation failed for tool '{self.name}'"
             if hasattr(e, 'json') and callable(e.json): # Attempt to parse Postgrest error
                 try:
@@ -432,11 +432,11 @@ class CRUDTool(BaseTool):
                     hint = error_details.get('hint')
                     details_str = error_details.get('details')
                     error_summary = f"DB Error (Code: {code}): {message}"
-                    if hint: error_summary += f". Hint: {hint}"
-                    if details_str: error_summary += f". Details: {details_str}"
+                    if hint: error_summary += f". Hint: {hint}"  # noqa: E701
+                    if details_str: error_summary += f". Details: {details_str}"  # noqa: E701
                     raise ToolException(f"{error_message_prefix}. {error_summary}")
                 except Exception as json_e: # Fallback if JSON parsing fails
-                    logger.warning(f"CRUDTool '{self.name}': Could not parse detailed JSON from database error: {json_e}")
+                    logger.warning(f"CRUDTool '{self.name}': Could not parse detailed JSON from database error: {json_e}")  # noqa: E501
             # Generic fallback if not a Postgrest error or JSON parsing failed
             raise ToolException(f"{error_message_prefix}. Error type: {type(e).__name__}, Details: {str(e)}.")
 
@@ -459,5 +459,5 @@ class CRUDTool(BaseTool):
         # often passes them as dicts after Pydantic model validation and conversion.
         # The _ensure_dict_input in _run handles cases where they might still be BaseModels
         # if called directly or through a different path.
-        logger.debug(f"CRUDTool '{self.name}': _arun called. Deferring to synchronous _run. Data type: {type(data)}, Filters type: {type(filters)}")
+        logger.debug(f"CRUDTool '{self.name}': _arun called. Deferring to synchronous _run. Data type: {type(data)}, Filters type: {type(filters)}")  # noqa: E501
         return self._run(data=data, filters=filters)

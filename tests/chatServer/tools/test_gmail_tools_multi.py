@@ -12,7 +12,6 @@ from chatServer.tools.gmail_tools import (
     GmailToolProvider,
 )
 
-
 # --- GmailToolProvider tests ---
 
 
@@ -115,7 +114,7 @@ async def test_token_refresh_triggered_when_expired():
 
             with patch("google.auth.transport.requests.Request"):
                 with patch.object(provider, "_update_stored_token", new_callable=AsyncMock) as mock_update:
-                    creds = await provider._get_google_credentials()
+                    creds = await provider._get_google_credentials()  # noqa: F841
 
                     mock_creds.refresh.assert_called_once()
                     mock_update.assert_called_once_with(
@@ -147,7 +146,7 @@ async def test_token_refresh_not_triggered_when_valid():
             mock_creds.expired = False
             mock_creds_cls.return_value = mock_creds
 
-            creds = await provider._get_google_credentials()
+            creds = await provider._get_google_credentials()  # noqa: F841
 
             mock_creds.refresh.assert_not_called()
 

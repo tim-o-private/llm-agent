@@ -118,8 +118,8 @@ class TestCreateDynamicCRUDToolClass(unittest.TestCase):
         self.assertIn("filters", args_schema.model_fields)
         self.assertFalse(args_schema.model_fields["filters"].is_required())
         filters_field_type = args_schema.model_fields["filters"].annotation
-        self.assertTrue(issubclass(filters_field_type.__args__[0], BaseModel) if hasattr(filters_field_type, '__args__') else issubclass(filters_field_type, BaseModel))
-        actual_filter_model = filters_field_type.__args__[0] if hasattr(filters_field_type, '__args__') else filters_field_type
+        self.assertTrue(issubclass(filters_field_type.__args__[0], BaseModel) if hasattr(filters_field_type, '__args__') else issubclass(filters_field_type, BaseModel))  # noqa: E501
+        actual_filter_model = filters_field_type.__args__[0] if hasattr(filters_field_type, '__args__') else filters_field_type  # noqa: E501
         self.assertIn("filter_id", actual_filter_model.model_fields)
 
     def test_fallback_to_base_schema_if_config_empty(self):
@@ -179,7 +179,7 @@ class TestLoadToolsFromDb(unittest.TestCase):
                 }
             }
         ]
-        loaded_tools = load_tools_from_db(tools_data, self.user_id, self.agent_name, self.direct_supabase_url, self.direct_supabase_key)
+        loaded_tools = load_tools_from_db(tools_data, self.user_id, self.agent_name, self.direct_supabase_url, self.direct_supabase_key)  # noqa: E501
         self.assertEqual(len(loaded_tools), 1)
         tool = loaded_tools[0]
         self.assertIsInstance(tool, CRUDTool)
@@ -198,7 +198,7 @@ class TestLoadToolsFromDb(unittest.TestCase):
                 "config": {"table_name": "items", "method": "read", "runtime_args_schema": {}}
             }
         ]
-        loaded_tools = load_tools_from_db(tools_data, self.user_id, self.agent_name, self.direct_supabase_url, self.direct_supabase_key)
+        loaded_tools = load_tools_from_db(tools_data, self.user_id, self.agent_name, self.direct_supabase_url, self.direct_supabase_key)  # noqa: E501
         self.assertEqual(len(loaded_tools), 1)
         tool = loaded_tools[0]
         self.assertIsInstance(tool, CRUDTool)
@@ -211,7 +211,7 @@ class TestLoadToolsFromDb(unittest.TestCase):
                 "config": {"custom_config_param": "test_value"}
             }
         ]
-        loaded_tools = load_tools_from_db(tools_data, self.user_id, self.agent_name, self.direct_supabase_url, self.direct_supabase_key)
+        loaded_tools = load_tools_from_db(tools_data, self.user_id, self.agent_name, self.direct_supabase_url, self.direct_supabase_key)  # noqa: E501
         self.assertEqual(len(loaded_tools), 1)
         tool = loaded_tools[0]
         self.assertIsInstance(tool, SampleNonCRUDTool)
@@ -222,14 +222,14 @@ class TestLoadToolsFromDb(unittest.TestCase):
 
     def test_skip_unregistered_tool(self):
         tools_data = [{"name": "GhostTool", "description": "N/A", "type": "UnknownToolType", "config": {}}]
-        loaded_tools = load_tools_from_db(tools_data, self.user_id, self.agent_name, self.direct_supabase_url, self.direct_supabase_key)
+        loaded_tools = load_tools_from_db(tools_data, self.user_id, self.agent_name, self.direct_supabase_url, self.direct_supabase_key)  # noqa: E501
         self.assertEqual(len(loaded_tools), 0)
 
     def test_skip_tool_missing_required_config_for_crud(self):
         tools_data = [
             {"name": "BadCrud", "description": "Bad.", "type": "CRUDTool", "config": {"method": "create"}}
         ]
-        loaded_tools = load_tools_from_db(tools_data, self.user_id, self.agent_name, self.direct_supabase_url, self.direct_supabase_key)
+        loaded_tools = load_tools_from_db(tools_data, self.user_id, self.agent_name, self.direct_supabase_url, self.direct_supabase_key)  # noqa: E501
         self.assertEqual(len(loaded_tools), 0)
 
     def test_skip_tool_missing_name_or_description(self):
@@ -237,7 +237,7 @@ class TestLoadToolsFromDb(unittest.TestCase):
             {"description": "No name.", "type": "CRUDTool", "config": {"table_name": "t", "method": "c"}},
             {"name": "NoDesc", "type": "CRUDTool", "config": {"table_name": "t", "method": "c"}},
         ]
-        loaded_tools = load_tools_from_db(tools_data, self.user_id, self.agent_name, self.direct_supabase_url, self.direct_supabase_key)
+        loaded_tools = load_tools_from_db(tools_data, self.user_id, self.agent_name, self.direct_supabase_url, self.direct_supabase_key)  # noqa: E501
         self.assertEqual(len(loaded_tools), 0)
 
 
@@ -248,7 +248,7 @@ class TestFetchUserInstructions(unittest.TestCase):
         db = MagicMock()
         mock_resp = MagicMock()
         mock_resp.data = {"instructions": "Always use bullet points."}
-        db.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_resp
+        db.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_resp  # noqa: E501
 
         result = _fetch_user_instructions(db, "user-1", "assistant")
         self.assertEqual(result, "Always use bullet points.")
@@ -257,7 +257,7 @@ class TestFetchUserInstructions(unittest.TestCase):
         db = MagicMock()
         mock_resp = MagicMock()
         mock_resp.data = None
-        db.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_resp
+        db.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_resp  # noqa: E501
 
         result = _fetch_user_instructions(db, "user-1", "assistant")
         self.assertIsNone(result)
@@ -266,14 +266,14 @@ class TestFetchUserInstructions(unittest.TestCase):
         db = MagicMock()
         mock_resp = MagicMock()
         mock_resp.data = {"instructions": ""}
-        db.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_resp
+        db.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_resp  # noqa: E501
 
         result = _fetch_user_instructions(db, "user-1", "assistant")
         self.assertIsNone(result)
 
     def test_returns_none_on_error(self):
         db = MagicMock()
-        db.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.side_effect = Exception("DB error")
+        db.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.side_effect = Exception("DB error")  # noqa: E501
 
         result = _fetch_user_instructions(db, "user-1", "assistant")
         self.assertIsNone(result)
@@ -318,16 +318,16 @@ class TestLoadAgentExecutorDb(unittest.TestCase):
 
         mock_agent_response = MagicMock()
         mock_agent_response.data = self.mock_agent_config_data
-        self.db_instance_mock.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = mock_agent_response
+        self.db_instance_mock.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = mock_agent_response  # noqa: E501
 
         mock_tools_response = MagicMock()
         mock_tools_response.data = self.mock_tools_data
-        self.db_instance_mock.table.return_value.select.return_value.eq.return_value.eq.return_value.eq.return_value.execute.return_value = mock_tools_response
+        self.db_instance_mock.table.return_value.select.return_value.eq.return_value.eq.return_value.eq.return_value.execute.return_value = mock_tools_response  # noqa: E501
 
         # Mock user instructions fetch
         mock_instructions_resp = MagicMock()
         mock_instructions_resp.data = None
-        self.db_instance_mock.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_instructions_resp
+        self.db_instance_mock.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_instructions_resp  # noqa: E501
 
         self.original_tool_registry = TOOL_REGISTRY.copy()
         TOOL_REGISTRY["CRUDTool"] = CRUDTool

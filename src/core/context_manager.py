@@ -115,7 +115,7 @@ class ContextManager:
             - A formatted string of the global context suitable for LLM.
         """
         if agent_name:
-             logger.warning("ContextManager.get_context called with agent_name, but it now only loads global context. Agent-specific loading is handled elsewhere.")
+             logger.warning("ContextManager.get_context called with agent_name, but it now only loads global context. Agent-specific loading is handled elsewhere.")  # noqa: E501
 
         raw_context = {'global': {}}
         formatted_context_parts = []

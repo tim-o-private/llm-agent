@@ -53,7 +53,7 @@ class AsyncPostgresBufferedWindowMemory(ConversationBufferWindowMemory):
         else:
             # This path depends on the resolution of abuffer when return_messages=False
             # For now, it would hit the NotImplementedError in abuffer.
-            return {self.memory_key: get_buffer_string(buffer, human_prefix=self.human_prefix, ai_prefix=self.ai_prefix)}
+            return {self.memory_key: get_buffer_string(buffer, human_prefix=self.human_prefix, ai_prefix=self.ai_prefix)}  # noqa: E501
 
 
     async def asave_context(self, inputs: Dict[str, Any], outputs: Dict[str, str]) -> None:

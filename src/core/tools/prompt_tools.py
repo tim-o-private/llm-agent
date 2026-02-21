@@ -10,16 +10,16 @@ from core.prompting.prompt_manager import PromptManagerService
 
 class UpdateSelfInstructionsInput(BaseModel):
     agent_name: str = Field(description="The name of the agent whose instructions are to be updated.")
-    instruction_change_proposal: Dict[str, Any] = Field(description="A dictionary representing the proposed changes or additions to instructions. Example: {'instructions': ['New instruction 1', 'New instruction 2']}")
-    customization_type: str = Field(default='instruction_set', description="The type of customization, e.g., 'instruction_set'.")
-    # customization_id: Optional[str] = Field(None, description="Optional ID of an existing customization to update. If None, a new one might be created or an existing one of type 'instruction_set' updated based on service logic.")
+    instruction_change_proposal: Dict[str, Any] = Field(description="A dictionary representing the proposed changes or additions to instructions. Example: {'instructions': ['New instruction 1', 'New instruction 2']}")  # noqa: E501
+    customization_type: str = Field(default='instruction_set', description="The type of customization, e.g., 'instruction_set'.")  # noqa: E501
+    # customization_id: Optional[str] = Field(None, description="Optional ID of an existing customization to update. If None, a new one might be created or an existing one of type 'instruction_set' updated based on service logic.")  # noqa: E501
 
 class UpdateSelfInstructionsTool(BaseTool):
     name: str = "update_self_instructions"
     description: str = (
         "Allows the agent to propose updates or additions to its own persistent instructions or behaviors. "
         "Use this to remember user preferences or adapt your core instructions over time. "
-        "The 'instruction_change_proposal' should be a dictionary, typically with an 'instructions' key holding a list of strings."
+        "The 'instruction_change_proposal' should be a dictionary, typically with an 'instructions' key holding a list of strings."  # noqa: E501
     )
     args_schema: Type[BaseModel] = UpdateSelfInstructionsInput
     prompt_manager: PromptManagerService
@@ -73,9 +73,9 @@ class UpdateSelfInstructionsTool(BaseTool):
                 is_active=True
             )
             if result:
-                return f"Successfully updated instructions for agent '{agent_name}'. New content: {result.get('content')}"
+                return f"Successfully updated instructions for agent '{agent_name}'. New content: {result.get('content')}"  # noqa: E501
             else:
-                return f"Failed to update instructions for agent '{agent_name}'. The existing instruction set might not have been found or an error occurred."
+                return f"Failed to update instructions for agent '{agent_name}'. The existing instruction set might not have been found or an error occurred."  # noqa: E501
         else:
             # Add new if no existing one of this type was found
             # print(f"Adding new customization for agent {agent_name}")

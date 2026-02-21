@@ -107,7 +107,7 @@ class TestGmailToolsAgentIntegration:
             assert credentials is None or not hasattr(credentials, 'token') or not credentials.token
         except Exception as e:
             # Should be a meaningful error about missing credentials
-            assert "not found" in str(e).lower() or "missing" in str(e).lower() or "no connection" in str(e).lower() or "no oauth" in str(e).lower()
+            assert "not found" in str(e).lower() or "missing" in str(e).lower() or "no connection" in str(e).lower() or "no oauth" in str(e).lower()  # noqa: E501
 
     @pytest.mark.asyncio
     async def test_database_integration_consistency(self, integration_helper):

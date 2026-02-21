@@ -1,12 +1,12 @@
 """Tests for the OAuth router (SPEC-008 FU-2)."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 
-from chatServer.routers.oauth_router import router, _get_oauth_service
+from chatServer.routers.oauth_router import _get_oauth_service, router
 from chatServer.services.oauth_service import OAuthResult
 
 

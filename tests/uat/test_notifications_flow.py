@@ -17,7 +17,6 @@ import pytest
 
 from tests.uat.conftest import TEST_USER_ID
 
-
 # ─── Seed Data ───────────────────────────────────────────────────────────────
 
 NOTIFICATIONS = [
@@ -148,9 +147,7 @@ class TestNotificationsFlow:
     async def test_unauthenticated_returns_401(self, supabase_fixture, mock_psycopg_conn):
         """Requests without auth header get 401."""
         # Import fresh — don't use authenticated_client fixture
-        from httpx import ASGITransport, AsyncClient
 
-        from chatServer.main import app
 
         # Don't override get_current_user — let real auth run
         # But we do need to not have the authenticated_client's overrides

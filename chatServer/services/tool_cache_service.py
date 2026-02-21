@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from ..database.connection import get_database_manager
 from .infrastructure_error_handler import handle_cache_errors, handle_database_errors
-from .ttl_cache_service import TTLCacheService, get_ttl_cache_service, register_ttl_cache_service
+from .ttl_cache_service import TTLCacheService, register_ttl_cache_service
 
 logger = logging.getLogger(__name__)
 

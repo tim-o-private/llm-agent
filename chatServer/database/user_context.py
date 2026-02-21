@@ -34,7 +34,7 @@ async def set_user_context(connection: psycopg.AsyncConnection, user_id: str) ->
             auth_uid_result = await cur.fetchone()
 
             if not auth_uid_result or str(auth_uid_result[0]) != user_id:
-                raise Exception(f"Failed to set user context: auth.uid() returned {auth_uid_result[0]}, expected {user_id}")
+                raise Exception(f"Failed to set user context: auth.uid() returned {auth_uid_result[0]}, expected {user_id}")  # noqa: E501
 
             logger.debug(f"Successfully set user context for user {user_id}")
 

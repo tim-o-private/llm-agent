@@ -15,7 +15,7 @@ from utils.logging_utils import get_logger
 
 # Assuming PromptManagerService is in src.core.prompting
 # Adjust import path as necessary based on your project structure
-# Removed: from core.prompting.prompt_manager import PromptManagerService # Not used by executor directly if CustomizableAgent is removed
+# Removed: from core.prompting.prompt_manager import PromptManagerService # Not used by executor directly if CustomizableAgent is removed  # noqa: E501
 
 logger = get_logger(__name__)
 
@@ -25,13 +25,13 @@ def preprocess_intermediate_steps(intermediate_steps: List[tuple]) -> List[tuple
     processed_steps = []
     for i, (action, observation) in enumerate(intermediate_steps):
         logger.debug(f"[preprocess_intermediate_steps] Step {i} - Original Action: {action}")
-        logger.debug(f"[preprocess_intermediate_steps] Step {i} - Original Observation: {observation!r}") # Added !r for more detail
+        logger.debug(f"[preprocess_intermediate_steps] Step {i} - Original Observation: {observation!r}") # Added !r for more detail  # noqa: E501
 
         processed_observation = observation
         if observation is None or (isinstance(observation, str) and not observation.strip()):
             # Using a clear placeholder for empty or None observations
             processed_observation = "(Tool returned no output or an empty string)"
-            logger.warning(f"[preprocess_intermediate_steps] Step {i} - Observation was None or empty, replaced with placeholder. Original: {observation!r}")
+            logger.warning(f"[preprocess_intermediate_steps] Step {i} - Observation was None or empty, replaced with placeholder. Original: {observation!r}")  # noqa: E501
 
         logger.debug(f"[preprocess_intermediate_steps] Step {i} - Processed Observation: {processed_observation!r}")
         processed_steps.append((action, processed_observation))
@@ -57,7 +57,7 @@ class CustomizableAgentExecutor(AgentExecutor):
 
         current_logger = logger_instance if logger_instance else logger
         agent_name_from_config = agent_config_dict.get('agent_name', 'UnknownAgent')
-        current_logger.info(f"Creating CustomizableAgentExecutor for '{agent_name_from_config}' from config dictionary.")
+        current_logger.info(f"Creating CustomizableAgentExecutor for '{agent_name_from_config}' from config dictionary.")  # noqa: E501
 
         llm_config_dict = agent_config_dict.get('llm', {})
         if not llm_config_dict or not llm_config_dict.get('model'):
@@ -103,7 +103,7 @@ class CustomizableAgentExecutor(AgentExecutor):
         ])
 
         if not hasattr(llm_instance, 'bind_tools'):
-             raise AttributeError("The configured LLM instance does not support .bind_tools() which is needed for function calling agent.")
+             raise AttributeError("The configured LLM instance does not support .bind_tools() which is needed for function calling agent.")  # noqa: E501
         llm_with_tools = llm_instance.bind_tools(tools)
 
         agent_runnable = (
@@ -125,7 +125,7 @@ class CustomizableAgentExecutor(AgentExecutor):
         )
         return instance
 
-    async def ainvoke(self, input: Dict[str, Any], config: Optional[Dict[str, Any]] = None, **kwargs: Any) -> Dict[str, Any]:
+    async def ainvoke(self, input: Dict[str, Any], config: Optional[Dict[str, Any]] = None, **kwargs: Any) -> Dict[str, Any]:  # noqa: E501
         if "chat_history" not in input:
              input["chat_history"] = []
 
@@ -147,7 +147,7 @@ def get_customizable_agent_executor(
         agent_config_data_dict = agent_config_obj
     else:
         logger_to_use_effective = logger_to_use if logger_to_use else logger
-        logger_to_use_effective.error(f"get_customizable_agent_executor received non-dict agent_config_obj of type {type(agent_config_obj)}. This is deprecated. Expecting a dictionary.")
+        logger_to_use_effective.error(f"get_customizable_agent_executor received non-dict agent_config_obj of type {type(agent_config_obj)}. This is deprecated. Expecting a dictionary.")  # noqa: E501
         if not hasattr(agent_config_obj, 'get'):
              raise TypeError(f"agent_config_obj must be a dictionary, got {type(agent_config_obj)}")
         agent_config_data_dict = agent_config_obj
