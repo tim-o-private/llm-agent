@@ -212,13 +212,12 @@ async def get_connection_status(
             )
 
             result = await cur.fetchone()
-            is_connected = result[0] > 0 if result else False
-
-            return {"connected": is_connected, "service": service_name}
+            count = result[0] if result else 0
+            return {"connected": count > 0, "count": count, "service": service_name}
 
     except Exception as e:
         logger.error(f"Error checking connection status for user {user_id}, service {service_name}: {e}")
-        return {"connected": False, "service": service_name, "error": "Failed to check status"}
+        return {"connected": False, "count": 0, "service": service_name, "error": "Failed to check status"}
 
 
 @router.put("/connections/{service_name}", response_model=ExternalAPIConnectionResponse)
@@ -301,7 +300,7 @@ async def delete_api_connection(
     user_id: str = Depends(get_current_user),
     db_conn: psycopg.AsyncConnection = Depends(get_db_connection)
 ):
-    """Delete (deactivate) an API connection.
+    """Delete (deactivate) all API connections for a service.
 
     Args:
         service_name: Name of the service
@@ -340,6 +339,61 @@ async def delete_api_connection(
         raise
     except Exception as e:
         logger.error(f"Error deleting API connection for user {user_id}, service {service_name}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete API connection"
+        )
+
+
+@router.delete("/connections/by-id/{connection_id}")
+async def delete_api_connection_by_id(
+    connection_id: str,
+    user_id: str = Depends(get_current_user),
+    db_conn: psycopg.AsyncConnection = Depends(get_db_connection)
+):
+    """Delete (deactivate) a specific API connection by ID.
+
+    Used for multi-account services like Gmail where multiple connections
+    exist for the same service_name.
+
+    Args:
+        connection_id: UUID of the specific connection to delete
+        user_id: Current user ID
+        db_conn: Database connection
+
+    Returns:
+        Success message
+
+    Raises:
+        HTTPException: If connection not found or deletion fails
+    """
+    try:
+        async with db_conn.cursor() as cur:
+            await cur.execute(
+                """
+                UPDATE external_api_connections
+                SET is_active = %s, updated_at = NOW()
+                WHERE id = %s AND user_id = %s
+                RETURNING service_name, service_user_email
+                """,
+                (False, connection_id, user_id)
+            )
+
+            result = await cur.fetchone()
+            if not result:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"No connection found with id {connection_id}"
+                )
+
+            service_name = result[0]
+            email = result[1] or "unknown"
+            return {"message": f"Disconnected {email} ({service_name})"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting connection {connection_id} for user {user_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete API connection"
