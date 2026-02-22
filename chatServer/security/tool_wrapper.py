@@ -122,9 +122,9 @@ def with_approval(
                 logger.info(f"Action {tool_name} queued for approval: {action_id}")
 
                 return (
-                    f"Action '{tool_name}' has been queued for your approval. "
-                    f"Action ID: {action_id}. "
-                    f"Please review and approve this action in the confirmation panel."
+                    f"STOP: Action '{tool_name}' requires user approval and has been queued (ID: {action_id}). "
+                    f"Tell the user their approval is needed and wait. Do NOT retry this tool call. "
+                    f"Do NOT attempt alternative approaches. The user will approve or deny in the UI."
                 )
             except Exception as e:
                 logger.error(f"Failed to queue action {tool_name}: {e}")

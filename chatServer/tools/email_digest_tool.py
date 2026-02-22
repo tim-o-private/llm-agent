@@ -11,11 +11,11 @@ logger = logging.getLogger(__name__)
 
 class EmailDigestInput(BaseModel):
     """Input schema for email digest tool."""
-    hours_back: int = Field(
+    hours_back: float = Field(
         default=24,
-        ge=1,
+        ge=0.5,
         le=168,
-        description="Hours to look back for emails (1-168 hours, default 24)"
+        description="Hours to look back for emails (0.5-168 hours, default 24)"
     )
     include_read: bool = Field(
         default=False,
@@ -65,7 +65,7 @@ class EmailDigestTool(BaseTool):
         super().__init__(user_id=user_id, agent_name=agent_name,
                         supabase_url=supabase_url, supabase_key=supabase_key, **kwargs)
 
-    def _run(self, hours_back: int = 24, include_read: bool = False) -> str:
+    def _run(self, hours_back: float = 24, include_read: bool = False) -> str:
         """Synchronous run method (not used in async context)."""
         return (
             f"Email digest tool requires async execution. "
@@ -73,7 +73,7 @@ class EmailDigestTool(BaseTool):
             f"Please use the async version (_arun) for proper execution."
         )
 
-    async def _arun(self, hours_back: int = 24, include_read: bool = False) -> str:
+    async def _arun(self, hours_back: float = 24, include_read: bool = False) -> str:
         """Generate email digest by calling unified service.
 
         Args:

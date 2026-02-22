@@ -30,7 +30,7 @@ class EmailDigestService:
 
     async def generate_digest(
         self,
-        hours_back: int = 24,
+        hours_back: float = 24,
         include_read: bool = False,
         custom_prompt: Optional[str] = None,
         store_result: bool = True
@@ -95,6 +95,13 @@ class EmailDigestService:
 
             # Extract the digest content from agent response
             digest_content = result.get("output", "")
+
+            # Handle content block lists from newer langchain-anthropic versions
+            if isinstance(digest_content, list):
+                digest_content = "".join(
+                    block.get("text", "") for block in digest_content
+                    if isinstance(block, dict) and block.get("type") == "text"
+                ) or ""
 
             if not digest_content:
                 logger.warning(f"email_digest_agent returned empty response for user {self.user_id}")

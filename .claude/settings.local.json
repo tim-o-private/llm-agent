@@ -9,7 +9,8 @@
       "WebFetch(domain:supabase.com)",
       "WebFetch(domain:docs.authlib.org)",
       "mcp__memory__store_memory",
-      "WebFetch(domain:blog.emilburzo.com)"
+      "WebFetch(domain:blog.emilburzo.com)",
+      "mcp__clarity-dev__chat_with_clarity"
     ]
   },
   "prefersReducedMotion": true

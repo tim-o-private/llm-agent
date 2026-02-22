@@ -482,7 +482,7 @@ class GmailGetMessageTool(BaseGmailTool):
 class GmailDigestInput(BaseModel):
     """Input schema for Gmail digest tool."""
 
-    hours_back: int = Field(default=24, ge=1, le=168, description="Hours to look back (1-168)")
+    hours_back: float = Field(default=24, ge=0.5, le=168, description="Hours to look back (0.5-168)")
     include_read: bool = Field(default=False, description="Include read emails")
     max_emails: int = Field(default=20, ge=1, le=50, description="Maximum emails to analyze (1-50)")
     account: Optional[str] = Field(
@@ -501,12 +501,12 @@ class GmailDigestTool(BaseGmailTool):
     )
     args_schema: Type[BaseModel] = GmailDigestInput
 
-    def _run(self, hours_back: int = 24, include_read: bool = False, max_emails: int = 20, account: Optional[str] = None) -> str:  # noqa: E501
+    def _run(self, hours_back: float = 24, include_read: bool = False, max_emails: int = 20, account: Optional[str] = None) -> str:  # noqa: E501
         return "Gmail digest tool requires async execution. Use the async version (_arun)."
 
     async def _arun(
         self,
-        hours_back: int = 24,
+        hours_back: float = 24,
         include_read: bool = False,
         max_emails: int = 20,
         account: Optional[str] = None,
@@ -551,7 +551,7 @@ class GmailDigestTool(BaseGmailTool):
     async def _digest_single(
         self,
         provider: GmailToolProvider,
-        hours_back: int,
+        hours_back: float,
         include_read: bool,
         max_emails: int,
     ) -> str:
@@ -574,7 +574,7 @@ class GmailDigestTool(BaseGmailTool):
 
         return self._create_digest_summary(search_result, hours_back, include_read, provider.account_email)
 
-    def _create_digest_summary(self, search_results, hours_back: int, include_read: bool, account: str = "") -> str:
+    def _create_digest_summary(self, search_results, hours_back: float, include_read: bool, account: str = "") -> str:
         """Create a human-readable digest summary."""
         try:
             if isinstance(search_results, list):
