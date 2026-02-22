@@ -193,3 +193,6 @@ node_modules
 
 # Generated schema dump (re-generate: ./scripts/dump-schema.sh)
 supabase/schema.sql
+
+# Dev server logs (written by pnpm dev tee pipes)
+logs/

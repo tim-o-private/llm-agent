@@ -45,12 +45,26 @@ llm-agent/
 ## Quick Commands
 
 ```bash
-pnpm dev                    # Start both servers
+pnpm dev                    # Start both servers (logs → logs/chatserver.log, logs/webapp.log)
 pytest tests/               # Python tests
 cd webApp && pnpm test      # Frontend tests
 ruff check src/ chatServer/ # Python lint
 cd webApp && pnpm lint      # Frontend lint
 ```
+
+## Dev MCP Server (`clarity-dev`)
+
+A local MCP server (`scripts/mcp/clarity_dev_server.py`) exposes one tool for agents and Claude Code:
+
+- **`chat_with_clarity(message, session_id?, agent_name?)`** — sends a message to the running chatServer (`localhost:3001`) and returns the agent's response. Mints an HS256 JWT using `SUPABASE_JWT_SECRET` + `CLARITY_DEV_USER_ID`.
+
+**Use this for:** verifying tool integrations end-to-end, UAT without browser access, confirming agent responses match spec.
+
+**Requires:** `pnpm dev` running + `CLARITY_DEV_USER_ID` set in `.env` (Supabase user UUID).
+
+**Log access:** Agents read `logs/chatserver.log` and `logs/webapp.log` directly with `Read`/`Grep`. For production: `flyctl logs -a clarity-chatserver` via Bash.
+
+Registered in `.mcp.json` — Claude Code loads it automatically.
 
 ## Skills & Principles
 
