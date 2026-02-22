@@ -37,6 +37,7 @@ These tools predate the `verb_resource` naming convention. Each rename requires:
 
 | Priority | Title | Notes |
 |----------|-------|-------|
+| P1 | MCP UAT expansion — browser-free UI testing | Extend `scripts/mcp/clarity_dev_server.py` with tools covering key UI flows: list sessions, list agents, list notifications, list pending actions, approve/reject action. Enables agents to do full UAT without browser access. Current MCP only covers `chat_with_clarity`. |
 | P1 | Dynamic tool creation | Agent writes tool config rows to DB; validated by API; no code execution. Enables self-extending agent. |
 | P1 | Trust escalation model | First-use manual approval → auto-approve after N consistent approvals. Rejection resets. Dashboard. |
 | P2 | Email draft-reply workflow | Agent drafts replies via pending_actions; user approves/edits/sends. Requires compose OAuth scope. |

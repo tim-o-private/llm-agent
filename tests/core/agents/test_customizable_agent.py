@@ -103,7 +103,7 @@ class TestCustomizableAgentExecutorFactory(unittest.TestCase):
             google_api_key="fake_google_api_key",
             temperature=0.5
         )
-        self.mock_llm_instance.bind_tools.assert_called_once_with(self.sample_tools)
+        self.mock_llm_instance.bind_tools.assert_called_once_with(self.sample_tools, tool_choice="auto")
 
     def test_creation_missing_google_api_key(self):
         self.mock_os_getenv.side_effect = lambda key, default=None: None

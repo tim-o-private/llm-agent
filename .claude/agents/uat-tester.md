@@ -17,7 +17,25 @@ Before starting:
 
 Full toolset: Read, Write, Edit, Bash, Glob, Grep, TaskList, TaskGet, TaskUpdate, SendMessage
 
-## How UAT Tests Work
+## Live UAT vs Flow Tests
+
+Two complementary approaches — use the right one for the task:
+
+### Live UAT via `chat_with_clarity` MCP tool
+
+For chat-based ACs, use the `chat_with_clarity` tool to send real messages to the running chatServer (`localhost:3001`). This exercises the full stack with no mocking.
+
+```
+chat_with_clarity(message="search my emails for receipts", agent_name="assistant")
+```
+
+Requires: `pnpm dev` running + `CLARITY_DEV_USER_ID` in `.env`. Check `logs/chatserver.log` via `Read`/`Grep` to inspect server-side output.
+
+### Flow tests (mocked boundaries)
+
+For ACs that need controlled data, isolated fixtures, or auth edge cases, write pytest flow tests in `tests/uat/`:
+
+## How UAT Flow Tests Work
 
 UAT tests exercise the **real call chain** with **mocked boundaries**:
 

@@ -380,7 +380,8 @@ async def supabase_webhook(payload: SupabasePayload):
 # Define a protocol for what we expect from an agent executor
 if __name__ == "__main__":
     import uvicorn
-    # Ensure logging is configured to see messages from the application
-    logging.basicConfig(level=logging.DEBUG)
+    # Logging configured via get_logger() — default DEBUG with noisy loggers quieted
+    from utils.logging_utils import get_logger as _init_logging
+    _init_logging("chatServer")
     print("Starting API server with Uvicorn for local development...")
-    uvicorn.run(app, host="0.0.0.0", port=3001)
+    uvicorn.run(app, host="0.0.0.0", port=3001, access_log=False)

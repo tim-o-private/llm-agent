@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "clarity-dev": {
+      "command": ".venv/bin/python",
+      "args": ["scripts/mcp/clarity_dev_server.py"]
+    }
+  }
+}

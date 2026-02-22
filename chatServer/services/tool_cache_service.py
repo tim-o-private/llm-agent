@@ -65,13 +65,7 @@ class ToolCacheService:
         Returns:
             List of tool configurations for the agent
         """
-        try:
-            all_tools = await self.cache_service.get_data()
-            return all_tools.get(agent_id, [])
-        except Exception as e:
-            logger.error(f"Failed to get cached tools for agent {agent_id}: {e}")
-            # Error handler will manage this and apply fallback
-            raise
+        return await self.cache_service.get(agent_id)
 
     @handle_cache_errors("invalidate_cache")
     async def invalidate_cache(self, agent_id: Optional[str] = None) -> None:

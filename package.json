@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev:chatServer": ".venv/bin/python -m chatServer.main",
-    "dev:webApp": "pnpm --filter clarity-frontend dev",
+    "dev:chatServer": "mkdir -p logs && .venv/bin/python -m chatServer.main 2>&1 | tee logs/chatserver.log",
+    "dev:webApp": "mkdir -p logs && pnpm --filter clarity-frontend dev 2>&1 | tee logs/webapp.log",
     "dev:ngrok": "ngrok start chatserver",
     "dev": "concurrently \"pnpm:dev:chatServer\" \"pnpm:dev:webApp\" \"pnpm:dev:ngrok\" --names \"SERVER,WEBAPP,NGROK\" --prefix-colors \"bgMagenta.bold,bgGreen.bold,bgCyan.bold\"",
     "prod:webApp": "flyctl deploy -c webApp/fly.toml --build-secret VITE_API_BASE_URL=https://clarity-chatserver.fly.dev --build-secret VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY --build-secret VITE_SUPABASE_URL=$VITE_SUPABASE_URL",

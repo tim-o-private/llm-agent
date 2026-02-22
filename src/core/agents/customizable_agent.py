@@ -104,7 +104,7 @@ class CustomizableAgentExecutor(AgentExecutor):
 
         if not hasattr(llm_instance, 'bind_tools'):
              raise AttributeError("The configured LLM instance does not support .bind_tools() which is needed for function calling agent.")  # noqa: E501
-        llm_with_tools = llm_instance.bind_tools(tools)
+        llm_with_tools = llm_instance.bind_tools(tools, tool_choice="auto")
 
         agent_runnable = (
             RunnablePassthrough.assign(

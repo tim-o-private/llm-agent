@@ -75,6 +75,18 @@ TOOL_APPROVAL_DEFAULTS: dict[str, tuple[ApprovalTier, ApprovalTier]] = {
     # LTM memory tools
     "save_memory": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.REQUIRES_APPROVAL),
     "read_memory": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+
+    # Email digest tools
+    "email_digest": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+    "gmail_digest": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+
+    # Schedule tools
+    "create_schedule": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.AUTO_APPROVE),
+    "delete_schedule": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.REQUIRES_APPROVAL),
+    "list_schedules": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+
+    # Update instructions
+    "update_instructions": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.REQUIRES_APPROVAL),
 }
 
 # Default tier for unknown tools (fail-safe)

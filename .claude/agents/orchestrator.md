@@ -151,7 +151,15 @@ Write and execute a Python script that exercises the changed code paths directly
 
 **Live UAT (when the dev server is available on localhost):**
 
-Spawn a uat-tester agent or conduct UAT yourself by hitting the API endpoints. Verify each AC against the running system.
+Use the `chat_with_clarity` MCP tool (registered in `.mcp.json`) to send messages directly to the running agent and verify responses match the spec. This requires no browser — mint a dev JWT and hit the real call chain end-to-end.
+
+```
+chat_with_clarity(message="...", agent_name="assistant")
+```
+
+For non-chat endpoints (REST API), use `Bash` with `curl` against `localhost:3001`. For chat-based ACs, prefer `chat_with_clarity` over curl — it exercises the full agent/tool stack.
+
+Spawn a uat-tester agent for flow tests that need mocked Supabase fixtures.
 
 **In both cases, produce a UAT report:**
 
