@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "clarity-dev": {
-      "command": "/home/tim/github/llm-agent/.venv/bin/python",
-      "args": ["/home/tim/github/llm-agent/scripts/mcp/clarity_dev_server.py"]
+      "command": ".venv/bin/python",
+      "args": ["scripts/mcp/clarity_dev_server.py"]
     }
   }
 }
