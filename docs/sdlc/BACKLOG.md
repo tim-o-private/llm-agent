@@ -14,6 +14,7 @@ Prioritized task queue. Items move to specs when ready for implementation.
 | Priority | ID | Title | Status |
 |----------|----|-------|--------|
 | P0 | SPEC-009 | [Conversation History & Agent Scheduling](specs/SPEC-009-conversation-history-and-agent-scheduling.md) | Planning |
+| P0 | SPEC-017 | [User-Scoped Database Access](specs/SPEC-017-user-scoped-db-access.md) | Draft — 4 functional units |
 | P1 | SPEC-007 | [Frontend Cleanup + Approval Toasts](specs/SPEC-007-frontend-cleanup.md) | Draft |
 | P1 | SPEC-008 | [Context Management & Compaction](specs/SPEC-008-context-management-and-compaction.md) | Draft |
 | P1 | SPEC-010 | [Agent Prompt Architecture](specs/SPEC-010-agent-prompt-architecture.md) | Draft — 3 functional units |
@@ -45,6 +46,7 @@ These tools predate the `verb_resource` naming convention. Each rename requires:
 | P2 | Multi-account email | OAuth per email account; agent triages across all accounts |
 | P2 | Calendar integration | Google Calendar read access for scheduling context |
 | P2 | Notification preferences UI | Settings page for per-category channel routing |
+| P2 | Consolidate dual-access tables to single path | `tasks`, `chat_sessions`, `external_api_connections` are accessed both directly from frontend (anon key + RLS) and via backend (service_role + UserScopedClient). Both paths enforce user isolation, but dual access creates race conditions (concurrent agent + user edits). Consolidate to API-only access. Depends on SPEC-017. |
 | P2 | Execution results dashboard | View past scheduled runs in webApp |
 | P3 | Agent orchestration | Chief agent creates/manages sub-agents for complex tasks |
 | P3 | Slack channel integration | Similar to Telegram pattern via user_channels |
