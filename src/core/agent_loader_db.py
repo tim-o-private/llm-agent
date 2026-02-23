@@ -22,6 +22,7 @@ from chatServer.tools.memory_tools import (
     SearchMemoryTool,
     SetProjectTool,
     StoreMemoryTool,
+    UpdateMemoryTool,
 )
 from chatServer.tools.reminder_tools import CreateReminderTool, ListRemindersTool
 from chatServer.tools.schedule_tools import CreateScheduleTool, DeleteScheduleTool, ListSchedulesTool
@@ -51,6 +52,7 @@ TOOL_REGISTRY: Dict[str, Type] = {
     "SearchMemoryTool": SearchMemoryTool,
     "FetchMemoryTool": FetchMemoryTool,
     "DeleteMemoryTool": DeleteMemoryTool,
+    "UpdateMemoryTool": UpdateMemoryTool,
     "SetProjectTool": SetProjectTool,
     "LinkMemoriesTool": LinkMemoriesTool,
     "ListEntitiesTool": ListEntitiesTool,
@@ -393,9 +395,9 @@ def load_tools_from_db(
             # Inject memory_client for memory tools; strip Supabase kwargs they don't need
             _memory_tool_types = (
                 "StoreMemoryTool", "RecallMemoryTool", "SearchMemoryTool",
-                "FetchMemoryTool", "DeleteMemoryTool", "SetProjectTool",
-                "LinkMemoriesTool", "ListEntitiesTool", "SearchEntitiesTool",
-                "GetContextInfoTool",
+                "FetchMemoryTool", "DeleteMemoryTool", "UpdateMemoryTool",
+                "SetProjectTool", "LinkMemoriesTool", "ListEntitiesTool",
+                "SearchEntitiesTool", "GetContextInfoTool",
             )
             if db_tool_type_str in _memory_tool_types:
                 if memory_client:

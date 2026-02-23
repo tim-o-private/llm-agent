@@ -15,6 +15,7 @@ from chatServer.tools.memory_tools import (
     SearchMemoryTool,
     SetProjectTool,
     StoreMemoryTool,
+    UpdateMemoryTool,
 )
 
 
@@ -154,6 +155,34 @@ class TestDeleteMemoryTool:
         mock_memory_client.call_tool.assert_called_once_with("delete_memory", {"memory_id": "mem-abc-123"})
 
 
+class TestUpdateMemoryTool:
+    @pytest.mark.asyncio
+    async def test_calls_update_with_text(self, mock_memory_client):
+        tool = _make_tool(UpdateMemoryTool, mock_memory_client)
+        await tool._arun(memory_id="mem-1", text="updated text")
+        mock_memory_client.call_tool.assert_called_once_with(
+            "update_memory", {"memory_id": "mem-1", "text": "updated text"},
+        )
+
+    @pytest.mark.asyncio
+    async def test_calls_update_with_multiple_fields(self, mock_memory_client):
+        tool = _make_tool(UpdateMemoryTool, mock_memory_client)
+        await tool._arun(memory_id="mem-1", text="new", tags=["a"], priority=5)
+        call_args = mock_memory_client.call_tool.call_args[0][1]
+        assert call_args["memory_id"] == "mem-1"
+        assert call_args["text"] == "new"
+        assert call_args["tags"] == ["a"]
+        assert call_args["priority"] == 5
+
+    @pytest.mark.asyncio
+    async def test_omits_empty_fields(self, mock_memory_client):
+        tool = _make_tool(UpdateMemoryTool, mock_memory_client)
+        await tool._arun(memory_id="mem-1")
+        mock_memory_client.call_tool.assert_called_once_with(
+            "update_memory", {"memory_id": "mem-1"},
+        )
+
+
 class TestSetProjectTool:
     @pytest.mark.asyncio
     async def test_calls_set_project(self, mock_memory_client):
@@ -221,7 +250,7 @@ class TestPromptSections:
 
     def test_other_tools_prompt_always_none(self):
         for cls in (RecallMemoryTool, SearchMemoryTool, FetchMemoryTool, DeleteMemoryTool,
-                    SetProjectTool, LinkMemoriesTool, ListEntitiesTool, SearchEntitiesTool,
-                    GetContextInfoTool):
+                    UpdateMemoryTool, SetProjectTool, LinkMemoriesTool, ListEntitiesTool,
+                    SearchEntitiesTool, GetContextInfoTool):
             assert cls.prompt_section("web") is None
             assert cls.prompt_section("scheduled") is None

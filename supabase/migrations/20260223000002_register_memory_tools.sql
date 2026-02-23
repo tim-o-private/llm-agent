@@ -28,6 +28,9 @@ VALUES
   ('delete_memory', 'DeleteMemoryTool',
    'Delete a memory. Use when the user asks you to forget something or when information is outdated.',
    '{}', true),
+  ('update_memory', 'UpdateMemoryTool',
+   'Update an existing memory''s text and/or metadata fields. Only provided fields are changed.',
+   '{}', true),
   ('set_project', 'SetProjectTool',
    'Validate a project exists in memory or create it. Returns project summary with memory counts.',
    '{}', true),
@@ -57,7 +60,7 @@ JOIN tools old_t ON at.tool_id = old_t.id
 CROSS JOIN tools new_t
 WHERE old_t.name IN ('save_memory', 'read_memory')
   AND new_t.name IN ('store_memory', 'recall', 'search_memory', 'fetch_memory',
-                      'delete_memory', 'set_project', 'link_memories',
+                      'delete_memory', 'update_memory', 'set_project', 'link_memories',
                       'list_entities', 'search_entities', 'get_context_info')
   AND at.is_active = true
 ON CONFLICT DO NOTHING;

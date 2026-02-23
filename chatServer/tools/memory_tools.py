@@ -79,6 +79,21 @@ class DeleteMemoryInput(BaseModel):
     memory_id: str = Field(..., description="The ID of the memory to delete.")
 
 
+class UpdateMemoryInput(BaseModel):
+    memory_id: str = Field(..., description="The ID of the memory to update.")
+    text: str = Field(default="", description="New text content (re-embeds if changed).")
+    memory_type: str = Field(
+        default="", description="New type: core_identity, project_context, task_instruction, or episodic.",
+    )
+    scope: str = Field(default="", description="New scope: global, project, or task.")
+    entity: str = Field(default="", description="New entity name.")
+    project: str = Field(default="", description="New project name.")
+    task_id: str = Field(default="", description="New task ID.")
+    tags: list[str] = Field(default_factory=list, description="New tags (replaces existing).")
+    status: str = Field(default="", description="New status.")
+    priority: int | None = Field(default=None, description="New priority.")
+
+
 class SetProjectInput(BaseModel):
     project: str = Field(..., description="Project name to validate or create.")
 
@@ -199,6 +214,43 @@ class DeleteMemoryTool(_MemoryToolBase):
 
     async def _arun(self, memory_id: str) -> str:
         return await self._call_mcp({"memory_id": memory_id})
+
+
+class UpdateMemoryTool(_MemoryToolBase):
+    """Update an existing memory's text and/or metadata."""
+
+    name: str = "update_memory"
+    description: str = (
+        "Update an existing memory's text and/or metadata fields. "
+        "Only provided fields are changed."
+    )
+    args_schema: Type[BaseModel] = UpdateMemoryInput
+    _mcp_tool_name: str = "update_memory"
+
+    async def _arun(self, memory_id: str, text: str = "", memory_type: str = "",
+                    scope: str = "", entity: str = "", project: str = "",
+                    task_id: str = "", tags: list[str] | None = None,
+                    status: str = "", priority: int | None = None) -> str:
+        args: dict[str, Any] = {"memory_id": memory_id}
+        if text:
+            args["text"] = text
+        if memory_type:
+            args["memory_type"] = memory_type
+        if scope:
+            args["scope"] = scope
+        if entity:
+            args["entity"] = entity
+        if project:
+            args["project"] = project
+        if task_id:
+            args["task_id"] = task_id
+        if tags:
+            args["tags"] = tags
+        if status:
+            args["status"] = status
+        if priority is not None:
+            args["priority"] = priority
+        return await self._call_mcp(args)
 
 
 class SetProjectTool(_MemoryToolBase):
