@@ -297,3 +297,66 @@ class TestUserScopedTables:
         ]
         for table in system_tables:
             assert table not in USER_SCOPED_TABLES, f"{table} should not be in USER_SCOPED_TABLES"
+
+
+class TestScopedTableQueryGetattr:
+    """Test __getattr__ delegation for methods not explicitly proxied."""
+
+    def test_order_delegates_to_underlying_query(self):
+        mock_query = MagicMock()
+        scoped = ScopedTableQuery(mock_query, USER_ID)
+        scoped.order("created_at", desc=True)
+        mock_query.order.assert_called_once_with("created_at", desc=True)
+
+    def test_limit_delegates_to_underlying_query(self):
+        mock_query = MagicMock()
+        scoped = ScopedTableQuery(mock_query, USER_ID)
+        scoped.limit(10)
+        mock_query.limit.assert_called_once_with(10)
+
+    def test_neq_delegates_to_underlying_query(self):
+        mock_query = MagicMock()
+        scoped = ScopedTableQuery(mock_query, USER_ID)
+        scoped.neq("status", "deleted")
+        mock_query.neq.assert_called_once_with("status", "deleted")
+
+    def test_getattr_raises_for_nonexistent_method(self):
+        mock_query = MagicMock(spec=["eq", "select"])
+        scoped = ScopedTableQuery(mock_query, USER_ID)
+        with pytest.raises(AttributeError):
+            scoped.nonexistent_method()
+
+
+class TestFactoryFunctions:
+    """Test non-DI factory functions for background services."""
+
+    @pytest.mark.asyncio
+    async def test_create_system_client_returns_system_client(self):
+        from unittest.mock import AsyncMock, patch
+
+        mock_manager = MagicMock()
+        mock_manager.ensure_initialized = AsyncMock()
+        mock_manager.get_client.return_value = MagicMock()
+
+        with patch("chatServer.database.supabase_client.get_supabase_manager", return_value=mock_manager):
+            from chatServer.database.supabase_client import create_system_client
+            result = await create_system_client()
+
+        assert isinstance(result, SystemClient)
+        mock_manager.ensure_initialized.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_create_user_scoped_client_returns_user_scoped_client(self):
+        from unittest.mock import AsyncMock, patch
+
+        mock_manager = MagicMock()
+        mock_manager.ensure_initialized = AsyncMock()
+        mock_manager.get_client.return_value = MagicMock()
+
+        with patch("chatServer.database.supabase_client.get_supabase_manager", return_value=mock_manager):
+            from chatServer.database.supabase_client import create_user_scoped_client
+            result = await create_user_scoped_client("user-123")
+
+        assert isinstance(result, UserScopedClient)
+        assert result.user_id == "user-123"
+        mock_manager.ensure_initialized.assert_awaited_once()

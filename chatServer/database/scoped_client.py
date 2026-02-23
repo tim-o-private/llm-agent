@@ -40,12 +40,19 @@ class ScopedTableQuery:
     Intercepts select/insert/update/delete/upsert to ensure user_id
     filtering is present. Detects duplicate user_id filters and
     overwrites caller-supplied user_id values to prevent spoofing.
+
+    Methods not explicitly proxied (order, limit, neq, in_, ilike, etc.)
+    are delegated to the underlying query builder via __getattr__.
     """
 
     def __init__(self, query, user_id: str):
         self._query = query
         self._user_id = user_id
         self._user_id_already_set = False
+
+    def __getattr__(self, name):
+        """Delegate unhandled methods to the underlying query builder."""
+        return getattr(self._query, name)
 
     def eq(self, column: str, value):
         if column == "user_id":

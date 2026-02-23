@@ -38,12 +38,12 @@ The root cause is architectural: there is no abstraction that makes correct beha
 - [ ] **AC-07:** `validate-patterns.sh` hook BLOCKS any `chatServer/routers/*.py` file that imports or calls `get_system_client` (routers must always use user-scoped access). [S3, A1]
 - [ ] **AC-08:** `validate-patterns.sh` hook BLOCKS any migration that creates a table with a `user_id` column unless `USER_SCOPED_TABLES` in `chatServer/database/user_scoped_tables.py` is also updated in the same commit. Advisory warning (not block) since the hook can't verify the Python file — but the `task-completed-gate.sh` check can verify at task completion. [S3, S6]
 - [ ] **AC-09:** `chat_message_history` table gets a user-scoped RLS policy via `chat_sessions.user_id` subquery, as defense-in-depth. [A8]
-- [ ] **AC-09:** Duplicate RLS policies on `email_digests` are cleaned up. Service role policy patterns are standardized to `TO "service_role"`. [A8]
-- [ ] **AC-10:** Architecture principle A8 in `reference.md` and `SKILL.md` is updated to reflect the revised principle: API layer as enforcement point, RLS as defense-in-depth, `UserScopedClient` as the mechanism. [S7, F1]
-- [ ] **AC-11:** `backend-patterns` skill is updated: checklist item changes from "RLS handles user scoping (no manual `user_id` filtering)" to "Use `get_user_scoped_client` for user-facing services; `get_system_client` for background-only services". [S7]
-- [ ] **AC-12:** `database-patterns` skill is updated: table template includes note that RLS is defense-in-depth; primary isolation is via `UserScopedClient`. New table checklist includes "Add table to `USER_SCOPED_TABLES` if it has a `user_id` column." [S7]
-- [ ] **AC-13:** All existing unit tests pass. New tests cover `UserScopedClient` auto-filtering, `SystemClient` passthrough, and hook enforcement. [S1]
-- [ ] **AC-14:** `CLAUDE.md` cross-domain gotchas updated with new gotcha: "Use `get_user_scoped_client` in services, never raw `get_supabase_client`. Background services use `get_system_client`." [S7]
+- [ ] **AC-10:** Duplicate RLS policies on `email_digests` are cleaned up. Service role policy patterns are standardized to `TO "service_role"`. [A8]
+- [ ] **AC-11:** Architecture principle A8 in `reference.md` and `SKILL.md` is updated to reflect the revised principle: API layer as enforcement point, RLS as defense-in-depth, `UserScopedClient` as the mechanism. [S7, F1]
+- [ ] **AC-12:** `backend-patterns` skill is updated: checklist item changes from "RLS handles user scoping (no manual `user_id` filtering)" to "Use `get_user_scoped_client` for user-facing services; `get_system_client` for background-only services". [S7]
+- [ ] **AC-13:** `database-patterns` skill is updated: table template includes note that RLS is defense-in-depth; primary isolation is via `UserScopedClient`. New table checklist includes "Add table to `USER_SCOPED_TABLES` if it has a `user_id` column." [S7]
+- [ ] **AC-14:** All existing unit tests pass. New tests cover `UserScopedClient` auto-filtering, `SystemClient` passthrough, and hook enforcement. [S1]
+- [ ] **AC-15:** `CLAUDE.md` cross-domain gotchas updated with new gotcha: "Use `get_user_scoped_client` in services, never raw `get_supabase_client`. Background services use `get_system_client`." [S7]
 
 ## Scope
 

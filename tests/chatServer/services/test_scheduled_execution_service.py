@@ -51,7 +51,7 @@ def _standard_patches():
             "chatServer.services.scheduled_execution_service.load_agent_executor_db"
         ),
         "get_supabase": patch(
-            "chatServer.services.scheduled_execution_service.get_system_client",
+            "chatServer.services.scheduled_execution_service.create_user_scoped_client",
             new_callable=AsyncMock,
         ),
         "wrap_tools": patch(
@@ -488,11 +488,10 @@ async def test_execute_marks_session_inactive_after_completion(service, mock_sch
 
     chat_sessions_mock.update.assert_called_once_with({"is_active": False})
     eq_calls = [call.args for call in chat_sessions_update_chain.eq.call_args_list]
-    # UserScopedClient auto-injects .eq("user_id", ...) before the explicit .eq("session_id", ...)
-    assert len(eq_calls) == 2
-    assert eq_calls[0] == ("user_id", "user-123")
-    assert eq_calls[1][0] == "session_id"
-    assert eq_calls[1][1].startswith("scheduled_assistant_")
+    # create_user_scoped_client is mocked — no auto-injection in tests
+    assert len(eq_calls) == 1
+    assert eq_calls[0][0] == "session_id"
+    assert eq_calls[0][1].startswith("scheduled_assistant_")
 
 
 @pytest.mark.asyncio

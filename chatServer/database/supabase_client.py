@@ -109,3 +109,25 @@ async def get_system_client(
 ) -> SystemClient:
     """FastAPI dependency for background services only. No user scoping."""
     return SystemClient(client)
+
+
+async def create_system_client() -> SystemClient:
+    """Non-DI factory for background services outside FastAPI request context.
+
+    Use this in background tasks, scheduled execution, and other code that
+    runs outside a FastAPI endpoint. For endpoints, use Depends(get_system_client).
+    """
+    manager = get_supabase_manager()
+    await manager.ensure_initialized()
+    return SystemClient(manager.get_client())
+
+
+async def create_user_scoped_client(user_id: str) -> UserScopedClient:
+    """Non-DI factory for code that runs on behalf of a user outside request context.
+
+    Use this in scheduled execution and other background code that operates
+    on a specific user's data. For endpoints, use Depends(get_user_scoped_client).
+    """
+    manager = get_supabase_manager()
+    await manager.ensure_initialized()
+    return UserScopedClient(manager.get_client(), user_id)

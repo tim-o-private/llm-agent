@@ -66,6 +66,17 @@ case "$FILE_PATH" in
     fi
     ;;
   */chatServer/tools/*.py)
+    # A8: Warn about sync create_client — should use async scoped/system client
+    # gmail_tools.py and memory_tools.py have TODOs for this (sync → async migration)
+    if grep -qP 'from supabase import.*create_client' "$FILE_PATH" 2>/dev/null; then
+      # Don't block existing files with TODOs, but block NEW files using the pattern
+      case "$FILE_PATH" in
+        *gmail_tools.py|*memory_tools.py) ;; # Known TODOs — SPEC-017 deferred
+        *)
+          echo "BLOCKED: 'create_client' in tool file. Per A8/SPEC-017, tools must use UserScopedClient (via get_supabase_client + wrapper) or create_user_scoped_client(). See chatServer/tools/reminder_tools.py for the pattern." >&2
+          exit 2
+        ;; esac
+    fi
     # A10: Tool name must follow verb_resource pattern
     if grep -qP 'name\s*=\s*"[^"]*"' "$FILE_PATH" 2>/dev/null; then
       NAMES=$(grep -oP 'name\s*=\s*"\K[^"]+' "$FILE_PATH" 2>/dev/null || true)
