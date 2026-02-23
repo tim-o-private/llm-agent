@@ -311,8 +311,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         currentAgentName: agentName,
         messages: messagesToShow,
         lastWakeupAt: Date.now(),
-        // Auto-open panel when agent has something to say
-        ...(hasWakeupGreeting ? { isChatPanelOpen: true } : {}),
+        // Always open panel on session init — show history + any new greeting
+        isChatPanelOpen: true,
       });
       console.log(
         `Chat store initialized. Agent: ${agentName}, Active Chat ID: ${chatIdToUse}, Session Instance ID: ${newSessionInstanceId}, Historical messages: ${historicalMessages.length}`,
