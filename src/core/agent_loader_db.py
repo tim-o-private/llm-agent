@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, create_model
 from chatServer.database.connection import get_db_connection
 from chatServer.tools.email_digest_tool import EmailDigestTool
 from chatServer.tools.gmail_tools import GmailDigestTool, GmailGetMessageTool, GmailSearchTool
-from chatServer.tools.memory_tools import ReadMemoryTool, SaveMemoryTool
+from chatServer.tools.memory_tools import RecallMemoryTool, SearchMemoryTool, StoreMemoryTool
 from chatServer.tools.reminder_tools import CreateReminderTool, ListRemindersTool
 from chatServer.tools.schedule_tools import CreateScheduleTool, DeleteScheduleTool, ListSchedulesTool
 from chatServer.tools.task_tools import CreateTaskTool, DeleteTaskTool, GetTasksTool, GetTaskTool, UpdateTaskTool
@@ -35,8 +35,9 @@ TOOL_REGISTRY: Dict[str, Type] = {
     "GmailSearchTool": GmailSearchTool,
     "GmailGetMessageTool": GmailGetMessageTool,
     "EmailDigestTool": EmailDigestTool,
-    "SaveMemoryTool": SaveMemoryTool,
-    "ReadMemoryTool": ReadMemoryTool,
+    "StoreMemoryTool": StoreMemoryTool,
+    "RecallMemoryTool": RecallMemoryTool,
+    "SearchMemoryTool": SearchMemoryTool,
     "GmailTool": None,  # Special handling - uses tool_class config to determine specific class
     "CreateReminderTool": CreateReminderTool,
     "ListRemindersTool": ListRemindersTool,
@@ -242,6 +243,7 @@ def load_tools_from_db(
     agent_name: str,
     supabase_url: str,
     supabase_key: str,
+    memory_client=None,
 ) -> List[Any]: # Returns a list of instantiated tool objects
     """
     Instantiates tool classes based on configuration data fetched from the database.
@@ -370,6 +372,13 @@ def load_tools_from_db(
                 logger.info(f"For non-CRUD tool '{db_tool_name}' (type '{db_tool_type_str}'), merging its DB config keys ({list(db_tool_config_json.keys())}) into constructor arguments.")  # noqa: E501
                 tool_constructor_kwargs.update(db_tool_config_json)
 
+            # Inject memory_client for memory tools; strip Supabase kwargs they don't need
+            if db_tool_type_str in ("StoreMemoryTool", "RecallMemoryTool", "SearchMemoryTool"):
+                if memory_client:
+                    tool_constructor_kwargs["memory_client"] = memory_client
+                tool_constructor_kwargs.pop("supabase_url", None)
+                tool_constructor_kwargs.pop("supabase_key", None)
+
         logger.debug(f"Attempting to instantiate tool '{db_tool_name}' (effective class '{effective_tool_class_to_instantiate.__name__}') with kwargs: {list(tool_constructor_kwargs.keys())}")  # noqa: E501
 
         try:
@@ -414,25 +423,49 @@ def _fetch_user_instructions(db: SupabaseClient, user_id: str, agent_name: str) 
         return None
 
 
-def _fetch_memory_notes(db: SupabaseClient, user_id: str, agent_name: str) -> Optional[str]:
-    """Fetch LTM notes for onboarding detection (lightweight check).
+async def _resolve_memory_user_id(user_id: str) -> str:
+    """Resolve Supabase user ID to min-memory user identity.
 
-    Returns the notes string or None if no row/notes exist.
+    Reads auth.users.raw_user_meta_data->>'provider_id' and formats as
+    'google-oauth2|{provider_id}'. Falls back to Supabase UUID.
     """
     try:
-        resp = (
-            db.table("agent_long_term_memory")
-            .select("notes")
-            .eq("user_id", user_id)
-            .eq("agent_name", agent_name)
-            .maybe_single()
-            .execute()
-        )
-        if resp.data:
-            return resp.data.get("notes") or None
+        async for conn in get_db_connection():
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "SELECT raw_user_meta_data->>'provider_id' FROM auth.users WHERE id = %s",
+                    (user_id,),
+                )
+                row = await cur.fetchone()
+                if row and row[0]:
+                    return f"google-oauth2|{row[0]}"
+        return user_id
+    except Exception as e:
+        logger.warning("Failed to resolve memory user ID for %s: %s", user_id, e)
+        return user_id
+
+
+async def _prefetch_memory_notes(memory_client) -> Optional[str]:
+    """Pre-fetch top memories from min-memory for the 'What You Know' prompt section."""
+    if not memory_client or not memory_client.base_url:
+        return None
+    try:
+        result = await memory_client.call_tool("retrieve_context", {
+            "query": "user context and preferences",
+            "memory_type": ["core_identity", "project_context"],
+            "limit": 10,
+        })
+        if isinstance(result, list) and result:
+            lines = []
+            for mem in result:
+                if isinstance(mem, dict) and "text" in mem:
+                    lines.append(f"- {mem['text']}")
+            return "\n".join(lines) if lines else None
+        elif isinstance(result, dict) and result.get("text"):
+            return result["text"] if result["text"] else None
         return None
     except Exception as e:
-        logger.warning(f"Failed to fetch memory notes for {user_id}/{agent_name}: {e}")
+        logger.warning("Failed to pre-fetch memory notes: %s", e)
         return None
 
 
@@ -484,6 +517,18 @@ def load_agent_executor_db(
         raise ValueError("Supabase URL and Service Key must be provided either as arguments or environment variables (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY).")  # noqa: E501
 
     db: SupabaseClient = create_client(effective_supabase_url, effective_supabase_key)
+
+    # Create memory client from env vars
+    import asyncio as _asyncio
+
+    mem_url = os.getenv("MEMORY_SERVER_URL", "")
+    mem_key = os.getenv("MEMORY_SERVER_BACKEND_KEY", "")
+    memory_client = None
+    if mem_url and mem_key:
+        from chatServer.services.memory_client import MemoryClient
+
+        memory_user_id = _asyncio.run(_resolve_memory_user_id(user_id))
+        memory_client = MemoryClient(base_url=mem_url, backend_key=mem_key, user_id=memory_user_id)
 
     cache_status = "cached" if use_cache else "non-cached"
     logger.info(f"Loading agent executor for agent_name='{agent_name}', user_id='{user_id}' using {cache_status} database-driven agent loading.")  # noqa: E501
@@ -628,6 +673,7 @@ def load_agent_executor_db(
         agent_name=agent_db_config["agent_name"],
         supabase_url=effective_supabase_url,
         supabase_key=effective_supabase_key,
+        memory_client=memory_client,
     )
 
     # 4. Prepare LLM config and assemble system prompt via prompt builder
@@ -643,8 +689,8 @@ def load_agent_executor_db(
     # Fetch user instructions from user_agent_prompt_customizations
     user_instructions = _fetch_user_instructions(db, user_id, agent_name)
 
-    # Fetch LTM notes for onboarding detection
-    memory_notes = _fetch_memory_notes(db, user_id, agent_name)
+    # Fetch memory notes from min-memory for prompt
+    memory_notes = _asyncio.run(_prefetch_memory_notes(memory_client))
 
     # Assemble the system prompt via the prompt builder
     from chatServer.services.prompt_builder import build_agent_prompt
@@ -711,6 +757,16 @@ async def load_agent_executor_db_async(
 
     logger.info(f"Loading agent executor (async) for agent_name='{agent_name}', user_id='{user_id}'")
 
+    # Resolve memory user ID and create MemoryClient
+    memory_user_id = await _resolve_memory_user_id(user_id)
+    memory_client = None
+    mem_url = os.getenv("MEMORY_SERVER_URL", "")
+    mem_key = os.getenv("MEMORY_SERVER_BACKEND_KEY", "")
+    if mem_url and mem_key:
+        from chatServer.services.memory_client import MemoryClient
+
+        memory_client = MemoryClient(base_url=mem_url, backend_key=mem_key, user_id=memory_user_id)
+
     # Step 1: Agent config from cache (~0ms on hit)
     agent_db_config = await get_cached_agent_config(agent_name)
     if not agent_db_config:
@@ -729,7 +785,7 @@ async def load_agent_executor_db_async(
     # Step 2: Parallelize tools + user instructions + memory notes fetch
     tools_task = get_cached_tools_for_agent(str(agent_id))
     instructions_task = get_cached_user_instructions(user_id, agent_name)
-    memory_task = _fetch_memory_notes_async(user_id, agent_name)
+    memory_task = _prefetch_memory_notes(memory_client)
     cached_tools_data, user_instructions, memory_notes = await asyncio.gather(
         tools_task, instructions_task, memory_task
     )
@@ -755,6 +811,7 @@ async def load_agent_executor_db_async(
         agent_name=agent_db_config["agent_name"],
         supabase_url=effective_supabase_url,
         supabase_key=effective_supabase_key,
+        memory_client=memory_client,
     )
 
     # Step 4: Build prompt
@@ -801,24 +858,6 @@ async def load_agent_executor_db_async(
         raise
 
 
-async def _fetch_memory_notes_async(user_id: str, agent_name: str) -> Optional[str]:
-    """Async fetch of LTM notes for onboarding detection."""
-    try:
-        from chatServer.database.supabase_client import get_supabase_client
-
-        client = await get_supabase_client()
-        result = await client.table("agent_long_term_memory").select("notes").eq(
-            "user_id", user_id
-        ).eq("agent_name", agent_name).maybe_single().execute()
-
-        if result.data:
-            return result.data.get("notes") or None
-        return None
-    except Exception as e:
-        logger.warning(f"Failed to fetch memory notes async for {user_id}/{agent_name}: {e}")
-        return None
-
-
 async def _fetch_agent_config_from_db_async(agent_name: str) -> Optional[Dict[str, Any]]:
     """Direct DB fetch for agent config when cache misses."""
     try:
@@ -843,40 +882,3 @@ async def _fetch_agent_config_from_db_async(agent_name: str) -> Optional[Dict[st
         return None
 
 
-async def fetch_ltm_notes(user_id: str, agent_name: str, supabase_client=None) -> Optional[str]:
-    """Fetch long-term memory notes for a user+agent from the database.
-
-    .. deprecated::
-        LTM is no longer injected into the system prompt. Agents use read_memory/save_memory
-        tools on-demand instead. This function is kept for backward compatibility but will
-        be removed in a future version.
-
-    Args:
-        user_id: The user's ID.
-        agent_name: The agent name (matches agent_name column in agent_long_term_memory).
-        supabase_client: Optional async Supabase client. If not provided, one will be obtained.
-
-    Returns:
-        The LTM notes string, or None if no notes exist.
-    """
-    try:
-        if supabase_client is None:
-            from chatServer.database.supabase_client import get_supabase_client
-            supabase_client = await get_supabase_client()
-
-        ltm_result = await supabase_client.table("agent_long_term_memory").select("notes").eq(
-            "user_id", user_id
-        ).eq("agent_name", agent_name).maybe_single().execute()
-
-        if ltm_result.data:
-            notes = ltm_result.data.get("notes")
-            if notes:
-                logger.info(f"Loaded LTM for user={user_id}, agent={agent_name} ({len(notes)} chars)")
-                return notes
-
-        logger.debug(f"No LTM found for user={user_id}, agent={agent_name}")
-        return None
-
-    except Exception as e:
-        logger.warning(f"Failed to load LTM for {user_id}/{agent_name}: {e}")
-        return None

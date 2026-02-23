@@ -38,7 +38,8 @@ class SessionOpenService:
 
         # 2b. Deterministic silence: returning user seen < 5 min ago → skip agent entirely
         if not is_new_user and last_message_at is not None:
-            from datetime import datetime, timezone as tz
+            from datetime import datetime
+            from datetime import timezone as tz
 
             elapsed = datetime.now(tz.utc) - (
                 last_message_at.astimezone(tz.utc)
@@ -121,13 +122,27 @@ class SessionOpenService:
         }
 
     async def _has_memory(self, supabase_client, user_id: str, agent_name: str) -> bool:
+        """Check if user has any memories in min-memory."""
         try:
-            resp = await supabase_client.table("agent_long_term_memory").select("id").eq(
-                "user_id", user_id
-            ).eq("agent_name", agent_name).maybe_single().execute()
-            return resp.data is not None
+            import os
+
+            mem_url = os.getenv("MEMORY_SERVER_URL", "")
+            mem_key = os.getenv("MEMORY_SERVER_BACKEND_KEY", "")
+            if not mem_url or not mem_key:
+                return False
+            from chatServer.services.memory_client import MemoryClient
+            from src.core.agent_loader_db import _resolve_memory_user_id
+
+            memory_user_id = await _resolve_memory_user_id(user_id)
+            client = MemoryClient(base_url=mem_url, backend_key=mem_key, user_id=memory_user_id)
+            result = await client.call_tool("search", {"query": "user preferences"})
+            if isinstance(result, list) and len(result) > 0:
+                return True
+            if isinstance(result, dict) and result.get("text"):
+                return True
+            return False
         except Exception as e:
-            logger.warning(f"Failed to check memory for {user_id}/{agent_name}: {e}")
+            logger.warning("Failed to check min-memory for %s/%s: %s", user_id, agent_name, e)
             return False
 
     async def _has_instructions(self, supabase_client, user_id: str, agent_name: str) -> bool:
@@ -146,7 +161,7 @@ class SessionOpenService:
         Uses direct pg connection per A3 — chat_message_history is a
         LangChain framework table, not a user-CRUD table.
         """
-        from datetime import datetime, timezone as tz
+        from datetime import timezone as tz
 
         from ..config.constants import CHAT_MESSAGE_HISTORY_TABLE_NAME
         from ..database.connection import get_db_connection

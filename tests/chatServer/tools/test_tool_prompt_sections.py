@@ -4,7 +4,7 @@ import pytest
 
 from chatServer.tools.email_digest_tool import EmailDigestTool
 from chatServer.tools.gmail_tools import GmailSearchTool
-from chatServer.tools.memory_tools import SaveMemoryTool
+from chatServer.tools.memory_tools import StoreMemoryTool
 from chatServer.tools.reminder_tools import CreateReminderTool
 from chatServer.tools.schedule_tools import CreateScheduleTool
 from chatServer.tools.task_tools import GetTasksTool
@@ -60,41 +60,41 @@ class TestGetTasksToolPromptSection:
         assert result == web_result
 
 
-class TestSaveMemoryToolPromptSection:
-    """Tests for SaveMemoryTool.prompt_section()."""
+class TestStoreMemoryToolPromptSection:
+    """Tests for StoreMemoryTool.prompt_section()."""
 
     def test_web_returns_string(self):
-        """SaveMemoryTool.prompt_section('web') returns non-None string."""
-        result = SaveMemoryTool.prompt_section("web")
+        """StoreMemoryTool.prompt_section('web') returns non-None string."""
+        result = StoreMemoryTool.prompt_section("web")
         assert isinstance(result, str)
         assert len(result) > 0
 
     def test_telegram_returns_string(self):
-        """SaveMemoryTool.prompt_section('telegram') returns non-None string."""
-        result = SaveMemoryTool.prompt_section("telegram")
+        """StoreMemoryTool.prompt_section('telegram') returns non-None string."""
+        result = StoreMemoryTool.prompt_section("telegram")
         assert isinstance(result, str)
         assert len(result) > 0
 
     def test_heartbeat_returns_none(self):
-        """SaveMemoryTool.prompt_section('heartbeat') returns None."""
-        result = SaveMemoryTool.prompt_section("heartbeat")
+        """StoreMemoryTool.prompt_section('heartbeat') returns None."""
+        result = StoreMemoryTool.prompt_section("heartbeat")
         assert result is None
 
     def test_scheduled_returns_none(self):
-        """SaveMemoryTool.prompt_section('scheduled') returns None."""
-        result = SaveMemoryTool.prompt_section("scheduled")
+        """StoreMemoryTool.prompt_section('scheduled') returns None."""
+        result = StoreMemoryTool.prompt_section("scheduled")
         assert result is None
 
-    def test_web_mentions_read_and_save_memory(self):
-        """SaveMemoryTool.prompt_section('web') mentions read_memory and save_memory."""
-        result = SaveMemoryTool.prompt_section("web")
-        assert "read_memory" in result.lower()
-        assert "save_memory" in result.lower()
+    def test_web_mentions_store_and_recall(self):
+        """StoreMemoryTool.prompt_section('web') mentions store_memory and recall."""
+        result = StoreMemoryTool.prompt_section("web")
+        assert "store_memory" in result.lower()
+        assert "recall" in result.lower()
 
     def test_web_and_telegram_same(self):
-        """SaveMemoryTool prompt sections for web and telegram are the same."""
-        web = SaveMemoryTool.prompt_section("web")
-        telegram = SaveMemoryTool.prompt_section("telegram")
+        """StoreMemoryTool prompt sections for web and telegram are the same."""
+        web = StoreMemoryTool.prompt_section("web")
+        telegram = StoreMemoryTool.prompt_section("telegram")
         assert web == telegram
 
 
@@ -296,7 +296,7 @@ class TestPromptSectionLengthLimits:
 
     @pytest.mark.parametrize("tool_class", [
         GetTasksTool,
-        SaveMemoryTool,
+        StoreMemoryTool,
         GmailSearchTool,
         CreateReminderTool,
         CreateScheduleTool,
@@ -319,7 +319,7 @@ class TestPromptSectionConsistency:
 
     @pytest.mark.parametrize("tool_class", [
         GetTasksTool,
-        SaveMemoryTool,
+        StoreMemoryTool,
         GmailSearchTool,
         CreateReminderTool,
         CreateScheduleTool,
