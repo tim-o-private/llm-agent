@@ -11,7 +11,18 @@ from pydantic import BaseModel, ConfigDict, Field, create_model
 from chatServer.database.connection import get_db_connection
 from chatServer.tools.email_digest_tool import EmailDigestTool
 from chatServer.tools.gmail_tools import GmailDigestTool, GmailGetMessageTool, GmailSearchTool
-from chatServer.tools.memory_tools import RecallMemoryTool, SearchMemoryTool, StoreMemoryTool
+from chatServer.tools.memory_tools import (
+    DeleteMemoryTool,
+    FetchMemoryTool,
+    GetContextInfoTool,
+    LinkMemoriesTool,
+    ListEntitiesTool,
+    RecallMemoryTool,
+    SearchEntitiesTool,
+    SearchMemoryTool,
+    SetProjectTool,
+    StoreMemoryTool,
+)
 from chatServer.tools.reminder_tools import CreateReminderTool, ListRemindersTool
 from chatServer.tools.schedule_tools import CreateScheduleTool, DeleteScheduleTool, ListSchedulesTool
 from chatServer.tools.task_tools import CreateTaskTool, DeleteTaskTool, GetTasksTool, GetTaskTool, UpdateTaskTool
@@ -38,6 +49,13 @@ TOOL_REGISTRY: Dict[str, Type] = {
     "StoreMemoryTool": StoreMemoryTool,
     "RecallMemoryTool": RecallMemoryTool,
     "SearchMemoryTool": SearchMemoryTool,
+    "FetchMemoryTool": FetchMemoryTool,
+    "DeleteMemoryTool": DeleteMemoryTool,
+    "SetProjectTool": SetProjectTool,
+    "LinkMemoriesTool": LinkMemoriesTool,
+    "ListEntitiesTool": ListEntitiesTool,
+    "SearchEntitiesTool": SearchEntitiesTool,
+    "GetContextInfoTool": GetContextInfoTool,
     "GmailTool": None,  # Special handling - uses tool_class config to determine specific class
     "CreateReminderTool": CreateReminderTool,
     "ListRemindersTool": ListRemindersTool,
@@ -373,7 +391,13 @@ def load_tools_from_db(
                 tool_constructor_kwargs.update(db_tool_config_json)
 
             # Inject memory_client for memory tools; strip Supabase kwargs they don't need
-            if db_tool_type_str in ("StoreMemoryTool", "RecallMemoryTool", "SearchMemoryTool"):
+            _memory_tool_types = (
+                "StoreMemoryTool", "RecallMemoryTool", "SearchMemoryTool",
+                "FetchMemoryTool", "DeleteMemoryTool", "SetProjectTool",
+                "LinkMemoriesTool", "ListEntitiesTool", "SearchEntitiesTool",
+                "GetContextInfoTool",
+            )
+            if db_tool_type_str in _memory_tool_types:
                 if memory_client:
                     tool_constructor_kwargs["memory_client"] = memory_client
                 tool_constructor_kwargs.pop("supabase_url", None)
