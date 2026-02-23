@@ -152,6 +152,15 @@ Each domain agent has strict file scope. The reviewer checks these boundaries.
 | frontend-dev | `webApp/src/` | `chatServer/`, `supabase/` |
 | deployment-dev | Dockerfiles, fly.toml, `.github/`, `requirements.txt`, `package.json` | Application code |
 
+### How scope enforcement works
+
+`scope-enforcement.sh` fires on every Write/Edit. It identifies the agent type in two ways:
+
+1. **`CLAUDE_AGENT_TYPE` env var** — set explicitly when spawning a domain agent. Takes precedence.
+2. **Branch-name fallback** — inferred from branch name keywords (e.g., `*database*` → `database-dev`). **Only active inside git worktrees.** In the main repo, the team lead is unrestricted.
+
+**Key implication:** domain agents must always work in worktrees (not the main repo). The team lead always works in the main repo. An ad-hoc fix branch in the main repo with a domain keyword in its name (e.g., `fix/uat-database-fixes`) will NOT trigger scope enforcement.
+
 ## Git Worktree Management
 
 Git worktrees allow multiple branches to be checked out simultaneously in different directories:
