@@ -1,10 +1,16 @@
--- SPEC-018: Register new min-memory-backed tools, deactivate old blob tools
+-- SPEC-018: Convert agent_tool_type enum to TEXT, register new memory tools
 
--- Deactivate old memory tools
+-- Step 1: Convert tools.type from enum to TEXT (enums require ALTER TYPE for every new value)
+ALTER TABLE tools ALTER COLUMN type TYPE VARCHAR(100) USING type::VARCHAR(100);
+
+-- Drop the enum type — no longer needed
+DROP TYPE IF EXISTS agent_tool_type;
+
+-- Step 2: Deactivate old memory tools
 UPDATE tools SET is_active = false, updated_at = now()
 WHERE name IN ('save_memory', 'read_memory');
 
--- Register new tools (upsert to handle re-runs)
+-- Step 3: Register new tools (upsert to handle re-runs)
 INSERT INTO tools (name, type, description, config, is_active)
 VALUES
   ('store_memory', 'StoreMemoryTool',
@@ -22,7 +28,7 @@ ON CONFLICT (name) DO UPDATE SET
   is_active = EXCLUDED.is_active,
   updated_at = now();
 
--- Link new tools to agents that had old memory tools
+-- Step 4: Link new tools to agents that had old memory tools
 INSERT INTO agent_tools (agent_id, tool_id, is_active)
 SELECT DISTINCT at.agent_id, new_t.id, true
 FROM agent_tools at
@@ -33,6 +39,6 @@ WHERE old_t.name IN ('save_memory', 'read_memory')
   AND at.is_active = true
 ON CONFLICT DO NOTHING;
 
--- Deactivate old agent_tools assignments
+-- Step 5: Deactivate old agent_tools assignments
 UPDATE agent_tools SET is_active = false, updated_at = now()
 WHERE tool_id IN (SELECT id FROM tools WHERE name IN ('save_memory', 'read_memory'));
