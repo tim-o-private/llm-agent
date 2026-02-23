@@ -91,7 +91,7 @@ describe('useTaskModalManagement', () => {
         result.current.openModal('detail', 'task-1');
       });
 
-      expect(mockStoreState.setModalOpenState).toHaveBeenCalledWith('task-1', true);
+      expect(mockStoreState.setModalOpenState).toHaveBeenCalledWith('detail-task-1', true);
     });
 
     it('should not sync with store when syncWithStore is false', () => {
@@ -145,7 +145,7 @@ describe('useTaskModalManagement', () => {
         result.current.closeModal();
       });
 
-      expect(mockStoreState.setModalOpenState).toHaveBeenCalledWith('task-1', false);
+      expect(mockStoreState.setModalOpenState).toHaveBeenCalledWith('detail-task-1', false);
     });
 
     it('should handle onOpenChange correctly', () => {

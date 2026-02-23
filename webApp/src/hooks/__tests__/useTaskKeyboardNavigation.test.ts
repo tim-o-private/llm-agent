@@ -1,5 +1,5 @@
 import { renderHook, act } from '@testing-library/react';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { useTaskKeyboardNavigation, NavigableTask } from '../useTaskKeyboardNavigation';
 import { useTaskViewStore } from '@/stores/useTaskViewStore';
 
@@ -20,15 +20,23 @@ describe('useTaskKeyboardNavigation', () => {
     clearFocusFastInputRequest: vi.fn(),
     initializeListener: vi.fn(),
     destroyListener: vi.fn(),
+    isSystemBusy: false,
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers();
 
     // Mock the store selector to return different values based on the property being accessed
     mockUseTaskViewStore.mockImplementation((selector: any) => {
       return selector(mockStoreState);
     });
+    // Also mock getState() — used inside setTimeout callbacks in the hook
+    mockUseTaskViewStore.getState = vi.fn().mockReturnValue(mockStoreState);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   const sampleTasks: NavigableTask[] = [{ id: 'task-1' }, { id: 'task-2' }, { id: 'task-3' }];
@@ -68,6 +76,9 @@ describe('useTaskKeyboardNavigation', () => {
           isInputFocused: false,
         }),
       );
+
+      // Auto-focus fires after a 10ms setTimeout — advance timers
+      act(() => { vi.advanceTimersByTime(20); });
 
       expect(mockStoreState.setFocusedTaskId).toHaveBeenCalledWith('task-1');
     });

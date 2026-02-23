@@ -186,6 +186,17 @@ export const ChatPanelV2: React.FC<ChatPanelV2Props> = ({ agentId: agentIdProp }
     return () => clearInterval(intervalId);
   }, [activeChatId, currentSessionInstanceId, refreshMessages, isRunning]);
 
+  // Trigger session_open wakeup when tab becomes visible again
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        useChatStore.getState().triggerWakeup();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
   // beforeunload listener to deactivate session instance - same as original ChatPanel
   useEffect(() => {
     const handleBeforeUnload = () => {

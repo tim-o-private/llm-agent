@@ -34,6 +34,7 @@ from .routers.email_agent_router import router as email_agent_router
 from .routers.external_api_router import router as external_api_router
 from .routers.notifications_router import router as notifications_router
 from .routers.oauth_router import router as oauth_router
+from .routers.session_open_router import router as session_open_router
 from .routers.telegram_router import router as telegram_router
 from .services.chat import get_chat_service
 from .services.prompt_customization import get_prompt_customization_service
@@ -218,6 +219,7 @@ app.include_router(oauth_router)
 app.include_router(actions_router)
 app.include_router(chat_history_router)
 app.include_router(notifications_router)
+app.include_router(session_open_router)
 app.include_router(telegram_router)
 
 # --- Logger setup ---
@@ -379,9 +381,10 @@ async def supabase_webhook(payload: SupabasePayload):
 
 # Define a protocol for what we expect from an agent executor
 if __name__ == "__main__":
-    import uvicorn
+    import uvicorn  # noqa: E402
+
+    from utils.logging_utils import get_logger as _init_logging  # noqa: E402
     # Logging configured via get_logger() — default DEBUG with noisy loggers quieted
-    from utils.logging_utils import get_logger as _init_logging
     _init_logging("chatServer")
     print("Starting API server with Uvicorn for local development...")
     uvicorn.run(app, host="0.0.0.0", port=3001, access_log=False)

@@ -1,5 +1,6 @@
 """Tests for prompt builder service."""
 
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock
 
 from chatServer.services.prompt_builder import (
@@ -438,3 +439,54 @@ class TestBuildAgentPrompt:
         """CHANNEL_GUIDANCE['telegram'] contains '4096'."""
         from chatServer.services.prompt_builder import CHANNEL_GUIDANCE
         assert "4096" in CHANNEL_GUIDANCE["telegram"]
+
+    # --- Session Open channel (FU-1) ---
+
+    def test_session_open_new_user_bootstrap_guidance(self):
+        """session_open + new user → bootstrap guidance, no WAKEUP_SILENT, no Onboarding."""
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="session_open",
+            user_instructions=None, memory_notes=None,
+        )
+        assert "## Session Open" in result
+        assert "first time you are meeting this user" in result
+        assert "WAKEUP_SILENT" not in result
+        assert "## Onboarding" not in result
+
+    def test_session_open_returning_user_hours_ago(self):
+        """session_open + returning user + last_message_at 3 hours ago → '3 hours ago'."""
+        three_hours_ago = datetime.now(timezone.utc) - timedelta(hours=3)
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="session_open",
+            user_instructions="some instructions", memory_notes="some notes",
+            last_message_at=three_hours_ago,
+        )
+        assert "## Session Open" in result
+        assert "3 hours ago" in result
+        assert "WAKEUP_SILENT" in result  # returning guidance includes WAKEUP_SILENT reference
+
+    def test_session_open_returning_user_less_than_2_minutes(self):
+        """session_open + returning user + last_message_at 1 minute ago → 'less than 2 minutes'."""
+        one_minute_ago = datetime.now(timezone.utc) - timedelta(minutes=1)
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="session_open",
+            user_instructions="some instructions", memory_notes="some notes",
+            last_message_at=one_minute_ago,
+        )
+        assert "## Session Open" in result
+        assert "less than 2 minutes" in result
+
+    def test_web_new_user_still_gets_onboarding(self):
+        """web + new user → Onboarding section still present (fallback preserved)."""
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="web",
+            user_instructions=None, memory_notes=None,
+        )
+        assert "## Onboarding" in result
+        assert "## Session Open" not in result
+
+    def test_session_open_channel_guidance(self):
+        """session_open channel guidance in CHANNEL_GUIDANCE."""
+        from chatServer.services.prompt_builder import CHANNEL_GUIDANCE
+        assert "session_open" in CHANNEL_GUIDANCE
+        assert "no user message" in CHANNEL_GUIDANCE["session_open"]
