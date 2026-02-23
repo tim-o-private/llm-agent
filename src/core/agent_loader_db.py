@@ -445,6 +445,7 @@ def load_agent_executor_db(
     log_level: int = logging.INFO,
     channel: str = "web",
     use_cache: bool = True,  # Default to using cache for better performance
+    last_message_at=None,
 ) -> CustomizableAgentExecutor:
     """
     Loads an agent's configuration and its associated tools from the database,
@@ -654,6 +655,7 @@ def load_agent_executor_db(
         user_instructions=user_instructions,
         tools=instantiated_tools,
         memory_notes=memory_notes,
+        last_message_at=last_message_at,
     )
 
     agent_config_for_executor = {
@@ -686,6 +688,7 @@ async def load_agent_executor_db_async(
     supabase_key: Optional[str] = None,
     log_level: int = logging.INFO,
     channel: str = "web",
+    last_message_at=None,
 ) -> CustomizableAgentExecutor:
     """Async version of load_agent_executor_db.
 
@@ -771,6 +774,7 @@ async def load_agent_executor_db_async(
         user_instructions=user_instructions,
         tools=instantiated_tools,
         memory_notes=memory_notes,
+        last_message_at=last_message_at,
     )
 
     agent_config_for_executor = {

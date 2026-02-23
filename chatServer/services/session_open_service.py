@@ -1,0 +1,153 @@
+"""Session open service — handles proactive agent greeting on app return."""
+
+import logging
+from typing import Any, Dict
+
+from langchain_core.messages import AIMessage
+
+from src.core.agent_loader_db import load_agent_executor_db_async
+
+from ..database.supabase_client import get_supabase_client
+from ..security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
+from ..services.audit_service import AuditService
+from ..services.pending_actions import PendingActionsService
+
+logger = logging.getLogger(__name__)
+
+
+class SessionOpenService:
+    """Handles session_open requests — agent decides whether to greet the user."""
+
+    async def run(
+        self,
+        user_id: str,
+        agent_name: str,
+        session_id: str,
+    ) -> Dict[str, Any]:
+        supabase_client = await get_supabase_client()
+
+        # 1. Check if user is new (no memory + no instructions)
+        has_memory = await self._has_memory(supabase_client, user_id, agent_name)
+        has_instructions = await self._has_instructions(supabase_client, user_id, agent_name)
+        is_new_user = not has_memory and not has_instructions
+
+        # 2. Get last message timestamp for this session
+        last_message_at = await self._get_last_message_at(supabase_client, session_id)
+
+        # 3. Load agent with session_open channel
+        agent_executor = await load_agent_executor_db_async(
+            agent_name=agent_name,
+            user_id=user_id,
+            session_id=session_id,
+            channel="session_open",
+            last_message_at=last_message_at,
+        )
+
+        # 4. Wrap tools with approval system
+        audit_service = AuditService(supabase_client)
+        pending_actions_service = PendingActionsService(
+            db_client=supabase_client,
+            audit_service=audit_service,
+        )
+        approval_context = ApprovalContext(
+            user_id=user_id,
+            session_id=session_id,
+            agent_name=agent_name,
+            db_client=supabase_client,
+            pending_actions_service=pending_actions_service,
+            audit_service=audit_service,
+        )
+        if hasattr(agent_executor, "tools") and agent_executor.tools:
+            wrap_tools_with_approval(agent_executor.tools, approval_context)
+
+        # 5. Build trigger prompt
+        if is_new_user:
+            trigger_prompt = "[SYSTEM: First session. No user message. Begin bootstrap.]"
+        else:
+            trigger_prompt = "[SYSTEM: User returned to app. No user message. Check tools and decide whether to greet.]"
+
+        # 6. Invoke agent
+        response = await agent_executor.ainvoke(
+            {"input": trigger_prompt, "chat_history": []}
+        )
+
+        # 7. Normalize output (handle content block lists)
+        output = response.get("output", "")
+        if isinstance(output, list):
+            output = (
+                "".join(
+                    block.get("text", "")
+                    for block in output
+                    if isinstance(block, dict) and block.get("type") == "text"
+                )
+                or "No text content in response."
+            )
+
+        # 8. Check for silent response
+        silent = output.strip().startswith("WAKEUP_SILENT")
+
+        # 9. Persist AI message if not silent
+        if not silent:
+            await self._persist_ai_message(session_id, output)
+
+        return {
+            "response": output,
+            "is_new_user": is_new_user,
+            "silent": silent,
+            "session_id": session_id,
+        }
+
+    async def _has_memory(self, supabase_client, user_id: str, agent_name: str) -> bool:
+        try:
+            resp = await supabase_client.table("agent_long_term_memory").select("id").eq(
+                "user_id", user_id
+            ).eq("agent_name", agent_name).maybe_single().execute()
+            return resp.data is not None
+        except Exception as e:
+            logger.warning(f"Failed to check memory for {user_id}/{agent_name}: {e}")
+            return False
+
+    async def _has_instructions(self, supabase_client, user_id: str, agent_name: str) -> bool:
+        try:
+            resp = await supabase_client.table("user_agent_prompt_customizations").select("id").eq(
+                "user_id", user_id
+            ).eq("agent_name", agent_name).maybe_single().execute()
+            return resp.data is not None
+        except Exception as e:
+            logger.warning(f"Failed to check instructions for {user_id}/{agent_name}: {e}")
+            return False
+
+    async def _get_last_message_at(self, supabase_client, session_id: str):
+        """Get the timestamp of the most recent message in this session."""
+        from datetime import datetime
+
+        try:
+            resp = await supabase_client.table("chat_message_history").select("created_at").eq(
+                "session_id", session_id
+            ).order("created_at", desc=True).limit(1).execute()
+            if resp.data and resp.data[0].get("created_at"):
+                ts_str = resp.data[0]["created_at"]
+                return datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to get last message time for session {session_id}: {e}")
+            return None
+
+    async def _persist_ai_message(self, session_id: str, content: str) -> None:
+        """Persist the AI's opening message to chat history."""
+        from langchain_postgres import PostgresChatMessageHistory
+
+        from ..config.constants import CHAT_MESSAGE_HISTORY_TABLE_NAME
+        from ..database.connection import get_db_connection
+
+        try:
+            async for conn in get_db_connection():
+                history = PostgresChatMessageHistory(
+                    CHAT_MESSAGE_HISTORY_TABLE_NAME,
+                    session_id,
+                    async_connection=conn,
+                )
+                await history.aadd_messages([AIMessage(content=content)])
+                break
+        except Exception as e:
+            logger.warning(f"Failed to persist session_open AI message: {e}")
