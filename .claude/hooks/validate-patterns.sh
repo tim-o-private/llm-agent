@@ -42,12 +42,27 @@ case "$FILE_PATH" in
       echo "$BAD" >&2
       exit 2
     fi
+    # A8: Block SystemClient/get_system_client in routers — routers must use user-scoped access
+    if grep -qP 'get_system_client|SystemClient' "$FILE_PATH" 2>/dev/null; then
+      echo "BLOCKED: 'SystemClient' or 'get_system_client' in router. Per A8, routers must use 'get_user_scoped_client'. Background operations belong in services." >&2
+      exit 2
+    fi
     ;;
   */webApp/src/api/hooks/*.ts|*/webApp/src/api/hooks/*.tsx)
     # A5: Block useAuthStore in API hooks — auth must come from supabase.auth.getSession()
     if grep -qP 'useAuthStore' "$FILE_PATH" 2>/dev/null; then
       echo "BLOCKED: 'useAuthStore' imported in API hooks. Per A5, auth tokens must come from supabase.auth.getSession(), not Zustand. See architecture-principles skill A5." >&2
       exit 2
+    fi
+    ;;
+  */chatServer/services/*.py)
+    # A8: Block raw get_supabase_client in services — must use get_user_scoped_client or get_system_client
+    if grep -qP 'get_supabase_client' "$FILE_PATH" 2>/dev/null; then
+      # Allow the re-export in supabase_client.py itself
+      case "$FILE_PATH" in */database/supabase_client.py) ;; *)
+        echo "BLOCKED: 'get_supabase_client' in service. Per A8/SPEC-017, services must use 'get_user_scoped_client' (user-facing) or 'get_system_client' (background). Raw client bypasses user scoping." >&2
+        exit 2
+      ;; esac
     fi
     ;;
   */chatServer/tools/*.py)

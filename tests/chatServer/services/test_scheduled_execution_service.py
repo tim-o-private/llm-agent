@@ -51,7 +51,7 @@ def _standard_patches():
             "chatServer.services.scheduled_execution_service.load_agent_executor_db"
         ),
         "get_supabase": patch(
-            "chatServer.services.scheduled_execution_service.get_supabase_client",
+            "chatServer.services.scheduled_execution_service.get_system_client",
             new_callable=AsyncMock,
         ),
         "wrap_tools": patch(

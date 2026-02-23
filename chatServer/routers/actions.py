@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from ..database.scoped_client import UserScopedClient
-from ..database.supabase_client import get_supabase_client, get_user_scoped_client
+from ..database.supabase_client import get_user_scoped_client
 from ..dependencies.auth import get_current_user
 
 logger = logging.getLogger(__name__)
@@ -237,6 +237,7 @@ async def get_audit_history(
 async def get_tool_preference(
     tool_name: str,
     user_id: str = Depends(get_current_user),
+    db_client: UserScopedClient = Depends(get_user_scoped_client),
 ):
     """Get the current approval preference for a tool."""
     try:
@@ -250,8 +251,6 @@ async def get_tool_preference(
 
         user_preference = None
         if tier == ApprovalTier.USER_CONFIGURABLE:
-            # TODO: SPEC-017 migrate to scoped client
-            db_client = await get_supabase_client()
             user_preference = await _get_user_preference(db_client, user_id, tool_name)
 
         return ToolPreferenceResponse(
@@ -270,6 +269,7 @@ async def set_tool_preference(
     tool_name: str,
     request: ToolPreferenceRequest,
     user_id: str = Depends(get_current_user),
+    db_client: UserScopedClient = Depends(get_user_scoped_client),
 ):
     """Set approval preference for a tool. Only works for USER_CONFIGURABLE tools."""
     try:
@@ -281,8 +281,6 @@ async def set_tool_preference(
                 detail="Preference must be 'auto' or 'requires_approval'"
             )
 
-        # TODO: SPEC-017 migrate to scoped client
-        db_client = await get_supabase_client()
         success = await set_user_preference(
             db_client=db_client,
             user_id=user_id,
