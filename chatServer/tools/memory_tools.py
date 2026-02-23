@@ -115,6 +115,11 @@ class SearchEntitiesInput(BaseModel):
     limit: int = Field(default=5, description="Max results.")
 
 
+class EmptyInput(BaseModel):
+    """No arguments required."""
+    pass
+
+
 # ---------------------------------------------------------------------------
 # Tools
 # ---------------------------------------------------------------------------
@@ -316,7 +321,7 @@ class GetContextInfoTool(_MemoryToolBase):
 
     name: str = "get_context_info"
     description: str = "Get environment context: current user identity, active project, and metadata."
-    args_schema: Type[BaseModel] = BaseModel  # No args
+    args_schema: Type[BaseModel] = EmptyInput
     _mcp_tool_name: str = "get_context_info"
 
     async def _arun(self) -> str:
