@@ -91,7 +91,8 @@ async function loadHistoricalMessages(chatId: string): Promise<ChatMessage[]> {
           };
         },
       )
-      .filter((msg: ChatMessage) => msg.text.length > 0);
+      .filter((msg: ChatMessage) => msg.text.length > 0)
+      .filter((msg: ChatMessage) => !msg.text.includes('WAKEUP_SILENT'));
     console.log(`Loaded ${messages.length} historical messages for chat ${chatId}`);
     return messages;
   } catch (historyError) {
@@ -310,8 +311,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         currentAgentName: agentName,
         messages: messagesToShow,
         lastWakeupAt: Date.now(),
-        // Auto-open panel when agent has something to say
-        ...(hasWakeupGreeting ? { isChatPanelOpen: true } : {}),
+        // Auto-open panel only for first-time bootstrap (no existing history)
+        ...(hasWakeupGreeting && historicalMessages.length === 0 ? { isChatPanelOpen: true } : {}),
       });
       console.log(
         `Chat store initialized. Agent: ${agentName}, Active Chat ID: ${chatIdToUse}, Session Instance ID: ${newSessionInstanceId}, Historical messages: ${historicalMessages.length}`,

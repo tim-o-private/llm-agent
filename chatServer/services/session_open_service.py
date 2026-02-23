@@ -36,6 +36,27 @@ class SessionOpenService:
         # 2. Get last message timestamp for this session (via direct pg, per A3)
         last_message_at = await self._get_last_message_at(session_id)
 
+        # 2b. Deterministic silence: returning user seen < 5 min ago → skip agent entirely
+        if not is_new_user and last_message_at is not None:
+            from datetime import datetime, timezone as tz
+
+            elapsed = datetime.now(tz.utc) - (
+                last_message_at.astimezone(tz.utc)
+                if last_message_at.tzinfo
+                else last_message_at.replace(tzinfo=tz.utc)
+            )
+            if elapsed.total_seconds() < 300:  # 5 minutes
+                logger.info(
+                    "session_open: returning user seen %.0fs ago — silent (deterministic)",
+                    elapsed.total_seconds(),
+                )
+                return {
+                    "response": "WAKEUP_SILENT",
+                    "is_new_user": False,
+                    "silent": True,
+                    "session_id": session_id,
+                }
+
         # 3. Load agent with session_open channel
         agent_executor = await load_agent_executor_db_async(
             agent_name=agent_name,

@@ -157,6 +157,51 @@ async def test_content_block_list_normalized():
 
 
 @pytest.mark.asyncio
+async def test_deterministic_silence_recent_returning_user():
+    """Returning user seen < 5 min ago → silent without invoking agent."""
+    ts = datetime.now(timezone.utc)  # just now
+    mock_client = _mock_supabase(has_memory=True, has_instructions=True)
+    service = SessionOpenService(mock_client)
+    mock_executor = AsyncMock()
+    mock_executor.tools = []
+    mock_executor.ainvoke = AsyncMock()  # should NOT be called
+
+    with (
+        patch(f"{_SVC}.load_agent_executor_db_async", return_value=mock_executor) as mock_loader,
+        patch(_DB_CONN, new=_mock_get_db_connection(ts)),
+        patch.object(service, "_persist_ai_message", new_callable=AsyncMock) as mock_persist,
+    ):
+        result = await service.run(user_id="u1", agent_name="clarity", session_id="s1")
+
+    assert result["silent"] is True
+    assert result["is_new_user"] is False
+    mock_loader.assert_not_awaited()  # agent never loaded
+    mock_executor.ainvoke.assert_not_awaited()  # agent never invoked
+    mock_persist.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_deterministic_silence_skipped_for_new_user():
+    """New user is never deterministically silenced, even with recent last_message_at."""
+    ts = datetime.now(timezone.utc)  # just now
+    mock_client = _mock_supabase(has_memory=False, has_instructions=False)
+    service = SessionOpenService(mock_client)
+    mock_executor = AsyncMock()
+    mock_executor.tools = []
+    mock_executor.ainvoke = AsyncMock(return_value={"output": "Hello! I'm Clarity."})
+    p_loader, p_db = _patch_svc(mock_executor, last_message_at=ts)
+
+    with p_loader, p_db, patch.object(
+        service, "_persist_ai_message", new_callable=AsyncMock
+    ):
+        result = await service.run(user_id="u1", agent_name="clarity", session_id="s1")
+
+    assert result["is_new_user"] is True
+    assert result["silent"] is False
+    mock_executor.ainvoke.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_agent_loaded_with_session_open_channel():
     """Agent loaded with channel='session_open'."""
     mock_client = _mock_supabase(has_memory=True, has_instructions=True)
