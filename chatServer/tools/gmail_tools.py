@@ -352,7 +352,7 @@ class GmailSearchTool(BaseGmailTool):
         if channel in ("web", "telegram"):
             return "Gmail: Use gmail_search, gmail_get_message, and gmail_digest for email tasks. When the user asks about email, use the tools — don't ask clarifying questions first."  # noqa: E501
         elif channel == "heartbeat":
-            return "Gmail: Check for important unread emails using gmail_search with 'is:unread newer_than:4h'. Report subjects and senders of anything urgent. Skip newsletters and automated notifications."  # noqa: E501
+            return "Gmail: Check for important unread emails using gmail_search with 'is:unread newer_than:1d'. Report subjects and senders of anything urgent. Skip newsletters and automated notifications."  # noqa: E501
         elif channel == "scheduled":
             return None
         else:
@@ -562,7 +562,10 @@ class GmailDigestTool(BaseGmailTool):
         if not search_tool:
             return "Gmail search tool not available."
 
-        query = f"newer_than:{hours_back}h"
+        # Gmail's newer_than: operator only accepts days, not hours.
+        # Use after: with a Unix timestamp for sub-day precision.
+        cutoff_ts = int((datetime.now(timezone.utc) - timedelta(hours=hours_back)).timestamp())
+        query = f"after:{cutoff_ts}"
         if not include_read:
             query += " is:unread"
 

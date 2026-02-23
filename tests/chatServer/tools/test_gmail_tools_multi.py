@@ -413,3 +413,45 @@ async def test_digest_partial_failure():
     assert "5 work emails" in result
     assert "=== broken@gmail.com (error) ===" in result
     assert "Auth error" in result
+
+
+@pytest.mark.asyncio
+async def test_digest_single_query_uses_after_timestamp():
+    """_digest_single must build query with after:<unix_ts>, not newer_than: (invalid for hours)."""
+    tool = _make_digest_tool()
+
+    mock_search_tool = AsyncMock()
+    mock_search_tool.name = "search_gmail"
+    mock_search_tool.arun = AsyncMock(return_value="No messages found")
+
+    mock_provider = MagicMock()
+    mock_provider.account_email = "work@gmail.com"
+    mock_provider.get_gmail_tools = AsyncMock(return_value=[mock_search_tool])
+
+    await tool._digest_single(mock_provider, hours_back=24, include_read=False, max_emails=20)
+
+    mock_search_tool.arun.assert_called_once()
+    query_arg = mock_search_tool.arun.call_args[0][0]["query"]
+    assert query_arg.startswith("after:"), f"Expected query to start with 'after:', got: {query_arg!r}"
+    assert "is:unread" in query_arg
+    assert "newer_than:" not in query_arg
+
+
+@pytest.mark.asyncio
+async def test_digest_single_query_omits_unread_when_include_read():
+    """_digest_single should not append is:unread when include_read=True."""
+    tool = _make_digest_tool()
+
+    mock_search_tool = AsyncMock()
+    mock_search_tool.name = "search_gmail"
+    mock_search_tool.arun = AsyncMock(return_value="No messages found")
+
+    mock_provider = MagicMock()
+    mock_provider.account_email = "work@gmail.com"
+    mock_provider.get_gmail_tools = AsyncMock(return_value=[mock_search_tool])
+
+    await tool._digest_single(mock_provider, hours_back=4, include_read=True, max_emails=20)
+
+    query_arg = mock_search_tool.arun.call_args[0][0]["query"]
+    assert query_arg.startswith("after:")
+    assert "is:unread" not in query_arg

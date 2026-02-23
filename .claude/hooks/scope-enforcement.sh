@@ -10,15 +10,21 @@ FILE_PATH=$(echo "$INPUT" | grep -oP '"file_path"\s*:\s*"([^"]*)"' | head -1 | s
 # Detect agent type from env var (set by orchestrator in spawn prompt)
 AGENT_TYPE="${CLAUDE_AGENT_TYPE:-}"
 
-# Fallback: try to detect from branch name
+# Fallback: try to detect from branch name — but ONLY inside a git worktree.
+# In the main repo, this is the team lead (unrestricted). In a worktree, it's
+# a domain agent. git rev-parse --git-dir returns ".git/worktrees/<name>" in
+# worktrees vs ".git" in the main repo.
 if [ -z "$AGENT_TYPE" ]; then
-  BRANCH=$(git branch --show-current 2>/dev/null || true)
-  case "$BRANCH" in
-    *database*|*migration*|*schema*) AGENT_TYPE="database-dev" ;;
-    *backend*|*service*|*api*) AGENT_TYPE="backend-dev" ;;
-    *frontend*|*webapp*|*ui*) AGENT_TYPE="frontend-dev" ;;
-    *deploy*|*docker*|*ci*|*cd*) AGENT_TYPE="deployment-dev" ;;
-  esac
+  GIT_DIR=$(git rev-parse --git-dir 2>/dev/null || true)
+  if [[ "$GIT_DIR" == *"/worktrees/"* ]]; then
+    BRANCH=$(git branch --show-current 2>/dev/null || true)
+    case "$BRANCH" in
+      *database*|*migration*|*schema*) AGENT_TYPE="database-dev" ;;
+      *backend*|*service*|*api*) AGENT_TYPE="backend-dev" ;;
+      *frontend*|*webapp*|*ui*) AGENT_TYPE="frontend-dev" ;;
+      *deploy*|*docker*|*ci*|*cd*) AGENT_TYPE="deployment-dev" ;;
+    esac
+  fi
 fi
 
 # No agent type detected — allow (manual/orchestrator use)
