@@ -22,7 +22,7 @@ from utils.logging_utils import get_logger
 from .config.constants import PROMPT_CUSTOMIZATIONS_TAG
 from .config.settings import get_settings
 from .database.connection import get_db_connection
-from .database.supabase_client import get_supabase_client, get_user_scoped_client
+from .database.supabase_client import get_user_scoped_client
 from .dependencies.agent_loader import get_agent_loader
 from .dependencies.auth import get_current_user
 from .models.chat import ChatRequest, ChatResponse
