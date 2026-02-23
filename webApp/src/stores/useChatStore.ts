@@ -24,7 +24,9 @@ interface ChatStore {
   currentSessionInstanceId: string | null;
   currentAgentName: string | null; // Renamed from currentAgentId
   isInitializingSession: boolean; // ADDED: Flag to prevent multiple initializations
+  lastWakeupAt: number | null;
   sendHeartbeatAsync: () => Promise<void>;
+  triggerWakeup: () => Promise<void>;
 
   addMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>, senderType?: 'user' | 'ai' | 'tool') => Promise<void>;
   toggleChatPanel: () => void;
@@ -136,6 +138,31 @@ async function deactivateSessionInstance(sessionInstanceId: string, userId: stri
   }
 }
 
+/** Call the session_open endpoint; agent decides whether to respond. */
+async function callSessionOpen(
+  agentName: string,
+  sessionId: string,
+): Promise<{ response: string; silent: boolean } | null> {
+  try {
+    const { data: { session: authSession } } = await supabase.auth.getSession();
+    const accessToken = authSession?.access_token;
+    if (!accessToken) return null;
+
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    const res = await fetch(`${apiBaseUrl}/api/chat/session_open`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ agent_name: agentName, session_id: sessionId }),
+    });
+    if (!res.ok) { console.warn('session_open failed:', res.status); return null; }
+    const data = await res.json();
+    return { response: data.response, silent: data.silent };
+  } catch (err) {
+    console.warn('session_open error (non-fatal):', err);
+    return null;
+  }
+}
+
 export const useChatStore = create<ChatStore>((set, get) => ({
   messages: [], // Messages will be primarily managed by backend history; client might only hold current view if needed.
   // For now, we keep it, but it might not be populated from DB on init if backend handles full history.
@@ -144,6 +171,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   currentSessionInstanceId: null,
   currentAgentName: null,
   isInitializingSession: false, // ADDED: Initial state for the flag
+  lastWakeupAt: null,
 
   addMessage: async (message, senderTypeFromParam) => {
     const senderType = senderTypeFromParam || message.sender || 'ai';
@@ -263,11 +291,24 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       // 5. Load historical messages from server
       const historicalMessages = chatIdToUse ? await loadHistoricalMessages(chatIdToUse) : [];
 
+      // Session open wakeup — always fires on init; agent decides whether to respond
+      const sessionOpenResult = await callSessionOpen(agentName, chatIdToUse);
+      const messagesToShow = [...historicalMessages];
+      if (sessionOpenResult && !sessionOpenResult.silent) {
+        messagesToShow.push({
+          id: uuidv4(),
+          text: sessionOpenResult.response,
+          sender: 'ai' as const,
+          timestamp: new Date(),
+        });
+      }
+
       set({
         activeChatId: chatIdToUse,
         currentSessionInstanceId: newSessionInstanceId,
         currentAgentName: agentName,
-        messages: historicalMessages,
+        messages: messagesToShow,
+        lastWakeupAt: Date.now(),
       });
       console.log(
         `Chat store initialized. Agent: ${agentName}, Active Chat ID: ${chatIdToUse}, Session Instance ID: ${newSessionInstanceId}, Historical messages: ${historicalMessages.length}`,
@@ -412,6 +453,26 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       }
     } else {
       // console.warn('Cannot send heartbeat: no currentSessionInstanceId or user.');
+    }
+  },
+
+  triggerWakeup: async () => {
+    const { activeChatId, currentAgentName, lastWakeupAt } = get();
+    if (!activeChatId || !currentAgentName) return;
+    const DEBOUNCE_MS = 2 * 60 * 1000;
+    if (lastWakeupAt && Date.now() - lastWakeupAt < DEBOUNCE_MS) return;
+
+    set({ lastWakeupAt: Date.now() });
+    const result = await callSessionOpen(currentAgentName, activeChatId);
+    if (result && !result.silent) {
+      set((state) => ({
+        messages: [...state.messages, {
+          id: uuidv4(),
+          text: result.response,
+          sender: 'ai' as const,
+          timestamp: new Date(),
+        }],
+      }));
     }
   },
 
