@@ -101,11 +101,13 @@ def build_agent_prompt(
     Args:
         soul: Behavioral philosophy from agent_configurations.soul.
         identity: Structured metadata {name, vibe, description} or None.
-        channel: "web", "telegram", or "scheduled".
+        channel: "web", "telegram", "scheduled", "heartbeat", or "session_open".
         user_instructions: Free-text user instructions or None.
         timezone: IANA timezone string (e.g. "America/New_York") or None.
         tools: List of instantiated tool objects (will call prompt_section() on each).
         memory_notes: LTM notes string or None. Used for onboarding detection.
+        last_message_at: Timestamp of most recent message in session. Used by
+            session_open channel to format time context for the agent.
 
     Returns:
         Assembled system prompt string.
