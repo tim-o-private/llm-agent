@@ -108,6 +108,8 @@ Per A1 (thin routers, fat services):
 5. **AgentExecutor.agent must not be replaced** — Use `self.agent.runnable = new_runnable`, not `self.agent = new_runnable_sequence`. Bypasses Pydantic validator, strips `aplan()`.
 6. **Settings created before load_dotenv()** — Call `settings.reload_from_env()` after `load_dotenv()` in main.py.
 7. **PostgREST upsert requires real UNIQUE constraint** — Partial unique indexes don't work with Supabase `ON CONFLICT`. Use select-then-insert if needed.
+8. **Executor cache survives new sessions** — The agent executor is cached per `(user_id, agent_name)`, not per session. After changing tool rows in the DB, a new session ID won't pick up the changes. **Restart chatServer** to clear the executor cache after any tool DB changes.
+9. **Mocking a method entirely hides its internals** — If a test mocks `_digest_single` entirely, the query-building logic inside it is never exercised. When you mock a whole method, ask: "is the logic inside this method tested anywhere?" If not, add a direct test of the internals (e.g., call `_digest_single` with a mock search tool and assert the query string).
 
 ## Detailed Reference
 

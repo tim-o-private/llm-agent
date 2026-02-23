@@ -8,6 +8,18 @@ FILE_PATH=$(echo "$INPUT" | grep -oP '"file_path"\s*:\s*"([^"]*)"' | head -1 | s
 
 case "$FILE_PATH" in
   */supabase/migrations/*.sql)
+    # tools table: ON CONFLICT DO UPDATE must include 'type =' in SET clause
+    # Omitting it leaves stale type values (e.g., CRUDTool instead of CreateTaskTool),
+    # causing tool loading to silently fail until server restart.
+    if grep -qiE 'ON\s+CONFLICT.*DO\s+UPDATE' "$FILE_PATH" 2>/dev/null; then
+      if grep -qiE '\btools\b' "$FILE_PATH" 2>/dev/null; then
+        SET_BLOCK=$(grep -A20 -iE 'ON\s+CONFLICT.*DO\s+UPDATE' "$FILE_PATH" | head -25)
+        if ! echo "$SET_BLOCK" | grep -qiE '\btype\s*='; then
+          echo "BLOCKED: ON CONFLICT DO UPDATE on 'tools' table is missing 'type =' in the SET clause. Omitting type leaves stale CRUDTool values that silently break tool loading. Add 'type = EXCLUDED.type' to the SET clause." >&2
+          exit 2
+        fi
+      fi
+    fi
     # A9: Block agent_name TEXT — must use agent_id UUID FK
     if grep -qiE 'agent_name\s+TEXT' "$FILE_PATH" 2>/dev/null; then
       echo "BLOCKED: 'agent_name TEXT' in migration. Per A9, use 'agent_id UUID NOT NULL REFERENCES agent_configurations(id) ON DELETE CASCADE'. See architecture-principles skill A9." >&2

@@ -64,6 +64,34 @@ When an agent makes a mistake or a pattern violation is found during review or U
 - **Target:** `chatServer/channels/telegram_bot.py`, CLAUDE.md gotcha
 - **Status:** Fixed in this branch
 
+### DEV-009: 2026-02-22 ON CONFLICT DO UPDATE omitted `type` column on tools table
+- **What happened:** Migration for task tools used `ON CONFLICT (name) DO UPDATE SET description=..., config=..., is_active=true` without including `type`. This left `type='CRUDTool'` in the DB for all 5 task tools, causing tool loading to silently fail (CRUDTool skipped without `table_name`). Required 3 follow-up migrations to repair.
+- **Root cause:** No rule or check existed requiring `type` to be included in upserts on the `tools` table.
+- **Correction:** Added check to `validate-patterns.sh`: any `ON CONFLICT DO UPDATE` touching the `tools` table is blocked if the SET clause omits `type =`. Added gotcha to `database-patterns/SKILL.md`.
+- **Target:** hook (`validate-patterns.sh`), skill (`database-patterns`)
+- **Status:** Fixed in PR #75
+
+### DEV-010: 2026-02-22 PostgREST PGRST203 from function overload not dropped
+- **What happened:** SPEC-008 added a 3-arg version of `get_oauth_tokens_for_scheduler` alongside the existing 2-arg version. PostgREST couldn't disambiguate; all Gmail tool calls failed with PGRST203.
+- **Root cause:** No documented rule about dropping old function signatures when adding overloads for PostgREST-exposed functions.
+- **Correction:** Added gotcha to `database-patterns/SKILL.md`: when adding an overload to a function called via PostgREST, drop the old signature in the same migration.
+- **Target:** skill (`database-patterns`)
+- **Status:** Fixed in PR #75
+
+### DEV-011: 2026-02-22 Gmail `newer_than:` hours syntax silently returns no results
+- **What happened:** `GmailDigestTool._digest_single` used `newer_than:{hours_back}h` (e.g., `newer_than:24h`). Gmail only accepts `newer_than:Nd` (days). The query ran without error but returned zero results for months.
+- **Root cause:** Gmail search syntax not documented. Tests mocked `_digest_single` entirely — the query-building logic inside it was never exercised, so the bug was never caught.
+- **Correction:** Fixed query to use `after:<unix_timestamp>`. Added two direct tests of `_digest_single` asserting the query starts with `after:` and handles `include_read` correctly. Added gotcha to `backend-patterns/SKILL.md` about mocking methods entirely.
+- **Target:** `chatServer/tools/gmail_tools.py`, tests (`test_gmail_tools_multi.py`), skill (`backend-patterns`)
+- **Status:** Fixed in PR #74
+
+### DEV-012: 2026-02-22 scope-enforcement.sh false-positive on ad-hoc fix branches
+- **What happened:** Branch `fix/uat-database-fixes` contained "database" in the name, causing `scope-enforcement.sh` to treat the team lead as a database-dev agent and block edits to `chatServer/tools/gmail_tools.py`. Required creating a second branch to land the fix.
+- **Root cause:** The branch-name fallback in scope enforcement matched any branch containing a domain keyword — including branches unrelated to that domain. It had no way to distinguish a domain agent's branch from the team lead's integration branch.
+- **Correction:** Restricted the branch-name fallback to worktrees only (`git rev-parse --git-dir` check). In the main repo, the team lead always has unrestricted access. Domain agents always run in worktrees, so the fallback still fires there.
+- **Target:** hook (`scope-enforcement.sh`)
+- **Status:** Fixed in this commit
+
 ### DEV-008: 2026-02-18 PR merge order not communicated
 - **What happened:** Multiple PRs from a spec were reported as "ready" simultaneously, but they had implicit ordering (database → backend → frontend). User merged in wrong order.
 - **Root cause:** No merge order documentation in PR bodies or orchestrator reporting.

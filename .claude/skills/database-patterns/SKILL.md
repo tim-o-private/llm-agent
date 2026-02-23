@@ -80,6 +80,8 @@ Migration files are named `YYYYMMDDHHMMSS_descriptive_name.sql`. When agents wor
 ## Key Gotchas
 
 1. **PostgREST upsert** — Supabase PostgREST `ON CONFLICT` requires a real UNIQUE constraint (not partial unique indexes). Use select-then-insert if needed.
+2. **PostgREST function overloads** — PostgREST can't disambiguate overloaded SQL functions (same name, different arg counts). When adding a new overload of a function called via PostgREST, **drop the old signature in the same migration**. Leaving both causes PGRST203 errors at runtime.
+3. **`ON CONFLICT DO UPDATE` must include `type`** — Upserts on the `tools` table must include `type = EXCLUDED.type` in the SET clause. Omitting it leaves stale `type` values (e.g., `CRUDTool` instead of `CreateTaskTool`), silently breaking tool loading. The `validate-patterns.sh` hook enforces this.
 
 ## Detailed Reference
 
