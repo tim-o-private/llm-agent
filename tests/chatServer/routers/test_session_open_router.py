@@ -1,11 +1,12 @@
 """Unit tests for session_open router."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
+from chatServer.database.supabase_client import get_supabase_client
 from chatServer.dependencies.auth import get_current_user
 from chatServer.routers.session_open_router import router
 
@@ -23,7 +24,12 @@ def override_get_current_user():
     return TEST_USER_ID
 
 
+def override_get_supabase_client():
+    return MagicMock()
+
+
 app.dependency_overrides[get_current_user] = override_get_current_user
+app.dependency_overrides[get_supabase_client] = override_get_supabase_client
 
 
 @pytest.fixture

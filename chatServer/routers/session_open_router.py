@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
 
+from ..database.supabase_client import get_supabase_client
 from ..dependencies.auth import get_current_user
 from ..models.session_open import SessionOpenRequest, SessionOpenResponse
 from ..services.session_open_service import SessionOpenService
@@ -11,8 +12,9 @@ router = APIRouter(prefix="/api/chat", tags=["session-open"])
 async def session_open(
     request: SessionOpenRequest,
     user_id: str = Depends(get_current_user),
+    db=Depends(get_supabase_client),
 ) -> SessionOpenResponse:
-    service = SessionOpenService()
+    service = SessionOpenService(db)
     result = await service.run(
         user_id=user_id,
         agent_name=request.agent_name,

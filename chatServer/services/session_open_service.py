@@ -7,7 +7,6 @@ from langchain_core.messages import AIMessage
 
 from src.core.agent_loader_db import load_agent_executor_db_async
 
-from ..database.supabase_client import get_supabase_client
 from ..security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
 from ..services.audit_service import AuditService
 from ..services.pending_actions import PendingActionsService
@@ -18,21 +17,24 @@ logger = logging.getLogger(__name__)
 class SessionOpenService:
     """Handles session_open requests — agent decides whether to greet the user."""
 
+    def __init__(self, db_client):
+        self.db_client = db_client
+
     async def run(
         self,
         user_id: str,
         agent_name: str,
         session_id: str,
     ) -> Dict[str, Any]:
-        supabase_client = await get_supabase_client()
+        supabase_client = self.db_client
 
         # 1. Check if user is new (no memory + no instructions)
         has_memory = await self._has_memory(supabase_client, user_id, agent_name)
         has_instructions = await self._has_instructions(supabase_client, user_id, agent_name)
         is_new_user = not has_memory and not has_instructions
 
-        # 2. Get last message timestamp for this session
-        last_message_at = await self._get_last_message_at(supabase_client, session_id)
+        # 2. Get last message timestamp for this session (via direct pg, per A3)
+        last_message_at = await self._get_last_message_at(session_id)
 
         # 3. Load agent with session_open channel
         agent_executor = await load_agent_executor_db_async(
@@ -117,18 +119,32 @@ class SessionOpenService:
             logger.warning(f"Failed to check instructions for {user_id}/{agent_name}: {e}")
             return False
 
-    async def _get_last_message_at(self, supabase_client, session_id: str):
-        """Get the timestamp of the most recent message in this session."""
-        from datetime import datetime
+    async def _get_last_message_at(self, session_id: str):
+        """Get the timestamp of the most recent message in this session.
+
+        Uses direct pg connection per A3 — chat_message_history is a
+        LangChain framework table, not a user-CRUD table.
+        """
+        from datetime import datetime, timezone as tz
+
+        from ..config.constants import CHAT_MESSAGE_HISTORY_TABLE_NAME
+        from ..database.connection import get_db_connection
 
         try:
-            resp = await supabase_client.table("chat_message_history").select("created_at").eq(
-                "session_id", session_id
-            ).order("created_at", desc=True).limit(1).execute()
-            if resp.data and resp.data[0].get("created_at"):
-                ts_str = resp.data[0]["created_at"]
-                return datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
-            return None
+            async for conn in get_db_connection():
+                async with conn.cursor() as cur:
+                    await cur.execute(
+                        f"SELECT created_at FROM {CHAT_MESSAGE_HISTORY_TABLE_NAME} "  # noqa: E501
+                        "WHERE session_id = %s ORDER BY created_at DESC LIMIT 1",
+                        (session_id,),
+                    )
+                    row = await cur.fetchone()
+                    if row and row[0]:
+                        ts = row[0]
+                        if ts.tzinfo is None:
+                            ts = ts.replace(tzinfo=tz.utc)
+                        return ts
+                    return None
         except Exception as e:
             logger.warning(f"Failed to get last message time for session {session_id}: {e}")
             return None

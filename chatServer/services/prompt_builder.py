@@ -76,7 +76,8 @@ ONBOARDING_SECTION = (
 def _format_time_context(last_message_at: datetime | None) -> str:
     if last_message_at is None:
         return "This is the first time opening this session."
-    elapsed = datetime.now(timezone.utc) - last_message_at.replace(tzinfo=timezone.utc)
+    ts = last_message_at.astimezone(timezone.utc) if last_message_at.tzinfo else last_message_at.replace(tzinfo=timezone.utc)
+    elapsed = datetime.now(timezone.utc) - ts
     minutes = int(elapsed.total_seconds() / 60)
     if minutes < 2:
         return "Your last interaction was less than 2 minutes ago."
