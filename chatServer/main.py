@@ -22,7 +22,7 @@ from utils.logging_utils import get_logger
 from .config.constants import PROMPT_CUSTOMIZATIONS_TAG
 from .config.settings import get_settings
 from .database.connection import get_db_connection
-from .database.supabase_client import get_supabase_client
+from .database.supabase_client import get_supabase_client, get_user_scoped_client
 from .dependencies.agent_loader import get_agent_loader
 from .dependencies.auth import get_current_user
 from .models.chat import ChatRequest, ChatResponse
@@ -262,7 +262,7 @@ async def chat_endpoint(
 async def create_prompt_customization(
     customization_data: PromptCustomizationCreate,
     user_id: str = Depends(get_current_user),
-    db = Depends(get_supabase_client) # This still uses supabase-py client
+    db=Depends(get_user_scoped_client),
 ):
     """Create a new prompt customization."""
     prompt_service = get_prompt_customization_service()
@@ -276,7 +276,7 @@ async def create_prompt_customization(
 async def get_prompt_customizations_for_agent(
     agent_name: str,
     user_id: str = Depends(get_current_user),
-    db = Depends(get_supabase_client) # This still uses supabase-py client
+    db=Depends(get_user_scoped_client),
 ):
     """Get prompt customizations for a specific agent."""
     prompt_service = get_prompt_customization_service()
@@ -289,9 +289,9 @@ async def get_prompt_customizations_for_agent(
 @app.put("/api/agent/prompt_customizations/{customization_id}", response_model=PromptCustomization, tags=[PROMPT_CUSTOMIZATIONS_TAG])  # noqa: E501
 async def update_prompt_customization(
     customization_id: str,
-    customization_data: PromptCustomizationCreate, # Re-use create model, user_id is fixed by RLS
-    user_id: str = Depends(get_current_user), # Ensures user owns the record via RLS
-    db = Depends(get_supabase_client) # This still uses supabase-py client
+    customization_data: PromptCustomizationCreate,
+    user_id: str = Depends(get_current_user),
+    db=Depends(get_user_scoped_client),
 ):
     """Update an existing prompt customization."""
     prompt_service = get_prompt_customization_service()
@@ -311,7 +311,7 @@ async def root():
 # This is just an example, actual task management might be more complex
 # and involve user authentication/authorization through JWT tokens passed from frontend
 @app.get("/api/tasks")
-async def get_tasks(request: Request, db = Depends(get_supabase_client)): # This still uses supabase-py client
+async def get_tasks(request: Request, db=Depends(get_user_scoped_client)):
     print("Attempting to fetch tasks from Supabase.")
     try:
         # Example: Fetch tasks. In a real app, you'd filter by user_id from JWT.

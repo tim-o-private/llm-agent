@@ -16,7 +16,8 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from ..database.supabase_client import get_supabase_client
+from ..database.scoped_client import UserScopedClient
+from ..database.supabase_client import get_supabase_client, get_user_scoped_client
 from ..dependencies.auth import get_current_user
 
 logger = logging.getLogger(__name__)
@@ -79,35 +80,20 @@ class PendingCountResponse(BaseModel):
 # Service initialization (lazy)
 # =============================================================================
 
-_pending_actions_service = None
-_audit_service = None
+def _build_pending_actions_service(db: UserScopedClient):
+    """Build a PendingActionsService with a user-scoped client."""
+    from ..services.audit_service import AuditService
+    from ..services.pending_actions import PendingActionsService
+
+    audit_service = AuditService(db)
+    return PendingActionsService(db_client=db, audit_service=audit_service)
 
 
-async def get_pending_actions_service():
-    """Get or create the pending actions service."""
-    global _pending_actions_service
-    if _pending_actions_service is None:
-        from ..services.audit_service import AuditService
-        from ..services.pending_actions import PendingActionsService
+def _build_audit_service(db: UserScopedClient):
+    """Build an AuditService with a user-scoped client."""
+    from ..services.audit_service import AuditService
 
-        db_client = await get_supabase_client()
-        audit_service = AuditService(db_client)
-        _pending_actions_service = PendingActionsService(
-            db_client=db_client,
-            audit_service=audit_service,
-        )
-    return _pending_actions_service
-
-
-async def get_audit_service():
-    """Get or create the audit service."""
-    global _audit_service
-    if _audit_service is None:
-        from ..services.audit_service import AuditService
-
-        db_client = await get_supabase_client()
-        _audit_service = AuditService(db_client)
-    return _audit_service
+    return AuditService(db)
 
 
 # =============================================================================
@@ -117,11 +103,12 @@ async def get_audit_service():
 @router.get("/pending", response_model=List[PendingActionResponse])
 async def get_pending_actions(
     user_id: str = Depends(get_current_user),
+    db: UserScopedClient = Depends(get_user_scoped_client),
     limit: int = Query(default=50, ge=1, le=100),
 ):
     """Get all pending actions for the current user."""
     try:
-        service = await get_pending_actions_service()
+        service = _build_pending_actions_service(db)
         actions = await service.get_pending_actions(user_id, limit=limit)
 
         return [
@@ -144,10 +131,11 @@ async def get_pending_actions(
 @router.get("/pending/count", response_model=PendingCountResponse)
 async def get_pending_count(
     user_id: str = Depends(get_current_user),
+    db: UserScopedClient = Depends(get_user_scoped_client),
 ):
     """Get count of pending actions for the current user."""
     try:
-        service = await get_pending_actions_service()
+        service = _build_pending_actions_service(db)
         count = await service.get_pending_count(user_id)
         return PendingCountResponse(count=count)
     except Exception as e:
@@ -159,10 +147,11 @@ async def get_pending_count(
 async def approve_action(
     action_id: str,
     user_id: str = Depends(get_current_user),
+    db: UserScopedClient = Depends(get_user_scoped_client),
 ):
     """Approve a pending action. Executes and logs to audit trail."""
     try:
-        service = await get_pending_actions_service()
+        service = _build_pending_actions_service(db)
         result = await service.approve_action(action_id, user_id)
 
         if result.success:
@@ -187,10 +176,11 @@ async def reject_action(
     action_id: str,
     request: ActionRejectionRequest,
     user_id: str = Depends(get_current_user),
+    db: UserScopedClient = Depends(get_user_scoped_client),
 ):
     """Reject a pending action."""
     try:
-        service = await get_pending_actions_service()
+        service = _build_pending_actions_service(db)
         success = await service.reject_action(action_id, user_id, reason=request.reason)
 
         if success:
@@ -209,6 +199,7 @@ async def reject_action(
 @router.get("/history", response_model=List[AuditLogEntryResponse])
 async def get_audit_history(
     user_id: str = Depends(get_current_user),
+    db: UserScopedClient = Depends(get_user_scoped_client),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     tool_name: Optional[str] = Query(default=None),
@@ -216,7 +207,7 @@ async def get_audit_history(
 ):
     """Get audit history for the current user."""
     try:
-        service = await get_audit_service()
+        service = _build_audit_service(db)
         entries = await service.get_audit_log(
             user_id=user_id,
             limit=limit,
@@ -259,6 +250,7 @@ async def get_tool_preference(
 
         user_preference = None
         if tier == ApprovalTier.USER_CONFIGURABLE:
+            # TODO: SPEC-017 migrate to scoped client
             db_client = await get_supabase_client()
             user_preference = await _get_user_preference(db_client, user_id, tool_name)
 
@@ -289,6 +281,7 @@ async def set_tool_preference(
                 detail="Preference must be 'auto' or 'requires_approval'"
             )
 
+        # TODO: SPEC-017 migrate to scoped client
         db_client = await get_supabase_client()
         success = await set_user_preference(
             db_client=db_client,
@@ -318,10 +311,11 @@ async def set_tool_preference(
 @router.post("/expire-stale")
 async def expire_stale_actions(
     user_id: str = Depends(get_current_user),
+    db: UserScopedClient = Depends(get_user_scoped_client),
 ):
     """Manually trigger expiration of stale pending actions."""
     try:
-        service = await get_pending_actions_service()
+        service = _build_pending_actions_service(db)
         count = await service.expire_stale_actions()
 
         return {

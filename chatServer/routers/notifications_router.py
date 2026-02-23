@@ -15,7 +15,7 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from ..database.supabase_client import get_supabase_client
+from ..database.supabase_client import get_user_scoped_client
 from ..dependencies.auth import get_current_user
 from ..services.notification_service import NotificationService
 
@@ -63,7 +63,7 @@ async def get_notifications(
     limit: int = 50,
     offset: int = 0,
     user_id: str = Depends(get_current_user),
-    db=Depends(get_supabase_client),
+    db=Depends(get_user_scoped_client),
 ):
     """List notifications for the current user."""
     service = NotificationService(db)
@@ -79,7 +79,7 @@ async def get_notifications(
 @router.get("/unread/count", response_model=UnreadCountResponse)
 async def get_unread_count(
     user_id: str = Depends(get_current_user),
-    db=Depends(get_supabase_client),
+    db=Depends(get_user_scoped_client),
 ):
     """Get count of unread notifications. Used for polling."""
     service = NotificationService(db)
@@ -91,7 +91,7 @@ async def get_unread_count(
 async def mark_notification_read(
     notification_id: str,
     user_id: str = Depends(get_current_user),
-    db=Depends(get_supabase_client),
+    db=Depends(get_user_scoped_client),
 ):
     """Mark a single notification as read."""
     service = NotificationService(db)
@@ -104,7 +104,7 @@ async def mark_notification_read(
 @router.post("/read-all", response_model=MarkAllReadResponse)
 async def mark_all_read(
     user_id: str = Depends(get_current_user),
-    db=Depends(get_supabase_client),
+    db=Depends(get_user_scoped_client),
 ):
     """Mark all notifications as read for the current user."""
     service = NotificationService(db)

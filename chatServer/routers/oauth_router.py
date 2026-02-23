@@ -16,7 +16,11 @@ router = APIRouter(prefix="/oauth", tags=["oauth"])
 
 
 def _get_oauth_service() -> OAuthService:
-    """Create OAuthService with a service-role Supabase client."""
+    """Create OAuthService with a service-role Supabase client.
+
+    TODO: SPEC-017 — OAuthService uses sync Supabase client for Google OAuth
+    callback handling (no auth context). Migrate when sync SystemClient is available.
+    """
     from supabase import create_client
 
     supabase_url = os.getenv("SUPABASE_URL")
