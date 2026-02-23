@@ -73,7 +73,7 @@ TOOL_APPROVAL_DEFAULTS: dict[str, tuple[ApprovalTier, ApprovalTier]] = {
     "list_reminders": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
 
     # LTM memory tools
-    "save_memory": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.REQUIRES_APPROVAL),
+    "save_memory": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.AUTO_APPROVE),
     "read_memory": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
 
     # Email digest tools

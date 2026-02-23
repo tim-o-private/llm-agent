@@ -41,6 +41,7 @@ def test_format_task_line_basic():
     result = _format_task_line(task, 1)
     assert "1. [HIGH] Do stuff" in result
     assert "pending" in result
+    assert "[id: t1]" in result
 
 
 def test_format_task_line_with_due_date():

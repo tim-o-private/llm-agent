@@ -28,6 +28,7 @@ def _format_task_line(task: dict, index: int) -> str:
         parts.append(f"(due: {due})")
 
     parts.append(f"— {status}")
+    parts.append(f"[id: {task.get('id', '?')}]")
 
     subtask_count = task.get("subtask_count", 0)
     if subtask_count > 0:
