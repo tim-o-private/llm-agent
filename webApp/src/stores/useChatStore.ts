@@ -294,7 +294,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       // Session open wakeup — always fires on init; agent decides whether to respond
       const sessionOpenResult = await callSessionOpen(agentName, chatIdToUse);
       const messagesToShow = [...historicalMessages];
-      if (sessionOpenResult && !sessionOpenResult.silent) {
+      const hasWakeupGreeting = sessionOpenResult && !sessionOpenResult.silent;
+      if (hasWakeupGreeting) {
         messagesToShow.push({
           id: uuidv4(),
           text: sessionOpenResult.response,
@@ -309,6 +310,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         currentAgentName: agentName,
         messages: messagesToShow,
         lastWakeupAt: Date.now(),
+        // Auto-open panel when agent has something to say
+        ...(hasWakeupGreeting ? { isChatPanelOpen: true } : {}),
       });
       console.log(
         `Chat store initialized. Agent: ${agentName}, Active Chat ID: ${chatIdToUse}, Session Instance ID: ${newSessionInstanceId}, Historical messages: ${historicalMessages.length}`,
@@ -466,6 +469,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const result = await callSessionOpen(currentAgentName, activeChatId);
     if (result && !result.silent) {
       set((state) => ({
+        isChatPanelOpen: true,
         messages: [...state.messages, {
           id: uuidv4(),
           text: result.response,

@@ -83,8 +83,8 @@ class SessionOpenService:
                 or "No text content in response."
             )
 
-        # 8. Check for silent response
-        silent = output.strip().startswith("WAKEUP_SILENT")
+        # 8. Check for silent response — agent may include reasoning before WAKEUP_SILENT
+        silent = "WAKEUP_SILENT" in output
 
         # 9. Persist AI message if not silent
         if not silent:
