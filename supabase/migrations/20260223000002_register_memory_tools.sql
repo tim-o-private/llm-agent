@@ -3,6 +3,9 @@
 -- Step 1: Convert tools.type from enum to VARCHAR(100)
 ALTER TABLE tools ALTER COLUMN type TYPE VARCHAR(100) USING type::VARCHAR(100);
 
+-- Also convert any backup tables that reference the same enum
+ALTER TABLE IF EXISTS agent_tools_backup ALTER COLUMN type TYPE VARCHAR(100) USING type::VARCHAR(100);
+
 -- Drop the enum type — no longer needed
 DROP TYPE IF EXISTS agent_tool_type;
 
