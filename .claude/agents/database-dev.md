@@ -77,6 +77,15 @@ Schema contract:
 3. Do NOT retry the same action more than twice
 4. Do NOT ask the user directly — go through the orchestrator
 
+## Git Coordination
+
+- **You own your branch while your task is `in_progress`.** No one else should be editing it.
+- If you're on a shared branch, always `git pull` or check `git log --oneline -3` before starting — the team lead or a prior agent may have committed ahead of you.
+- **Commit early and often.** Uncommitted work is invisible to the team lead and can be overwritten.
+- If the team lead messages you with a fix request, make the fix yourself and commit — don't wait for them to do it.
+- When done, push immediately and report completion. Unpushed commits on a shared branch block everyone else.
+- **Never force-push.** If you need to fix a commit, add a new commit.
+
 ## Rules
 
 - **Stay in scope** — only `supabase/migrations/` and `chatServer/database/`

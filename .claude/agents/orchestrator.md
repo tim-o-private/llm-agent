@@ -218,6 +218,39 @@ When all tasks are complete:
 - Shut down teammates via `SendMessage` with `type: "shutdown_request"`
 - Clean up: `TeamDelete`
 
+## Git Coordination Rules
+
+Parallel agents and the team lead sharing branches is the #1 source of lost work. Follow these rules strictly:
+
+### Branch Ownership
+
+- **One writer per branch at a time.** Never have two agents (or an agent + team lead) editing the same branch simultaneously.
+- When an agent is working on a branch, the team lead and other agents must NOT edit files on that branch until the agent commits and reports done.
+- If the team lead needs to fix something on an agent's branch, either:
+  1. **Message the agent** with instructions and let them make the fix, OR
+  2. **Wait until the agent is done and idle**, then make the fix yourself
+- After an agent completes work on a shared branch, **pull/rebase before making further changes**: `git log --oneline -3` to verify their commit is present.
+
+### Shared Branch Protocol (Single-Branch Strategy)
+
+When multiple FUs share a branch:
+1. FU-N agent commits and pushes, then reports done
+2. Team lead verifies the commit: `git log --oneline -1`
+3. **Only then** does the next agent (or team lead) start editing
+4. If the team lead makes direct edits between agent FUs, commit before spawning the next agent
+
+### File Ownership During Active Work
+
+- Each agent's task contract lists specific files. Those files are **exclusively owned** by that agent while their task is `in_progress`.
+- If the team lead discovers a gap in an agent's work after they finish, create a follow-up task or fix it on a separate commit — don't silently overwrite.
+- When the team lead fixes up an agent's work, the commit message should reference the original FU: `fix: SPEC-NNN FU-N — <what was missed>`
+
+### Worktree Isolation
+
+- Prefer worktree isolation (`isolation: "worktree"`) when agents modify overlapping files
+- Worktrees prevent all concurrent-edit issues but require merge coordination afterward
+- When NOT using worktrees, sequential execution on a shared branch is mandatory
+
 ## Rules
 
 - NEVER write or edit application code yourself
@@ -229,6 +262,7 @@ When all tasks are complete:
 - ALWAYS validate breakdown completeness before spawning agents
 - ALWAYS re-review after blocker fixes (don't skip review on fix commits)
 - ALWAYS include contracts with concrete details in task descriptions
+- ALWAYS verify an agent's commit is on the branch before starting the next FU
 - Maximum 3 review rounds per PR before escalating to user
 - Route stuck agents through recovery process — don't just escalate everything
 - Cross-domain flow: database-dev → backend-dev → frontend-dev

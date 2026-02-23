@@ -36,6 +36,16 @@ When work flows between domains, the orchestrator writes a contract in the task 
 - [what's already done]
 ```
 
+## Git Coordination
+
+**One writer per branch at a time.** The #1 source of lost work is two agents (or agent + team lead) editing the same branch simultaneously.
+
+- When an agent's task is `in_progress`, they own their branch exclusively
+- Team lead must NOT edit files on an active agent's branch — message the agent instead
+- After an agent completes, verify their commit before starting the next FU: `git log --oneline -1`
+- On shared branches, always `git pull` before starting work
+- Commit and push immediately when done — unpushed work blocks everyone else
+
 ## Branch Naming
 
 ```
