@@ -4,11 +4,13 @@ import asyncio
 import logging
 from typing import Optional
 
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException
 
 from supabase import AsyncClient, acreate_client
 
 from ..config.settings import get_settings
+from ..dependencies.auth import get_current_user
+from .scoped_client import SystemClient, UserScopedClient
 
 logger = logging.getLogger(__name__)
 
@@ -83,8 +85,27 @@ def get_supabase_manager() -> SupabaseManager:
 
 
 async def get_supabase_client() -> AsyncClient:
-    """FastAPI dependency to get the Supabase client."""
+    """FastAPI dependency to get the raw Supabase client.
+
+    Prefer get_user_scoped_client() for user-facing code or
+    get_system_client() for background services.
+    """
     supabase_manager = get_supabase_manager()
     if isinstance(supabase_manager, SupabaseManager):
         await supabase_manager.ensure_initialized()
     return supabase_manager.get_client()
+
+
+async def get_user_scoped_client(
+    user_id: str = Depends(get_current_user),
+    client: AsyncClient = Depends(get_supabase_client),
+) -> UserScopedClient:
+    """FastAPI dependency for user-facing endpoints. Auto-scopes all queries."""
+    return UserScopedClient(client, user_id)
+
+
+async def get_system_client(
+    client: AsyncClient = Depends(get_supabase_client),
+) -> SystemClient:
+    """FastAPI dependency for background services only. No user scoping."""
+    return SystemClient(client)
