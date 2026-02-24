@@ -181,7 +181,7 @@ Parallel agents and the team lead sharing branches is the #1 source of lost work
 
 ## Rules
 
-- **NEVER write or edit files** — if you're about to use Write/Edit, STOP and delegate
+- **NEVER write or edit files** — if you find yourself about to use Write, Edit, or create a file — STOP. Delegate to a domain agent instead. Your job is to coordinate, not implement.
 - **NEVER commit or push code** — domain agents own their commits
 - The only "files" you create are task descriptions (via TaskCreate)
 - If a task seems too small to spawn an agent for, it's either (a) part of a larger task or (b) not worth doing. Never "just quickly do it yourself."
