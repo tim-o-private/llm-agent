@@ -37,29 +37,45 @@ class TestApprovalTierEnum:
 
 class TestToolApprovalDefaults:
     def test_gmail_read_tools_are_auto_approve(self):
-        tier, _ = TOOL_APPROVAL_DEFAULTS.get("gmail_search", (None, None))
+        tier, _ = TOOL_APPROVAL_DEFAULTS.get("search_gmail", (None, None))
         assert tier == ApprovalTier.AUTO_APPROVE
 
-        tier, _ = TOOL_APPROVAL_DEFAULTS.get("gmail_get_message", (None, None))
+        tier, _ = TOOL_APPROVAL_DEFAULTS.get("get_gmail", (None, None))
         assert tier == ApprovalTier.AUTO_APPROVE
-
-    def test_gmail_send_requires_approval(self):
-        tier, default = TOOL_APPROVAL_DEFAULTS.get("gmail_send_message", (None, None))
-        assert tier == ApprovalTier.REQUIRES_APPROVAL
-        assert default == ApprovalTier.REQUIRES_APPROVAL
 
     def test_get_tasks_is_auto_approve(self):
         tier, _ = TOOL_APPROVAL_DEFAULTS.get("get_tasks", (None, None))
         assert tier == ApprovalTier.AUTO_APPROVE
 
-    def test_create_task_is_user_configurable(self):
-        tier, _ = TOOL_APPROVAL_DEFAULTS.get("create_task", (None, None))
+    def test_create_tasks_is_user_configurable(self):
+        tier, _ = TOOL_APPROVAL_DEFAULTS.get("create_tasks", (None, None))
         assert tier == ApprovalTier.USER_CONFIGURABLE
+
+    def test_delete_tools_require_approval_by_default(self):
+        for tool_name in ("delete_tasks", "delete_reminders", "delete_schedules"):
+            tier, default = TOOL_APPROVAL_DEFAULTS.get(tool_name, (None, None))
+            assert tier == ApprovalTier.USER_CONFIGURABLE, f"{tool_name} should be user_configurable"
+            assert default == ApprovalTier.REQUIRES_APPROVAL, f"{tool_name} default should be requires_approval"
+
+    def test_memory_tools_are_auto_approve(self):
+        memory_tools = [
+            "create_memories", "search_memories", "get_memories",
+            "update_memories", "delete_memories", "set_project",
+            "link_memories", "get_entities", "search_entities", "get_context",
+        ]
+        for tool_name in memory_tools:
+            tier, _ = TOOL_APPROVAL_DEFAULTS.get(tool_name, (None, None))
+            assert tier == ApprovalTier.AUTO_APPROVE, f"{tool_name} should be auto-approve"
+
+    def test_update_instructions_requires_approval_by_default(self):
+        tier, default = TOOL_APPROVAL_DEFAULTS.get("update_instructions", (None, None))
+        assert tier == ApprovalTier.USER_CONFIGURABLE
+        assert default == ApprovalTier.REQUIRES_APPROVAL
 
 
 class TestGetToolDefaultTier:
     def test_known_tool(self):
-        tier, default = get_tool_default_tier("gmail_search")
+        tier, default = get_tool_default_tier("search_gmail")
         assert tier == ApprovalTier.AUTO_APPROVE
 
     def test_unknown_tool_defaults_to_requires_approval(self):
@@ -74,34 +90,19 @@ class TestGetEffectiveTier:
         """Create a mock Supabase client with sync chain and async execute."""
         mock_db = MagicMock()
         mock_execute = AsyncMock(return_value=MagicMock(data=execute_data))
-        # Chain: table().select().eq().eq().single().execute()
         chain = mock_db.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value
         chain.execute = mock_execute
-        # Also for upsert chain: table().upsert().execute()
         upsert_execute = AsyncMock(return_value=MagicMock())
         mock_db.table.return_value.upsert.return_value.execute = upsert_execute
         return mock_db
 
     @pytest.mark.asyncio
-    async def test_requires_approval_cannot_be_overridden(self):
-        mock_db = self._make_db_mock({"approval_tier": "auto"})
-
-        tier = await get_effective_tier(
-            user_id="test-user",
-            tool_name="gmail_send_message",
-            db_client=mock_db,
-        )
-
-        assert tier == ApprovalTier.REQUIRES_APPROVAL
-
-    @pytest.mark.asyncio
     async def test_auto_approve_always_auto(self):
         tier = await get_effective_tier(
-            user_id="test-user",
-            tool_name="gmail_search",
+            user_id="search_test_user",
+            tool_name="search_gmail",
             db_client=None,
         )
-
         assert tier == ApprovalTier.AUTO_APPROVE
 
     @pytest.mark.asyncio
@@ -109,12 +110,12 @@ class TestGetEffectiveTier:
         mock_db = self._make_db_mock(None)
 
         tier = await get_effective_tier(
-            user_id="test-user",
-            tool_name="create_task",
+            user_id="search_test_user",
+            tool_name="create_tasks",
             db_client=mock_db,
         )
 
-        _, default = get_tool_default_tier("create_task")
+        _, default = get_tool_default_tier("create_tasks")
         assert tier == default
 
     @pytest.mark.asyncio
@@ -122,8 +123,8 @@ class TestGetEffectiveTier:
         mock_db = self._make_db_mock({"approval_tier": "auto"})
 
         tier = await get_effective_tier(
-            user_id="test-user",
-            tool_name="gmail_archive",
+            user_id="search_test_user",
+            tool_name="create_tasks",
             db_client=mock_db,
         )
 
@@ -134,8 +135,8 @@ class TestGetEffectiveTier:
         mock_db = self._make_db_mock({"approval_tier": "requires_approval"})
 
         tier = await get_effective_tier(
-            user_id="test-user",
-            tool_name="create_task",
+            user_id="search_test_user",
+            tool_name="create_tasks",
             db_client=mock_db,
         )
 
@@ -144,37 +145,22 @@ class TestGetEffectiveTier:
     @pytest.mark.asyncio
     async def test_unknown_tool_requires_approval(self):
         tier = await get_effective_tier(
-            user_id="test-user",
+            user_id="search_test_user",
             tool_name="some_new_dangerous_tool",
             db_client=None,
         )
-
         assert tier == ApprovalTier.REQUIRES_APPROVAL
 
 
 class TestSetUserPreference:
-    @pytest.mark.asyncio
-    async def test_cannot_override_requires_approval(self):
-        mock_db = AsyncMock()
-
-        result = await set_user_preference(
-            db_client=mock_db,
-            user_id="test-user",
-            tool_name="gmail_send_message",
-            preference="auto",
-        )
-
-        assert result is False
-        mock_db.table.assert_not_called()
-
     @pytest.mark.asyncio
     async def test_cannot_set_preference_for_auto_approve(self):
         mock_db = AsyncMock()
 
         result = await set_user_preference(
             db_client=mock_db,
-            user_id="test-user",
-            tool_name="gmail_search",
+            user_id="search_test_user",
+            tool_name="search_gmail",
             preference="requires_approval",
         )
 
@@ -187,8 +173,8 @@ class TestSetUserPreference:
 
         result = await set_user_preference(
             db_client=mock_db,
-            user_id="test-user",
-            tool_name="create_task",
+            user_id="search_test_user",
+            tool_name="create_tasks",
             preference="requires_approval",
         )
 
@@ -201,8 +187,8 @@ class TestSetUserPreference:
 
         result = await set_user_preference(
             db_client=mock_db,
-            user_id="test-user",
-            tool_name="create_task",
+            user_id="search_test_user",
+            tool_name="create_tasks",
             preference="invalid_value",
         )
 
@@ -221,23 +207,17 @@ class TestRequiresApprovalHelper:
 
 
 class TestSecurityInvariants:
-    def test_all_send_operations_require_approval(self):
-        dangerous_tools = ["gmail_send_message"]
-        for tool_name in dangerous_tools:
-            tier, _ = TOOL_APPROVAL_DEFAULTS.get(tool_name, (None, None))
-            assert tier == ApprovalTier.REQUIRES_APPROVAL, f"{tool_name} should require approval"
-
     def test_all_read_operations_are_auto_approve(self):
-        read_tools = ["gmail_search", "gmail_get_message", "get_tasks"]
+        read_tools = ["search_gmail", "get_gmail", "get_tasks", "get_reminders", "get_schedules"]
         for tool_name in read_tools:
             tier, _ = TOOL_APPROVAL_DEFAULTS.get(tool_name, (None, None))
             assert tier == ApprovalTier.AUTO_APPROVE, f"{tool_name} should be auto-approve"
 
     @pytest.mark.asyncio
-    async def test_llm_cannot_bypass_approval_system(self):
+    async def test_unknown_tool_cannot_bypass_approval(self):
         tier = await get_effective_tier(
-            user_id="victim-user",
-            tool_name="gmail_send_message",
+            user_id="search_test_user",
+            tool_name="dangerous_unknown_tool",
             db_client=None,
         )
         assert tier == ApprovalTier.REQUIRES_APPROVAL

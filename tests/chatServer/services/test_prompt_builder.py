@@ -31,9 +31,9 @@ class TestBuildAgentPrompt:
         """All sections present when every input is provided."""
         # Create mock tools
         tool1 = Mock()
-        tool1.name = "read_memory"
+        tool1.name = "search_memories"
         tool2 = Mock()
-        tool2.name = "save_memory"
+        tool2.name = "create_memories"
         tool3 = Mock()
         tool3.name = "update_instructions"
 
@@ -450,7 +450,7 @@ class TestBuildAgentPrompt:
             user_instructions=None, memory_notes=None,
         )
         assert "## Interaction Learning" in result
-        assert "store_memory" in result
+        assert "create_memories" in result
 
     def test_interaction_learning_on_telegram(self):
         """Telegram channel includes Interaction Learning section."""
@@ -544,3 +544,39 @@ class TestBuildAgentPrompt:
         from chatServer.services.prompt_builder import CHANNEL_GUIDANCE
         assert "session_open" in CHANNEL_GUIDANCE
         assert "no user message" in CHANNEL_GUIDANCE["session_open"]
+
+    # --- Operating Model (SPEC-019) ---
+
+    def test_operating_model_on_web(self):
+        """Web channel includes How You Operate section."""
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="web",
+            user_instructions=None, memory_notes="some notes",
+        )
+        assert "## How You Operate" in result
+        assert "get_tasks" in result
+        assert "search_memories" in result
+
+    def test_operating_model_on_session_open(self):
+        """session_open channel includes How You Operate section."""
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="session_open",
+            user_instructions="some", memory_notes="some notes",
+        )
+        assert "## How You Operate" in result
+
+    def test_no_operating_model_on_scheduled(self):
+        """Scheduled channel does NOT include How You Operate."""
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="scheduled",
+            user_instructions=None, memory_notes=None,
+        )
+        assert "## How You Operate" not in result
+
+    def test_no_operating_model_on_heartbeat(self):
+        """Heartbeat channel does NOT include How You Operate."""
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="heartbeat",
+            user_instructions=None, memory_notes=None,
+        )
+        assert "## How You Operate" not in result

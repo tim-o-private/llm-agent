@@ -46,7 +46,7 @@ SESSION_OPEN_BOOTSTRAP_GUIDANCE = (
     "3. Share what you found: 'You have X emails, Y tasks, Z reminders.'\n"
     "   If tools are empty or not connected, say so plainly.\n"
     "4. Based on what you found, suggest ONE concrete next step.\n"
-    "5. Call store_memory to record initial observations about their setup.\n\n"
+    "5. Call create_memories to record initial observations about their setup.\n\n"
     "Do NOT ask about communication preferences or priorities.\n"
     "Learn those from how they respond to you."
 )
@@ -74,7 +74,7 @@ ONBOARDING_SECTION = (
     "1. Use your tools first — check emails, tasks, reminders.\n"
     "2. Introduce yourself briefly using your identity.\n"
     "3. Share what you found and suggest one concrete next step.\n"
-    "4. Call store_memory to record initial observations about their setup.\n\n"
+    "4. Call create_memories to record initial observations about their setup.\n\n"
     "Do NOT ask about communication preferences or priorities.\n"
     "Learn those from how they respond to you."
 )
@@ -83,9 +83,24 @@ INTERACTION_LEARNING_GUIDANCE = (
     "Learn from every interaction:\n"
     "- Notice communication patterns (terse replies = wants concise responses).\n"
     "- Infer preferences from behavior, don't wait to be told.\n"
-    "- After every few exchanges, call store_memory to record observations.\n"
+    "- After every few exchanges, call create_memories to record observations.\n"
     "  Use memory_type 'core_identity' for user facts, 'episodic' for events/decisions.\n"
-    "- Use recall before answering questions about the user's preferences or history."
+    "- Use search_memories before answering questions about the user's preferences or history."
+)
+
+OPERATING_MODEL = (
+    "Every conversation starts with awareness. Before responding:\n"
+    "1. Check tasks (get_tasks) for what's active, overdue, or due today.\n"
+    "2. Recall what you know about this person (search_memories).\n"
+    "3. Respond informed by what you found — don't announce that you did this.\n\n"
+    "When the user mentions something they need to do — create a task. "
+    "Don't ask permission. If they don't want it, they'll say so. "
+    "Break vague goals into concrete next steps.\n\n"
+    "When you have Gmail access, scan for actionable items — things that need "
+    "replies, deadlines mentioned, commitments made. Turn these into tasks "
+    "when appropriate.\n\n"
+    "When the user says they finished something, mark it complete. "
+    "The task list should always reflect reality."
 )
 
 def _format_time_context(last_message_at: datetime | None) -> str:
@@ -147,15 +162,19 @@ def build_agent_prompt(
     effective_soul = soul or "You are a helpful assistant."
     sections.append(f"## Soul\n{effective_soul}")
 
-    # 3. Channel
+    # 3. Operating Model (interactive + session_open channels only)
+    if channel in ("web", "telegram", "session_open"):
+        sections.append(f"## How You Operate\n{OPERATING_MODEL}")
+
+    # 4. Channel
     guidance = CHANNEL_GUIDANCE.get(channel, CHANNEL_GUIDANCE["web"])
     sections.append(f"## Channel\nYou are responding via {channel}. {guidance}")
 
-    # 4. Current Time
+    # 5. Current Time
     now = _get_current_time(timezone)
     sections.append(f"## Current Time\n{now}")
 
-    # 5. What You Know (pre-loaded memory)
+    # 6. What You Know (pre-loaded memory)
     if memory_notes:
         truncated_notes = memory_notes[:4000]
         sections.append(
@@ -163,7 +182,7 @@ def build_agent_prompt(
             f"These are your accumulated notes about this user:\n{truncated_notes}"
         )
 
-    # 6. User Instructions
+    # 7. User Instructions
     if user_instructions:
         truncated = user_instructions[:MAX_INSTRUCTIONS_LENGTH]
         instructions_text = truncated
@@ -178,7 +197,7 @@ def build_agent_prompt(
     )
     sections.append(f"## User Instructions\n{instructions_text}")
 
-    # 7. Tool Guidance
+    # 8. Tool Guidance
     if tools:
         seen_classes = set()
         guidance_lines = []
@@ -197,11 +216,11 @@ def build_agent_prompt(
         if guidance_lines:
             sections.append("## Tool Guidance\n" + "\n".join(guidance_lines))
 
-    # 8. Interaction Learning (web/telegram only)
+    # 9. Interaction Learning (web/telegram only)
     if channel in ("web", "telegram"):
         sections.append(f"## Interaction Learning\n{INTERACTION_LEARNING_GUIDANCE}")
 
-    # 9. Session Open / Onboarding
+    # 10. Session Open / Onboarding
     is_new_user = not memory_notes and not user_instructions
     if channel == "session_open":
         if is_new_user:

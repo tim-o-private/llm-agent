@@ -9,7 +9,6 @@ from typing import Any, Dict, List, Optional, Type
 from pydantic import BaseModel, ConfigDict, Field, create_model
 
 from chatServer.database.connection import get_db_connection
-from chatServer.tools.email_digest_tool import EmailDigestTool
 from chatServer.tools.gmail_tools import GetGmailTool, SearchGmailTool
 from chatServer.tools.memory_tools import (
     CreateMemoriesTool,
@@ -32,68 +31,51 @@ from core.tools.crud_tool import CRUDTool, CRUDToolInput
 from supabase import Client as SupabaseClient
 from supabase import create_client
 
-# Example imports for specific tool subclasses (USER ACTION: Add actual tool class imports here)
-# from core.tools.agent_memory_tools import CreateMemoryTool, FetchMemoryTool, UpdateMemoryTool, DeleteMemoryTool
 from utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
 
-# Tool registry: maps tool_type string from DB to Python class
-# Option 2: Registering generic CRUDTool to be configured by DB.
+# Tool registry: maps tools.type column value → Python class.
+# The canonical migration (SPEC-019) sets correct type values; legacy aliases
+# kept only for safety during migration rollback.
 TOOL_REGISTRY: Dict[str, Type] = {
     "CRUDTool": CRUDTool,
+    # Gmail
     "SearchGmailTool": SearchGmailTool,
     "GetGmailTool": GetGmailTool,
-    "GmailSearchTool": SearchGmailTool,       # legacy DB key
-    "GmailGetMessageTool": GetGmailTool,       # legacy DB key
-    "EmailDigestTool": EmailDigestTool,
+    "GmailTool": None,  # Special handling — uses config.tool_class
+    # Memory
     "CreateMemoriesTool": CreateMemoriesTool,
     "SearchMemoriesTool": SearchMemoriesTool,
     "GetMemoriesTool": GetMemoriesTool,
     "DeleteMemoriesTool": DeleteMemoriesTool,
     "UpdateMemoriesTool": UpdateMemoriesTool,
-    "StoreMemoryTool": CreateMemoriesTool,     # legacy DB key
-    "RecallMemoryTool": SearchMemoriesTool,    # legacy DB key
-    "SearchMemoryTool": SearchMemoriesTool,    # legacy DB key
-    "FetchMemoryTool": GetMemoriesTool,        # legacy DB key
-    "DeleteMemoryTool": DeleteMemoriesTool,    # legacy DB key
-    "UpdateMemoryTool": UpdateMemoriesTool,    # legacy DB key
     "SetProjectTool": SetProjectTool,
     "LinkMemoriesTool": LinkMemoriesTool,
     "GetEntitiesTool": GetEntitiesTool,
-    "ListEntitiesTool": GetEntitiesTool,       # legacy DB key
     "SearchEntitiesTool": SearchEntitiesTool,
     "GetContextTool": GetContextTool,
-    "GetContextInfoTool": GetContextTool,      # legacy DB key
-    "GmailTool": None,  # Special handling - uses tool_class config to determine specific class
-    "GetRemindersTool": GetRemindersTool,
-    "CreateRemindersTool": CreateRemindersTool,
-    "DeleteRemindersTool": DeleteRemindersTool,
-    "CreateReminderTool": CreateRemindersTool,  # legacy DB key
-    "ListRemindersTool": GetRemindersTool,      # legacy DB key
-    "GetSchedulesTool": GetSchedulesTool,
-    "CreateSchedulesTool": CreateSchedulesTool,
-    "DeleteSchedulesTool": DeleteSchedulesTool,
-    "UpdateInstructionsTool": UpdateInstructionsTool,
+    # Tasks
     "GetTasksTool": GetTasksTool,
     "CreateTasksTool": CreateTasksTool,
     "UpdateTasksTool": UpdateTasksTool,
     "DeleteTasksTool": DeleteTasksTool,
-    "GetTaskTool": GetTasksTool,                # legacy DB key
-    "CreateTaskTool": CreateTasksTool,           # legacy DB key
-    "UpdateTaskTool": UpdateTasksTool,           # legacy DB key
-    "DeleteTaskTool": DeleteTasksTool,           # legacy DB key
-    # Add other distinct, non-CRUDTool Python classes here if any.
-    # The string key (e.g., "CRUDTool") must match the 'type' column
-    # (or ENUM value as string) in your agent_tools table for these tools.
+    # Reminders
+    "GetRemindersTool": GetRemindersTool,
+    "CreateRemindersTool": CreateRemindersTool,
+    "DeleteRemindersTool": DeleteRemindersTool,
+    # Schedules
+    "GetSchedulesTool": GetSchedulesTool,
+    "CreateSchedulesTool": CreateSchedulesTool,
+    "DeleteSchedulesTool": DeleteSchedulesTool,
+    # Instructions
+    "UpdateInstructionsTool": UpdateInstructionsTool,
 }
 
-# Gmail tool class registry for GmailTool type
+# Gmail tool class registry for GmailTool type (config.tool_class → class)
 GMAIL_TOOL_CLASSES: Dict[str, Type] = {
     "SearchGmailTool": SearchGmailTool,
     "GetGmailTool": GetGmailTool,
-    "GmailSearchTool": SearchGmailTool,        # legacy DB key
-    "GmailGetMessageTool": GetGmailTool,       # legacy DB key
 }
 
 # Agent registry: maps agent_name to specialized agent classes
