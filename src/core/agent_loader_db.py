@@ -10,23 +10,22 @@ from pydantic import BaseModel, ConfigDict, Field, create_model
 
 from chatServer.database.connection import get_db_connection
 from chatServer.tools.email_digest_tool import EmailDigestTool
-from chatServer.tools.gmail_tools import GmailDigestTool, GmailGetMessageTool, GmailSearchTool
+from chatServer.tools.gmail_tools import GetGmailTool, SearchGmailTool
 from chatServer.tools.memory_tools import (
-    DeleteMemoryTool,
-    FetchMemoryTool,
-    GetContextInfoTool,
+    CreateMemoriesTool,
+    DeleteMemoriesTool,
+    GetContextTool,
+    GetEntitiesTool,
+    GetMemoriesTool,
     LinkMemoriesTool,
-    ListEntitiesTool,
-    RecallMemoryTool,
     SearchEntitiesTool,
-    SearchMemoryTool,
+    SearchMemoriesTool,
     SetProjectTool,
-    StoreMemoryTool,
-    UpdateMemoryTool,
+    UpdateMemoriesTool,
 )
-from chatServer.tools.reminder_tools import CreateReminderTool, ListRemindersTool
-from chatServer.tools.schedule_tools import CreateScheduleTool, DeleteScheduleTool, ListSchedulesTool
-from chatServer.tools.task_tools import CreateTaskTool, DeleteTaskTool, GetTasksTool, GetTaskTool, UpdateTaskTool
+from chatServer.tools.reminder_tools import CreateRemindersTool, DeleteRemindersTool, GetRemindersTool
+from chatServer.tools.schedule_tools import CreateSchedulesTool, DeleteSchedulesTool, GetSchedulesTool
+from chatServer.tools.task_tools import CreateTasksTool, DeleteTasksTool, GetTasksTool, UpdateTasksTool
 from chatServer.tools.update_instructions_tool import UpdateInstructionsTool
 from core.agents.customizable_agent import CustomizableAgentExecutor
 from core.tools.crud_tool import CRUDTool, CRUDToolInput
@@ -43,33 +42,47 @@ logger = get_logger(__name__)
 # Option 2: Registering generic CRUDTool to be configured by DB.
 TOOL_REGISTRY: Dict[str, Type] = {
     "CRUDTool": CRUDTool,
-    "GmailDigestTool": GmailDigestTool,
-    "GmailSearchTool": GmailSearchTool,
-    "GmailGetMessageTool": GmailGetMessageTool,
+    "SearchGmailTool": SearchGmailTool,
+    "GetGmailTool": GetGmailTool,
+    "GmailSearchTool": SearchGmailTool,       # legacy DB key
+    "GmailGetMessageTool": GetGmailTool,       # legacy DB key
     "EmailDigestTool": EmailDigestTool,
-    "StoreMemoryTool": StoreMemoryTool,
-    "RecallMemoryTool": RecallMemoryTool,
-    "SearchMemoryTool": SearchMemoryTool,
-    "FetchMemoryTool": FetchMemoryTool,
-    "DeleteMemoryTool": DeleteMemoryTool,
-    "UpdateMemoryTool": UpdateMemoryTool,
+    "CreateMemoriesTool": CreateMemoriesTool,
+    "SearchMemoriesTool": SearchMemoriesTool,
+    "GetMemoriesTool": GetMemoriesTool,
+    "DeleteMemoriesTool": DeleteMemoriesTool,
+    "UpdateMemoriesTool": UpdateMemoriesTool,
+    "StoreMemoryTool": CreateMemoriesTool,     # legacy DB key
+    "RecallMemoryTool": SearchMemoriesTool,    # legacy DB key
+    "SearchMemoryTool": SearchMemoriesTool,    # legacy DB key
+    "FetchMemoryTool": GetMemoriesTool,        # legacy DB key
+    "DeleteMemoryTool": DeleteMemoriesTool,    # legacy DB key
+    "UpdateMemoryTool": UpdateMemoriesTool,    # legacy DB key
     "SetProjectTool": SetProjectTool,
     "LinkMemoriesTool": LinkMemoriesTool,
-    "ListEntitiesTool": ListEntitiesTool,
+    "GetEntitiesTool": GetEntitiesTool,
+    "ListEntitiesTool": GetEntitiesTool,       # legacy DB key
     "SearchEntitiesTool": SearchEntitiesTool,
-    "GetContextInfoTool": GetContextInfoTool,
+    "GetContextTool": GetContextTool,
+    "GetContextInfoTool": GetContextTool,      # legacy DB key
     "GmailTool": None,  # Special handling - uses tool_class config to determine specific class
-    "CreateReminderTool": CreateReminderTool,
-    "ListRemindersTool": ListRemindersTool,
-    "CreateScheduleTool": CreateScheduleTool,
-    "DeleteScheduleTool": DeleteScheduleTool,
-    "ListSchedulesTool": ListSchedulesTool,
+    "GetRemindersTool": GetRemindersTool,
+    "CreateRemindersTool": CreateRemindersTool,
+    "DeleteRemindersTool": DeleteRemindersTool,
+    "CreateReminderTool": CreateRemindersTool,  # legacy DB key
+    "ListRemindersTool": GetRemindersTool,      # legacy DB key
+    "GetSchedulesTool": GetSchedulesTool,
+    "CreateSchedulesTool": CreateSchedulesTool,
+    "DeleteSchedulesTool": DeleteSchedulesTool,
     "UpdateInstructionsTool": UpdateInstructionsTool,
     "GetTasksTool": GetTasksTool,
-    "GetTaskTool": GetTaskTool,
-    "CreateTaskTool": CreateTaskTool,
-    "UpdateTaskTool": UpdateTaskTool,
-    "DeleteTaskTool": DeleteTaskTool,
+    "CreateTasksTool": CreateTasksTool,
+    "UpdateTasksTool": UpdateTasksTool,
+    "DeleteTasksTool": DeleteTasksTool,
+    "GetTaskTool": GetTasksTool,                # legacy DB key
+    "CreateTaskTool": CreateTasksTool,           # legacy DB key
+    "UpdateTaskTool": UpdateTasksTool,           # legacy DB key
+    "DeleteTaskTool": DeleteTasksTool,           # legacy DB key
     # Add other distinct, non-CRUDTool Python classes here if any.
     # The string key (e.g., "CRUDTool") must match the 'type' column
     # (or ENUM value as string) in your agent_tools table for these tools.
@@ -77,9 +90,10 @@ TOOL_REGISTRY: Dict[str, Type] = {
 
 # Gmail tool class registry for GmailTool type
 GMAIL_TOOL_CLASSES: Dict[str, Type] = {
-    "GmailDigestTool": GmailDigestTool,
-    "GmailSearchTool": GmailSearchTool,
-    "GmailGetMessageTool": GmailGetMessageTool,
+    "SearchGmailTool": SearchGmailTool,
+    "GetGmailTool": GetGmailTool,
+    "GmailSearchTool": SearchGmailTool,        # legacy DB key
+    "GmailGetMessageTool": GetGmailTool,       # legacy DB key
 }
 
 # Agent registry: maps agent_name to specialized agent classes
@@ -394,10 +408,14 @@ def load_tools_from_db(
 
             # Inject memory_client for memory tools; strip Supabase kwargs they don't need
             _memory_tool_types = (
+                "CreateMemoriesTool", "SearchMemoriesTool", "GetMemoriesTool",
+                "DeleteMemoriesTool", "UpdateMemoriesTool",
+                "SetProjectTool", "LinkMemoriesTool", "GetEntitiesTool",
+                "SearchEntitiesTool", "GetContextTool",
+                # Legacy DB type strings
                 "StoreMemoryTool", "RecallMemoryTool", "SearchMemoryTool",
                 "FetchMemoryTool", "DeleteMemoryTool", "UpdateMemoryTool",
-                "SetProjectTool", "LinkMemoriesTool", "ListEntitiesTool",
-                "SearchEntitiesTool", "GetContextInfoTool",
+                "ListEntitiesTool", "GetContextInfoTool",
             )
             if db_tool_type_str in _memory_tool_types:
                 if memory_client:

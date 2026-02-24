@@ -337,10 +337,10 @@ class GmailSearchInput(BaseModel):
     )
 
 
-class GmailSearchTool(BaseGmailTool):
+class SearchGmailTool(BaseGmailTool):
     """Search Gmail messages using Gmail search syntax."""
 
-    name: str = "gmail_search"
+    name: str = "search_gmail"
     description: str = (
         "Search Gmail messages using Gmail search syntax. "
         "Examples: is:unread, from:example@gmail.com, subject:meeting, newer_than:2d. "
@@ -354,13 +354,13 @@ class GmailSearchTool(BaseGmailTool):
     def prompt_section(cls, channel: str) -> str | None:
         """Return behavioral guidance for the agent prompt, or None to omit."""
         if channel in ("web", "telegram"):
-            return "Gmail: Use gmail_search, gmail_get_message, and gmail_digest for email tasks. When the user asks about email, use the tools — don't ask clarifying questions first."  # noqa: E501
+            return "Gmail: Use search_gmail and get_gmail for email tasks. When the user asks about email, use the tools — don't ask clarifying questions first."  # noqa: E501
         elif channel == "heartbeat":
-            return "Gmail: Check for important unread emails using gmail_search with 'is:unread newer_than:1d'. Report subjects and senders of anything urgent. Skip newsletters and automated notifications."  # noqa: E501
+            return "Gmail: Check for important unread emails using search_gmail with 'is:unread newer_than:1d'. Report subjects and senders of anything urgent. Skip newsletters and automated notifications."  # noqa: E501
         elif channel == "scheduled":
             return None
         else:
-            return "Gmail: Use gmail_search, gmail_get_message, and gmail_digest for email tasks. When the user asks about email, use the tools — don't ask clarifying questions first."  # noqa: E501
+            return "Gmail: Use search_gmail and get_gmail for email tasks. When the user asks about email, use the tools — don't ask clarifying questions first."  # noqa: E501
 
     def _run(self, query: str, max_results: int = 10, account: Optional[str] = None) -> str:
         return "Gmail search tool requires async execution. Use the async version (_arun)."
@@ -443,10 +443,10 @@ class GmailGetMessageInput(BaseModel):
     )
 
 
-class GmailGetMessageTool(BaseGmailTool):
+class GetGmailTool(BaseGmailTool):
     """Get detailed Gmail message content by ID."""
 
-    name: str = "gmail_get_message"
+    name: str = "get_gmail"
     description: str = (
         "Get detailed Gmail message content by ID. "
         "Requires the 'account' parameter to specify which Gmail account the message is from."
@@ -483,154 +483,9 @@ class GmailGetMessageTool(BaseGmailTool):
             return f"Gmail get message failed: {str(e)}"
 
 
-class GmailDigestInput(BaseModel):
-    """Input schema for Gmail digest tool."""
-
-    hours_back: float = Field(default=24, ge=0.5, le=168, description="Hours to look back (0.5-168)")
-    include_read: bool = Field(default=False, description="Include read emails")
-    max_emails: int = Field(default=20, ge=1, le=50, description="Maximum emails to analyze (1-50)")
-    account: Optional[str] = Field(
-        default=None,
-        description="Email address of a specific account. Omit to aggregate across ALL accounts.",
-    )
-
-
-class GmailDigestTool(BaseGmailTool):
-    """Generate a digest of recent emails from Gmail."""
-
-    name: str = "gmail_digest"
-    description: str = (
-        "Generate a digest of recent emails from Gmail. "
-        "Use 'account' to digest a specific account, or omit to aggregate across all connected accounts."
-    )
-    args_schema: Type[BaseModel] = GmailDigestInput
-
-    def _run(self, hours_back: float = 24, include_read: bool = False, max_emails: int = 20, account: Optional[str] = None) -> str:  # noqa: E501
-        return "Gmail digest tool requires async execution. Use the async version (_arun)."
-
-    async def _arun(
-        self,
-        hours_back: float = 24,
-        include_read: bool = False,
-        max_emails: int = 20,
-        account: Optional[str] = None,
-    ) -> str:
-        """Generate Gmail digest, optionally across all accounts."""
-        try:
-            context = "scheduler" if "background" in self.agent_name.lower() else "user"
-
-            if account:
-                provider = await GmailToolProvider.get_provider_for_account(
-                    self.user_id, account, context
-                )
-                return await self._digest_single(provider, hours_back, include_read, max_emails)
-            else:
-                providers = await GmailToolProvider.get_all_providers(self.user_id, context)
-
-                if not providers:
-                    return "No Gmail accounts connected. Please connect Gmail in Settings > Integrations."
-
-                if len(providers) == 1:
-                    return await self._digest_single(providers[0], hours_back, include_read, max_emails)
-
-                # Multi-account digest
-                parts = []
-                for provider in providers:
-                    try:
-                        digest = await self._digest_single(provider, hours_back, include_read, max_emails)
-                        parts.append(f"=== {provider.account_email} ===\n{digest}")
-                    except Exception as e:
-                        parts.append(
-                            f"=== {provider.account_email} (error) ===\n"
-                            f"Could not retrieve digest: {e}"
-                        )
-
-                header = f"Email Digest - Last {hours_back} Hours ({len(providers)} accounts)\n\n"
-                return header + "\n\n".join(parts)
-
-        except Exception as e:
-            logger.error(f"Gmail digest failed for user {self.user_id}: {e}")
-            return f"Gmail digest failed: {str(e)}"
-
-    async def _digest_single(
-        self,
-        provider: GmailToolProvider,
-        hours_back: float,
-        include_read: bool,
-        max_emails: int,
-    ) -> str:
-        """Generate digest for a single account."""
-        gmail_tools = await provider.get_gmail_tools()
-        search_tool = next((t for t in gmail_tools if "search" in t.name.lower()), None)
-
-        if not search_tool:
-            return "Gmail search tool not available."
-
-        # Gmail's newer_than: operator only accepts days, not hours.
-        # Use after: with a Unix timestamp for sub-day precision.
-        cutoff_ts = int((datetime.now(timezone.utc) - timedelta(hours=hours_back)).timestamp())
-        query = f"after:{cutoff_ts}"
-        if not include_read:
-            query += " is:unread"
-
-        search_result = await search_tool.arun({"query": query, "max_results": max_emails})
-
-        if not search_result or "No messages found" in str(search_result):
-            read_status = "read and unread" if include_read else "unread"
-            return f"No {read_status} emails in the last {hours_back} hours."
-
-        return self._create_digest_summary(search_result, hours_back, include_read, provider.account_email)
-
-    def _create_digest_summary(self, search_results, hours_back: float, include_read: bool, account: str = "") -> str:
-        """Create a human-readable digest summary."""
-        try:
-            if isinstance(search_results, list):
-                emails = search_results
-                email_count = len(emails)
-                subjects = [e.get("subject", "No Subject") for e in emails if isinstance(e, dict)]
-                senders = [e.get("sender", "Unknown") for e in emails if isinstance(e, dict)]
-            else:
-                lines = str(search_results).split("\n") if search_results else []
-                email_count = 0
-                subjects = []
-                senders = []
-                for line in lines:
-                    line = str(line).strip()
-                    if "Subject:" in line:
-                        subjects.append(line.split("Subject:")[1].strip())
-                        email_count += 1
-                    elif "From:" in line:
-                        senders.append(line.split("From:")[1].strip())
-                if email_count == 0 and lines:
-                    email_count = len([line for line in lines if line.strip()])
-
-            read_status = "read and unread" if include_read else "unread"
-            account_label = f" ({account})" if account else ""
-
-            digest = f"Email Digest{account_label} - Last {hours_back} Hours\n\n"
-            digest += f"Summary: {email_count} {read_status} emails\n\n"
-
-            if subjects:
-                digest += "Recent Subjects:\n"
-                for i, subject in enumerate(subjects[:10], 1):
-                    digest += f"{i}. {subject}\n"
-                if len(subjects) > 10:
-                    digest += f"... and {len(subjects) - 10} more\n"
-                digest += "\n"
-
-            if senders:
-                unique_senders = list(set(senders))
-                digest += f"Senders: {len(unique_senders)} unique\n"
-                for sender in unique_senders[:5]:
-                    digest += f"- {sender}\n"
-                if len(unique_senders) > 5:
-                    digest += f"- ... and {len(unique_senders) - 5} more\n"
-
-            return digest
-
-        except Exception as e:
-            logger.error(f"Failed to create digest summary: {e}")
-            return f"Email digest generated but summary formatting failed: {e}"
+# Backward-compat aliases (old names → new classes)
+GmailSearchTool = SearchGmailTool
+GmailGetMessageTool = GetGmailTool
 
 
 # Factory functions for backward compatibility

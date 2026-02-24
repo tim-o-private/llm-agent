@@ -49,7 +49,7 @@ class _MemoryToolBase(BaseTool):
 # Input schemas
 # ---------------------------------------------------------------------------
 
-class StoreMemoryInput(BaseModel):
+class CreateMemoriesInput(BaseModel):
     text: str = Field(..., description="The memory text to store.")
     memory_type: str = Field(..., description="Type: core_identity, project_context, task_instruction, or episodic.")
     entity: str = Field(..., description="Entity this memory is about (e.g., user name, project name).")
@@ -59,27 +59,23 @@ class StoreMemoryInput(BaseModel):
     task_id: str = Field(default="", description="Task ID (required when scope is task).")
 
 
-class RecallInput(BaseModel):
-    query: str = Field(..., description="What to recall — describe what you're looking for.")
+class SearchMemoriesInput(BaseModel):
+    query: str = Field(..., description="What to search for — describe what you're looking for.")
     limit: int = Field(default=10, description="Max number of memories to return.")
     memory_type: list[str] = Field(default_factory=list, description="Filter by memory types.")
     scope: str = Field(default="", description="Filter by scope: global, project, or task.")
     project: str = Field(default="", description="Filter by project name.")
 
 
-class SearchMemoryInput(BaseModel):
-    query: str = Field(..., description="Search query to find relevant memories.")
-
-
-class FetchMemoryInput(BaseModel):
+class GetMemoriesInput(BaseModel):
     id: str = Field(..., description="The ID of the memory to fetch.")
 
 
-class DeleteMemoryInput(BaseModel):
+class DeleteMemoriesInput(BaseModel):
     memory_id: str = Field(..., description="The ID of the memory to delete.")
 
 
-class UpdateMemoryInput(BaseModel):
+class UpdateMemoriesInput(BaseModel):
     memory_id: str = Field(..., description="The ID of the memory to update.")
     text: str = Field(default="", description="New text content (re-embeds if changed).")
     memory_type: str = Field(
@@ -104,7 +100,7 @@ class LinkMemoriesInput(BaseModel):
     relation_type: str = Field(..., description="Relationship: supports, contradicts, supersedes, refines, depends_on, implements, or example_of.")  # noqa: E501
 
 
-class ListEntitiesInput(BaseModel):
+class GetEntitiesInput(BaseModel):
     scope: str = Field(default="", description="Filter by scope.")
     project: str = Field(default="", description="Filter by project.")
     memory_type: str = Field(default="", description="Filter by memory type.")
@@ -124,15 +120,15 @@ class EmptyInput(BaseModel):
 # Tools
 # ---------------------------------------------------------------------------
 
-class StoreMemoryTool(_MemoryToolBase):
+class CreateMemoriesTool(_MemoryToolBase):
     """Store a memory about the user or a project."""
 
-    name: str = "store_memory"
+    name: str = "create_memories"
     description: str = (
         "Store a memory. Use proactively when you learn something — preferences, "
         "habits, projects, decisions, or communication style. Don't wait to be asked."
     )
-    args_schema: Type[BaseModel] = StoreMemoryInput
+    args_schema: Type[BaseModel] = CreateMemoriesInput
     _mcp_tool_name: str = "store_memory"
 
     @classmethod
@@ -140,8 +136,8 @@ class StoreMemoryTool(_MemoryToolBase):
         if channel in ("web", "telegram"):
             return (
                 "Memory: Proactively observe and record. When you learn something about the user "
-                "— from their messages, email patterns, task habits, or tone — call store_memory. "
-                "Don't wait to be asked. Use recall before answering questions about the user's "
+                "— from their messages, email patterns, task habits, or tone — call create_memories. "
+                "Don't wait to be asked. Use search_memories before answering questions about the user's "
                 "preferences, past decisions, or projects."
             )
         return None
@@ -158,16 +154,17 @@ class StoreMemoryTool(_MemoryToolBase):
         return await self._call_mcp(args)
 
 
-class RecallMemoryTool(_MemoryToolBase):
-    """Recall memories relevant to a query (semantic search with context)."""
+class SearchMemoriesTool(_MemoryToolBase):
+    """Search memories relevant to a query with optional filtering."""
 
-    name: str = "recall"
+    name: str = "search_memories"
     description: str = (
-        "Recall memories relevant to a query. Returns semantically similar memories "
+        "Search memories relevant to a query. Returns semantically similar memories "
         "with hierarchical context (merges global + project scopes). Use before answering "
-        "questions about preferences, past decisions, or projects."
+        "questions about preferences, past decisions, or projects. "
+        "Provide scope/type filters for hierarchical recall, or just a query for basic search."
     )
-    args_schema: Type[BaseModel] = RecallInput
+    args_schema: Type[BaseModel] = SearchMemoriesInput
     _mcp_tool_name: str = "retrieve_context"
 
     async def _arun(self, query: str, limit: int = 10, memory_type: list[str] | None = None,
@@ -182,54 +179,42 @@ class RecallMemoryTool(_MemoryToolBase):
         return await self._call_mcp(args)
 
 
-class SearchMemoryTool(_MemoryToolBase):
-    """Semantic vector search for memories."""
-
-    name: str = "search_memory"
-    description: str = "Search for memories matching a query. Returns matching memories ranked by relevance."
-    args_schema: Type[BaseModel] = SearchMemoryInput
-    _mcp_tool_name: str = "search"
-
-    async def _arun(self, query: str) -> str:
-        return await self._call_mcp({"query": query})
-
-
-class FetchMemoryTool(_MemoryToolBase):
+class GetMemoriesTool(_MemoryToolBase):
     """Fetch a specific memory by ID."""
 
-    name: str = "fetch_memory"
+    name: str = "get_memories"
     description: str = "Fetch a specific memory by its ID. Use after search to get full details."
-    args_schema: Type[BaseModel] = FetchMemoryInput
+    args_schema: Type[BaseModel] = GetMemoriesInput
     _mcp_tool_name: str = "fetch"
 
     async def _arun(self, id: str) -> str:
         return await self._call_mcp({"id": id})
 
 
-class DeleteMemoryTool(_MemoryToolBase):
+class DeleteMemoriesTool(_MemoryToolBase):
     """Soft-delete a memory by ID."""
 
-    name: str = "delete_memory"
+    name: str = "delete_memories"
     description: str = (
         "Delete a memory. Use when the user asks you to forget something "
         "or when information is outdated."
     )
-    args_schema: Type[BaseModel] = DeleteMemoryInput
+    args_schema: Type[BaseModel] = DeleteMemoriesInput
     _mcp_tool_name: str = "delete_memory"
 
     async def _arun(self, memory_id: str) -> str:
         return await self._call_mcp({"memory_id": memory_id})
 
 
-class UpdateMemoryTool(_MemoryToolBase):
+class UpdateMemoriesTool(_MemoryToolBase):
     """Update an existing memory's text and/or metadata."""
 
-    name: str = "update_memory"
+    name: str = "update_memories"
     description: str = (
         "Update an existing memory's text and/or metadata fields. "
         "Only provided fields are changed."
     )
-    args_schema: Type[BaseModel] = UpdateMemoryInput
+    args_schema: Type[BaseModel] = UpdateMemoriesInput
     _mcp_tool_name: str = "update_memory"
 
     async def _arun(self, memory_id: str, text: str = "", memory_type: str = "",
@@ -285,12 +270,12 @@ class LinkMemoriesTool(_MemoryToolBase):
         return await self._call_mcp({"memory_id": memory_id, "related_id": related_id, "relation_type": relation_type})
 
 
-class ListEntitiesTool(_MemoryToolBase):
+class GetEntitiesTool(_MemoryToolBase):
     """List all known entities."""
 
-    name: str = "list_entities"
+    name: str = "get_entities"
     description: str = "List all entities in memory with optional filtering by scope, project, or memory type."
-    args_schema: Type[BaseModel] = ListEntitiesInput
+    args_schema: Type[BaseModel] = GetEntitiesInput
     _mcp_tool_name: str = "list_entities"
 
     async def _arun(self, scope: str = "", project: str = "", memory_type: str = "") -> str:
@@ -316,13 +301,35 @@ class SearchEntitiesTool(_MemoryToolBase):
         return await self._call_mcp({"query": query, "limit": limit})
 
 
-class GetContextInfoTool(_MemoryToolBase):
+class GetContextTool(_MemoryToolBase):
     """Get environment context info."""
 
-    name: str = "get_context_info"
+    name: str = "get_context"
     description: str = "Get environment context: current user identity, active project, and metadata."
     args_schema: Type[BaseModel] = EmptyInput
     _mcp_tool_name: str = "get_context_info"
 
     async def _arun(self) -> str:
         return await self._call_mcp({})
+
+
+# ---------------------------------------------------------------------------
+# Backward-compat aliases (old names → new classes)
+# ---------------------------------------------------------------------------
+StoreMemoryTool = CreateMemoriesTool
+RecallMemoryTool = SearchMemoriesTool
+SearchMemoryTool = SearchMemoriesTool
+FetchMemoryTool = GetMemoriesTool
+DeleteMemoryTool = DeleteMemoriesTool
+UpdateMemoryTool = UpdateMemoriesTool
+ListEntitiesTool = GetEntitiesTool
+GetContextInfoTool = GetContextTool
+
+# Old input schema aliases
+StoreMemoryInput = CreateMemoriesInput
+RecallInput = SearchMemoriesInput
+SearchMemoryInput = SearchMemoriesInput
+FetchMemoryInput = GetMemoriesInput
+DeleteMemoryInput = DeleteMemoriesInput
+UpdateMemoryInput = UpdateMemoriesInput
+ListEntitiesInput = GetEntitiesInput
