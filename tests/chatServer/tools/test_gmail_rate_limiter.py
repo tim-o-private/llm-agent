@@ -1,14 +1,12 @@
 """Tests for Gmail rate limiter."""
 
 import logging
+
 import pytest
 
 from chatServer.tools.gmail_rate_limiter import (
-    GmailRateLimiter,
-    GmailRateLimitInfo,
     GMAIL_RATE_MINUTE,
-    GMAIL_RATE_HOUR,
-    GMAIL_RATE_DAY,
+    GmailRateLimiter,
 )
 
 
