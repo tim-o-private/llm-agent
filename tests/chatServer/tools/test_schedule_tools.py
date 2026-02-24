@@ -1,63 +1,68 @@
 """Unit tests for schedule tools."""
 
+import sys
+from contextlib import contextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from chatServer.tools.schedule_tools import (
-    CreateScheduleTool,
-    DeleteScheduleTool,
-    ListSchedulesTool,
+    CreateSchedulesTool,
+    DeleteSchedulesTool,
+    GetSchedulesTool,
 )
 
 
 @pytest.fixture
 def create_tool():
-    return CreateScheduleTool(
+    return CreateSchedulesTool(
         user_id="user-123",
-        agent_name="assistant",
+        agent_name="search_test_agent",
     )
 
 
 @pytest.fixture
 def delete_tool():
-    return DeleteScheduleTool(
+    return DeleteSchedulesTool(
         user_id="user-123",
-        agent_name="assistant",
+        agent_name="search_test_agent",
     )
 
 
 @pytest.fixture
-def list_tool():
-    return ListSchedulesTool(
+def get_tool():
+    return GetSchedulesTool(
         user_id="user-123",
-        agent_name="assistant",
+        agent_name="search_test_agent",
     )
 
 
+@contextmanager
 def _patch_schedule_deps(mock_db, mock_service):
-    """Context manager tuple that patches the lazy imports used by schedule tools."""
-    return (
-        patch(
-            "chatServer.database.supabase_client.get_supabase_client",
-            new_callable=AsyncMock,
-            return_value=mock_db,
-        ),
-        patch(
-            "chatServer.services.schedule_service.ScheduleService",
-            return_value=mock_service,
-        ),
-    )
+    """Patch the lazy imports used by schedule tools inside _arun via sys.modules."""
+    mock_supabase_mod = MagicMock()
+    mock_supabase_mod.get_supabase_client = AsyncMock(return_value=mock_db)
+    mock_service_mod = MagicMock()
+    mock_service_mod.ScheduleService = MagicMock(return_value=mock_service)
+    mock_scoped_mod = MagicMock()
+    mock_scoped_mod.UserScopedClient = MagicMock(return_value=mock_db)
+
+    with patch.dict(sys.modules, {
+        "chatServer.database.supabase_client": mock_supabase_mod,
+        "chatServer.services.schedule_service": mock_service_mod,
+        "chatServer.database.scoped_client": mock_scoped_mod,
+    }):
+        yield
 
 
 # ---------------------------------------------------------------------------
-# CreateScheduleTool
+# CreateSchedulesTool
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_create_schedule_success(create_tool):
-    """Verify create_schedule calls ScheduleService and returns confirmation."""
+async def test_create_schedules_success(create_tool):
+    """Verify create_schedules calls ScheduleService for each entry and returns confirmation."""
     mock_db = MagicMock()
     mock_service = MagicMock()
     mock_service.create_schedule = AsyncMock(
@@ -65,19 +70,18 @@ async def test_create_schedule_success(create_tool):
             "id": "sched-1",
             "prompt": "Check email",
             "schedule_cron": "0 7 * * *",
-            "agent_name": "assistant",
+            "agent_name": "search_test_agent",
         }
     )
 
-    p1, p2 = _patch_schedule_deps(mock_db, mock_service)
-    with p1, p2:
+    with _patch_schedule_deps(mock_db, mock_service):
         result = await create_tool._arun(
-            prompt="Check email",
-            schedule_cron="0 7 * * *",
-            agent_name="assistant",
+            schedules=[
+                {"prompt": "Check email", "schedule_cron": "0 7 * * *", "agent_name": "search_test_agent"},
+            ]
         )
 
-    assert "Schedule created" in result
+    assert "Created" in result
     assert "Check email" in result
     mock_service.create_schedule.assert_awaited_once()
     call_kwargs = mock_service.create_schedule.call_args[1]
@@ -87,28 +91,34 @@ async def test_create_schedule_success(create_tool):
 
 
 @pytest.mark.asyncio
-async def test_create_schedule_invalid_cron(create_tool):
-    """Verify create_schedule rejects invalid cron without calling service."""
-    result = await create_tool._arun(
-        prompt="Check email",
-        schedule_cron="not-valid-cron",
-    )
+async def test_create_schedules_invalid_cron(create_tool):
+    """Verify create_schedules rejects invalid cron without calling service."""
+    mock_db = MagicMock()
+    mock_service = MagicMock()
+    mock_service.create_schedule = AsyncMock()
+
+    with _patch_schedule_deps(mock_db, mock_service):
+        result = await create_tool._arun(
+            schedules=[
+                {"prompt": "Check email", "schedule_cron": "not-valid-cron"},
+            ]
+        )
     assert "invalid cron expression" in result
+    mock_service.create_schedule.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_create_schedule_service_error(create_tool):
-    """Verify create_schedule handles service errors gracefully."""
+async def test_create_schedules_service_error(create_tool):
+    """Verify create_schedules handles service errors gracefully."""
     mock_db = MagicMock()
     mock_service = MagicMock()
     mock_service.create_schedule = AsyncMock(side_effect=ValueError("Unknown agent: 'bad'"))
 
-    p1, p2 = _patch_schedule_deps(mock_db, mock_service)
-    with p1, p2:
+    with _patch_schedule_deps(mock_db, mock_service):
         result = await create_tool._arun(
-            prompt="Check email",
-            schedule_cron="0 7 * * *",
-            agent_name="bad",
+            schedules=[
+                {"prompt": "Check email", "schedule_cron": "0 7 * * *", "agent_name": "bad"},
+            ]
         )
 
     assert "Error" in result
@@ -116,63 +126,96 @@ async def test_create_schedule_service_error(create_tool):
 
 
 @pytest.mark.asyncio
-async def test_create_schedule_sync_run(create_tool):
+async def test_create_schedules_multiple(create_tool):
+    """Verify create_schedules handles multiple entries including mixed success/failure."""
+    mock_db = MagicMock()
+    mock_service = MagicMock()
+    mock_service.create_schedule = AsyncMock(
+        return_value={"id": "sched-1", "prompt": "test", "schedule_cron": "0 7 * * *", "agent_name": "search_test_agent"}  # noqa: E501
+    )
+
+    with _patch_schedule_deps(mock_db, mock_service):
+        result = await create_tool._arun(
+            schedules=[
+                {"prompt": "Check email", "schedule_cron": "0 7 * * *"},
+                {"prompt": "Bad cron", "schedule_cron": "invalid"},
+            ]
+        )
+
+    assert "#1: Created" in result
+    assert "#2: Error" in result
+
+
+@pytest.mark.asyncio
+async def test_create_schedules_sync_run(create_tool):
     """Verify sync _run returns async required message."""
-    result = create_tool._run(prompt="test", schedule_cron="0 7 * * *")
+    result = create_tool._run(schedules=[{"prompt": "test", "schedule_cron": "0 7 * * *"}])
     assert "requires async" in result
 
 
 # ---------------------------------------------------------------------------
-# DeleteScheduleTool
+# DeleteSchedulesTool
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_delete_schedule_success(delete_tool):
-    """Verify delete_schedule calls service and returns confirmation."""
+async def test_delete_schedules_success(delete_tool):
+    """Verify delete_schedules calls service for each id and returns confirmation."""
     mock_db = MagicMock()
     mock_service = MagicMock()
     mock_service.delete_schedule = AsyncMock(return_value=True)
 
-    p1, p2 = _patch_schedule_deps(mock_db, mock_service)
-    with p1, p2:
-        result = await delete_tool._arun(schedule_id="sched-1")
+    with _patch_schedule_deps(mock_db, mock_service):
+        result = await delete_tool._arun(ids=["sched-1"])
 
-    assert "deleted successfully" in result
+    assert "deleted" in result
     mock_service.delete_schedule.assert_awaited_once_with(
         schedule_id="sched-1", user_id="user-123"
     )
 
 
 @pytest.mark.asyncio
-async def test_delete_schedule_not_found(delete_tool):
-    """Verify delete_schedule returns not-found message."""
+async def test_delete_schedules_not_found(delete_tool):
+    """Verify delete_schedules returns not-found message."""
     mock_db = MagicMock()
     mock_service = MagicMock()
     mock_service.delete_schedule = AsyncMock(return_value=False)
 
-    p1, p2 = _patch_schedule_deps(mock_db, mock_service)
-    with p1, p2:
-        result = await delete_tool._arun(schedule_id="sched-missing")
+    with _patch_schedule_deps(mock_db, mock_service):
+        result = await delete_tool._arun(ids=["sched-missing"])
 
     assert "not found" in result
 
 
 @pytest.mark.asyncio
-async def test_delete_schedule_sync_run(delete_tool):
+async def test_delete_schedules_multiple(delete_tool):
+    """Verify delete_schedules handles multiple ids."""
+    mock_db = MagicMock()
+    mock_service = MagicMock()
+    mock_service.delete_schedule = AsyncMock(side_effect=[True, False])
+
+    with _patch_schedule_deps(mock_db, mock_service):
+        result = await delete_tool._arun(ids=["sched-1", "sched-2"])
+
+    assert "sched-1: deleted" in result
+    assert "sched-2: not found" in result
+
+
+@pytest.mark.asyncio
+async def test_delete_schedules_sync_run(delete_tool):
     """Verify sync _run returns async required message."""
-    result = delete_tool._run(schedule_id="sched-1")
+    result = delete_tool._run(ids=["sched-1"])
     assert "requires async" in result
 
 
 # ---------------------------------------------------------------------------
-# ListSchedulesTool
+# GetSchedulesTool
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_list_schedules_returns_formatted(list_tool):
-    """Verify list_schedules returns formatted schedule list with next run."""
+async def test_get_schedules_returns_formatted(get_tool):
+    """Verify get_schedules returns formatted schedule list with next run."""
     mock_db = MagicMock()
     mock_service = MagicMock()
     mock_service.list_schedules = AsyncMock(
@@ -181,22 +224,21 @@ async def test_list_schedules_returns_formatted(list_tool):
                 "id": "s1",
                 "prompt": "Check email",
                 "schedule_cron": "0 7 * * *",
-                "agent_name": "assistant",
+                "agent_name": "search_test_agent",
                 "active": True,
             },
             {
                 "id": "s2",
                 "prompt": "Weekly report",
                 "schedule_cron": "0 9 * * 1",
-                "agent_name": "assistant",
+                "agent_name": "search_test_agent",
                 "active": True,
             },
         ]
     )
 
-    p1, p2 = _patch_schedule_deps(mock_db, mock_service)
-    with p1, p2:
-        result = await list_tool._arun(active_only=True)
+    with _patch_schedule_deps(mock_db, mock_service):
+        result = await get_tool._arun(active_only=True)
 
     assert "2 schedule(s)" in result
     assert "Check email" in result
@@ -206,21 +248,92 @@ async def test_list_schedules_returns_formatted(list_tool):
 
 
 @pytest.mark.asyncio
-async def test_list_schedules_empty(list_tool):
-    """Verify list_schedules shows empty message when no schedules."""
+async def test_get_schedules_empty(get_tool):
+    """Verify get_schedules shows empty message when no schedules."""
     mock_db = MagicMock()
     mock_service = MagicMock()
     mock_service.list_schedules = AsyncMock(return_value=[])
 
-    p1, p2 = _patch_schedule_deps(mock_db, mock_service)
-    with p1, p2:
-        result = await list_tool._arun()
+    with _patch_schedule_deps(mock_db, mock_service):
+        result = await get_tool._arun()
 
     assert "no active schedules" in result
 
 
 @pytest.mark.asyncio
-async def test_list_schedules_sync_run(list_tool):
+async def test_get_schedules_by_id(get_tool):
+    """Verify get_schedules with id param fetches a single schedule."""
+    mock_db = MagicMock()
+
+    # Build the chained mock for db.table(...).select(...).eq(...).eq(...).maybe_single().execute()
+    mock_execute = AsyncMock(return_value=MagicMock(data={
+        "id": "s1",
+        "prompt": "Check email",
+        "schedule_cron": "0 7 * * *",
+        "agent_name": "search_test_agent",
+        "active": True,
+    }))
+    mock_maybe_single = MagicMock()
+    mock_maybe_single.execute = mock_execute
+    mock_eq2 = MagicMock()
+    mock_eq2.maybe_single.return_value = mock_maybe_single
+    mock_eq1 = MagicMock()
+    mock_eq1.eq.return_value = mock_eq2
+    mock_select = MagicMock()
+    mock_select.eq.return_value = mock_eq1
+    mock_table = MagicMock()
+    mock_table.select.return_value = mock_select
+    mock_db.table.return_value = mock_table
+
+    mock_supabase_mod = MagicMock()
+    mock_supabase_mod.get_supabase_client = AsyncMock(return_value=mock_db)
+    mock_scoped_mod = MagicMock()
+    mock_scoped_mod.UserScopedClient = MagicMock(return_value=mock_db)
+
+    with patch.dict(sys.modules, {
+        "chatServer.database.supabase_client": mock_supabase_mod,
+        "chatServer.database.scoped_client": mock_scoped_mod,
+    }):
+        result = await get_tool._arun(id="s1")
+
+    assert "1 schedule(s)" in result
+    assert "Check email" in result
+
+
+@pytest.mark.asyncio
+async def test_get_schedules_by_id_not_found(get_tool):
+    """Verify get_schedules with id returns not-found when schedule missing."""
+    mock_db = MagicMock()
+
+    mock_execute = AsyncMock(return_value=MagicMock(data=None))
+    mock_maybe_single = MagicMock()
+    mock_maybe_single.execute = mock_execute
+    mock_eq2 = MagicMock()
+    mock_eq2.maybe_single.return_value = mock_maybe_single
+    mock_eq1 = MagicMock()
+    mock_eq1.eq.return_value = mock_eq2
+    mock_select = MagicMock()
+    mock_select.eq.return_value = mock_eq1
+    mock_table = MagicMock()
+    mock_table.select.return_value = mock_select
+    mock_db.table.return_value = mock_table
+
+    mock_supabase_mod = MagicMock()
+    mock_supabase_mod.get_supabase_client = AsyncMock(return_value=mock_db)
+    mock_scoped_mod = MagicMock()
+    mock_scoped_mod.UserScopedClient = MagicMock(return_value=mock_db)
+
+    with patch.dict(sys.modules, {
+        "chatServer.database.supabase_client": mock_supabase_mod,
+        "chatServer.database.scoped_client": mock_scoped_mod,
+    }):
+        result = await get_tool._arun(id="nonexistent")
+
+    assert "not found" in result
+
+
+@pytest.mark.asyncio
+async def test_get_schedules_sync_run(get_tool):
     """Verify sync _run returns async required message."""
-    result = list_tool._run()
+    result = get_tool._run()
     assert "requires async" in result
