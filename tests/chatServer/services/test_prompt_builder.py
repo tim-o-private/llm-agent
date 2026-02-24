@@ -273,7 +273,7 @@ class TestBuildAgentPrompt:
         )
         assert "## Onboarding" in result
         assert "first interaction" in result
-        assert "SHOW usefulness" in result
+        assert "introduce yourself" in result
 
     def test_onboarding_telegram_no_memory_no_instructions(self):
         """Onboarding section present on telegram when memory and instructions are empty."""
@@ -503,7 +503,7 @@ class TestBuildAgentPrompt:
         )
         assert "## Session Open" in result
         assert "first time you are meeting this user" in result
-        assert "SHOW usefulness" in result
+        assert "introduce yourself" in result
         assert "WAKEUP_SILENT" not in result
         assert "## Onboarding" not in result
 
@@ -565,6 +565,24 @@ class TestBuildAgentPrompt:
             user_instructions="some", memory_notes="some notes",
         )
         assert "## How You Operate" not in result
+
+    def test_bootstrap_context_placeholder_substituted(self):
+        """bootstrap_context value replaces $bootstrap_context in session_open returning user prompt."""
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="session_open",
+            user_instructions="some instructions", memory_notes="some notes",
+            bootstrap_context="Tasks: 3 active",
+        )
+        assert "Tasks: 3 active" in result
+        assert "$bootstrap_context" not in result
+
+    def test_bootstrap_context_empty_when_not_provided(self):
+        """No $bootstrap_context literal in output when bootstrap_context not provided."""
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="session_open",
+            user_instructions="some instructions", memory_notes="some notes",
+        )
+        assert "$bootstrap_context" not in result
 
     def test_no_operating_model_on_scheduled(self):
         """Scheduled channel does NOT include How You Operate."""
@@ -727,7 +745,7 @@ class TestPromptTemplateRendering:
             prompt_template=template,
         )
         # New user on session_open gets bootstrap guidance
-        assert "SHOW usefulness" in result
+        assert "introduce yourself" in result
 
     def test_template_preserves_literal_dollar(self):
         """Literal $$ in template becomes $ in output (string.Template behavior)."""
