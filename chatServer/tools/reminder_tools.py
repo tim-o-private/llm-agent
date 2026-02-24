@@ -241,3 +241,8 @@ class DeleteRemindersTool(BaseTool):
         except Exception as e:
             logger.error(f"delete_reminders failed for user {self.user_id}: {e}")
             return f"Failed to delete reminders: {e}"
+
+
+# Backward-compat aliases — agent_loader_db.py still imports old names until FU-6 updates registries
+CreateReminderTool = CreateRemindersTool
+ListRemindersTool = GetRemindersTool
