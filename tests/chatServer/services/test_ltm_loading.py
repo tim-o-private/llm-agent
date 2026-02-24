@@ -58,14 +58,16 @@ async def test_prefetch_memory_notes_returns_none_on_error():
 
 
 @pytest.mark.asyncio
-async def test_prefetch_memory_notes_handles_dict_result():
-    """_prefetch_memory_notes handles dict result with text key."""
+async def test_prefetch_memory_notes_handles_dict_with_memories_key():
+    """_prefetch_memory_notes extracts memories from dict response."""
     mock_client = MagicMock()
     mock_client.base_url = "http://memory:8000"
-    mock_client.call_tool = AsyncMock(return_value={"text": "User prefers dark mode"})
+    mock_client.call_tool = AsyncMock(return_value={
+        "memories": [{"text": "User prefers dark mode"}, {"text": "Likes coffee"}],
+    })
 
     result = await _prefetch_memory_notes(mock_client)
-    assert result == "User prefers dark mode"
+    assert result == "- User prefers dark mode\n- Likes coffee"
 
 
 @pytest.mark.asyncio

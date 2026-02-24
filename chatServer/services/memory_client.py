@@ -1,6 +1,5 @@
-"""Async HTTP client for min-memory MCP server."""
+"""Async HTTP client for min-memory server."""
 
-import json
 import logging
 from typing import Any
 
@@ -10,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class MemoryClient:
-    """Client for min-memory server using MCP JSON-RPC over HTTP."""
+    """Client for min-memory server using direct REST API."""
 
     def __init__(self, base_url: str, backend_key: str, user_id: str):
         self.base_url = base_url.rstrip("/")
@@ -18,17 +17,12 @@ class MemoryClient:
         self.user_id = user_id
 
     async def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any] | list:
-        """Call a min-memory tool via MCP JSON-RPC.
+        """Call a min-memory tool via the direct REST endpoint.
 
-        Returns parsed JSON from the tool's text response.
-        Raises RuntimeError on communication or parsing errors.
+        Returns parsed JSON from the tool response.
+        Raises RuntimeError on communication or server errors.
         """
-        payload = {
-            "jsonrpc": "2.0",
-            "method": "tools/call",
-            "params": {"name": tool_name, "arguments": arguments},
-            "id": 1,
-        }
+        payload = {"tool_name": tool_name, "arguments": arguments}
         headers = {
             "Content-Type": "application/json",
             "X-Backend-Key": self.backend_key,
@@ -36,28 +30,10 @@ class MemoryClient:
         }
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.post(f"{self.base_url}/mcp", json=payload, headers=headers)
+                resp = await client.post(f"{self.base_url}/api/tools/call", json=payload, headers=headers)
                 resp.raise_for_status()
         except httpx.HTTPError as e:
             logger.error("Memory server request failed: %s", e)
             raise RuntimeError(f"Memory server unavailable: {e}") from e
 
-        try:
-            body = resp.json()
-        except (json.JSONDecodeError, ValueError) as e:
-            raise RuntimeError(f"Memory server returned invalid JSON: {e}") from e
-
-        if "error" in body:
-            raise RuntimeError(f"Memory server error: {body['error']}")
-
-        # MCP response: {"result": {"content": [{"type": "text", "text": "..."}]}}
-        content = body.get("result", {}).get("content", [])
-        if not content:
-            return {}
-
-        text = content[0].get("text", "")
-        try:
-            return json.loads(text)
-        except (json.JSONDecodeError, ValueError):
-            # Some tools return plain text, not JSON
-            return {"text": text}
+        return resp.json()

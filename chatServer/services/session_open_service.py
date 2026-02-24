@@ -138,7 +138,7 @@ class SessionOpenService:
             result = await client.call_tool("search", {"query": "user preferences"})
             if isinstance(result, list) and len(result) > 0:
                 return True
-            if isinstance(result, dict) and result.get("text"):
+            if isinstance(result, dict) and (result.get("results") or result.get("memories")):
                 return True
             return False
         except Exception as e:

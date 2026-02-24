@@ -481,15 +481,15 @@ async def _prefetch_memory_notes(memory_client) -> Optional[str]:
             "memory_type": ["core_identity", "project_context"],
             "limit": 10,
         })
-        if isinstance(result, list) and result:
-            lines = []
-            for mem in result:
-                if isinstance(mem, dict) and "text" in mem:
-                    lines.append(f"- {mem['text']}")
-            return "\n".join(lines) if lines else None
-        elif isinstance(result, dict) and result.get("text"):
-            return result["text"] if result["text"] else None
-        return None
+        # Response is direct JSON from /api/tools/call
+        memories = result if isinstance(result, list) else result.get("memories", result.get("results", []))
+        if not memories:
+            return None
+        lines = []
+        for mem in memories:
+            if isinstance(mem, dict) and "text" in mem:
+                lines.append(f"- {mem['text']}")
+        return "\n".join(lines) if lines else None
     except Exception as e:
         logger.warning("Failed to pre-fetch memory notes: %s", e)
         return None
