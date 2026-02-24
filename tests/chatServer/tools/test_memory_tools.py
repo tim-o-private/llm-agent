@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from chatServer.tools.memory_tools import (
+    CreateMemoriesInput,
     DeleteMemoryTool,
     FetchMemoryTool,
     GetContextInfoTool,
@@ -94,6 +95,34 @@ class TestStoreMemoryTool:
         )
         assert "Failed" in result
         assert "Connection refused" in result
+
+    @pytest.mark.asyncio
+    async def test_uses_defaults_when_optional_fields_omitted(self, store_tool, mock_memory_client):
+        """LLM sometimes sends only text+tags — defaults should fill in the rest."""
+        result = await store_tool._arun(text="User prefers dark mode")
+        mock_memory_client.call_tool.assert_called_once_with(
+            "store_memory",
+            {"text": "User prefers dark mode", "memory_type": "episodic", "entity": "user", "scope": "global"},
+        )
+        assert "ok" in result
+
+    def test_input_schema_accepts_text_only(self):
+        """CreateMemoriesInput should not raise when only text is provided."""
+        inp = CreateMemoriesInput(text="Just a text field")
+        assert inp.memory_type == "episodic"
+        assert inp.entity == "user"
+        assert inp.scope == "global"
+
+    @pytest.mark.asyncio
+    async def test_returns_error_string_on_unreachable_server(self, mock_memory_client):
+        """Tool must return an error string, never raise, when the memory server is down."""
+        mock_memory_client.call_tool.side_effect = ConnectionError("Memory server unreachable")
+        tool = _make_tool(StoreMemoryTool, mock_memory_client)
+        result = await tool._arun(text="test memory")
+        # Must be a string, not an exception
+        assert isinstance(result, str)
+        assert "Failed" in result or "Error" in result
+        assert "unreachable" in result.lower()
 
 
 class TestRecallMemoryTool:
