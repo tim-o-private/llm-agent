@@ -135,10 +135,16 @@ class CreateMemoriesTool(_MemoryToolBase):
     def prompt_section(cls, channel: str) -> str | None:
         if channel in ("web", "telegram"):
             return (
-                "Memory: Proactively observe and record. When you learn something about the user "
-                "— from their messages, email patterns, task habits, or tone — call create_memories. "
-                "Don't wait to be asked. Use search_memories before answering questions about the user's "
-                "preferences, past decisions, or projects."
+                "Memory recording guide:\n"
+                "- memory_type 'core_identity': user facts, preferences, personality traits, "
+                "communication style\n"
+                "- memory_type 'project_context': life domains, ongoing projects, work context, "
+                "relationships between entities\n"
+                "- memory_type 'episodic': specific events, decisions, feedback, corrections\n"
+                "- Create entities for people, organizations, and projects the user mentions\n"
+                "- Record priority signals: what the user reacts to, dismisses, or corrects\n"
+                "- Use search_memories before answering questions about the user's preferences "
+                "or history"
             )
         return None
 

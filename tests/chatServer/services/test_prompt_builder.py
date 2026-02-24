@@ -548,7 +548,7 @@ class TestBuildAgentPrompt:
     # --- Operating Model (SPEC-019) ---
 
     def test_operating_model_on_web(self):
-        """Web channel includes How You Operate section."""
+        """Web channel includes How You Operate with executive function guidance."""
         result = build_agent_prompt(
             soul="x", identity=None, channel="web",
             user_instructions=None, memory_notes="some notes",
@@ -556,14 +556,15 @@ class TestBuildAgentPrompt:
         assert "## How You Operate" in result
         assert "get_tasks" in result
         assert "search_memories" in result
+        assert "Break" in result.lower() or "break" in result
 
-    def test_operating_model_on_session_open(self):
-        """session_open channel includes How You Operate section."""
+    def test_operating_model_excluded_from_session_open(self):
+        """session_open channel does NOT include How You Operate (AC-04)."""
         result = build_agent_prompt(
             soul="x", identity=None, channel="session_open",
             user_instructions="some", memory_notes="some notes",
         )
-        assert "## How You Operate" in result
+        assert "## How You Operate" not in result
 
     def test_no_operating_model_on_scheduled(self):
         """Scheduled channel does NOT include How You Operate."""
@@ -580,6 +581,41 @@ class TestBuildAgentPrompt:
             user_instructions=None, memory_notes=None,
         )
         assert "## How You Operate" not in result
+
+    def test_operating_model_executive_function(self):
+        """OPERATING_MODEL contains executive function key phrases (AC-03)."""
+        from chatServer.services.prompt_builder import OPERATING_MODEL
+        assert "break" in OPERATING_MODEL.lower()
+        assert "priorit" in OPERATING_MODEL.lower()
+        assert "energy" in OPERATING_MODEL.lower()
+
+    def test_interaction_learning_structured_model(self):
+        """INTERACTION_LEARNING_GUIDANCE contains structured mental model guidance (AC-05)."""
+        from chatServer.services.prompt_builder import INTERACTION_LEARNING_GUIDANCE
+        assert "Life domains" in INTERACTION_LEARNING_GUIDANCE
+        assert "Key entities" in INTERACTION_LEARNING_GUIDANCE
+        assert "Priority signals" in INTERACTION_LEARNING_GUIDANCE
+        assert "Communication patterns" in INTERACTION_LEARNING_GUIDANCE
+
+    def test_memory_prompt_section_structured_recording(self):
+        """CreateMemoriesTool.prompt_section contains structured recording guidance (AC-06)."""
+        from chatServer.tools.memory_tools import CreateMemoriesTool
+        section = CreateMemoriesTool.prompt_section("web")
+        assert section is not None
+        assert "core_identity" in section
+        assert "project_context" in section
+        assert "episodic" in section
+        assert "entities" in section
+        assert "priority signals" in section.lower()
+
+    def test_task_prompt_section_executive_function(self):
+        """GetTasksTool.prompt_section contains executive function framing (AC-07)."""
+        from chatServer.tools.task_tools import GetTasksTool
+        section = GetTasksTool.prompt_section("web")
+        assert section is not None
+        assert "break down" in section.lower()
+        assert "focus on first" in section
+        assert "stale" in section
 
 
 class TestPromptTemplateRendering:

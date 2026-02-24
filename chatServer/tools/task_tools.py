@@ -129,13 +129,22 @@ class GetTasksTool(BaseTool):
     def prompt_section(cls, channel: str) -> str | None:
         """Return behavioral guidance for the agent prompt, or None to omit."""
         if channel in ("web", "telegram"):
-            return "Tasks: Check get_tasks at conversation start to see what the user is working on. When they mention something actionable, use create_tasks. Update status as work progresses with update_tasks."  # noqa: E501
+            return (
+                "Tasks: Check get_tasks at conversation start. When the user mentions something "
+                "actionable, create it with create_tasks. Update status as work progresses.\n"
+                "Executive function: identify opportunities to break down large goals into "
+                "concrete steps. When multiple tasks compete, suggest what to focus on first "
+                "and why. Flag tasks that look stale (not updated in >7 days) or blocked."
+            )
         elif channel == "heartbeat":
             return "Tasks: Call get_tasks to check for overdue or stale tasks. Report any that need attention."
         elif channel == "scheduled":
             return None
         else:
-            return "Tasks: Check get_tasks at conversation start to see what the user is working on. When they mention something actionable, use create_tasks. Update status as work progresses with update_tasks."  # noqa: E501
+            return (
+                "Tasks: Check get_tasks at conversation start. When the user mentions something "
+                "actionable, create it with create_tasks. Update status as work progresses."
+            )
 
     def _run(self, **kwargs) -> str:
         return "get_tasks requires async execution. Use _arun."

@@ -10,7 +10,10 @@
       "WebFetch(domain:docs.authlib.org)",
       "mcp__memory__store_memory",
       "WebFetch(domain:blog.emilburzo.com)",
-      "mcp__clarity-dev__chat_with_clarity"
+      "mcp__clarity-dev__chat_with_clarity",
+      "WebFetch(domain:smith.langchain.com)",
+      "mcp__langsmith__paginate_runs",
+      "mcp__langsmith__fetch_runs"
     ]
   },
   "prefersReducedMotion": true
