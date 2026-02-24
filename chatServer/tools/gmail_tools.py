@@ -12,9 +12,12 @@ from typing import List, Optional, Type
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
+from .gmail_rate_limiter import GmailRateLimiter
+
 try:
     from google.oauth2.credentials import Credentials
     from langchain_google_community import GmailToolkit
+    from langchain_google_community.gmail.search import GmailSearch
 except ImportError:
     raise ImportError(
         "langchain-google-community is required for Gmail tools. "
@@ -22,6 +25,43 @@ except ImportError:
     )
 
 logger = logging.getLogger(__name__)
+
+
+class MetadataGmailSearch(GmailSearch):
+    """Gmail search that returns metadata only — no email bodies.
+
+    Overrides LangChain's default which downloads full raw emails.
+    Returns message ID, subject, sender, snippet, and date.
+    """
+
+    def _parse_messages(self, messages: list[dict]) -> list[dict]:
+        results = []
+        for message in messages:
+            message_id = message["id"]
+            message_data = (
+                self.api_resource.users()
+                .messages()
+                .get(
+                    userId="me",
+                    id=message_id,
+                    format="metadata",
+                    metadataHeaders=["Subject", "From", "Date"],
+                )
+                .execute()
+            )
+            headers = {
+                h["name"]: h["value"]
+                for h in message_data.get("payload", {}).get("headers", [])
+            }
+            results.append({
+                "id": message_id,
+                "threadId": message_data.get("threadId", ""),
+                "snippet": message_data.get("snippet", ""),
+                "subject": headers.get("Subject", "(no subject)"),
+                "sender": headers.get("From", "(unknown)"),
+                "date": headers.get("Date", ""),
+            })
+        return results
 
 
 class GmailToolProvider:
@@ -296,7 +336,16 @@ class GmailToolProvider:
                 f"account {self._account_email} (context: {self.context})"
             )
 
-        return self._toolkit.get_tools()
+        raw_tools = self._toolkit.get_tools()
+        # Replace search tool with metadata-only version
+        tools = []
+        for tool in raw_tools:
+            if "search" in tool.name.lower():
+                metadata_search = MetadataGmailSearch(api_resource=self._toolkit.api_resource)
+                tools.append(metadata_search)
+            else:
+                tools.append(tool)
+        return tools
 
 
 # Database-driven tool classes
@@ -330,7 +379,7 @@ class GmailSearchInput(BaseModel):
             "(e.g., 'is:unread', 'from:example@gmail.com', 'newer_than:2d')"
         ),
     )
-    max_results: int = Field(default=10, ge=1, le=50, description="Maximum results (1-50)")
+    max_results: int = Field(default=5, ge=1, le=50, description="Maximum results (1-50, default 5)")
     account: Optional[str] = Field(
         default=None,
         description="Email address of the account to search. Omit to search ALL connected accounts.",
@@ -368,6 +417,13 @@ class SearchGmailTool(BaseGmailTool):
     async def _arun(self, query: str, max_results: int = 10, account: Optional[str] = None) -> str:
         """Search Gmail messages, optionally across all accounts."""
         try:
+            call_count = 1 + max_results  # 1 list call + N get calls
+            rate_msg = GmailRateLimiter.check_and_increment(
+                self.user_id, account or "all", call_count
+            )
+            if rate_msg:
+                return rate_msg
+
             context = "scheduler" if "background" in self.agent_name.lower() else "user"
 
             if account:
@@ -415,7 +471,25 @@ class SearchGmailTool(BaseGmailTool):
         search_tool = next((t for t in gmail_tools if "search" in t.name.lower()), None)
         if not search_tool:
             return "Gmail search tool not available."
-        return await search_tool.arun({"query": query, "max_results": max_results})
+        result = await search_tool.arun({"query": query, "max_results": max_results})
+        # MetadataGmailSearch._run returns list of dicts; format for agent
+        if isinstance(result, list):
+            return self._format_metadata_results(result)
+        return str(result)
+
+    def _format_metadata_results(self, results: list[dict]) -> str:
+        """Format metadata search results as readable lines."""
+        if not results:
+            return "No messages found."
+        lines = []
+        for i, msg in enumerate(results, 1):
+            msg_id = msg.get("id", "?")[:12]
+            subject = msg.get("subject", "(no subject)")
+            sender = msg.get("sender", "(unknown)")
+            date = msg.get("date", "")
+            lines.append(f'{i}. [{msg_id}] "{subject}" — from: {sender} — {date}')
+        lines.append("\n(Use get_gmail with message ID and account for full content)")
+        return "\n".join(lines)
 
     def _format_results(self, results: str, account: str) -> str:
         """Format single-account results with account tag."""
@@ -448,8 +522,9 @@ class GetGmailTool(BaseGmailTool):
 
     name: str = "get_gmail"
     description: str = (
-        "Get detailed Gmail message content by ID. "
-        "Requires the 'account' parameter to specify which Gmail account the message is from."
+        "Get full email content by message ID. "
+        "Use this to read full email content after finding messages with search_gmail. "
+        "Requires the 'account' parameter to specify which Gmail account."
     )
     args_schema: Type[BaseModel] = GmailGetMessageInput
 
@@ -459,6 +534,10 @@ class GetGmailTool(BaseGmailTool):
     async def _arun(self, message_id: str, account: str = "") -> str:
         """Get Gmail message by ID from a specific account."""
         try:
+            rate_msg = GmailRateLimiter.check_and_increment(self.user_id, account, 1)
+            if rate_msg:
+                return rate_msg
+
             if not account:
                 return "Error: 'account' parameter is required. Specify the email address of the Gmail account."
 

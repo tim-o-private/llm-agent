@@ -5,11 +5,21 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from chatServer.tools.gmail_rate_limiter import GmailRateLimiter
 from chatServer.tools.gmail_tools import (
     GetGmailTool,
     GmailToolProvider,
     SearchGmailTool,
 )
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """Reset Gmail rate limiter between tests to prevent cross-test pollution."""
+    GmailRateLimiter.reset()
+    yield
+    GmailRateLimiter.reset()
+
 
 # --- GmailToolProvider tests ---
 

@@ -165,3 +165,42 @@ async def test_load_agent_executor_db_async_parallelizes_fetch():
         instructions_end_idx = call_order.index("instructions_end")
         assert tools_start_idx < tools_end_idx
         assert instructions_start_idx < instructions_end_idx
+
+
+@pytest.mark.asyncio
+async def test_token_budget_warning_logged(caplog):
+    """AC-20: Very long assembled prompt (>200K chars) triggers a WARNING log."""
+    import logging
+
+    mock_tools_data = [
+        {"name": "read_memory", "type": "ReadMemoryTool", "description": "Read memory", "config": {}, "is_active": True},  # noqa: E501
+    ]
+
+    mock_executor = _make_mock_executor()
+
+    # Build a prompt string >200K chars (50K tokens * 4 chars/token)
+    huge_soul = "x" * 210_000
+
+    big_config = {**MOCK_AGENT_CONFIG, "soul": huge_soul}
+
+    with (
+        patch.dict("os.environ", ENV_VARS),
+        patch("chatServer.services.agent_config_cache_service.get_cached_agent_config", new_callable=AsyncMock, return_value=big_config),  # noqa: E501
+        patch("chatServer.services.tool_cache_service.get_cached_tools_for_agent", new_callable=AsyncMock, return_value=mock_tools_data),  # noqa: E501
+        patch("chatServer.services.user_instructions_cache_service.get_cached_user_instructions", new_callable=AsyncMock, return_value=""),  # noqa: E501
+        patch("core.agent_loader_db.load_tools_from_db", return_value=[]),
+        patch("core.agent_loader_db.CustomizableAgentExecutor") as mock_executor_class,
+        patch("chatServer.services.prompt_builder.build_agent_prompt", return_value="x" * 210_000),
+        caplog.at_level(logging.WARNING, logger="core.agent_loader_db"),
+    ):
+        mock_executor_class.from_agent_config.return_value = mock_executor
+
+        from core.agent_loader_db import load_agent_executor_db_async
+
+        await load_agent_executor_db_async(
+            agent_name="assistant",
+            user_id="user-1",
+            session_id="session-1",
+        )
+
+    assert any("Token budget warning" in r.message for r in caplog.records)

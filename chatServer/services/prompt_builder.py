@@ -38,32 +38,34 @@ CHANNEL_GUIDANCE = {
 }
 
 SESSION_OPEN_BOOTSTRAP_GUIDANCE = (
-    "This is the very first time you are meeting this user.\n"
+    "This is the first time you are meeting this user.\n"
     "No one typed anything yet — you are initiating.\n\n"
-    "Your job is to SHOW usefulness, not ASK about it.\n\n"
+    "Your job is to introduce yourself and start learning about this person.\n\n"
     "Steps:\n"
-    "1. Use your tools to learn what you can — check emails, tasks, reminders.\n"
-    "   Do this BEFORE writing your greeting.\n"
-    "2. Introduce yourself in one sentence.\n"
-    "3. Share what you found: 'You have X emails, Y tasks, Z reminders.'\n"
-    "   If tools are empty or not connected, say so plainly.\n"
-    "4. Based on what you found, suggest ONE concrete next step.\n"
-    "5. Call create_memories to record initial observations about their setup.\n\n"
-    "Do NOT ask about communication preferences or priorities.\n"
-    "Learn those from how they respond to you."
+    "1. Introduce yourself in one sentence — who you are and what you do for them.\n"
+    "2. Ask one concrete, open-ended question to start learning about them.\n"
+    "   Something like: 'What's eating your time right now?' or\n"
+    "   'What's one thing you wish you could get off your plate?'\n"
+    "3. Call create_memories to record your initial observations after they respond.\n\n"
+    "Do NOT:\n"
+    "- Call get_tasks, get_reminders, or search_gmail — there's nothing to find yet.\n"
+    "- Ask about communication preferences or what tools they use.\n"
+    "- List your features or capabilities.\n\n"
+    "Learn about them from how they respond to you."
 )
 
 SESSION_OPEN_RETURNING_GUIDANCE = (
     "The user just returned to the app. {time_context}\n"
     "No one typed anything yet — you are deciding whether to initiate.\n\n"
+    "Context from your tools (pre-fetched):\n"
+    "$bootstrap_context\n\n"
     "Decision rules:\n"
-    "- If the user was here less than 5 minutes ago AND nothing new is in flight: "
+    "- If nothing needs attention and it's been less than 30 minutes: "
     "respond with exactly: WAKEUP_SILENT\n"
-    "- Otherwise: check your tools (tasks, reminders, optionally emails), then greet "
-    "with a brief summary of what needs attention.\n\n"
-    "If you greet: 2-4 sentences max. State facts, don't ask questions.\n"
-    "Example: 'Morning! 2 tasks due today and a reminder at 3pm.'\n"
-    "If nothing is in flight but enough time has passed: say so briefly and offer to help."
+    "- Otherwise: greet with a brief summary of what needs attention.\n\n"
+    "If you greet: 2-4 sentences max. State facts from the context above. "
+    "Don't call tools to re-fetch what's already in your prompt.\n"
+    "Example: 'Morning! 2 tasks due today and a reminder at 3pm.'"
 )
 
 MAX_INSTRUCTIONS_LENGTH = 2000
@@ -71,12 +73,12 @@ MAX_INSTRUCTIONS_LENGTH = 2000
 ONBOARDING_SECTION = (
     "This appears to be your first interaction with this user.\n"
     "Their memory is empty and they have no custom instructions set.\n\n"
-    "Your job is to SHOW usefulness, not ASK about it.\n\n"
+    "Your job is to introduce yourself and start learning about this person.\n\n"
     "Steps:\n"
-    "1. Use your tools first — check emails, tasks, reminders.\n"
-    "2. Introduce yourself briefly using your identity.\n"
-    "3. Share what you found and suggest one concrete next step.\n"
-    "4. Call create_memories to record initial observations about their setup.\n\n"
+    "1. Introduce yourself briefly using your identity.\n"
+    "2. Ask one concrete, open-ended question to start learning.\n"
+    "3. Call create_memories to record initial observations after they respond.\n\n"
+    "Do NOT call get_tasks, get_reminders, or search_gmail — there's nothing to find.\n"
     "Do NOT ask about communication preferences or priorities.\n"
     "Learn those from how they respond to you."
 )
@@ -193,6 +195,7 @@ def _format_session_str(
     memory_notes: str | None,
     user_instructions: str | None,
     last_message_at: datetime | None,
+    bootstrap_context: str | None = None,
 ) -> str:
     """Format session open / onboarding section."""
     is_new_user = not memory_notes and not user_instructions
@@ -200,7 +203,8 @@ def _format_session_str(
         if is_new_user:
             return SESSION_OPEN_BOOTSTRAP_GUIDANCE
         time_context = _format_time_context(last_message_at)
-        return SESSION_OPEN_RETURNING_GUIDANCE.format(time_context=time_context)
+        result = SESSION_OPEN_RETURNING_GUIDANCE.format(time_context=time_context)
+        return string.Template(result).safe_substitute(bootstrap_context=bootstrap_context or "")
     if channel in ("web", "telegram") and is_new_user:
         return ONBOARDING_SECTION
     return ""
@@ -215,6 +219,7 @@ def _compute_section_values(
     tools: list | None,
     memory_notes: str | None,
     last_message_at: datetime | None,
+    bootstrap_context: str | None = None,
 ) -> dict[str, str]:
     """Compute all placeholder values for prompt assembly."""
     return {
@@ -227,7 +232,10 @@ def _compute_section_values(
         "user_instructions": _format_instructions_str(user_instructions),
         "tool_guidance": _format_tool_guidance(tools, channel),
         "interaction_learning": INTERACTION_LEARNING_GUIDANCE if channel in ("web", "telegram") else "",
-        "session_section": _format_session_str(channel, memory_notes, user_instructions, last_message_at),
+        "bootstrap_context": bootstrap_context or "",
+        "session_section": _format_session_str(  # noqa: E501
+            channel, memory_notes, user_instructions, last_message_at, bootstrap_context
+        ),
     }
 
 
@@ -241,6 +249,7 @@ def build_agent_prompt(
     memory_notes: str | None = None,
     last_message_at: datetime | None = None,
     prompt_template: str | None = None,
+    bootstrap_context: str | None = None,
 ) -> str:
     """Assemble the agent system prompt from layered sections.
 
@@ -270,6 +279,7 @@ def build_agent_prompt(
         tools=tools,
         memory_notes=memory_notes,
         last_message_at=last_message_at,
+        bootstrap_context=bootstrap_context,
     )
 
     # Template path: substitute placeholders and strip empty sections

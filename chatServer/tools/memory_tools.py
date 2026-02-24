@@ -45,15 +45,16 @@ class _MemoryToolBase(BaseTool):
             return f"Failed to {self.name}: {e}"
 
 
+
 # ---------------------------------------------------------------------------
 # Input schemas
 # ---------------------------------------------------------------------------
 
 class CreateMemoriesInput(BaseModel):
     text: str = Field(..., description="The memory text to store.")
-    memory_type: str = Field(..., description="Type: core_identity, project_context, task_instruction, or episodic.")
-    entity: str = Field(..., description="Entity this memory is about (e.g., user name, project name).")
-    scope: str = Field(..., description="Scope: global, project, or task.")
+    memory_type: str = Field(default="episodic", description="Type: core_identity, project_context, task_instruction, or episodic.")  # noqa: E501
+    entity: str = Field(default="user", description="Entity this memory is about (e.g., user name, project name).")
+    scope: str = Field(default="global", description="Scope: global, project, or task.")
     tags: list[str] = Field(default_factory=list, description="Optional tags for categorization.")
     project: str = Field(default="", description="Project name (required when scope is project or task).")
     task_id: str = Field(default="", description="Task ID (required when scope is task).")
@@ -148,16 +149,21 @@ class CreateMemoriesTool(_MemoryToolBase):
             )
         return None
 
-    async def _arun(self, text: str, memory_type: str, entity: str, scope: str,
-                    tags: list[str] | None = None, project: str = "", task_id: str = "") -> str:
-        args: dict[str, Any] = {"text": text, "memory_type": memory_type, "entity": entity, "scope": scope}
-        if tags:
-            args["tags"] = tags
-        if project:
-            args["project"] = project
-        if task_id:
-            args["task_id"] = task_id
-        return await self._call_mcp(args)
+    async def _arun(self, text: str, memory_type: str = "episodic", entity: str = "user",
+                    scope: str = "global", tags: list[str] | None = None,
+                    project: str = "", task_id: str = "") -> str:
+        try:
+            args: dict[str, Any] = {"text": text, "memory_type": memory_type, "entity": entity, "scope": scope}
+            if tags:
+                args["tags"] = tags
+            if project:
+                args["project"] = project
+            if task_id:
+                args["task_id"] = task_id
+            return await self._call_mcp(args)
+        except Exception as e:
+            logger.error("Error in %s for user=%s, agent=%s: %s", self.name, self.user_id, self.agent_name, e)
+            return f"Error in {self.name}: {e}"
 
 
 class SearchMemoriesTool(_MemoryToolBase):
@@ -175,14 +181,18 @@ class SearchMemoriesTool(_MemoryToolBase):
 
     async def _arun(self, query: str, limit: int = 10, memory_type: list[str] | None = None,
                     scope: str = "", project: str = "") -> str:
-        args: dict[str, Any] = {"query": query, "limit": limit}
-        if memory_type:
-            args["memory_type"] = memory_type
-        if scope:
-            args["scope"] = scope
-        if project:
-            args["project"] = project
-        return await self._call_mcp(args)
+        try:
+            args: dict[str, Any] = {"query": query, "limit": limit}
+            if memory_type:
+                args["memory_type"] = memory_type
+            if scope:
+                args["scope"] = scope
+            if project:
+                args["project"] = project
+            return await self._call_mcp(args)
+        except Exception as e:
+            logger.error("Error in %s for user=%s, agent=%s: %s", self.name, self.user_id, self.agent_name, e)
+            return f"Error in {self.name}: {e}"
 
 
 class GetMemoriesTool(_MemoryToolBase):
@@ -227,26 +237,30 @@ class UpdateMemoriesTool(_MemoryToolBase):
                     scope: str = "", entity: str = "", project: str = "",
                     task_id: str = "", tags: list[str] | None = None,
                     status: str = "", priority: int | None = None) -> str:
-        args: dict[str, Any] = {"memory_id": memory_id}
-        if text:
-            args["text"] = text
-        if memory_type:
-            args["memory_type"] = memory_type
-        if scope:
-            args["scope"] = scope
-        if entity:
-            args["entity"] = entity
-        if project:
-            args["project"] = project
-        if task_id:
-            args["task_id"] = task_id
-        if tags:
-            args["tags"] = tags
-        if status:
-            args["status"] = status
-        if priority is not None:
-            args["priority"] = priority
-        return await self._call_mcp(args)
+        try:
+            args: dict[str, Any] = {"memory_id": memory_id}
+            if text:
+                args["text"] = text
+            if memory_type:
+                args["memory_type"] = memory_type
+            if scope:
+                args["scope"] = scope
+            if entity:
+                args["entity"] = entity
+            if project:
+                args["project"] = project
+            if task_id:
+                args["task_id"] = task_id
+            if tags:
+                args["tags"] = tags
+            if status:
+                args["status"] = status
+            if priority is not None:
+                args["priority"] = priority
+            return await self._call_mcp(args)
+        except Exception as e:
+            logger.error("Error in %s for user=%s, agent=%s: %s", self.name, self.user_id, self.agent_name, e)
+            return f"Error in {self.name}: {e}"
 
 
 class SetProjectTool(_MemoryToolBase):
@@ -285,14 +299,18 @@ class GetEntitiesTool(_MemoryToolBase):
     _mcp_tool_name: str = "list_entities"
 
     async def _arun(self, scope: str = "", project: str = "", memory_type: str = "") -> str:
-        args: dict[str, Any] = {}
-        if scope:
-            args["scope"] = scope
-        if project:
-            args["project"] = project
-        if memory_type:
-            args["memory_type"] = memory_type
-        return await self._call_mcp(args)
+        try:
+            args: dict[str, Any] = {}
+            if scope:
+                args["scope"] = scope
+            if project:
+                args["project"] = project
+            if memory_type:
+                args["memory_type"] = memory_type
+            return await self._call_mcp(args)
+        except Exception as e:
+            logger.error("Error in %s for user=%s, agent=%s: %s", self.name, self.user_id, self.agent_name, e)
+            return f"Error in {self.name}: {e}"
 
 
 class SearchEntitiesTool(_MemoryToolBase):

@@ -504,6 +504,7 @@ def load_agent_executor_db(
     channel: str = "web",
     use_cache: bool = True,  # Default to using cache for better performance
     last_message_at=None,
+    bootstrap_context: Optional[str] = None,
 ) -> CustomizableAgentExecutor:
     """
     Loads an agent's configuration and its associated tools from the database,
@@ -728,6 +729,7 @@ def load_agent_executor_db(
         memory_notes=memory_notes,
         last_message_at=last_message_at,
         prompt_template=agent_db_config.get("prompt_template"),
+        bootstrap_context=bootstrap_context,
     )
 
     agent_config_for_executor = {
@@ -736,6 +738,15 @@ def load_agent_executor_db(
         "system_prompt": assembled_prompt,
     }
 
+    # Token budget warning (AC-20)
+    estimated_tokens = len(assembled_prompt) // 4
+    if estimated_tokens > 50000:
+        logger.warning(
+            "Token budget warning: assembled prompt for '%s' is ~%d tokens (>50K threshold). "
+            "This may trigger rate limits.",
+            agent_db_config["agent_name"], estimated_tokens,
+        )
+
     # 5. Create and return the executor
     try:
         agent_executor = CustomizableAgentExecutor.from_agent_config(
@@ -743,7 +754,8 @@ def load_agent_executor_db(
             tools=instantiated_tools,
             user_id=user_id,
             session_id=session_id,
-            logger_instance=logger
+            logger_instance=logger,
+            channel=channel,
         )
         logger.info(f"Successfully created CustomizableAgentExecutor for agent '{agent_db_config['agent_name']}' using {cache_status} DB data.")  # noqa: E501
         return agent_executor
@@ -761,6 +773,7 @@ async def load_agent_executor_db_async(
     log_level: int = logging.INFO,
     channel: str = "web",
     last_message_at=None,
+    bootstrap_context: Optional[str] = None,
 ) -> CustomizableAgentExecutor:
     """Async version of load_agent_executor_db.
 
@@ -859,6 +872,7 @@ async def load_agent_executor_db_async(
         memory_notes=memory_notes,
         last_message_at=last_message_at,
         prompt_template=agent_db_config.get("prompt_template"),
+        bootstrap_context=bootstrap_context,
     )
 
     agent_config_for_executor = {
@@ -866,6 +880,15 @@ async def load_agent_executor_db_async(
         "llm": llm_config_from_db or {},
         "system_prompt": assembled_prompt,
     }
+
+    # Token budget warning (AC-20)
+    estimated_tokens = len(assembled_prompt) // 4
+    if estimated_tokens > 50000:
+        logger.warning(
+            "Token budget warning: assembled prompt for '%s' is ~%d tokens (>50K threshold). "
+            "This may trigger rate limits.",
+            agent_db_config["agent_name"], estimated_tokens,
+        )
 
     # Step 5: Create and return the executor
     try:
@@ -875,6 +898,7 @@ async def load_agent_executor_db_async(
             user_id=user_id,
             session_id=session_id,
             logger_instance=logger,
+            channel=channel,
         )
         agent_nm = agent_db_config['agent_name']
         logger.info(f"Successfully created CustomizableAgentExecutor (async) for agent '{agent_nm}'.")
