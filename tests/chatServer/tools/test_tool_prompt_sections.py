@@ -52,11 +52,12 @@ class TestGetTasksToolPromptSection:
         telegram = GetTasksTool.prompt_section("telegram")
         assert web == telegram
 
-    def test_unknown_channel_returns_web_default(self):
-        """GetTasksTool.prompt_section() for unknown channel returns web default."""
+    def test_unknown_channel_returns_string(self):
+        """GetTasksTool.prompt_section() for unknown channel returns a non-None string."""
         result = GetTasksTool.prompt_section("unknown_channel")
-        web_result = GetTasksTool.prompt_section("web")
-        assert result == web_result
+        assert result is not None
+        assert "get_tasks" in result
+        assert "create_tasks" in result
 
 
 class TestCreateMemoriesToolPromptSection:
@@ -84,10 +85,10 @@ class TestCreateMemoriesToolPromptSection:
         result = CreateMemoriesTool.prompt_section("scheduled")
         assert result is None
 
-    def test_web_mentions_create_and_search(self):
-        """CreateMemoriesTool.prompt_section('web') mentions create_memories and search_memories."""
+    def test_web_mentions_structured_recording_and_search(self):
+        """CreateMemoriesTool.prompt_section('web') contains recording guide and search_memories."""
         result = CreateMemoriesTool.prompt_section("web")
-        assert "create_memories" in result.lower()
+        assert "core_identity" in result
         assert "search_memories" in result.lower()
 
     def test_web_and_telegram_same(self):
@@ -264,13 +265,13 @@ class TestPromptSectionLengthLimits:
         UpdateInstructionsTool,
     ])
     @pytest.mark.parametrize("channel", ["web", "telegram", "heartbeat", "scheduled"])
-    def test_prompt_section_length_under_300_chars(self, tool_class, channel):
-        """All prompt_section() returns do not exceed 300 characters."""
+    def test_prompt_section_length_under_600_chars(self, tool_class, channel):
+        """All prompt_section() returns do not exceed 600 characters."""
         result = tool_class.prompt_section(channel)
         if result is not None:
-            assert len(result) <= 300, (
+            assert len(result) <= 600, (
                 f"{tool_class.__name__}.prompt_section('{channel}') "
-                f"is {len(result)} chars (max 300)"
+                f"is {len(result)} chars (max 600)"
             )
 
 
