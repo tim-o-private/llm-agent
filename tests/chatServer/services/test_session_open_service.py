@@ -388,8 +388,8 @@ async def test_has_memory_returns_true_for_list_results():
     service = SessionOpenService(mock_client)
 
     with (
-        patch("os.getenv", side_effect=lambda k, d="": {"MEMORY_SERVER_URL": "http://mem:8000", "MEMORY_SERVER_BACKEND_KEY": "key"}.get(k, d)),
-        patch("src.core.agent_loader_db._resolve_memory_user_id", new_callable=AsyncMock, return_value="google-oauth2|123"),
+        patch("os.getenv", side_effect=lambda k, d="": {"MEMORY_SERVER_URL": "http://mem:8000", "MEMORY_SERVER_BACKEND_KEY": "key"}.get(k, d)),  # noqa: E501
+        patch("src.core.agent_loader_db._resolve_memory_user_id", new_callable=AsyncMock, return_value="google-oauth2|123"),  # noqa: E501
         patch("chatServer.services.memory_client.MemoryClient") as mock_mem_cls,
     ):
         mock_mem = MagicMock()
@@ -407,8 +407,8 @@ async def test_has_memory_returns_true_for_dict_with_memories():
     service = SessionOpenService(mock_client)
 
     with (
-        patch("os.getenv", side_effect=lambda k, d="": {"MEMORY_SERVER_URL": "http://mem:8000", "MEMORY_SERVER_BACKEND_KEY": "key"}.get(k, d)),
-        patch("src.core.agent_loader_db._resolve_memory_user_id", new_callable=AsyncMock, return_value="google-oauth2|123"),
+        patch("os.getenv", side_effect=lambda k, d="": {"MEMORY_SERVER_URL": "http://mem:8000", "MEMORY_SERVER_BACKEND_KEY": "key"}.get(k, d)),  # noqa: E501
+        patch("src.core.agent_loader_db._resolve_memory_user_id", new_callable=AsyncMock, return_value="google-oauth2|123"),  # noqa: E501
         patch("chatServer.services.memory_client.MemoryClient") as mock_mem_cls,
     ):
         mock_mem = MagicMock()
@@ -426,8 +426,8 @@ async def test_has_memory_returns_false_for_empty_results():
     service = SessionOpenService(mock_client)
 
     with (
-        patch("os.getenv", side_effect=lambda k, d="": {"MEMORY_SERVER_URL": "http://mem:8000", "MEMORY_SERVER_BACKEND_KEY": "key"}.get(k, d)),
-        patch("src.core.agent_loader_db._resolve_memory_user_id", new_callable=AsyncMock, return_value="google-oauth2|123"),
+        patch("os.getenv", side_effect=lambda k, d="": {"MEMORY_SERVER_URL": "http://mem:8000", "MEMORY_SERVER_BACKEND_KEY": "key"}.get(k, d)),  # noqa: E501
+        patch("src.core.agent_loader_db._resolve_memory_user_id", new_callable=AsyncMock, return_value="google-oauth2|123"),  # noqa: E501
         patch("chatServer.services.memory_client.MemoryClient") as mock_mem_cls,
     ):
         mock_mem = MagicMock()
@@ -457,8 +457,8 @@ async def test_has_memory_returns_false_on_error():
     service = SessionOpenService(mock_client)
 
     with (
-        patch("os.getenv", side_effect=lambda k, d="": {"MEMORY_SERVER_URL": "http://mem:8000", "MEMORY_SERVER_BACKEND_KEY": "key"}.get(k, d)),
-        patch("src.core.agent_loader_db._resolve_memory_user_id", new_callable=AsyncMock, return_value="u1"),
+        patch("os.getenv", side_effect=lambda k, d="": {"MEMORY_SERVER_URL": "http://mem:8000", "MEMORY_SERVER_BACKEND_KEY": "key"}.get(k, d)),  # noqa: E501
+        patch("src.core.agent_loader_db._resolve_memory_user_id", new_callable=AsyncMock, return_value="u1"),  # noqa: E501
         patch("chatServer.services.memory_client.MemoryClient") as mock_mem_cls,
     ):
         mock_mem = MagicMock()

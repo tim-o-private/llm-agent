@@ -8,9 +8,9 @@ from langchain_core.messages import AIMessage
 from src.core.agent_loader_db import load_agent_executor_db_async
 
 from ..security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
-from .bootstrap_context_service import BootstrapContextService
 from ..services.audit_service import AuditService
 from ..services.pending_actions import PendingActionsService
+from .bootstrap_context_service import BootstrapContextService
 
 logger = logging.getLogger(__name__)
 
