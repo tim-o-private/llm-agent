@@ -233,7 +233,9 @@ def _compute_section_values(
         "tool_guidance": _format_tool_guidance(tools, channel),
         "interaction_learning": INTERACTION_LEARNING_GUIDANCE if channel in ("web", "telegram") else "",
         "bootstrap_context": bootstrap_context or "",
-        "session_section": _format_session_str(channel, memory_notes, user_instructions, last_message_at, bootstrap_context),
+        "session_section": _format_session_str(  # noqa: E501
+            channel, memory_notes, user_instructions, last_message_at, bootstrap_context
+        ),
     }
 
 
