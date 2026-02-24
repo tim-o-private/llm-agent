@@ -98,6 +98,7 @@ These affect ALL domains. Domain-specific gotchas live in their respective skill
 3. **chatServer is a proper Python package** — Run via `python -m chatServer.main`. Never use try/except ImportError hacks for bare import fallbacks. See Gotcha #15 in backend-patterns skill.
 4. **ES256 JWT tokens** — Supabase issues ES256, not HS256. Don't revert `auth.py` to HS256-only.
 5. **`os.getenv()` is scattered** — Env vars read in `settings.py`, `agent_loader_db.py`, `gmail_tools.py`, `memory_tools.py`, `update_instructions_tool.py`, `email_digest_service.py`. Renaming requires full grep.
+6. **Never use raw `get_supabase_client` in services or routers** — Per A8/SPEC-017, routers use `get_user_scoped_client` (auto-filters by user_id), background services use `get_system_client`. `validate-patterns.sh` blocks violations. See `chatServer/database/scoped_client.py`.
 
 ## Resolving Bugs
 

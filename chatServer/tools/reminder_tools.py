@@ -75,10 +75,12 @@ class CreateReminderTool(BaseTool):
             if recurrence and recurrence not in ("daily", "weekly", "monthly"):
                 return f"Error: invalid recurrence '{recurrence}'. Must be 'daily', 'weekly', or 'monthly'."
 
+            from ..database.scoped_client import UserScopedClient
             from ..database.supabase_client import get_supabase_client
             from ..services.reminder_service import ReminderService
 
-            db = await get_supabase_client()
+            raw_client = await get_supabase_client()
+            db = UserScopedClient(raw_client, self.user_id)
             service = ReminderService(db)
             await service.create_reminder(
                 user_id=self.user_id,
@@ -126,10 +128,12 @@ class ListRemindersTool(BaseTool):
 
     async def _arun(self, limit: int = 10) -> str:
         try:
+            from ..database.scoped_client import UserScopedClient
             from ..database.supabase_client import get_supabase_client
             from ..services.reminder_service import ReminderService
 
-            db = await get_supabase_client()
+            raw_client = await get_supabase_client()
+            db = UserScopedClient(raw_client, self.user_id)
             service = ReminderService(db)
             reminders = await service.list_upcoming(user_id=self.user_id, limit=limit)
 

@@ -24,7 +24,7 @@ chatServer/
 Before writing backend code, verify:
 - [ ] Env vars use canonical names: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (not `VITE_SUPABASE_URL` or `SUPABASE_SERVICE_KEY`)
 - [ ] New Python deps added to BOTH `requirements.txt` AND `chatServer/requirements.txt`
-- [ ] Using `Depends(get_supabase_client)` or `Depends(get_db_connection)` — no new connections
+- [ ] Using `Depends(get_user_scoped_client)` in routers, `get_system_client()` in background services — never raw `get_supabase_client` (A8/SPEC-017)
 - [ ] Business logic in services, not routers
 - [ ] Pydantic models for request/response validation
 - [ ] RLS handles user scoping (no manual `user_id` filtering)

@@ -37,7 +37,7 @@ When you face a design decision, find the applicable principle below. If the one
 | A5 | Auth from getSession() | Never use Zustand auth store for API tokens | `validate-patterns.sh` BLOCKS in hooks |
 | A6 | Tools = capability units | New capability = BaseTool subclass + service + DB row + registry | backend-patterns recipe |
 | A7 | Cross-channel default | Every message feature works web + Telegram via shared chat_id | product-architecture checklist |
-| A8 | RLS = security boundary | Every user-owned table has RLS. No app-layer filtering instead. | `validate-patterns.sh` BLOCKS |
+| A8 | Scoped access + RLS | Routers use `get_user_scoped_client`; services use scoped or system client; raw `get_supabase_client` blocked. RLS as defense-in-depth. | `validate-patterns.sh` BLOCKS |
 | A9 | UUID FKs, not names | All inter-table refs use UUID FK with ON DELETE. Never agent_name TEXT. | `validate-patterns.sh` BLOCKS |
 | A10 | Predictable naming | Entity "foo" → `foos` table, `foo_service.py`, `foo_router.py`, `useFooHooks.ts` | `validate-patterns.sh` (tools) |
 | A11 | Design for N | Pluggable patterns; config over new infrastructure | Reviewer |

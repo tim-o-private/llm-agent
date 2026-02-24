@@ -9,7 +9,7 @@ from croniter import croniter
 
 from ..config.constants import SCHEDULED_TASK_INTERVAL_SECONDS, SESSION_INSTANCE_TTL_SECONDS
 from ..database.connection import get_database_manager
-from ..database.supabase_client import get_supabase_client
+from ..database.supabase_client import create_system_client
 
 logger = logging.getLogger(__name__)
 
@@ -246,7 +246,7 @@ class BackgroundTaskService:
             logger.debug("Running task: check_due_reminders")
 
             try:
-                db_client = await get_supabase_client()
+                db_client = await create_system_client()
 
                 from ..services.notification_service import NotificationService
                 from ..services.reminder_service import ReminderService

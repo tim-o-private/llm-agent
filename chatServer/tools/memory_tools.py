@@ -1,4 +1,8 @@
-"""Memory tools for agent long-term memory persistence."""
+"""Memory tools for agent long-term memory persistence.
+
+TODO: SPEC-017 — memory_tools uses sync Supabase client (create_client).
+Migrate to async UserScopedClient when sync wrapper is available.
+"""
 
 import logging
 import os
