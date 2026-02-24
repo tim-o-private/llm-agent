@@ -1,17 +1,18 @@
 # SPEC-018: Proactive Agent Memory + min-memory Integration
 
-> **Status:** Draft
+> **Status:** Implemented
 > **Author:** Tim + Claude
 > **Created:** 2026-02-23
 > **Updated:** 2026-02-23
+> **Branch:** `feat/spec-018-proactive-memory`
 
 ## Goal
 
-Make Clarity proactive — an agent that earns trust by doing things, not asking what to do. Replace the 4000-char memory blob with min-memory (semantic search, hierarchical scoping, cross-tool continuity with Claude Desktop/Code/ChatGPT). Rewrite bootstrap and onboarding prompts to be tool-first.
+Make the agent proactive — earning trust by doing things, not asking what to do. Replace the 4000-char memory blob with min-memory (semantic search, hierarchical scoping, cross-tool continuity with Claude Desktop/Code/ChatGPT). Rewrite bootstrap and onboarding prompts to be tool-first.
 
 ## Background
 
-Clarity has the infrastructure for proactive behavior (heartbeat, session_open, onboarding) but the behavioral prompting is passive — "What are your priorities?" instead of using tools to demonstrate value. OpenClaw's key insight: agents earn trust by acting, not asking.
+The agent has the infrastructure for proactive behavior (heartbeat, session_open, onboarding) but the behavioral prompting is passive — "What are your priorities?" instead of using tools to demonstrate value. OpenClaw's key insight: agents earn trust by acting, not asking.
 
 The memory system (`agent_long_term_memory`) is a single TEXT blob with no search, no structure, and no continuity with other tools. A production-grade memory server (min-memory) already exists with semantic vector search, entity relationships, hierarchical scoping (global/project/task), and multi-user isolation via Auth0 OAuth.
 
@@ -19,18 +20,18 @@ Integration design was researched in `docs/sdlc/research/memory_research.md` (Fe
 
 ## Acceptance Criteria
 
-- [ ] **AC-01:** min-memory accepts trusted backend requests via `X-Backend-Key` + `X-User-Id` headers, bypassing OAuth for server-to-server calls. [A8]
-- [ ] **AC-02:** `MemoryClient` in chatServer makes async HTTP calls to min-memory's MCP JSON-RPC endpoint. [A1, A3]
-- [ ] **AC-03:** Three new LangChain tools replace `SaveMemoryTool`/`ReadMemoryTool`: `store_memory` (write), `recall` (semantic search), `search_memory` (keyword search). [A6, A10]
-- [ ] **AC-04:** Agent loader resolves Supabase UUID → min-memory user identity (`google-oauth2|{provider_id}`) via `auth.users.raw_user_meta_data`. [A8]
-- [ ] **AC-05:** "What You Know" prompt section is populated by pre-fetching top 10 `core_identity` + `project_context` memories from min-memory (not from `agent_long_term_memory` blob). `build_agent_prompt()` stays sync. [A14]
-- [ ] **AC-06:** Onboarding detection (`is_new_user`) checks min-memory for existing memories instead of `agent_long_term_memory` table. [A14]
-- [ ] **AC-07:** `SESSION_OPEN_BOOTSTRAP_GUIDANCE` is rewritten to be tool-first: agent uses tools before greeting, reports findings, suggests one next step. Does NOT ask about preferences. [A14]
-- [ ] **AC-08:** `ONBOARDING_SECTION` is rewritten with same philosophy — demonstrate value, don't interrogate. [A14]
-- [ ] **AC-09:** Memory tool `prompt_section()` encourages proactive observation: "record what you learn from their messages, email patterns, task habits, and tone — don't wait to be asked." [A14]
-- [ ] **AC-10:** Old `SaveMemoryTool`/`ReadMemoryTool` removed. Old tool rows deactivated in `agent_tools`. `agent_long_term_memory` table kept but not used. [A6]
-- [ ] **AC-11:** `session_open_service.py` `_has_memory()` checks min-memory instead of Supabase. [A14]
-- [ ] **AC-12:** Cross-tool continuity verified: memory stored via Claude Desktop MCP is visible to Clarity agent in "What You Know" section. [A14]
+- [x] **AC-01:** min-memory accepts trusted backend requests via `X-Backend-Key` + `X-User-Id` headers, bypassing OAuth for server-to-server calls. [A8]
+- [x] **AC-02:** `MemoryClient` in chatServer makes async HTTP calls to min-memory's `/api/tools/call` REST endpoint (direct JSON, not MCP transport). [A1, A3]
+- [x] **AC-03:** Eleven new LangChain tools replace `SaveMemoryTool`/`ReadMemoryTool`, exposing the full min-memory API: `store_memory`, `recall`, `search_memory`, `fetch_memory`, `delete_memory`, `update_memory`, `set_project`, `link_memories`, `list_entities`, `search_entities`, `get_context_info`. [A6, A10]
+- [x] **AC-04:** Agent loader resolves Supabase UUID → min-memory user identity (`google-oauth2|{provider_id}`) via `auth.users.raw_user_meta_data`. [A8]
+- [x] **AC-05:** "What You Know" prompt section is populated by pre-fetching top 10 `core_identity` + `project_context` memories from min-memory (not from `agent_long_term_memory` blob). `build_agent_prompt()` stays sync. [A14]
+- [x] **AC-06:** Onboarding detection (`is_new_user`) checks min-memory for existing memories instead of `agent_long_term_memory` table. [A14]
+- [x] **AC-07:** `SESSION_OPEN_BOOTSTRAP_GUIDANCE` is rewritten to be tool-first: agent uses tools before greeting, reports findings, suggests one next step. Does NOT ask about preferences. [A14]
+- [x] **AC-08:** `ONBOARDING_SECTION` is rewritten with same philosophy — demonstrate value, don't interrogate. [A14]
+- [x] **AC-09:** Memory tool `prompt_section()` encourages proactive observation: "record what you learn from their messages, email patterns, task habits, and tone — don't wait to be asked." [A14]
+- [x] **AC-10:** Old `SaveMemoryTool`/`ReadMemoryTool` removed. Old tool rows deactivated in `agent_tools`. `agent_long_term_memory` table kept but not used. [A6]
+- [x] **AC-11:** `session_open_service.py` `_has_memory()` checks min-memory instead of Supabase. [A14]
+- [x] **AC-12:** Cross-tool continuity verified: memory stored via Claude Desktop MCP is visible to agent in "What You Know" section. [A14]
 
 ## Manual Steps (User must do before/during implementation)
 
@@ -55,24 +56,35 @@ Integration design was researched in `docs/sdlc/research/memory_research.md` (Fe
 
 7. **After implementation:** Migration deactivates old tools, registers new ones. Server restart required (executor cache).
 
+## Spec Deviations (vs. Original Plan)
+
+| Area | Planned | Actual | Rationale |
+|------|---------|--------|-----------|
+| Tool count | 3 tools (store, recall, search) | 11 tools (full min-memory API) | Expose all capabilities; thin wrappers are cheap |
+| Transport | MCP JSON-RPC over `/mcp` | Direct REST via `/api/tools/call` | MCP Streamable HTTP requires session management — unsuitable for server-to-server |
+| DB tool type | `agent_tool_type` enum | `VARCHAR(100)` | Enum required ALTER TYPE for every new tool class; VARCHAR is flexible |
+| Approval tiers | Not in spec | All 11 tools added as AUTO_APPROVE | Unknown tools default to REQUIRES_APPROVAL; needed explicit registration |
+
 ## Scope
 
-### Files to Create
+### Files Created
 
 | File | Purpose |
 |------|---------|
-| `chatServer/services/memory_client.py` | Async HTTP client for min-memory MCP endpoint |
-| `supabase/migrations/XXXXXXXX_register_memory_tools.sql` | Deactivate old tools, register new ones |
+| `chatServer/services/memory_client.py` | Async HTTP client for min-memory `/api/tools/call` endpoint |
+| `supabase/migrations/20260223000002_register_memory_tools.sql` | Convert enum to VARCHAR, deactivate old tools, register 11 new ones |
+| `scripts/wipe_user_memories.py` | Dev utility: wipe test user memories (guards against OAuth users) |
 
-### Files to Modify
+### Files Modified
 
 | File | Change |
 |------|--------|
-| `chatServer/tools/memory_tools.py` | Replace SaveMemory/ReadMemory with StoreMemory/Recall/SearchMemory |
+| `chatServer/tools/memory_tools.py` | Replace SaveMemory/ReadMemory with 11 `_MemoryToolBase` subclasses |
 | `chatServer/services/prompt_builder.py` | Rewrite bootstrap, onboarding, returning guidance; update prompt_section text |
-| `src/core/agent_loader_db.py` | MemoryClient creation, user identity resolution, pre-fetch from min-memory |
-| `chatServer/services/session_open_service.py` | Update `_has_memory()` to check min-memory |
-| `~/github/min-memory/src/auth.py` | Add trusted backend key auth path (external repo) |
+| `src/core/agent_loader_db.py` | MemoryClient creation, user identity resolution, pre-fetch from min-memory, TOOL_REGISTRY for all 11 tools |
+| `chatServer/services/session_open_service.py` | Update `_has_memory()` to check min-memory via direct REST |
+| `chatServer/security/approval_tiers.py` | Add all 11 memory tools as AUTO_APPROVE |
+| `~/github/min-memory/` | Trusted backend key auth + `/api/tools/call` endpoint (external repo) |
 
 ### Out of Scope
 
@@ -95,12 +107,20 @@ Add `X-Backend-Key` + `X-User-Id` header check before OAuth fallback in `get_cur
 
 **New:** `chatServer/services/memory_client.py`
 - `MemoryClient(base_url, backend_key, user_id)`
-- `async call_tool(tool_name, arguments) -> dict` — MCP JSON-RPC over HTTP
+- `async call_tool(tool_name, arguments) -> dict` — direct REST to `/api/tools/call`
 
-**Replace:** `chatServer/tools/memory_tools.py`
-- `StoreMemoryTool` (name: `store_memory`) — args: text, memory_type, entity, scope, tags
-- `RecallMemoryTool` (name: `recall`) — args: query, limit, memory_type
-- `SearchMemoryTool` (name: `search_memory`) — args: query
+**Replace:** `chatServer/tools/memory_tools.py` — 11 tools via `_MemoryToolBase` pattern:
+- `StoreMemoryTool` (name: `store_memory`) — write structured memories
+- `RecallMemoryTool` (name: `recall`) — semantic context retrieval
+- `SearchMemoryTool` (name: `search_memory`) — keyword search
+- `FetchMemoryTool` (name: `fetch_memory`) — get by ID
+- `DeleteMemoryTool` (name: `delete_memory`) — soft delete
+- `UpdateMemoryTool` (name: `update_memory`) — modify existing memory
+- `SetProjectTool` (name: `set_project`) — set project scope
+- `LinkMemoriesTool` (name: `link_memories`) — create relationships
+- `ListEntitiesTool` (name: `list_entities`) — browse entities
+- `SearchEntitiesTool` (name: `search_entities`) — fuzzy entity search
+- `GetContextInfoTool` (name: `get_context_info`) — environment info
 
 ### FU-3: Agent Loader Wiring
 
@@ -108,8 +128,8 @@ Add `X-Backend-Key` + `X-User-Id` header check before OAuth fallback in `get_cur
 
 1. `_resolve_memory_user_id()` — reads `auth.users.raw_user_meta_data->>'provider_id'`, formats as `google-oauth2|{id}`, falls back to Supabase UUID
 2. Create `MemoryClient` in async tool loading path, pass to tool constructors
-3. Replace `_fetch_memory_notes_async` with min-memory `retrieve_context` call (top 10 core_identity + project_context)
-4. Update onboarding detection to check min-memory
+3. `_prefetch_memory_notes()` calls min-memory `retrieve_context` (top 10 core_identity + project_context), parses direct REST response format
+4. Onboarding detection checks min-memory
 
 ### FU-4: Proactive Prompt Rewrites
 
@@ -122,48 +142,33 @@ Add `X-Backend-Key` + `X-User-Id` header check before OAuth fallback in `get_cur
 
 ### FU-5: Deprecation and Cleanup
 
-- Remove old tool classes
+- Remove old tool classes (`SaveMemoryTool`, `ReadMemoryTool`)
 - Remove old memory fetch helpers from agent loader
 - Update session_open_service `_has_memory()`
-- Migration: deactivate/register tool rows
+- Migration: convert `agent_tool_type` enum → VARCHAR(100), deactivate old tools, register new ones
+- Add all 11 tools to `approval_tiers.py` as AUTO_APPROVE
 - Keep `agent_long_term_memory` table (don't drop)
 
 ## Dependencies
 
 - SPEC-017 (User-Scoped DB Access) — branching from this
-- min-memory server running locally for dev/test
-- SPEC-016 (Session Open) — already complete, provides the bootstrap/onboarding infrastructure we're rewriting
+- min-memory server with `/api/tools/call` endpoint and trusted backend auth
 
-## Testing Requirements
+## Testing
 
-### Unit Tests
+### Unit Tests (751 passed, 10 skipped)
 
-- `test_memory_client.py`: HTTP call construction, error handling, response parsing
-- `test_memory_tools.py`: StoreMemory/Recall/SearchMemory tool invocation, schema validation
-- `test_prompt_builder.py`: Updated bootstrap text, onboarding text, memory prompt_section text
-- `test_agent_loader_db.py`: User identity resolution, MemoryClient creation, pre-fetch formatting
-
-### Integration Tests
-
-- Round-trip: store via chatServer tool → retrieve via min-memory MCP → verify match
-- Cross-tool: store via Claude Code min-memory MCP → verify appears in agent's "What You Know"
+- `test_memory_client.py` (7 tests): payload format, headers, URL, response types, error handling
+- `test_memory_tools.py` (25 tests): all 11 tools — invocation, schema validation, error handling, prompt_section
+- `test_prompt_builder.py`: updated bootstrap, onboarding, memory prompt_section text
+- `test_ltm_loading.py` (7 tests): pre-fetch formatting, dict/list responses, error handling, user identity resolution
 
 ### Manual Verification (UAT)
 
-- [ ] New user: open web app → agent uses tools before greeting, doesn't ask about preferences
-- [ ] Existing user: agent's "What You Know" populated from min-memory
-- [ ] Remember something: tell agent a fact → verify in min-memory via `mcp__claude_ai_memory-http__search`
-- [ ] Cross-tool: store memory in Claude Desktop → verify Clarity sees it
-
-## Functional Units (for Implementation)
-
-1. **FU-1:** Trusted backend auth (min-memory repo, ~30 lines)
-2. **FU-2:** MemoryClient + tools (chatServer, ~200 lines)
-3. **FU-3:** Agent loader wiring (agent_loader_db.py, ~80 lines)
-4. **FU-4:** Prompt rewrites (prompt_builder.py, text changes)
-5. **FU-5:** Deprecation + migration (cleanup)
-
-**Implementation order:** FU-1 → FU-2 → FU-3 → FU-4 → FU-5
+- [x] store_memory: agent stores memory, confirmed in min-memory
+- [x] recall: agent retrieves cross-tool memories from Claude Desktop
+- [x] Cross-tool continuity: memories stored via Claude Code MCP visible in agent's "What You Know"
+- [ ] New user bootstrap: zero memories → agent uses tools before greeting
 
 ## Completeness Checklist
 
@@ -175,3 +180,4 @@ Add `X-Backend-Key` + `X-User-Id` header check before OAuth fallback in `get_cur
 - [x] Out-of-scope is explicit
 - [x] Testing requirements map to ACs
 - [x] Dependencies documented
+- [x] Spec deviations documented
