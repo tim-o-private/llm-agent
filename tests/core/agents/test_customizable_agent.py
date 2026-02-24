@@ -182,6 +182,79 @@ class TestCustomizableAgentExecutorFactory(unittest.TestCase):
         self.assertFalse(hasattr(executor, '_base_system_prompt'))
 
 
+class TestCustomizableAgentExecutorLimits(unittest.TestCase):
+    """Tests for channel-based executor limits (AC-14, AC-15) and ChatAnthropic settings (AC-19)."""
+
+    def setUp(self):
+        self.mock_llm_instance = MagicMock()
+        self.mock_llm_instance.bind_tools = MagicMock(return_value=MagicMock())
+        self.sample_tools = [MagicMock(spec=BaseTool)]
+        self.user_id = "test_user"
+        self.session_id = "test_session"
+        self.minimal_config = {
+            "agent_name": "TestAgent",
+            "llm": {"model": "gemini-pro", "temperature": 0.5},
+            "system_prompt": "You are a test agent.",
+        }
+
+    def _make_executor(self, channel="web"):
+        with (
+            patch("langchain_google_genai.ChatGoogleGenerativeAI", return_value=self.mock_llm_instance),
+            patch("os.getenv", side_effect=lambda k, d=None: {"GOOGLE_API_KEY": "fake"}.get(k, d)),
+        ):
+            return CustomizableAgentExecutor.from_agent_config(
+                self.minimal_config, self.sample_tools, self.user_id, self.session_id, channel=channel
+            )
+
+    def test_session_open_executor_limits(self):
+        """AC-14: session_open gets max_iterations=3, max_execution_time=15."""
+        executor = self._make_executor(channel="session_open")
+        self.assertEqual(executor.max_iterations, 3)
+        self.assertEqual(executor.max_execution_time, 15.0)
+
+    def test_web_executor_limits(self):
+        """AC-15: web gets max_iterations=10, max_execution_time=60."""
+        executor = self._make_executor(channel="web")
+        self.assertEqual(executor.max_iterations, 10)
+        self.assertEqual(executor.max_execution_time, 60.0)
+
+    def test_telegram_executor_limits(self):
+        """AC-15: telegram gets max_iterations=10, max_execution_time=60."""
+        executor = self._make_executor(channel="telegram")
+        self.assertEqual(executor.max_iterations, 10)
+        self.assertEqual(executor.max_execution_time, 60.0)
+
+    def test_scheduled_executor_limits(self):
+        """Other channels (scheduled) get max_iterations=10, max_execution_time=60."""
+        executor = self._make_executor(channel="scheduled")
+        self.assertEqual(executor.max_iterations, 10)
+        self.assertEqual(executor.max_execution_time, 60.0)
+
+    def test_chat_anthropic_explicit_settings(self):
+        """AC-19: ChatAnthropic instantiated with max_retries=2, max_tokens=2048."""
+        mock_anthropic_instance = MagicMock()
+        mock_anthropic_instance.bind_tools = MagicMock(return_value=MagicMock())
+        claude_config = {
+            "agent_name": "ClaudeAgent",
+            "llm": {"provider": "claude", "model": "claude-sonnet-4-5", "temperature": 0.5},
+            "system_prompt": "You are a Claude agent.",
+        }
+        with (
+            patch("langchain_anthropic.ChatAnthropic", return_value=mock_anthropic_instance) as mock_claude_cls,
+            patch("os.getenv", side_effect=lambda k, d=None: {"ANTHROPIC_API_KEY": "fake-key"}.get(k, d)),
+        ):
+            CustomizableAgentExecutor.from_agent_config(
+                claude_config, self.sample_tools, self.user_id, self.session_id, channel="web"
+            )
+        mock_claude_cls.assert_called_once_with(
+            model="claude-sonnet-4-5",
+            anthropic_api_key="fake-key",
+            temperature=0.5,
+            max_retries=2,
+            max_tokens=2048,
+        )
+
+
 class TestCustomizableAgentExecutorInvoke(unittest.IsolatedAsyncioTestCase):
     async def test_ainvoke_adds_empty_chat_history_if_missing(self):
         from langchain_core.runnables import RunnableLambda

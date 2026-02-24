@@ -53,6 +53,7 @@ class CustomizableAgentExecutor(AgentExecutor):
         user_id: str,
         session_id: str,
         logger_instance: Optional[logging.Logger] = None,
+        channel: str = "web",
     ) -> "CustomizableAgentExecutor":
 
         current_logger = logger_instance if logger_instance else logger
@@ -76,6 +77,8 @@ class CustomizableAgentExecutor(AgentExecutor):
                 model=model_name,
                 anthropic_api_key=anthropic_api_key,
                 temperature=temperature,
+                max_retries=2,
+                max_tokens=2048,
             )
         else:
             from langchain_google_genai import ChatGoogleGenerativeAI
@@ -117,11 +120,24 @@ class CustomizableAgentExecutor(AgentExecutor):
             | ToolsAgentOutputParser()
         )
 
+        # Set executor limits per channel (AC-14, AC-15)
+        if channel == "session_open":
+            max_iterations = 3
+            max_execution_time = 15.0
+        elif channel in ("web", "telegram"):
+            max_iterations = 10
+            max_execution_time = 60.0
+        else:  # scheduled, heartbeat, etc.
+            max_iterations = 10
+            max_execution_time = 60.0
+
         instance = cls(
             agent=agent_runnable,
             tools=tools,
             verbose=True,
-            handle_parsing_errors=True
+            handle_parsing_errors=True,
+            max_iterations=max_iterations,
+            max_execution_time=max_execution_time,
         )
         return instance
 

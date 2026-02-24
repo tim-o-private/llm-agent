@@ -320,14 +320,76 @@ async def test_new_user_skips_bootstrap_context():
 
 
 @pytest.mark.asyncio
+async def test_empty_output_returns_silent():
+    """AC-17: Empty output from executor → silent=True, no persistence."""
+    mock_client = _mock_supabase(has_instructions=True)
+    service = SessionOpenService(mock_client)
+    mock_executor = AsyncMock()
+    mock_executor.tools = []
+    mock_executor.ainvoke = AsyncMock(return_value={"output": ""})
+    p_loader, p_db, p_mem = _patch_svc(mock_executor, has_memory=True)
+
+    with p_loader, p_db, p_mem, patch.object(
+        service, "_persist_ai_message", new_callable=AsyncMock
+    ) as mock_persist:
+        result = await service.run(user_id="u1", agent_name="assistant", session_id="s1")
+
+    assert result["silent"] is True
+    assert result["response"] == ""
+    mock_persist.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_no_text_content_output_returns_silent():
+    """AC-17: 'No text content in response.' output → silent=True."""
+    mock_client = _mock_supabase(has_instructions=True)
+    service = SessionOpenService(mock_client)
+    mock_executor = AsyncMock()
+    mock_executor.tools = []
+    mock_executor.ainvoke = AsyncMock(return_value={"output": "No text content in response."})
+    p_loader, p_db, p_mem = _patch_svc(mock_executor, has_memory=True)
+
+    with p_loader, p_db, p_mem, patch.object(
+        service, "_persist_ai_message", new_callable=AsyncMock
+    ) as mock_persist:
+        result = await service.run(user_id="u1", agent_name="assistant", session_id="s1")
+
+    assert result["silent"] is True
+    mock_persist.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_llm_error_returns_silent():
+    """AC-16: Exception from ainvoke → silent=True, no re-raise."""
+    mock_client = _mock_supabase(has_instructions=True)
+    service = SessionOpenService(mock_client)
+    mock_executor = AsyncMock()
+    mock_executor.tools = []
+    mock_executor.ainvoke = AsyncMock(side_effect=RuntimeError("rate limit exceeded"))
+    p_loader, p_db, p_mem = _patch_svc(mock_executor, has_memory=True)
+
+    with p_loader, p_db, p_mem, patch.object(
+        service, "_persist_ai_message", new_callable=AsyncMock
+    ) as mock_persist:
+        result = await service.run(user_id="u1", agent_name="assistant", session_id="s1")
+
+    assert result["silent"] is True
+    assert result["response"] == ""
+    mock_persist.assert_not_awaited()
+
+
+# --- _has_memory unit tests (min-memory integration) ---
+
+
+@pytest.mark.asyncio
 async def test_has_memory_returns_true_for_list_results():
     """_has_memory returns True when min-memory returns non-empty list."""
     mock_client = MagicMock()
     service = SessionOpenService(mock_client)
 
     with (
-        patch("os.getenv", side_effect=lambda k, d="": {"MEMORY_SERVER_URL": "http://mem:8000", "MEMORY_SERVER_BACKEND_KEY": "key"}.get(k, d)),
-        patch("src.core.agent_loader_db._resolve_memory_user_id", new_callable=AsyncMock, return_value="google-oauth2|123"),
+        patch("os.getenv", side_effect=lambda k, d="": {"MEMORY_SERVER_URL": "http://mem:8000", "MEMORY_SERVER_BACKEND_KEY": "key"}.get(k, d)),  # noqa: E501
+        patch("src.core.agent_loader_db._resolve_memory_user_id", new_callable=AsyncMock, return_value="google-oauth2|123"),  # noqa: E501
         patch("chatServer.services.memory_client.MemoryClient") as mock_mem_cls,
     ):
         mock_mem = MagicMock()
@@ -345,8 +407,8 @@ async def test_has_memory_returns_true_for_dict_with_memories():
     service = SessionOpenService(mock_client)
 
     with (
-        patch("os.getenv", side_effect=lambda k, d="": {"MEMORY_SERVER_URL": "http://mem:8000", "MEMORY_SERVER_BACKEND_KEY": "key"}.get(k, d)),
-        patch("src.core.agent_loader_db._resolve_memory_user_id", new_callable=AsyncMock, return_value="google-oauth2|123"),
+        patch("os.getenv", side_effect=lambda k, d="": {"MEMORY_SERVER_URL": "http://mem:8000", "MEMORY_SERVER_BACKEND_KEY": "key"}.get(k, d)),  # noqa: E501
+        patch("src.core.agent_loader_db._resolve_memory_user_id", new_callable=AsyncMock, return_value="google-oauth2|123"),  # noqa: E501
         patch("chatServer.services.memory_client.MemoryClient") as mock_mem_cls,
     ):
         mock_mem = MagicMock()
@@ -364,8 +426,8 @@ async def test_has_memory_returns_false_for_empty_results():
     service = SessionOpenService(mock_client)
 
     with (
-        patch("os.getenv", side_effect=lambda k, d="": {"MEMORY_SERVER_URL": "http://mem:8000", "MEMORY_SERVER_BACKEND_KEY": "key"}.get(k, d)),
-        patch("src.core.agent_loader_db._resolve_memory_user_id", new_callable=AsyncMock, return_value="google-oauth2|123"),
+        patch("os.getenv", side_effect=lambda k, d="": {"MEMORY_SERVER_URL": "http://mem:8000", "MEMORY_SERVER_BACKEND_KEY": "key"}.get(k, d)),  # noqa: E501
+        patch("src.core.agent_loader_db._resolve_memory_user_id", new_callable=AsyncMock, return_value="google-oauth2|123"),  # noqa: E501
         patch("chatServer.services.memory_client.MemoryClient") as mock_mem_cls,
     ):
         mock_mem = MagicMock()
@@ -395,8 +457,8 @@ async def test_has_memory_returns_false_on_error():
     service = SessionOpenService(mock_client)
 
     with (
-        patch("os.getenv", side_effect=lambda k, d="": {"MEMORY_SERVER_URL": "http://mem:8000", "MEMORY_SERVER_BACKEND_KEY": "key"}.get(k, d)),
-        patch("src.core.agent_loader_db._resolve_memory_user_id", new_callable=AsyncMock, return_value="u1"),
+        patch("os.getenv", side_effect=lambda k, d="": {"MEMORY_SERVER_URL": "http://mem:8000", "MEMORY_SERVER_BACKEND_KEY": "key"}.get(k, d)),  # noqa: E501
+        patch("src.core.agent_loader_db._resolve_memory_user_id", new_callable=AsyncMock, return_value="u1"),  # noqa: E501
         patch("chatServer.services.memory_client.MemoryClient") as mock_mem_cls,
     ):
         mock_mem = MagicMock()
