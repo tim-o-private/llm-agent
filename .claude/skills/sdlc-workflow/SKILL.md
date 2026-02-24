@@ -46,13 +46,20 @@ When work flows between domains, the orchestrator writes a contract in the task 
 - On shared branches, always `git pull` before starting work
 - Commit and push immediately when done — unpushed work blocks everyone else
 
-## Branch Naming
+## Branch Strategy
 
-```
-feat/SPEC-NNN-short-description
-```
+**Default: Single branch, single PR per spec.**
 
-One branch per functional unit. Created via git worktree for parallel work.
+The orchestrator creates one feature branch (`feat/SPEC-NNN-name`). Domain agents work sequentially on this branch, each committing their FU before the next agent starts. This avoids merge conflicts and worktree coordination overhead.
+
+**Exception: Worktrees for parallel cross-domain work.**
+
+Only use worktrees when:
+- The spec has truly independent FUs that don't share files
+- Time savings from parallelism outweigh merge coordination cost
+- The orchestrator explicitly decides this in the breakdown step
+
+Branch naming: `feat/SPEC-NNN-short-description`
 
 ## Commit Format
 
@@ -64,12 +71,21 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 Commit frequently — after each logical unit of work.
 
-## PR Per Functional Unit
+## Model Tiering
 
-Each self-contained piece gets its own PR:
-- Database migration + RLS (database-dev)
-- Service layer + API (backend-dev)
-- Frontend component + hook + tests (frontend-dev)
+| Role | Model | Rationale |
+|------|-------|-----------|
+| Orchestrator | opus | Contract authoring, judgment calls, dynamic reasoning |
+| Spec-writer | opus | Architecture decisions, codebase analysis |
+| Reviewer | opus | Deep semantic review, principle application |
+| Domain agents | sonnet | Well-scoped implementation with clear contracts |
+| Mechanical tasks | haiku | Config changes, file moves, trivially specific contracts |
+
+## PR Strategy
+
+**Default: Single PR per spec.** All FU commits go on one branch, one PR.
+
+**Exception:** Multi-PR only when the spec has truly parallel, independent FUs on separate branches.
 
 ## Testing Requirements
 
