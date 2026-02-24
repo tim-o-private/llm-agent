@@ -6,18 +6,32 @@
 User writes spec (or agent generates from requirements)
   -> User invokes orchestrator agent
   -> Orchestrator reads spec, creates team, breaks into tasks with domain assignments
-  -> Per functional unit:
-     -> Orchestrator creates worktree + branch
+  -> Creates single feature branch (default) or worktrees (parallel exception)
+  -> Per functional unit (sequentially on shared branch):
      -> Orchestrator writes contract in task description
-     -> Domain agent (database/backend/frontend/deployment) implements in worktree
-     -> Agent commits, pushes, creates PR
-     -> Reviewer checks diff against spec, patterns, scope boundaries, contracts
+     -> Domain agent (sonnet) implements, commits on shared branch
+     -> Reviewer (opus) checks diff against spec, patterns, scope
      -> [BLOCKER] -> Domain agent fixes -> Reviewer re-reviews
-     -> [Clean] -> Orchestrator reports PR to user
-     -> User UATs + merges
-     -> Orchestrator removes worktree, passes contract forward, unblocks next task
-  -> All tasks done -> Orchestrator updates spec status, cleans up team
+     -> [Clean] -> Next FU proceeds
+  -> UAT on the complete branch
+  -> Orchestrator reports PR to user
+  -> User reviews + merges
+  -> Orchestrator cleans up team
 ```
+
+## Model Tiering
+
+The orchestrator, reviewer, and spec-writer run on opus because they make judgment calls that require deep reasoning — contract authoring, architectural decisions, semantic code review. Domain agents run on sonnet because they execute well-defined contracts with clear inputs and outputs. Haiku handles mechanical tasks where the contract is trivially specific.
+
+This tiering optimizes cost and latency without sacrificing quality where it matters. The key insight: sonnet can follow a well-defined contract; opus writes the contract.
+
+| Role | Model | Rationale |
+|------|-------|-----------|
+| Orchestrator | opus | Contract authoring, judgment calls, dynamic reasoning |
+| Spec-writer | opus | Architecture decisions, codebase analysis |
+| Reviewer | opus | Deep semantic review, principle application |
+| Domain agents | sonnet | Well-scoped implementation with clear contracts |
+| Mechanical tasks | haiku | Config changes, file moves, trivially specific contracts |
 
 ## Domain Agent Team
 
@@ -152,7 +166,9 @@ Each domain agent has strict file scope. The reviewer checks these boundaries.
 | frontend-dev | `webApp/src/` | `chatServer/`, `supabase/` |
 | deployment-dev | Dockerfiles, fly.toml, `.github/`, `requirements.txt`, `package.json` | Application code |
 
-## Git Worktree Management
+## Git Worktree Management (Exception)
+
+> **Note:** Single-branch sequential is the default strategy. Worktrees are only used when the orchestrator explicitly chooses parallel execution for independent cross-domain FUs.
 
 Git worktrees allow multiple branches to be checked out simultaneously in different directories:
 

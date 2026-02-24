@@ -5,6 +5,17 @@ description: PostgreSQL and Supabase database patterns. Use when writing SQL mig
 
 # Database Patterns
 
+## Principles That Apply
+
+| ID | Rule | Enforcement |
+|----|------|-------------|
+| A3 | Supabase REST+RLS for user CRUD; psycopg for framework ops | Reviewer |
+| A8 | All tables: RLS enabled + `is_record_owner()` policy | `validate-patterns.sh` BLOCKS |
+| A9 | UUID FKs with ON DELETE, never `agent_name TEXT` | `validate-patterns.sh` BLOCKS |
+| A10 | Entity "foo" → table `foos`, migration `create_foos.sql` | Reviewer |
+
+For full rationale on any principle: `.claude/skills/architecture-principles/reference.md`
+
 ## Core Rule
 
 All data lives in one PostgreSQL database on Supabase. No SQLite, Redis, MongoDB, or additional data stores.
@@ -81,8 +92,9 @@ Migration files are named `YYYYMMDDHHMMSS_descriptive_name.sql`. When agents wor
 
 1. **PostgREST upsert** — Supabase PostgREST `ON CONFLICT` requires a real UNIQUE constraint (not partial unique indexes). Use select-then-insert if needed.
 2. **PostgREST function overloads** — PostgREST can't disambiguate overloaded SQL functions (same name, different arg counts). When adding a new overload of a function called via PostgREST, **drop the old signature in the same migration**. Leaving both causes PGRST203 errors at runtime.
-3. **`ON CONFLICT DO UPDATE` must include `type`** — Upserts on the `tools` table must include `type = EXCLUDED.type` in the SET clause. Omitting it leaves stale `type` values (e.g., `CRUDTool` instead of `CreateTaskTool`), silently breaking tool loading. The `validate-patterns.sh` hook enforces this.
-4. **Service-role key bypasses RLS** — The `service_role` key used by backend services bypasses all RLS policies. User data isolation is enforced at the API layer via `UserScopedClient` (SPEC-017), with RLS as defense-in-depth. Never use raw `get_supabase_client` in services — use `get_user_scoped_client` or `get_system_client`.
+3. **`ON CONFLICT DO UPDATE` must include `type`** — Upserts on the `tools` table must include `type = EXCLUDED.type` in the SET clause. Omitting it leaves stale `type` values, silently breaking tool loading. The `validate-patterns.sh` hook enforces this.
+4. **`agent_tools.is_active` reactivation** — `INSERT ON CONFLICT DO NOTHING` won't reactivate a deactivated row. Use `UPDATE ... SET is_active = true WHERE is_active = false` instead. Discovered in SPEC-019 when `create_tasks` link was silently missing.
+5. **Service-role key bypasses RLS** — The `service_role` key used by backend services bypasses all RLS policies. User data isolation is enforced at the API layer via `UserScopedClient` (SPEC-017), with RLS as defense-in-depth. Never use raw `get_supabase_client` in services — use `get_user_scoped_client` or `get_system_client`.
 
 ## Detailed Reference
 

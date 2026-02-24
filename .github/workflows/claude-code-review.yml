@@ -25,7 +25,20 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
-            Review this PR against the project's architecture principles and spec.
+            ${{ github.event.action == 'synchronize' && 'INCREMENTAL REVIEW — this is a follow-up push after a previous review.
+
+            Steps:
+            1. Read the PREVIOUS review comments on this PR using `gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews`
+            2. Review ONLY the new commits since the last review: `git log --oneline origin/${{ github.event.pull_request.base.ref }}..HEAD`
+            3. Verify previously reported blockers are resolved
+            4. Check that fixes did not introduce new violations
+            5. Do NOT re-check all ACs — only verify blocker resolution + new code
+
+            Post findings as a PR review:
+            - **APPROVED** if all previous blockers are resolved and no new issues
+            - **BLOCKERS** if previous issues persist or new violations found
+            - **NOTES** for non-blocking observations'
+            || 'Review this PR against the project'\''s architecture principles and spec.
 
             Steps:
             1. Read `.claude/skills/architecture-principles/reference.md` for the full principles (S1-S7, F1-F2, A1-A14).
@@ -46,4 +59,4 @@ jobs:
             Post your findings as a PR review comment using `gh pr review` with:
             - **APPROVED** if no issues found
             - **BLOCKERS** listing each violation with its principle ID (e.g. `A8: reminders table missing RLS`)
-            - **NOTES** for non-blocking observations
+            - **NOTES** for non-blocking observations' }}

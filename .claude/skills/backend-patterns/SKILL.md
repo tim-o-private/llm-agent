@@ -1,9 +1,22 @@
 ---
 name: backend-patterns
-description: FastAPI backend and LangChain agent patterns for chatServer/ and src/. Use when writing or modifying Python code in chatServer/, src/core/, or tests/. Covers service layer, dependency injection, Pydantic validation, RLS, auth (ES256), CRUDTool, agent loading, executor caching, and content block handling.
+description: FastAPI backend and LangChain agent patterns for chatServer/ and src/. Use when writing or modifying Python code in chatServer/, src/core/, or tests/. Covers service layer, dependency injection, Pydantic validation, RLS, auth (ES256), agent tools (BaseTool), agent loading, executor caching, prompt template rendering, and content block handling.
 ---
 
 # Backend Patterns
+
+## Principles That Apply
+
+| ID | Rule | Enforcement |
+|----|------|-------------|
+| A1 | Thin routers, fat services — no `.select()` in routers | `validate-patterns.sh` BLOCKS |
+| A3 | Supabase REST+RLS for user CRUD; psycopg for framework ops | Reviewer |
+| A5 | Auth via `Depends(get_current_user)` and `getSession()` | `validate-patterns.sh` BLOCKS in hooks |
+| A6 | New capability = BaseTool subclass + service + DB row | backend-patterns recipe |
+| A8 | Routers use `get_user_scoped_client`; raw client blocked | `validate-patterns.sh` BLOCKS |
+| A10 | Entity "foo" → `foo_service.py`, `foo_router.py` | Reviewer + `task-completed-gate.sh` |
+
+For full rationale on any principle: `.claude/skills/architecture-principles/reference.md`
 
 ## Architecture: Routers → Services → Database
 
@@ -30,7 +43,7 @@ Before writing backend code, verify:
 - [ ] RLS handles user scoping (no manual `user_id` filtering)
 - [ ] `Depends(get_current_user)` for auth — no manual header parsing
 - [ ] Error handling re-raises HTTPException, logs unexpected errors
-- [ ] Agent tools use the right pattern (see "Choosing a Tool Pattern" below)
+- [ ] Agent tools use dedicated BaseTool subclass + service (see "Agent Tool Pattern" below)
 - [ ] Content block lists normalized to strings in chat responses
 - [ ] Tool name follows `verb_resource` pattern (e.g., `create_reminder`, `list_reminders`)
 - [ ] Tool verb is from approved list: create, list, get, update, delete, search, save, read, send, fetch
@@ -48,23 +61,19 @@ Checklist lives in `agent_schedules.config` JSONB under `heartbeat_checklist` ke
 
 ### Onboarding Detection
 
-`build_agent_prompt()` accepts `memory_notes` parameter. When both `memory_notes` and `user_instructions` are empty on interactive channels (`web`/`telegram`), an onboarding section is injected into the system prompt. Self-resolving: once the agent calls `save_memory` or `update_instructions`, subsequent loads skip onboarding.
+`build_agent_prompt()` accepts `memory_notes` parameter. When both `memory_notes` and `user_instructions` are empty on interactive channels (`web`/`telegram`), an onboarding section is injected into the system prompt. Self-resolving: once the agent calls `store_memory` or `update_instructions`, subsequent loads skip onboarding.
 
-## Choosing a Tool Pattern
+### Prompt Template Rendering (SPEC-019)
 
-Two patterns exist for agent tools. Choose based on the resource characteristics:
+`build_agent_prompt()` accepts an optional `prompt_template` parameter (from `agent_configurations.prompt_template`). When set, uses `string.Template` (`$placeholder` syntax) instead of hardcoded assembly. Empty sections are auto-stripped via regex.
 
-| Use **CRUDTool** (DB-configured) when... | Use **dedicated BaseTool** subclasses when... |
-|-------------------------------------------|-----------------------------------------------|
-| Flat table, no relationships | Hierarchical or relational data (e.g., tasks + subtasks) |
-| No business logic beyond insert/select | Status transitions, computed fields, validation |
-| Schema is stable and simple | Rich query filtering (date ranges, status, parent) |
-| Tool is low-priority / experimental | Tool is core to agent UX |
-| Async is not required | Must be async (event loop safety) |
+Available placeholders: `$soul`, `$identity`, `$operating_model`, `$channel_guidance`, `$tool_guidance`, `$instructions`, `$memory_notes`, `$session`. Falls back to hardcoded assembly when `prompt_template` is None/empty.
 
-**Dedicated tool pattern** (preferred for new tools): `BaseTool` subclass in `chatServer/tools/` + `Service` in `chatServer/services/`. See `task_tools.py` / `task_service.py` or `reminder_tools.py` / `reminder_service.py` as references.
+## Agent Tool Pattern
 
-**CRUDTool pattern**: configured entirely via `agent_tools` JSONB. See `src/core/tools/crud_tool.py`. Appropriate for simple flat-table operations.
+All agent tools use **dedicated BaseTool subclasses** — `BaseTool` subclass in `chatServer/tools/` + `Service` in `chatServer/services/`. See `task_tools.py` / `task_service.py` or `reminder_tools.py` / `reminder_service.py` as references.
+
+CRUDTool (DB-configured via JSONB) was deprecated in SPEC-019. All tools are now dedicated BaseTool subclasses with explicit `args_schema`, async support, and service-layer delegation.
 
 ## Recipe: Add a New Tool (End-to-End)
 

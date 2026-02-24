@@ -164,34 +164,9 @@ async def get_tasks(user_id: str = Depends(get_current_user)):
 
 **Never manually parse Authorization headers in endpoints.**
 
-## 7. Choosing an Agent Tool Pattern
+## 7. Agent Tool Pattern: Dedicated BaseTool + Service
 
-Two patterns exist. Choose based on the resource:
-
-| Use **CRUDTool** when... | Use **dedicated BaseTool** when... |
-|---------------------------|-------------------------------------|
-| Flat table, no relationships | Hierarchical/relational data (tasks + subtasks) |
-| No business logic beyond insert/select | Status transitions, computed fields, validation |
-| Schema is stable and simple | Rich query filtering (date ranges, status, parent) |
-| Tool is low-priority / experimental | Tool is core to agent UX |
-| Async not required | Must be async (event loop safety) |
-
-### Pattern A: CRUDTool (DB-configured)
-
-```python
-# Tool behavior configured entirely via JSONB in agent_tools table
-INSERT INTO agent_tools (agent_id, name, description, config) VALUES
-('agent-uuid', 'fetch_notes', 'Fetch user notes', {
-    "table_name": "notes",
-    "method": "fetch",
-    "field_map": {},
-    "runtime_args_schema": {
-        "filters": {"type": "dict", "optional": true}
-    }
-});
-```
-
-### Pattern B: Dedicated BaseTool + Service (preferred for new tools)
+All agent tools use dedicated BaseTool subclasses with service-layer delegation. CRUDTool (DB-configured via JSONB) was deprecated in SPEC-019.
 
 ```python
 # chatServer/services/task_service.py
@@ -319,24 +294,24 @@ name = "gmail_search"
 class GmailSearchTool(BaseTool): ...
 ```
 
-### Legacy Tools (Pre-Convention)
+### Canonical Tool Names (SPEC-019)
 
-Existing tools that predate this convention should NOT be renamed without a migration plan (DB `tools.name`, `agent_tool_type` enum, agent_tools rows). They are documented as legacy exceptions. See `docs/sdlc/BACKLOG.md` for the rename backlog.
+All tools were canonicalized to `verb_resource` naming in SPEC-019. The 23 active tools use standard verbs. Legacy names no longer exist in the DB.
 
 ## 13. Tool Error Handling
 
 ```python
-from langchain_core.tools import ToolException
+from langchain_core.tools import BaseTool
 
-class CRUDTool(BaseTool):
-    def _run(self, data=None, filters=None) -> str:
+class CreateTaskTool(BaseTool):
+    async def _arun(self, title: str, ...) -> str:
         try:
-            self._validate_inputs(data, filters)
-            result = self._execute_operation(data, filters)
-            return f"Success: {result}"
-        except ValidationError as e:
-            raise ToolException(f"Invalid input: {e}")
+            service = TaskService(db)
+            task = await service.create_task(user_id=self.user_id, title=title, ...)
+            return f'Created task: "{title}"'
+        except ValueError as e:
+            return f"Error: {e}"
         except Exception as e:
-            logger.error(f"CRUDTool error: {e}")
-            raise ToolException(f"Database operation failed: {e}")
+            logger.error(f"create_tasks failed for user {self.user_id}: {e}")
+            return f"Failed to create task: {e}"
 ```

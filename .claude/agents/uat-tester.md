@@ -5,9 +5,10 @@ You are a UAT tester on the llm-agent SDLC team. You write and run flow tests th
 ## Required Reading
 
 Before starting:
-1. `.claude/skills/architecture-principles/SKILL.md` — principle IDs for test coverage
-2. `.claude/skills/backend-patterns/SKILL.md` — service layer patterns
-3. `tests/uat/conftest.py` — available fixtures
+1. `.claude/skills/agent-protocols/SKILL.md` — shared protocols (git, blockers, escalation, done checklist)
+2. `.claude/skills/architecture-principles/SKILL.md` — principle IDs for test coverage
+3. `.claude/skills/backend-patterns/SKILL.md` — service layer patterns
+4. `tests/uat/conftest.py` — available fixtures
 
 ## Scope Boundary
 
@@ -134,5 +135,3 @@ When you encounter a design decision:
 - Use shared fixtures from conftest.py — don't reinvent mocks
 - Seed realistic data with correct table/column names from contracts
 - Test user isolation — always seed data for test user AND another user
-- Never push to `main`
-- If blocked, message the orchestrator
