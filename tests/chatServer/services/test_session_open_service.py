@@ -254,11 +254,66 @@ async def test_last_message_at_passed_to_loader():
         patch(_DB_CONN, new=_mock_get_db_connection(ts)),
         patch(f"{_SVC}.SessionOpenService._has_memory", new_callable=AsyncMock, return_value=True),
         patch.object(service, "_persist_ai_message", new_callable=AsyncMock),
+        patch(f"{_SVC}.BootstrapContextService") as mock_bcs_cls,
     ):
+        mock_bcs = AsyncMock()
+        mock_bcs.gather = AsyncMock(return_value=MagicMock(render=MagicMock(return_value="Tasks: 2 active")))
+        mock_bcs_cls.return_value = mock_bcs
         await service.run(user_id="u1", agent_name="assistant", session_id="s1")
 
     call_kwargs = mock_loader.call_args[1]
     assert call_kwargs["last_message_at"] == ts
+
+
+@pytest.mark.asyncio
+async def test_returning_user_gets_bootstrap_context():
+    """Returning user: BootstrapContextService.gather() called and result passed to loader."""
+    mock_client = _mock_supabase(has_instructions=True)
+    service = SessionOpenService(mock_client)
+    mock_executor = AsyncMock()
+    mock_executor.tools = []
+    mock_executor.ainvoke = AsyncMock(return_value={"output": "WAKEUP_SILENT"})
+
+    rendered = "Tasks: 2 active task(s)\nReminders: No upcoming reminders.\nEmail: 1 account(s) connected: alice@example.com"  # noqa: E501
+
+    with (
+        patch(f"{_SVC}.load_agent_executor_db_async", return_value=mock_executor) as mock_loader,
+        patch(_DB_CONN, new=_mock_get_db_connection()),
+        patch(f"{_SVC}.SessionOpenService._has_memory", new_callable=AsyncMock, return_value=True),
+        patch.object(service, "_persist_ai_message", new_callable=AsyncMock),
+        patch(f"{_SVC}.BootstrapContextService") as mock_bcs_cls,
+    ):
+        mock_ctx = MagicMock()
+        mock_ctx.render.return_value = rendered
+        mock_bcs = AsyncMock()
+        mock_bcs.gather = AsyncMock(return_value=mock_ctx)
+        mock_bcs_cls.return_value = mock_bcs
+
+        await service.run(user_id="u1", agent_name="assistant", session_id="s1")
+
+    mock_bcs.gather.assert_awaited_once_with("u1")
+    call_kwargs = mock_loader.call_args[1]
+    assert call_kwargs["bootstrap_context"] == rendered
+
+
+@pytest.mark.asyncio
+async def test_new_user_skips_bootstrap_context():
+    """New user: BootstrapContextService never called, bootstrap_context=None passed to loader."""
+    mock_client = _mock_supabase(has_instructions=False)
+    service = SessionOpenService(mock_client)
+    mock_executor = AsyncMock()
+    mock_executor.tools = []
+    mock_executor.ainvoke = AsyncMock(return_value={"output": "Hello! I'm your assistant."})
+    p_loader, p_db, p_mem = _patch_svc(mock_executor, has_memory=False)
+
+    with p_loader as mock_loader, p_db, p_mem, patch.object(
+        service, "_persist_ai_message", new_callable=AsyncMock
+    ), patch(f"{_SVC}.BootstrapContextService") as mock_bcs_cls:
+        await service.run(user_id="u1", agent_name="assistant", session_id="s1")
+
+    mock_bcs_cls.assert_not_called()
+    call_kwargs = mock_loader.call_args[1]
+    assert call_kwargs["bootstrap_context"] is None
 
 
 # --- _has_memory unit tests (min-memory integration) ---
