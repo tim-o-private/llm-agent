@@ -130,7 +130,9 @@ class TestSearchMemoryTool:
     @pytest.mark.asyncio
     async def test_calls_search_with_correct_args(self, search_tool, mock_memory_client):
         await search_tool._arun(query="project deadlines")
-        mock_memory_client.call_tool.assert_called_once_with("retrieve_context", {"query": "project deadlines", "limit": 10})
+        mock_memory_client.call_tool.assert_called_once_with(
+            "retrieve_context", {"query": "project deadlines", "limit": 10}
+        )
 
     @pytest.mark.asyncio
     async def test_handles_client_error_gracefully(self, search_tool, mock_memory_client):
