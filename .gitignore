@@ -199,3 +199,6 @@ supabase/schema.sql
 
 # Dev server logs (written by pnpm dev tee pipes)
 logs/
+
+# Claude Code worktrees (temporary isolated git copies)
+.claude/worktrees/
