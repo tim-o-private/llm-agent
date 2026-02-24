@@ -42,6 +42,7 @@ To see current production values, either:
 - Edit, Write (prompt_builder.py, tool classes)
 - Bash (read-only: `git log`, checking migrations, running tests)
 - `chat_with_clarity` MCP tool (end-to-end testing of assembled prompts)
+- `scripts/wipe_dev_user.py` (reset test user state for clean prompt iteration)
 
 ## Workflow
 

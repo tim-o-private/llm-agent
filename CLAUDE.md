@@ -58,11 +58,11 @@ cd webApp && pnpm lint      # Frontend lint
 
 A local MCP server (`scripts/mcp/clarity_dev_server.py`) exposes one tool for agents and Claude Code:
 
-- **`chat_with_clarity(message, session_id?, agent_name?)`** — sends a message to the running chatServer (`localhost:3001`) and returns the agent's response. Mints an HS256 JWT using `SUPABASE_JWT_SECRET` + `CLARITY_DEV_USER_ID`.
+- **`chat_with_clarity(message, session_id?, agent_name?)`** — sends a message to the running chatServer (`localhost:3001`) and returns the agent's response. Authenticates as the dev test user via `CLARITY_DEV_USERNAME`/`CLARITY_DEV_PASSWORD` (falls back to HS256 JWT via `CLARITY_DEV_USER_ID` if credentials aren't set).
 
 **Use this for:** verifying tool integrations end-to-end, UAT without browser access, confirming agent responses match spec.
 
-**Requires:** `pnpm dev` running + `CLARITY_DEV_USER_ID` set in `.env` (Supabase user UUID).
+**Requires:** `pnpm dev` running + `CLARITY_DEV_USERNAME`/`CLARITY_DEV_PASSWORD` in `.env` (or legacy `CLARITY_DEV_USER_ID`).
 
 **Log access:** Agents read `logs/chatserver.log` and `logs/webapp.log` directly with `Read`/`Grep`. For production: `flyctl logs -a clarity-chatserver` via Bash.
 
