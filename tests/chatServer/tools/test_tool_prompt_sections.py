@@ -85,11 +85,11 @@ class TestStoreMemoryToolPromptSection:
         result = StoreMemoryTool.prompt_section("scheduled")
         assert result is None
 
-    def test_web_mentions_store_and_recall(self):
-        """StoreMemoryTool.prompt_section('web') mentions store_memory and recall."""
+    def test_web_mentions_create_and_search(self):
+        """StoreMemoryTool.prompt_section('web') mentions create_memories and search_memories."""
         result = StoreMemoryTool.prompt_section("web")
-        assert "store_memory" in result.lower()
-        assert "recall" in result.lower()
+        assert "create_memories" in result.lower()
+        assert "search_memories" in result.lower()
 
     def test_web_and_telegram_same(self):
         """StoreMemoryTool prompt sections for web and telegram are the same."""
