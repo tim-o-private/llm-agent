@@ -5,11 +5,10 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from chatServer.tools.task_tools import (
-    CreateTaskTool,
-    DeleteTaskTool,
+    CreateTasksTool,
+    DeleteTasksTool,
     GetTasksTool,
-    GetTaskTool,
-    UpdateTaskTool,
+    UpdateTasksTool,
     _format_task_detail,
     _format_task_line,
 )
@@ -87,7 +86,7 @@ def test_format_task_detail():
     assert "[ ] 2. Sub 2" in result
 
 
-# --- GetTasksTool ---
+# --- GetTasksTool (list mode) ---
 
 
 @pytest.mark.asyncio
@@ -145,14 +144,14 @@ async def test_get_tasks_error_handling(mock_task_service, tool_kwargs):
     with patch("chatServer.tools.task_tools._get_task_service", return_value=mock_task_service):
         result = await tool._arun()
 
-    assert "Failed to list tasks" in result
+    assert "Failed to get tasks" in result
 
 
-# --- GetTaskTool ---
+# --- GetTasksTool (single task by ID) ---
 
 
 @pytest.mark.asyncio
-async def test_get_task_found(mock_task_service, tool_kwargs):
+async def test_get_tasks_by_id_found(mock_task_service, tool_kwargs):
     mock_task_service.get_task.return_value = {
         "id": "t1",
         "title": "My Task",
@@ -161,143 +160,177 @@ async def test_get_task_found(mock_task_service, tool_kwargs):
         "subtasks": [],
     }
 
-    tool = GetTaskTool(**tool_kwargs)
+    tool = GetTasksTool(**tool_kwargs)
     with patch("chatServer.tools.task_tools._get_task_service", return_value=mock_task_service):
-        result = await tool._arun(task_id="t1")
+        result = await tool._arun(id="t1")
 
     assert "My Task" in result
     assert "t1" in result
+    mock_task_service.get_task.assert_called_once_with(user_id="test-user-id", task_id="t1")
 
 
 @pytest.mark.asyncio
-async def test_get_task_not_found(mock_task_service, tool_kwargs):
+async def test_get_tasks_by_id_not_found(mock_task_service, tool_kwargs):
     mock_task_service.get_task.return_value = None
 
-    tool = GetTaskTool(**tool_kwargs)
+    tool = GetTasksTool(**tool_kwargs)
     with patch("chatServer.tools.task_tools._get_task_service", return_value=mock_task_service):
-        result = await tool._arun(task_id="bad-id")
+        result = await tool._arun(id="bad-id")
 
     assert "not found" in result
 
 
-# --- CreateTaskTool ---
+# --- CreateTasksTool ---
 
 
 @pytest.mark.asyncio
-async def test_create_task_basic(mock_task_service, tool_kwargs):
-    mock_task_service.create_task.return_value = {"id": "new-1", "title": "Buy groceries"}
+async def test_create_tasks_single(mock_task_service, tool_kwargs):
+    mock_task_service.create_tasks.return_value = [
+        {"id": "new-1", "title": "Buy groceries", "priority": 2, "status": "pending"},
+    ]
 
-    tool = CreateTaskTool(**tool_kwargs)
+    tool = CreateTasksTool(**tool_kwargs)
     with patch("chatServer.tools.task_tools._get_task_service", return_value=mock_task_service):
-        result = await tool._arun(title="Buy groceries")
+        result = await tool._arun(tasks=[{"title": "Buy groceries"}])
 
-    assert 'Created task: "Buy groceries"' in result
+    assert 'Created: "Buy groceries"' in result
     assert "status: pending" in result
 
 
 @pytest.mark.asyncio
-async def test_create_task_with_all_fields(mock_task_service, tool_kwargs):
-    mock_task_service.create_task.return_value = {"id": "new-2", "title": "Review PR"}
+async def test_create_tasks_batch(mock_task_service, tool_kwargs):
+    mock_task_service.create_tasks.return_value = [
+        {"id": "new-1", "title": "Task A", "priority": 2, "status": "pending"},
+        {"id": "new-2", "title": "Task B", "priority": 4, "status": "planning", "due_date": "2026-03-01"},
+    ]
 
-    tool = CreateTaskTool(**tool_kwargs)
+    tool = CreateTasksTool(**tool_kwargs)
     with patch("chatServer.tools.task_tools._get_task_service", return_value=mock_task_service):
-        result = await tool._arun(
-            title="Review PR",
-            priority=4,
-            due_date="2026-02-25",
-            status="planning",
-            category="work",
-        )
+        result = await tool._arun(tasks=[
+            {"title": "Task A"},
+            {"title": "Task B", "priority": 4, "due_date": "2026-03-01", "status": "planning"},
+        ])
 
-    assert "Review PR" in result
-    assert "due: 2026-02-25" in result
-    assert "high" in result
+    assert "Task A" in result
+    assert "Task B" in result
+    assert "due: 2026-03-01" in result
 
 
 @pytest.mark.asyncio
-async def test_create_subtask(mock_task_service, tool_kwargs):
-    mock_task_service.create_task.return_value = {
-        "id": "sub-1",
-        "title": "Step 1",
-        "parent_task_id": "parent-1",
-    }
+async def test_create_tasks_with_error(mock_task_service, tool_kwargs):
+    mock_task_service.create_tasks.return_value = [
+        {"id": "new-1", "title": "Good", "priority": 2, "status": "pending"},
+        {"error": "Missing required field 'title'"},
+    ]
 
-    tool = CreateTaskTool(**tool_kwargs)
+    tool = CreateTasksTool(**tool_kwargs)
     with patch("chatServer.tools.task_tools._get_task_service", return_value=mock_task_service):
-        result = await tool._arun(title="Step 1", parent_task_id="parent-1")
+        result = await tool._arun(tasks=[{"title": "Good"}, {}])
+
+    assert "Good" in result
+    assert "Error:" in result
+
+
+@pytest.mark.asyncio
+async def test_create_tasks_subtask(mock_task_service, tool_kwargs):
+    mock_task_service.create_tasks.return_value = [
+        {"id": "sub-1", "title": "Step 1", "priority": 2, "status": "pending", "parent_task_id": "parent-1"},
+    ]
+
+    tool = CreateTasksTool(**tool_kwargs)
+    with patch("chatServer.tools.task_tools._get_task_service", return_value=mock_task_service):
+        result = await tool._arun(tasks=[{"title": "Step 1", "parent_task_id": "parent-1"}])
 
     assert "[subtask of parent-1]" in result
 
 
-@pytest.mark.asyncio
-async def test_create_task_validation_error(mock_task_service, tool_kwargs):
-    mock_task_service.create_task.side_effect = ValueError("Initial status must be 'pending' or 'planning'")
-
-    tool = CreateTaskTool(**tool_kwargs)
-    with patch("chatServer.tools.task_tools._get_task_service", return_value=mock_task_service):
-        result = await tool._arun(title="Bad", status="completed")
-
-    assert "Error:" in result
-
-
-# --- UpdateTaskTool ---
+# --- UpdateTasksTool ---
 
 
 @pytest.mark.asyncio
-async def test_update_task_status(mock_task_service, tool_kwargs):
-    mock_task_service.update_task.return_value = {"id": "t1", "title": "Done Task", "status": "completed"}
+async def test_update_tasks_single(mock_task_service, tool_kwargs):
+    mock_task_service.update_tasks.return_value = [
+        {"id": "t1", "title": "Done Task", "changes": ["status → completed ✓"]},
+    ]
 
-    tool = UpdateTaskTool(**tool_kwargs)
+    tool = UpdateTasksTool(**tool_kwargs)
     with patch("chatServer.tools.task_tools._get_task_service", return_value=mock_task_service):
-        result = await tool._arun(task_id="t1", status="completed")
+        result = await tool._arun(tasks=[{"id": "t1", "status": "completed"}])
 
     assert 'Updated "Done Task"' in result
     assert "status → completed ✓" in result
 
 
 @pytest.mark.asyncio
-async def test_update_task_multiple_fields(mock_task_service, tool_kwargs):
-    mock_task_service.update_task.return_value = {"id": "t1", "title": "New Title"}
+async def test_update_tasks_batch(mock_task_service, tool_kwargs):
+    mock_task_service.update_tasks.return_value = [
+        {"id": "t1", "title": "Task A", "changes": ["status → completed ✓"]},
+        {"id": "t2", "title": "Task B", "changes": ['title → "New Title"', "priority → URGENT"]},
+    ]
 
-    tool = UpdateTaskTool(**tool_kwargs)
+    tool = UpdateTasksTool(**tool_kwargs)
     with patch("chatServer.tools.task_tools._get_task_service", return_value=mock_task_service):
-        result = await tool._arun(task_id="t1", title="New Title", priority=5)
+        result = await tool._arun(tasks=[
+            {"id": "t1", "status": "completed"},
+            {"id": "t2", "title": "New Title", "priority": 5},
+        ])
 
-    assert "New Title" in result
-    assert "URGENT" in result
+    assert "Task A" in result
+    assert "Task B" in result
 
 
 @pytest.mark.asyncio
-async def test_update_task_not_found(mock_task_service, tool_kwargs):
-    mock_task_service.update_task.return_value = None
+async def test_update_tasks_not_found(mock_task_service, tool_kwargs):
+    mock_task_service.update_tasks.return_value = [
+        {"id": "bad-id", "error": "Task 'bad-id' not found."},
+    ]
 
-    tool = UpdateTaskTool(**tool_kwargs)
+    tool = UpdateTasksTool(**tool_kwargs)
     with patch("chatServer.tools.task_tools._get_task_service", return_value=mock_task_service):
-        result = await tool._arun(task_id="bad-id", title="X")
+        result = await tool._arun(tasks=[{"id": "bad-id", "title": "X"}])
 
     assert "not found" in result
 
 
-# --- DeleteTaskTool ---
+# --- DeleteTasksTool ---
 
 
 @pytest.mark.asyncio
-async def test_delete_task_success(mock_task_service, tool_kwargs):
-    mock_task_service.delete_task.return_value = {"id": "t1", "title": "Old Task"}
+async def test_delete_tasks_single(mock_task_service, tool_kwargs):
+    mock_task_service.delete_tasks.return_value = [
+        {"id": "t1", "title": "Old Task"},
+    ]
 
-    tool = DeleteTaskTool(**tool_kwargs)
+    tool = DeleteTasksTool(**tool_kwargs)
     with patch("chatServer.tools.task_tools._get_task_service", return_value=mock_task_service):
-        result = await tool._arun(task_id="t1")
+        result = await tool._arun(ids=["t1"])
 
-    assert 'Deleted task: "Old Task"' in result
+    assert 'Deleted: "Old Task"' in result
 
 
 @pytest.mark.asyncio
-async def test_delete_task_not_found(mock_task_service, tool_kwargs):
-    mock_task_service.delete_task.return_value = None
+async def test_delete_tasks_batch(mock_task_service, tool_kwargs):
+    mock_task_service.delete_tasks.return_value = [
+        {"id": "t1", "title": "Task A"},
+        {"id": "t2", "title": "Task B"},
+    ]
 
-    tool = DeleteTaskTool(**tool_kwargs)
+    tool = DeleteTasksTool(**tool_kwargs)
     with patch("chatServer.tools.task_tools._get_task_service", return_value=mock_task_service):
-        result = await tool._arun(task_id="bad-id")
+        result = await tool._arun(ids=["t1", "t2"])
+
+    assert "Task A" in result
+    assert "Task B" in result
+
+
+@pytest.mark.asyncio
+async def test_delete_tasks_not_found(mock_task_service, tool_kwargs):
+    mock_task_service.delete_tasks.return_value = [
+        {"id": "bad-id", "error": "Task 'bad-id' not found."},
+    ]
+
+    tool = DeleteTasksTool(**tool_kwargs)
+    with patch("chatServer.tools.task_tools._get_task_service", return_value=mock_task_service):
+        result = await tool._arun(ids=["bad-id"])
 
     assert "not found" in result
