@@ -1,6 +1,6 @@
 """Task tools for agent integration.
 
-Provides GetTasksTool, GetTaskTool, CreateTaskTool, UpdateTaskTool, DeleteTaskTool
+Provides GetTasksTool, CreateTasksTool, UpdateTasksTool, DeleteTasksTool
 for LangChain agents. Follows the BaseTool pattern established by reminder_tools.py.
 """
 
@@ -85,6 +85,10 @@ async def _get_task_service(user_id: str):
 class GetTasksInput(BaseModel):
     """Input schema for get_tasks tool."""
 
+    id: Optional[str] = Field(
+        default=None,
+        description="UUID of a specific task to retrieve with full detail. When provided, other filters are ignored.",
+    )
     status: Optional[str] = Field(
         default=None,
         description="Filter by status: 'pending', 'planning', 'in_progress', 'completed', 'skipped', 'deferred'",
@@ -105,11 +109,13 @@ class GetTasksInput(BaseModel):
 
 
 class GetTasksTool(BaseTool):
-    """List user's tasks with optional filters."""
+    """List user's tasks with optional filters, or get a single task by ID."""
 
     name: str = "get_tasks"
     description: str = (
-        "List the user's tasks. By default shows top-level pending/in-progress tasks. "
+        "List the user's tasks, or get a single task by ID. "
+        "By default shows top-level pending/in-progress tasks. "
+        "Pass 'id' to get full detail on one task (including subtasks). "
         "Use filters to narrow results by status, due date, or to include completed tasks and subtasks."
     )
     args_schema: Type[BaseModel] = GetTasksInput
@@ -123,19 +129,20 @@ class GetTasksTool(BaseTool):
     def prompt_section(cls, channel: str) -> str | None:
         """Return behavioral guidance for the agent prompt, or None to omit."""
         if channel in ("web", "telegram"):
-            return "Tasks: Check get_tasks at conversation start to see what the user is working on. When they mention something actionable, use create_task. Update status as work progresses."  # noqa: E501
+            return "Tasks: Check get_tasks at conversation start to see what the user is working on. When they mention something actionable, use create_tasks. Update status as work progresses with update_tasks."  # noqa: E501
         elif channel == "heartbeat":
             return "Tasks: Call get_tasks to check for overdue or stale tasks. Report any that need attention."
         elif channel == "scheduled":
             return None
         else:
-            return "Tasks: Check get_tasks at conversation start to see what the user is working on. When they mention something actionable, use create_task. Update status as work progresses."  # noqa: E501
+            return "Tasks: Check get_tasks at conversation start to see what the user is working on. When they mention something actionable, use create_tasks. Update status as work progresses with update_tasks."  # noqa: E501
 
     def _run(self, **kwargs) -> str:
         return "get_tasks requires async execution. Use _arun."
 
     async def _arun(
         self,
+        id: Optional[str] = None,
         status: Optional[str] = None,
         due_date: Optional[str] = None,
         include_completed: bool = False,
@@ -144,6 +151,15 @@ class GetTasksTool(BaseTool):
     ) -> str:
         try:
             service = await _get_task_service(self.user_id)
+
+            # Single task detail mode
+            if id:
+                task = await service.get_task(user_id=self.user_id, task_id=id)
+                if not task:
+                    return f"Task '{id}' not found."
+                return _format_task_detail(task)
+
+            # List mode
             tasks = await service.list_tasks(
                 user_id=self.user_id,
                 status=status,
@@ -166,75 +182,39 @@ class GetTasksTool(BaseTool):
 
         except Exception as e:
             logger.error(f"get_tasks failed for user {self.user_id}: {e}")
-            return f"Failed to list tasks: {e}"
+            return f"Failed to get tasks: {e}"
 
 
-# --- GetTaskTool ---
+# --- CreateTasksTool ---
 
 
-class GetTaskInput(BaseModel):
-    """Input schema for get_task tool."""
+class CreateTasksInput(BaseModel):
+    """Input schema for create_tasks tool."""
 
-    task_id: str = Field(..., description="UUID of the task to retrieve")
-
-
-class GetTaskTool(BaseTool):
-    """Get a single task with its subtasks."""
-
-    name: str = "get_task"
-    description: str = "Get detailed information about a specific task by its ID, including all subtasks."
-    args_schema: Type[BaseModel] = GetTaskInput
-
-    user_id: str
-    agent_name: Optional[str] = None
-    supabase_url: Optional[str] = None
-    supabase_key: Optional[str] = None
-
-    def _run(self, **kwargs) -> str:
-        return "get_task requires async execution. Use _arun."
-
-    async def _arun(self, task_id: str) -> str:
-        try:
-            service = await _get_task_service(self.user_id)
-            task = await service.get_task(user_id=self.user_id, task_id=task_id)
-
-            if not task:
-                return f"Task '{task_id}' not found."
-
-            return _format_task_detail(task)
-
-        except Exception as e:
-            logger.error(f"get_task failed for user {self.user_id}: {e}")
-            return f"Failed to get task: {e}"
-
-
-# --- CreateTaskTool ---
-
-
-class CreateTaskInput(BaseModel):
-    """Input schema for create_task tool."""
-
-    title: str = Field(..., description="Task title", min_length=1, max_length=200)
-    description: Optional[str] = Field(default=None, description="Longer description or notes")
-    priority: int = Field(default=2, ge=1, le=5, description="1=lowest, 5=highest")
-    due_date: Optional[str] = Field(default=None, description="Due date as YYYY-MM-DD")
-    status: str = Field(default="pending", description="Initial status: 'pending' or 'planning'")
-    parent_task_id: Optional[str] = Field(
-        default=None,
-        description="UUID of parent task to create this as a subtask",
+    tasks: list[dict] = Field(
+        ...,
+        description=(
+            "List of tasks to create. Each dict can have: "
+            "title (required, str), description (str), priority (int 1-5, default 2), "
+            "due_date (YYYY-MM-DD), status ('pending' or 'planning', default 'pending'), "
+            "parent_task_id (UUID of parent for subtasks), category (str). "
+            "Single task = list with one item."
+        ),
+        min_length=1,
     )
-    category: Optional[str] = Field(default=None, description="Category label")
 
 
-class CreateTaskTool(BaseTool):
-    """Create a task or subtask."""
+class CreateTasksTool(BaseTool):
+    """Create one or more tasks."""
 
-    name: str = "create_task"
+    name: str = "create_tasks"
     description: str = (
-        "Create a new task for the user. Set parent_task_id to create a subtask under an existing task. "
-        "Priority: 1=lowest, 5=highest. Default status is 'pending'."
+        "Create one or more tasks for the user. Input is a list of task objects. "
+        "Each task must have a 'title'. Optional: description, priority (1-5), due_date (YYYY-MM-DD), "
+        "status ('pending'/'planning'), parent_task_id (for subtasks), category. "
+        "For a single task, pass a list with one item."
     )
-    args_schema: Type[BaseModel] = CreateTaskInput
+    args_schema: Type[BaseModel] = CreateTasksInput
 
     user_id: str
     agent_name: Optional[str] = None
@@ -242,80 +222,64 @@ class CreateTaskTool(BaseTool):
     supabase_key: Optional[str] = None
 
     def _run(self, **kwargs) -> str:
-        return "create_task requires async execution. Use _arun."
+        return "create_tasks requires async execution. Use _arun."
 
-    async def _arun(
-        self,
-        title: str,
-        description: Optional[str] = None,
-        priority: int = 2,
-        due_date: Optional[str] = None,
-        status: str = "pending",
-        parent_task_id: Optional[str] = None,
-        category: Optional[str] = None,
-    ) -> str:
+    async def _arun(self, tasks: list[dict]) -> str:
         try:
             service = await _get_task_service(self.user_id)
-            await service.create_task(
-                user_id=self.user_id,
-                title=title,
-                description=description,
-                priority=priority,
-                due_date=due_date,
-                status=status,
-                parent_task_id=parent_task_id,
-                category=category,
-            )
+            results = await service.create_tasks(user_id=self.user_id, tasks=tasks)
 
-            priority_label = PRIORITY_LABELS.get(priority, "MED")
-            parts = [f'Created task: "{title}" (priority: {priority_label.lower()}']
-            if due_date:
-                parts.append(f", due: {due_date}")
-            parts.append(f", status: {status})")
-            if parent_task_id:
-                parts.append(f" [subtask of {parent_task_id}]")
+            lines = []
+            for result in results:
+                if result.get("error"):
+                    lines.append(f'Error: {result["error"]}')
+                else:
+                    title = result.get("title", "Untitled")
+                    priority = PRIORITY_LABELS.get(result.get("priority", 2), "MED")
+                    parts = [f'Created: "{title}" (priority: {priority.lower()}']
+                    if result.get("due_date"):
+                        parts.append(f", due: {result['due_date']}")
+                    parts.append(f", status: {result.get('status', 'pending')})")
+                    if result.get("parent_task_id"):
+                        parts.append(f" [subtask of {result['parent_task_id']}]")
+                    lines.append("".join(parts))
 
-            return "".join(parts)
+            return "\n".join(lines)
 
-        except ValueError as e:
-            return f"Error: {e}"
         except Exception as e:
-            logger.error(f"create_task failed for user {self.user_id}: {e}")
-            return f"Failed to create task: {e}"
+            logger.error(f"create_tasks failed for user {self.user_id}: {e}")
+            return f"Failed to create tasks: {e}"
 
 
-# --- UpdateTaskTool ---
+# --- UpdateTasksTool ---
 
 
-class UpdateTaskInput(BaseModel):
-    """Input schema for update_task tool."""
+class UpdateTasksInput(BaseModel):
+    """Input schema for update_tasks tool."""
 
-    task_id: str = Field(..., description="UUID of the task to update")
-    title: Optional[str] = Field(default=None, description="New title")
-    description: Optional[str] = Field(default=None, description="New description")
-    status: Optional[str] = Field(
-        default=None,
-        description="New status: 'pending', 'planning', 'in_progress', 'completed', 'skipped', 'deferred'",
-    )
-    priority: Optional[int] = Field(default=None, ge=1, le=5, description="New priority (1-5)")
-    due_date: Optional[str] = Field(default=None, description="New due date (YYYY-MM-DD) or empty string to clear")
-    notes: Optional[str] = Field(default=None, description="Additional notes")
-    completion_note: Optional[str] = Field(
-        default=None,
-        description="Note on how/why the task was completed",
+    tasks: list[dict] = Field(
+        ...,
+        description=(
+            "List of task updates. Each dict must have 'id' (UUID) plus fields to update: "
+            "title, description, status (pending/planning/in_progress/completed/skipped/deferred), "
+            "priority (int 1-5), due_date (YYYY-MM-DD or empty string to clear), "
+            "notes (str), completion_note (str). Only provided fields are changed. "
+            "Single update = list with one item."
+        ),
+        min_length=1,
     )
 
 
-class UpdateTaskTool(BaseTool):
-    """Update task fields."""
+class UpdateTasksTool(BaseTool):
+    """Update one or more tasks."""
 
-    name: str = "update_task"
+    name: str = "update_tasks"
     description: str = (
-        "Update a task's fields. Only provided fields are changed. "
-        "To mark a task complete, set status to 'completed'. "
-        "To clear a due date, pass an empty string for due_date."
+        "Update one or more tasks. Input is a list of objects, each with 'id' and fields to change. "
+        "To mark complete, set status to 'completed'. To clear due date, pass empty string. "
+        "For a single update, pass a list with one item."
     )
-    args_schema: Type[BaseModel] = UpdateTaskInput
+    args_schema: Type[BaseModel] = UpdateTasksInput
 
     user_id: str
     agent_name: Optional[str] = None
@@ -323,81 +287,53 @@ class UpdateTaskTool(BaseTool):
     supabase_key: Optional[str] = None
 
     def _run(self, **kwargs) -> str:
-        return "update_task requires async execution. Use _arun."
+        return "update_tasks requires async execution. Use _arun."
 
-    async def _arun(
-        self,
-        task_id: str,
-        title: Optional[str] = None,
-        description: Optional[str] = None,
-        status: Optional[str] = None,
-        priority: Optional[int] = None,
-        due_date: Optional[str] = None,
-        notes: Optional[str] = None,
-        completion_note: Optional[str] = None,
-    ) -> str:
+    async def _arun(self, tasks: list[dict]) -> str:
         try:
             service = await _get_task_service(self.user_id)
-            task = await service.update_task(
-                user_id=self.user_id,
-                task_id=task_id,
-                title=title,
-                description=description,
-                status=status,
-                priority=priority,
-                due_date=due_date,
-                notes=notes,
-                completion_note=completion_note,
-            )
+            results = await service.update_tasks(user_id=self.user_id, tasks=tasks)
 
-            if not task:
-                return f"Task '{task_id}' not found."
+            lines = []
+            for result in results:
+                if result.get("error"):
+                    task_id = result.get("id", "?")
+                    lines.append(f"Error ({task_id}): {result['error']}")
+                else:
+                    task_title = result.get("title", result.get("id", "?"))
+                    changes = result.get("changes", [])
+                    lines.append(f'Updated "{task_title}": {", ".join(changes)}')
 
-            changes = []
-            if title is not None:
-                changes.append(f"title → \"{title}\"")
-            if status is not None:
-                mark = " ✓" if status == "completed" else ""
-                changes.append(f"status → {status}{mark}")
-            if priority is not None:
-                changes.append(f"priority → {PRIORITY_LABELS.get(priority, str(priority))}")
-            if due_date is not None:
-                changes.append(f"due → {due_date or 'cleared'}")
-            if description is not None:
-                changes.append("description updated")
-            if notes is not None:
-                changes.append("notes updated")
-            if completion_note is not None:
-                changes.append("completion note added")
+            return "\n".join(lines)
 
-            task_title = task.get("title", task_id)
-            return f'Updated "{task_title}": {", ".join(changes)}'
-
-        except ValueError as e:
-            return f"Error: {e}"
         except Exception as e:
-            logger.error(f"update_task failed for user {self.user_id}: {e}")
-            return f"Failed to update task: {e}"
+            logger.error(f"update_tasks failed for user {self.user_id}: {e}")
+            return f"Failed to update tasks: {e}"
 
 
-# --- DeleteTaskTool ---
+# --- DeleteTasksTool ---
 
 
-class DeleteTaskInput(BaseModel):
-    """Input schema for delete_task tool."""
+class DeleteTasksInput(BaseModel):
+    """Input schema for delete_tasks tool."""
 
-    task_id: str = Field(..., description="UUID of the task to delete")
+    ids: list[str] = Field(
+        ...,
+        description="List of task UUIDs to delete (soft-delete). Single delete = list with one ID.",
+        min_length=1,
+    )
 
 
-class DeleteTaskTool(BaseTool):
-    """Soft-delete a task and its subtasks."""
+class DeleteTasksTool(BaseTool):
+    """Soft-delete one or more tasks and their subtasks."""
 
-    name: str = "delete_task"
+    name: str = "delete_tasks"
     description: str = (
-        "Delete a task and all its subtasks. This is a soft delete (can be undone). "
-        "Use this when the user explicitly asks to remove a task."
+        "Delete one or more tasks and all their subtasks. This is a soft delete (can be undone). "
+        "Use this when the user explicitly asks to remove tasks. "
+        "For a single delete, pass a list with one ID."
     )
-    args_schema: Type[BaseModel] = DeleteTaskInput
+    args_schema: Type[BaseModel] = DeleteTasksInput
 
     user_id: str
     agent_name: Optional[str] = None
@@ -405,18 +341,23 @@ class DeleteTaskTool(BaseTool):
     supabase_key: Optional[str] = None
 
     def _run(self, **kwargs) -> str:
-        return "delete_task requires async execution. Use _arun."
+        return "delete_tasks requires async execution. Use _arun."
 
-    async def _arun(self, task_id: str) -> str:
+    async def _arun(self, ids: list[str]) -> str:
         try:
             service = await _get_task_service(self.user_id)
-            task = await service.delete_task(user_id=self.user_id, task_id=task_id)
+            results = await service.delete_tasks(user_id=self.user_id, task_ids=ids)
 
-            if not task:
-                return f"Task '{task_id}' not found."
+            lines = []
+            for result in results:
+                if result.get("error"):
+                    task_id = result.get("id", "?")
+                    lines.append(f"Error ({task_id}): {result['error']}")
+                else:
+                    lines.append(f'Deleted: "{result.get("title", result.get("id", "?"))}"')
 
-            return f'Deleted task: "{task.get("title", task_id)}"'
+            return "\n".join(lines)
 
         except Exception as e:
-            logger.error(f"delete_task failed for user {self.user_id}: {e}")
-            return f"Failed to delete task: {e}"
+            logger.error(f"delete_tasks failed for user {self.user_id}: {e}")
+            return f"Failed to delete tasks: {e}"

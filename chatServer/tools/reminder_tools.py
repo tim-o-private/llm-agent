@@ -73,7 +73,8 @@ class GetRemindersTool(BaseTool):
                 rec = f" (repeats {reminder['recurrence']})" if reminder.get("recurrence") else ""
                 body_text = reminder.get("body", "")
                 body_line = f"\nDetails: {body_text}" if body_text else ""
-                return f"Reminder: [{dt_str}] {reminder['title']}{rec} (status: {reminder.get('status', 'unknown')}){body_line}"
+                status = reminder.get('status', 'unknown')
+                return f"Reminder: [{dt_str}] {reminder['title']}{rec} (status: {status}){body_line}"
 
             reminders = await service.list_upcoming(user_id=self.user_id, limit=limit)
 
@@ -181,7 +182,8 @@ class CreateRemindersTool(BaseTool):
                 )
 
                 recurrence_msg = f" (repeats {recurrence})" if recurrence else ""
-                results.append(f"Reminder set: \"{title}\" at {parsed_dt.strftime('%Y-%m-%d %H:%M %Z')}{recurrence_msg}.")
+                time_str = parsed_dt.strftime('%Y-%m-%d %H:%M %Z')
+                results.append(f"Reminder set: \"{title}\" at {time_str}{recurrence_msg}.")
 
             except ValueError as e:
                 results.append(f"Error parsing remind_at for '{item.get('title', '?')}': {e}. Use ISO 8601 format.")

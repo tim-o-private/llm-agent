@@ -296,3 +296,117 @@ class TaskService:
         if not result.data:
             return None
         return result.data[0]
+
+    # --- Batch operations ---
+
+    async def create_tasks(self, user_id: str, tasks: list[dict]) -> list[dict]:
+        """Create multiple tasks. Iterates over each and calls create_task.
+
+        Returns a list of results — each is either the created task dict
+        or a dict with an 'error' key if that item failed.
+        """
+        results = []
+        for task_data in tasks:
+            try:
+                title = task_data.get("title")
+                if not title:
+                    results.append({"error": "Missing required field 'title'"})
+                    continue
+                created = await self.create_task(
+                    user_id=user_id,
+                    title=title,
+                    description=task_data.get("description"),
+                    priority=task_data.get("priority", 2),
+                    due_date=task_data.get("due_date"),
+                    status=task_data.get("status", "pending"),
+                    parent_task_id=task_data.get("parent_task_id"),
+                    category=task_data.get("category"),
+                )
+                results.append(created)
+            except (ValueError, Exception) as e:
+                results.append({"error": str(e)})
+        return results
+
+    async def update_tasks(self, user_id: str, tasks: list[dict]) -> list[dict]:
+        """Update multiple tasks. Iterates over each and calls update_task.
+
+        Each dict must have 'id' plus fields to update.
+        Returns a list of results — each has the updated task info and a 'changes'
+        summary, or an 'error' key if that item failed.
+        """
+        priority_labels = {1: "LOW", 2: "MED", 3: "MED", 4: "HIGH", 5: "URGENT"}
+        results = []
+        for task_data in tasks:
+            task_id = task_data.get("id")
+            if not task_id:
+                results.append({"error": "Missing required field 'id'"})
+                continue
+            try:
+                title = task_data.get("title")
+                description = task_data.get("description")
+                status = task_data.get("status")
+                priority = task_data.get("priority")
+                due_date = task_data.get("due_date")
+                notes = task_data.get("notes")
+                completion_note = task_data.get("completion_note")
+
+                updated = await self.update_task(
+                    user_id=user_id,
+                    task_id=task_id,
+                    title=title,
+                    description=description,
+                    status=status,
+                    priority=priority,
+                    due_date=due_date,
+                    notes=notes,
+                    completion_note=completion_note,
+                )
+
+                if not updated:
+                    results.append({"id": task_id, "error": f"Task '{task_id}' not found."})
+                    continue
+
+                # Build changes summary
+                changes = []
+                if title is not None:
+                    changes.append(f'title → "{title}"')
+                if status is not None:
+                    mark = " ✓" if status == "completed" else ""
+                    changes.append(f"status → {status}{mark}")
+                if priority is not None:
+                    changes.append(f"priority → {priority_labels.get(priority, str(priority))}")
+                if due_date is not None:
+                    changes.append(f"due → {due_date or 'cleared'}")
+                if description is not None:
+                    changes.append("description updated")
+                if notes is not None:
+                    changes.append("notes updated")
+                if completion_note is not None:
+                    changes.append("completion note added")
+
+                results.append({
+                    "id": task_id,
+                    "title": updated.get("title", task_id),
+                    "changes": changes,
+                })
+            except (ValueError, Exception) as e:
+                results.append({"id": task_id, "error": str(e)})
+        return results
+
+    async def delete_tasks(self, user_id: str, task_ids: list[str]) -> list[dict]:
+        """Soft-delete multiple tasks. Iterates over each and calls delete_task.
+
+        Returns a list of results — each has the deleted task info
+        or an 'error' key if that item failed.
+        """
+        results = []
+        for task_id in task_ids:
+            try:
+                deleted = await self.delete_task(user_id=user_id, task_id=task_id)
+                if not deleted:
+                    results.append({"id": task_id, "error": f"Task '{task_id}' not found."})
+                else:
+                    results.append({"id": task_id, "title": deleted.get("title", task_id)})
+            except Exception as e:
+                results.append({"id": task_id, "error": str(e)})
+        return results
