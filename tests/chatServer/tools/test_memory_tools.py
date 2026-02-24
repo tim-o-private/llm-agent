@@ -1,218 +1,256 @@
-"""Tests for SaveMemoryTool and ReadMemoryTool."""
+"""Tests for memory tools backed by min-memory MCP server."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
-from chatServer.tools.memory_tools import MAX_NOTES_LENGTH, ReadMemoryTool, SaveMemoryTool
+from chatServer.tools.memory_tools import (
+    DeleteMemoryTool,
+    FetchMemoryTool,
+    GetContextInfoTool,
+    LinkMemoriesTool,
+    ListEntitiesTool,
+    RecallMemoryTool,
+    SearchEntitiesTool,
+    SearchMemoryTool,
+    SetProjectTool,
+    StoreMemoryTool,
+    UpdateMemoryTool,
+)
 
 
 @pytest.fixture
-def mock_supabase_client():
-    """Create a mock Supabase client with chainable methods."""
-    client = MagicMock()
+def mock_memory_client():
+    client = AsyncMock()
+    client.call_tool = AsyncMock(return_value={"message": "ok"})
     return client
 
 
-@pytest.fixture
-def save_tool():
-    return SaveMemoryTool(
-        user_id="user-123",
-        agent_name="assistant",
-        supabase_url="https://test.supabase.co",
-        supabase_key="test-key",
-    )
+def _make_tool(cls, mock_memory_client):
+    return cls(memory_client=mock_memory_client, user_id="user-123", agent_name="search_agent")
 
 
 @pytest.fixture
-def read_tool():
-    return ReadMemoryTool(
-        user_id="user-123",
-        agent_name="assistant",
-        supabase_url="https://test.supabase.co",
-        supabase_key="test-key",
-    )
+def store_tool(mock_memory_client):
+    return _make_tool(StoreMemoryTool, mock_memory_client)
 
 
-def _mock_upsert(client, return_value=None, side_effect=None):
-    """Set up mock for upsert chain: table().upsert().execute()."""
-    execute = client.table.return_value.upsert.return_value.execute
-    if side_effect:
-        execute.side_effect = side_effect
-    else:
-        execute.return_value = return_value or MagicMock(data=[{"id": 1}])
+@pytest.fixture
+def recall_tool(mock_memory_client):
+    return _make_tool(RecallMemoryTool, mock_memory_client)
 
 
-def _mock_select(client, return_value=None, side_effect=None):
-    """Set up mock for select chain: table().select().eq().eq().maybe_single().execute()."""
-    chain = client.table.return_value.select.return_value
-    execute = (
-        chain.eq.return_value
-        .eq.return_value
-        .maybe_single.return_value
-        .execute
-    )
-    if side_effect:
-        execute.side_effect = side_effect
-    else:
-        execute.return_value = return_value or MagicMock(data=None)
+@pytest.fixture
+def search_tool(mock_memory_client):
+    return _make_tool(SearchMemoryTool, mock_memory_client)
 
 
-class TestSaveMemoryTool:
+class TestStoreMemoryTool:
     @pytest.mark.asyncio
-    async def test_save_memory_creates_new_entry(self, save_tool, mock_supabase_client):
-        """Test saving memory notes upserts into the table."""
-        _mock_upsert(mock_supabase_client)
+    async def test_calls_store_memory_with_correct_args(self, store_tool, mock_memory_client):
+        result = await store_tool._arun(
+            text="User likes dark roast",
+            memory_type="core_identity",
+            entity="user-123",
+            scope="global",
+            tags=["preferences"],
+        )
 
-        with patch.object(save_tool, "_get_client", return_value=mock_supabase_client):
-            result = await save_tool._arun(notes="User prefers morning meetings")
-
-        assert "saved successfully" in result
-        mock_supabase_client.table.assert_called_once_with("agent_long_term_memory")
-        mock_supabase_client.table.return_value.upsert.assert_called_once_with(
+        mock_memory_client.call_tool.assert_called_once_with(
+            "store_memory",
             {
-                "user_id": "user-123",
-                "agent_name": "assistant",
-                "notes": "User prefers morning meetings",
+                "text": "User likes dark roast",
+                "memory_type": "core_identity",
+                "entity": "user-123",
+                "scope": "global",
+                "tags": ["preferences"],
             },
-            on_conflict="user_id,agent_name",
+        )
+        assert "ok" in result
+
+    @pytest.mark.asyncio
+    async def test_omits_empty_tags(self, store_tool, mock_memory_client):
+        await store_tool._arun(
+            text="Test memory", memory_type="episodic", entity="user-123", scope="global",
+        )
+        call_args = mock_memory_client.call_tool.call_args[0][1]
+        assert "tags" not in call_args
+
+    @pytest.mark.asyncio
+    async def test_passes_project_and_task_id(self, store_tool, mock_memory_client):
+        await store_tool._arun(
+            text="Sprint goal", memory_type="project_context", entity="myproj",
+            scope="project", project="myproj", task_id="task-1",
+        )
+        call_args = mock_memory_client.call_tool.call_args[0][1]
+        assert call_args["project"] == "myproj"
+        assert call_args["task_id"] == "task-1"
+
+    @pytest.mark.asyncio
+    async def test_handles_client_error_gracefully(self, store_tool, mock_memory_client):
+        mock_memory_client.call_tool.side_effect = RuntimeError("Connection refused")
+        result = await store_tool._arun(
+            text="Test", memory_type="episodic", entity="user-123", scope="global",
+        )
+        assert "Failed" in result
+        assert "Connection refused" in result
+
+
+class TestRecallMemoryTool:
+    @pytest.mark.asyncio
+    async def test_calls_retrieve_context_with_correct_args(self, recall_tool, mock_memory_client):
+        await recall_tool._arun(query="coffee preferences", limit=5, memory_type=["core_identity"])
+
+        mock_memory_client.call_tool.assert_called_once_with(
+            "retrieve_context",
+            {"query": "coffee preferences", "limit": 5, "memory_type": ["core_identity"]},
         )
 
     @pytest.mark.asyncio
-    async def test_save_memory_updates_existing_entry(self, save_tool, mock_supabase_client):
-        """Test that upsert updates existing notes (same user_id + agent_id)."""
-        _mock_upsert(mock_supabase_client)
-
-        with patch.object(save_tool, "_get_client", return_value=mock_supabase_client):
-            result = await save_tool._arun(notes="Updated notes content")
-
-        assert "saved successfully" in result
-        call_args = mock_supabase_client.table.return_value.upsert.call_args
-        assert call_args[1]["on_conflict"] == "user_id,agent_name"
+    async def test_default_limit(self, recall_tool, mock_memory_client):
+        await recall_tool._arun(query="test")
+        call_args = mock_memory_client.call_tool.call_args[0][1]
+        assert call_args["limit"] == 10
 
     @pytest.mark.asyncio
-    async def test_save_memory_truncates_long_notes(self, save_tool, mock_supabase_client):
-        """Test that notes exceeding MAX_NOTES_LENGTH are truncated."""
-        long_notes = "x" * (MAX_NOTES_LENGTH + 500)
-        _mock_upsert(mock_supabase_client)
-
-        with patch.object(save_tool, "_get_client", return_value=mock_supabase_client):
-            result = await save_tool._arun(notes=long_notes)
-
-        assert "truncated" in result
-        call_args = mock_supabase_client.table.return_value.upsert.call_args
-        saved_notes = call_args[0][0]["notes"]
-        assert len(saved_notes) == MAX_NOTES_LENGTH
+    async def test_passes_scope_and_project(self, recall_tool, mock_memory_client):
+        await recall_tool._arun(query="test", scope="project", project="myproj")
+        call_args = mock_memory_client.call_tool.call_args[0][1]
+        assert call_args["scope"] == "project"
+        assert call_args["project"] == "myproj"
 
     @pytest.mark.asyncio
-    async def test_save_memory_handles_db_error(self, save_tool, mock_supabase_client):
-        """Test graceful handling of database errors."""
-        _mock_upsert(mock_supabase_client, side_effect=Exception("DB connection failed"))
+    async def test_handles_client_error_gracefully(self, recall_tool, mock_memory_client):
+        mock_memory_client.call_tool.side_effect = RuntimeError("Timeout")
+        result = await recall_tool._arun(query="test")
+        assert "Failed" in result
 
-        with patch.object(save_tool, "_get_client", return_value=mock_supabase_client):
-            result = await save_tool._arun(notes="Some notes")
 
-        assert "Failed to save" in result
-        assert "DB connection failed" in result
+class TestSearchMemoryTool:
+    @pytest.mark.asyncio
+    async def test_calls_search_with_correct_args(self, search_tool, mock_memory_client):
+        await search_tool._arun(query="project deadlines")
+        mock_memory_client.call_tool.assert_called_once_with("search", {"query": "project deadlines"})
 
     @pytest.mark.asyncio
-    async def test_save_memory_scoped_to_user(self, mock_supabase_client):
-        """Test that memory is scoped to a specific user_id and agent_name."""
-        tool_user_a = SaveMemoryTool(
-            user_id="user-A",
-            agent_name="assistant",
-            supabase_url="https://test.supabase.co",
-            supabase_key="test-key",
-        )
-        tool_user_b = SaveMemoryTool(
-            user_id="user-B",
-            agent_name="assistant",
-            supabase_url="https://test.supabase.co",
-            supabase_key="test-key",
-        )
-
-        _mock_upsert(mock_supabase_client)
-
-        with patch.object(tool_user_a, "_get_client", return_value=mock_supabase_client):
-            await tool_user_a._arun(notes="User A notes")
-
-        call_a = mock_supabase_client.table.return_value.upsert.call_args[0][0]
-        assert call_a["user_id"] == "user-A"
-
-        mock_supabase_client.reset_mock()
-        _mock_upsert(mock_supabase_client, return_value=MagicMock(data=[{"id": 2}]))
-
-        with patch.object(tool_user_b, "_get_client", return_value=mock_supabase_client):
-            await tool_user_b._arun(notes="User B notes")
-
-        call_b = mock_supabase_client.table.return_value.upsert.call_args[0][0]
-        assert call_b["user_id"] == "user-B"
+    async def test_handles_client_error_gracefully(self, search_tool, mock_memory_client):
+        mock_memory_client.call_tool.side_effect = RuntimeError("Server down")
+        result = await search_tool._arun(query="test")
+        assert "Failed" in result
 
 
-class TestReadMemoryTool:
+class TestFetchMemoryTool:
     @pytest.mark.asyncio
-    async def test_read_memory_returns_notes(self, read_tool, mock_supabase_client):
-        """Test reading existing memory notes."""
-        mock_result = MagicMock()
-        mock_result.data = {"notes": "User prefers morning meetings"}
-        _mock_select(mock_supabase_client, return_value=mock_result)
+    async def test_calls_fetch(self, mock_memory_client):
+        tool = _make_tool(FetchMemoryTool, mock_memory_client)
+        await tool._arun(id="mem-abc-123")
+        mock_memory_client.call_tool.assert_called_once_with("fetch", {"id": "mem-abc-123"})
 
-        with patch.object(read_tool, "_get_client", return_value=mock_supabase_client):
-            result = await read_tool._arun()
 
-        assert result == "User prefers morning meetings"
-        mock_supabase_client.table.assert_called_once_with("agent_long_term_memory")
-
+class TestDeleteMemoryTool:
     @pytest.mark.asyncio
-    async def test_read_memory_returns_placeholder_when_empty(self, read_tool, mock_supabase_client):
-        """Test that a placeholder is returned when no notes exist."""
-        mock_result = MagicMock()
-        mock_result.data = None
-        _mock_select(mock_supabase_client, return_value=mock_result)
+    async def test_calls_delete(self, mock_memory_client):
+        tool = _make_tool(DeleteMemoryTool, mock_memory_client)
+        await tool._arun(memory_id="mem-abc-123")
+        mock_memory_client.call_tool.assert_called_once_with("delete_memory", {"memory_id": "mem-abc-123"})
 
-        with patch.object(read_tool, "_get_client", return_value=mock_supabase_client):
-            result = await read_tool._arun()
 
-        assert result == "(No memory notes yet.)"
-
+class TestUpdateMemoryTool:
     @pytest.mark.asyncio
-    async def test_read_memory_returns_placeholder_for_empty_notes(self, read_tool, mock_supabase_client):
-        """Test placeholder returned when notes field is empty string."""
-        mock_result = MagicMock()
-        mock_result.data = {"notes": ""}
-        _mock_select(mock_supabase_client, return_value=mock_result)
-
-        with patch.object(read_tool, "_get_client", return_value=mock_supabase_client):
-            result = await read_tool._arun()
-
-        assert result == "(No memory notes yet.)"
-
-    @pytest.mark.asyncio
-    async def test_read_memory_handles_db_error(self, read_tool, mock_supabase_client):
-        """Test graceful handling of database errors."""
-        _mock_select(
-            mock_supabase_client,
-            side_effect=Exception("DB connection failed"),
+    async def test_calls_update_with_text(self, mock_memory_client):
+        tool = _make_tool(UpdateMemoryTool, mock_memory_client)
+        await tool._arun(memory_id="mem-1", text="updated text")
+        mock_memory_client.call_tool.assert_called_once_with(
+            "update_memory", {"memory_id": "mem-1", "text": "updated text"},
         )
 
-        with patch.object(read_tool, "_get_client", return_value=mock_supabase_client):
-            result = await read_tool._arun()
-
-        assert "Failed to read" in result
-        assert "DB connection failed" in result
+    @pytest.mark.asyncio
+    async def test_calls_update_with_multiple_fields(self, mock_memory_client):
+        tool = _make_tool(UpdateMemoryTool, mock_memory_client)
+        await tool._arun(memory_id="mem-1", text="new", tags=["a"], priority=5)
+        call_args = mock_memory_client.call_tool.call_args[0][1]
+        assert call_args["memory_id"] == "mem-1"
+        assert call_args["text"] == "new"
+        assert call_args["tags"] == ["a"]
+        assert call_args["priority"] == 5
 
     @pytest.mark.asyncio
-    async def test_read_memory_filters_by_user_and_agent(self, read_tool, mock_supabase_client):
-        """Test that read queries filter by user_id and agent_name."""
-        mock_result = MagicMock()
-        mock_result.data = {"notes": "test"}
-        chain = mock_supabase_client.table.return_value.select.return_value
-        chain.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_result
+    async def test_omits_empty_fields(self, mock_memory_client):
+        tool = _make_tool(UpdateMemoryTool, mock_memory_client)
+        await tool._arun(memory_id="mem-1")
+        mock_memory_client.call_tool.assert_called_once_with(
+            "update_memory", {"memory_id": "mem-1"},
+        )
 
-        with patch.object(read_tool, "_get_client", return_value=mock_supabase_client):
-            await read_tool._arun()
 
-        eq_calls = chain.eq.call_args_list
-        assert eq_calls[0] == (("user_id", "user-123"),)
-        second_eq = chain.eq.return_value.eq
-        second_eq.assert_called_once_with("agent_name", "assistant")
+class TestSetProjectTool:
+    @pytest.mark.asyncio
+    async def test_calls_set_project(self, mock_memory_client):
+        tool = _make_tool(SetProjectTool, mock_memory_client)
+        await tool._arun(project="llm-agent")
+        mock_memory_client.call_tool.assert_called_once_with("set_project", {"project": "llm-agent"})
+
+
+class TestLinkMemoriesTool:
+    @pytest.mark.asyncio
+    async def test_calls_link_memories(self, mock_memory_client):
+        tool = _make_tool(LinkMemoriesTool, mock_memory_client)
+        await tool._arun(memory_id="a", related_id="b", relation_type="supports")
+        mock_memory_client.call_tool.assert_called_once_with(
+            "link_memories", {"memory_id": "a", "related_id": "b", "relation_type": "supports"},
+        )
+
+
+class TestListEntitiesTool:
+    @pytest.mark.asyncio
+    async def test_calls_list_entities(self, mock_memory_client):
+        tool = _make_tool(ListEntitiesTool, mock_memory_client)
+        await tool._arun(scope="project", project="myproj")
+        mock_memory_client.call_tool.assert_called_once_with(
+            "list_entities", {"scope": "project", "project": "myproj"},
+        )
+
+    @pytest.mark.asyncio
+    async def test_omits_empty_filters(self, mock_memory_client):
+        tool = _make_tool(ListEntitiesTool, mock_memory_client)
+        await tool._arun()
+        mock_memory_client.call_tool.assert_called_once_with("list_entities", {})
+
+
+class TestSearchEntitiesTool:
+    @pytest.mark.asyncio
+    async def test_calls_search_entities(self, mock_memory_client):
+        tool = _make_tool(SearchEntitiesTool, mock_memory_client)
+        await tool._arun(query="user", limit=3)
+        mock_memory_client.call_tool.assert_called_once_with(
+            "search_entities", {"query": "user", "limit": 3},
+        )
+
+
+class TestGetContextInfoTool:
+    @pytest.mark.asyncio
+    async def test_calls_get_context_info(self, mock_memory_client):
+        tool = _make_tool(GetContextInfoTool, mock_memory_client)
+        await tool._arun()
+        mock_memory_client.call_tool.assert_called_once_with("get_context_info", {})
+
+
+class TestPromptSections:
+    def test_store_memory_prompt_for_web(self):
+        section = StoreMemoryTool.prompt_section("web")
+        assert section is not None
+        assert "store_memory" in section
+        assert "recall" in section
+
+    def test_store_memory_prompt_for_telegram(self):
+        assert StoreMemoryTool.prompt_section("telegram") is not None
+
+    def test_store_memory_prompt_none_for_scheduled(self):
+        assert StoreMemoryTool.prompt_section("scheduled") is None
+
+    def test_other_tools_prompt_always_none(self):
+        for cls in (RecallMemoryTool, SearchMemoryTool, FetchMemoryTool, DeleteMemoryTool,
+                    UpdateMemoryTool, SetProjectTool, LinkMemoriesTool, ListEntitiesTool,
+                    SearchEntitiesTool, GetContextInfoTool):
+            assert cls.prompt_section("web") is None
+            assert cls.prompt_section("scheduled") is None
