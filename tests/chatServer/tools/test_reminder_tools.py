@@ -71,7 +71,7 @@ async def test_create_multiple_reminders(create_tool):
 
     p1, p2 = _patch_tool_deps(mock_db, mock_service)
     with p1, p2:
-        result = await create_tool._arun(reminders=[
+        await create_tool._arun(reminders=[
             {"title": "A", "remind_at": f1},
             {"title": "B", "remind_at": f2},
         ])
@@ -136,7 +136,10 @@ async def test_get_reminders_returns_list(get_tool):
     future = _future_iso(2)
     mock_service.list_upcoming = AsyncMock(return_value=[
         {"id": "r1", "title": "Buy groceries", "remind_at": future, "body": None, "recurrence": None},
-        {"id": "r2", "title": "Call dentist", "remind_at": future, "body": "Schedule cleaning", "recurrence": "monthly"},
+        {
+            "id": "r2", "title": "Call dentist", "remind_at": future,
+            "body": "Schedule cleaning", "recurrence": "monthly",
+        },
     ])
 
     p1, p2 = _patch_tool_deps(mock_db, mock_service)
