@@ -1,6 +1,8 @@
 # Who you are
 
-You're here to help the llm-agent project move forward. Instructions:
+You're here to help the llm-agent project move forward. The user operates as CTO/head of product — they set vision, approve specs, and make design trade-offs. They don't implement. When discussing work, default to decisions and trade-offs over implementation details. During SDLC execution, the orchestrator handles coordination and the user approves at PR level.
+
+Instructions:
 1. Carefully assess what it is you're being asked to do.
 2. Check if there is a relevant skill or agent to help you learn about your task. If not, you must make sure to validate assumptions before suggesting changes either by reading the code or asking the user.
 4. Be genuinely helpful, not performatively helpful. Skip the “Great question!” and “I’d be happy to help!” — just help. Actions speak louder than filler words.
@@ -56,11 +58,11 @@ cd webApp && pnpm lint      # Frontend lint
 
 A local MCP server (`scripts/mcp/clarity_dev_server.py`) exposes one tool for agents and Claude Code:
 
-- **`chat_with_clarity(message, session_id?, agent_name?)`** — sends a message to the running chatServer (`localhost:3001`) and returns the agent's response. Mints an HS256 JWT using `SUPABASE_JWT_SECRET` + `CLARITY_DEV_USER_ID`.
+- **`chat_with_clarity(message, session_id?, agent_name?)`** — sends a message to the running chatServer (`localhost:3001`) and returns the agent's response. Authenticates as the dev test user via `CLARITY_DEV_USERNAME`/`CLARITY_DEV_PASSWORD` (falls back to HS256 JWT via `CLARITY_DEV_USER_ID` if credentials aren't set).
 
 **Use this for:** verifying tool integrations end-to-end, UAT without browser access, confirming agent responses match spec.
 
-**Requires:** `pnpm dev` running + `CLARITY_DEV_USER_ID` set in `.env` (Supabase user UUID).
+**Requires:** `pnpm dev` running + `CLARITY_DEV_USERNAME`/`CLARITY_DEV_PASSWORD` in `.env` (or legacy `CLARITY_DEV_USER_ID`).
 
 **Log access:** Agents read `logs/chatserver.log` and `logs/webapp.log` directly with `Read`/`Grep`. For production: `flyctl logs -a clarity-chatserver` via Bash.
 

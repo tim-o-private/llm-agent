@@ -5,8 +5,9 @@ MCP Server for local Clarity dev access.
 Provides chat_with_clarity tool so agents can send messages to the running
 chatServer and verify tool integrations end-to-end without human relay.
 
-Auth: mints HS256 JWTs signed with SUPABASE_JWT_SECRET — same fallback path
-used by auth.py for non-ES256 tokens.
+Auth: signs in via Supabase email/password using CLARITY_DEV_USERNAME and
+CLARITY_DEV_PASSWORD to get a real JWT for the test user. Falls back to
+HS256 JWT minting if credentials aren't set.
 """
 
 import json
@@ -27,11 +28,42 @@ load_dotenv()
 CHAT_API_URL = "http://localhost:3001/api/chat"
 DEFAULT_AGENT_NAME = "clarity"
 
+# Cached auth state (refreshed when expired)
+_cached_token: Optional[str] = None
+_cached_token_expiry: Optional[datetime] = None
+
 mcp = FastMCP("clarity_dev_mcp")
 
 
+def _sign_in_dev_user() -> str:
+    """Sign in as the dev test user via Supabase GoTrue and return the access token."""
+    supabase_url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    anon_key = os.environ.get("SUPABASE_ANON_KEY", "")
+    email = os.environ.get("CLARITY_DEV_USERNAME", "")
+    password = os.environ.get("CLARITY_DEV_PASSWORD", "")
+
+    if not all([supabase_url, anon_key, email, password]):
+        raise RuntimeError(
+            "SUPABASE_URL, SUPABASE_ANON_KEY, CLARITY_DEV_USERNAME, and "
+            "CLARITY_DEV_PASSWORD must all be set in .env"
+        )
+
+    resp = httpx.post(
+        f"{supabase_url}/auth/v1/token?grant_type=password",
+        json={"email": email, "password": password},
+        headers={"apikey": anon_key, "Content-Type": "application/json"},
+        timeout=10.0,
+    )
+    if resp.status_code != 200:
+        detail = resp.text[:500]
+        raise RuntimeError(f"Supabase sign-in failed ({resp.status_code}): {detail}")
+
+    data = resp.json()
+    return data["access_token"]
+
+
 def _mint_dev_jwt() -> str:
-    """Mint an HS256 JWT for the configured dev user."""
+    """Mint an HS256 JWT for the configured dev user (legacy fallback)."""
     secret = os.environ.get("SUPABASE_JWT_SECRET")
     user_id = os.environ.get("CLARITY_DEV_USER_ID")
 
@@ -48,6 +80,25 @@ def _mint_dev_jwt() -> str:
         "exp": int((now + timedelta(hours=1)).timestamp()),
     }
     return jwt.encode(payload, secret, algorithm="HS256")
+
+
+def _get_dev_token() -> str:
+    """Get a dev JWT, preferring email/password auth, falling back to HS256 minting."""
+    global _cached_token, _cached_token_expiry
+
+    now = datetime.now(timezone.utc)
+    if _cached_token and _cached_token_expiry and now < _cached_token_expiry:
+        return _cached_token
+
+    # Try email/password sign-in first
+    if os.environ.get("CLARITY_DEV_USERNAME") and os.environ.get("CLARITY_DEV_PASSWORD"):
+        token = _sign_in_dev_user()
+        _cached_token = token
+        _cached_token_expiry = now + timedelta(minutes=50)  # Supabase tokens last 1h
+        return token
+
+    # Fall back to HS256 minting
+    return _mint_dev_jwt()
 
 
 def _handle_error(e: Exception) -> str:
@@ -122,7 +173,8 @@ async def chat_with_clarity(params: ChatInput) -> str:
     spec, or debug agent behaviour without human relay.
 
     Requires the chatServer to be running on localhost:3001.
-    Mints a short-lived HS256 JWT using SUPABASE_JWT_SECRET + CLARITY_DEV_USER_ID.
+    Authenticates as the dev test user via CLARITY_DEV_USERNAME/PASSWORD,
+    falling back to HS256 JWT if credentials aren't configured.
 
     Args:
         params (ChatInput): Validated input containing:
@@ -148,7 +200,7 @@ async def chat_with_clarity(params: ChatInput) -> str:
         - Test tool integration: chat_with_clarity(message="search my emails for receipts")
     """
     try:
-        token = _mint_dev_jwt()
+        token = _get_dev_token()
     except RuntimeError as e:
         return _handle_error(e)
 

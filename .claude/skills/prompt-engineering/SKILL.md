@@ -134,4 +134,24 @@ chat_with_clarity(message="hello", agent_name="assistant")
 6. **User instructions are truncated at 2000 chars.** The agent can write unlimited instructions via UpdateInstructionsTool, but only the first 2000 chars appear in the prompt.
 7. **Memory notes are truncated at 4000 chars.** Pre-fetched memory is capped. The agent should keep high-signal memories concise.
 
+### 6. Reset Test User State
+
+When iterating on prompts, wipe all user data to start from a clean slate:
+
+```bash
+# Preview what would be deleted (auto-resolves test user from .env)
+python scripts/wipe_dev_user.py --dry-run
+
+# Wipe everything (with confirmation prompt)
+python scripts/wipe_dev_user.py
+
+# Wipe without confirmation
+python scripts/wipe_dev_user.py --yes
+
+# Or pass an explicit UUID
+python scripts/wipe_dev_user.py <user-uuid> --yes
+```
+
+Auto-resolves the test user UUID by signing in with `CLARITY_DEV_USERNAME`/`CLARITY_DEV_PASSWORD` from `.env`. Deletes all Supabase data (chat history, sessions, tasks, notes, etc.) and min-memory memories. Backups are saved to `logs/` before deletion.
+
 For full patterns with code examples and anti-patterns, see [reference.md](reference.md).
