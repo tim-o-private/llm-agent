@@ -895,7 +895,7 @@ async def _fetch_agent_config_from_db_async(agent_name: str) -> Optional[Dict[st
             async with conn.cursor() as cur:
                 await cur.execute("""
                     SELECT id, agent_name, soul, identity, llm_config,
-                           created_at, updated_at
+                           prompt_template, created_at, updated_at
                     FROM agent_configurations
                     WHERE agent_name = %s
                 """, (agent_name,))
