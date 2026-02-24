@@ -52,7 +52,7 @@ class _MemoryToolBase(BaseTool):
 
 class CreateMemoriesInput(BaseModel):
     text: str = Field(..., description="The memory text to store.")
-    memory_type: str = Field(default="episodic", description="Type: core_identity, project_context, task_instruction, or episodic.")
+    memory_type: str = Field(default="episodic", description="Type: core_identity, project_context, task_instruction, or episodic.")  # noqa: E501
     entity: str = Field(default="user", description="Entity this memory is about (e.g., user name, project name).")
     scope: str = Field(default="global", description="Scope: global, project, or task.")
     tags: list[str] = Field(default_factory=list, description="Optional tags for categorization.")
