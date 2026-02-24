@@ -727,6 +727,7 @@ def load_agent_executor_db(
         tools=instantiated_tools,
         memory_notes=memory_notes,
         last_message_at=last_message_at,
+        prompt_template=agent_db_config.get("prompt_template"),
     )
 
     agent_config_for_executor = {
@@ -857,6 +858,7 @@ async def load_agent_executor_db_async(
         tools=instantiated_tools,
         memory_notes=memory_notes,
         last_message_at=last_message_at,
+        prompt_template=agent_db_config.get("prompt_template"),
     )
 
     agent_config_for_executor = {
