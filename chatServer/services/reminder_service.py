@@ -78,6 +78,38 @@ class ReminderService:
         )
         return result.data or []
 
+    async def get_by_id(self, user_id: str, reminder_id: str) -> dict | None:
+        """Get a single reminder by ID."""
+        result = (
+            await self.db.table("reminders")
+            .select("*")
+            .eq("id", reminder_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+        return result.data[0] if result.data else None
+
+    async def delete_reminders(self, user_id: str, ids: list[str]) -> list[str]:
+        """Soft-delete reminders by setting status to 'deleted'.
+
+        Returns list of IDs that were successfully deleted.
+        """
+        deleted = []
+        for reminder_id in ids:
+            result = (
+                await self.db.table("reminders")
+                .update({"status": "deleted", "updated_at": datetime.now(timezone.utc).isoformat()})
+                .eq("id", reminder_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+            if result.data:
+                deleted.append(reminder_id)
+                logger.info(f"Soft-deleted reminder {reminder_id} for user {user_id}")
+            else:
+                logger.warning(f"Reminder {reminder_id} not found for user {user_id}")
+        return deleted
+
     async def get_due_reminders(self) -> list[dict]:
         """Get all pending reminders whose remind_at <= now (across all users)."""
         now = datetime.now(timezone.utc).isoformat()
