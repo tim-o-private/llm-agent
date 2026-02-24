@@ -250,7 +250,7 @@ class TestBuildAgentPrompt:
         )
         sections = [
             "## Identity", "## Soul", "## Channel", "## Current Time",
-            "## User Instructions", "## Tool Guidance",
+            "## User Instructions", "## Tool Guidance", "## Interaction Learning",
         ]
         positions = [result.index(s) for s in sections]
         assert positions == sorted(positions), "Sections are not in the expected order"
@@ -273,6 +273,7 @@ class TestBuildAgentPrompt:
         )
         assert "## Onboarding" in result
         assert "first interaction" in result
+        assert "SHOW usefulness" in result
 
     def test_onboarding_telegram_no_memory_no_instructions(self):
         """Onboarding section present on telegram when memory and instructions are empty."""
@@ -440,6 +441,58 @@ class TestBuildAgentPrompt:
         from chatServer.services.prompt_builder import CHANNEL_GUIDANCE
         assert "4096" in CHANNEL_GUIDANCE["telegram"]
 
+    # --- Interaction Learning section ---
+
+    def test_interaction_learning_on_web(self):
+        """Web channel includes Interaction Learning section."""
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="web",
+            user_instructions=None, memory_notes=None,
+        )
+        assert "## Interaction Learning" in result
+        assert "store_memory" in result
+
+    def test_interaction_learning_on_telegram(self):
+        """Telegram channel includes Interaction Learning section."""
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="telegram",
+            user_instructions=None, memory_notes=None,
+        )
+        assert "## Interaction Learning" in result
+
+    def test_no_interaction_learning_on_scheduled(self):
+        """Scheduled channel does NOT include Interaction Learning."""
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="scheduled",
+            user_instructions=None, memory_notes=None,
+        )
+        assert "## Interaction Learning" not in result
+
+    def test_no_interaction_learning_on_heartbeat(self):
+        """Heartbeat channel does NOT include Interaction Learning."""
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="heartbeat",
+            user_instructions=None, memory_notes=None,
+        )
+        assert "## Interaction Learning" not in result
+
+    def test_interaction_learning_section_ordering(self):
+        """Interaction Learning appears after Tool Guidance, before Session Open/Onboarding."""
+        class MockTool:
+            @classmethod
+            def prompt_section(cls, channel):
+                return "Tool guidance"
+
+        result = build_agent_prompt(
+            soul="x", identity=None, channel="web",
+            user_instructions=None, memory_notes=None,
+            tools=[MockTool()],
+        )
+        guidance_pos = result.index("## Tool Guidance")
+        learning_pos = result.index("## Interaction Learning")
+        onboarding_pos = result.index("## Onboarding")
+        assert guidance_pos < learning_pos < onboarding_pos
+
     # --- Session Open channel (FU-1) ---
 
     def test_session_open_new_user_bootstrap_guidance(self):
@@ -450,6 +503,7 @@ class TestBuildAgentPrompt:
         )
         assert "## Session Open" in result
         assert "first time you are meeting this user" in result
+        assert "SHOW usefulness" in result
         assert "WAKEUP_SILENT" not in result
         assert "## Onboarding" not in result
 

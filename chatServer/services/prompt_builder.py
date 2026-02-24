@@ -37,13 +37,18 @@ CHANNEL_GUIDANCE = {
 
 SESSION_OPEN_BOOTSTRAP_GUIDANCE = (
     "This is the very first time you are meeting this user.\n"
-    "No one typed anything yet — you are initiating the conversation.\n\n"
-    "Your job:\n"
-    "1. Introduce yourself warmly and briefly using your identity.\n"
-    "2. Ask what their key priorities are and how they'd like to use you.\n"
-    "3. Ask about communication preferences (concise vs detailed, formal vs casual).\n"
-    "4. When they respond, use save_memory and update_instructions to record what you learn.\n\n"
-    "One warm, natural opening message. Don't interrogate — you can learn more over time."
+    "No one typed anything yet — you are initiating.\n\n"
+    "Your job is to SHOW usefulness, not ASK about it.\n\n"
+    "Steps:\n"
+    "1. Use your tools to learn what you can — check emails, tasks, reminders.\n"
+    "   Do this BEFORE writing your greeting.\n"
+    "2. Introduce yourself in one sentence.\n"
+    "3. Share what you found: 'You have X emails, Y tasks, Z reminders.'\n"
+    "   If tools are empty or not connected, say so plainly.\n"
+    "4. Based on what you found, suggest ONE concrete next step.\n"
+    "5. Call store_memory to record initial observations about their setup.\n\n"
+    "Do NOT ask about communication preferences or priorities.\n"
+    "Learn those from how they respond to you."
 )
 
 SESSION_OPEN_RETURNING_GUIDANCE = (
@@ -64,19 +69,32 @@ MAX_INSTRUCTIONS_LENGTH = 2000
 ONBOARDING_SECTION = (
     "This appears to be your first interaction with this user.\n"
     "Their memory is empty and they have no custom instructions set.\n\n"
-    "Welcome the user warmly and help them get started:\n"
-    "1. Introduce yourself briefly using your identity.\n"
-    "2. Ask about their key priorities and how they'd like to use you.\n"
-    "3. Ask about communication preferences (concise vs detailed, formal vs casual).\n"
-    "4. After gathering answers, use save_memory to record what you learn.\n"
-    "5. Use update_instructions to set initial standing instructions.\n\n"
-    "Keep it conversational — you can learn more over time."
+    "Your job is to SHOW usefulness, not ASK about it.\n\n"
+    "Steps:\n"
+    "1. Use your tools first — check emails, tasks, reminders.\n"
+    "2. Introduce yourself briefly using your identity.\n"
+    "3. Share what you found and suggest one concrete next step.\n"
+    "4. Call store_memory to record initial observations about their setup.\n\n"
+    "Do NOT ask about communication preferences or priorities.\n"
+    "Learn those from how they respond to you."
+)
+
+INTERACTION_LEARNING_GUIDANCE = (
+    "Learn from every interaction:\n"
+    "- Notice communication patterns (terse replies = wants concise responses).\n"
+    "- Infer preferences from behavior, don't wait to be told.\n"
+    "- After every few exchanges, call store_memory to record observations.\n"
+    "  Use memory_type 'core_identity' for user facts, 'episodic' for events/decisions.\n"
+    "- Use recall before answering questions about the user's preferences or history."
 )
 
 def _format_time_context(last_message_at: datetime | None) -> str:
     if last_message_at is None:
         return "This is the first time opening this session."
-    ts = last_message_at.astimezone(timezone.utc) if last_message_at.tzinfo else last_message_at.replace(tzinfo=timezone.utc)
+    if last_message_at.tzinfo:
+        ts = last_message_at.astimezone(timezone.utc)
+    else:
+        ts = last_message_at.replace(tzinfo=timezone.utc)
     elapsed = datetime.now(timezone.utc) - ts
     minutes = int(elapsed.total_seconds() / 60)
     if minutes < 2:
@@ -179,7 +197,11 @@ def build_agent_prompt(
         if guidance_lines:
             sections.append("## Tool Guidance\n" + "\n".join(guidance_lines))
 
-    # 8. Session Open / Onboarding
+    # 8. Interaction Learning (web/telegram only)
+    if channel in ("web", "telegram"):
+        sections.append(f"## Interaction Learning\n{INTERACTION_LEARNING_GUIDANCE}")
+
+    # 9. Session Open / Onboarding
     is_new_user = not memory_notes and not user_instructions
     if channel == "session_open":
         if is_new_user:
