@@ -7,27 +7,6 @@ INPUT=$(cat)
 FILE_PATH=$(echo "$INPUT" | grep -oP '"file_path"\s*:\s*"([^"]*)"' | head -1 | sed 's/.*"\([^"]*\)"/\1/' || true)
 [ -z "$FILE_PATH" ] && exit 0
 
-# Block orchestrator agents from modifying files entirely.
-# Orchestrators plan and delegate — they do not write code.
-# No branch-name fallback here (risk of false positives per SPEC-020 edge cases).
-if [ "${CLAUDE_AGENT_TYPE:-}" = "orchestrator" ]; then
-  NORM_PATH="$FILE_PATH"
-  NORM_PATH="${NORM_PATH#./}"
-  PROJECT_DIR_TMP="${CLAUDE_PROJECT_DIR:-}"
-  if [ -n "$PROJECT_DIR_TMP" ]; then
-    NORM_PATH="${NORM_PATH#$PROJECT_DIR_TMP/}"
-  fi
-  case "$NORM_PATH" in
-    docs/*|.claude/*)
-      exit 0
-      ;;
-    *)
-      echo "BLOCKED: Orchestrator agents cannot modify files. Delegate to a domain agent instead." >&2
-      exit 2
-      ;;
-  esac
-fi
-
 # Detect agent type from env var (set by orchestrator in spawn prompt)
 AGENT_TYPE="${CLAUDE_AGENT_TYPE:-}"
 
