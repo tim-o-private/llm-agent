@@ -191,6 +191,9 @@ node_modules
 # Repomix output
 .repomix-output.txt
 
+# MCP config (contains API keys)
+.mcp.json
+
 # Generated schema dump (re-generate: ./scripts/dump-schema.sh)
 supabase/schema.sql
 
