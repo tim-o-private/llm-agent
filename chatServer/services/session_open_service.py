@@ -100,9 +100,22 @@ class SessionOpenService:
             trigger_prompt = "[SYSTEM: User returned to app. No user message. Check tools and decide whether to greet.]"
 
         # 7. Invoke agent
-        response = await agent_executor.ainvoke(
-            {"input": trigger_prompt, "chat_history": []}
-        )
+        try:
+            response = await agent_executor.ainvoke(
+                {"input": trigger_prompt, "chat_history": []}
+            )
+        except Exception as e:
+            error_name = type(e).__name__
+            logger.error(
+                "session_open: agent invocation failed for user=%s: %s: %s",
+                user_id, error_name, e,
+            )
+            return {
+                "response": "",
+                "is_new_user": is_new_user,
+                "silent": True,
+                "session_id": session_id,
+            }
 
         # 7. Normalize output (handle content block lists)
         output = response.get("output", "")
@@ -115,6 +128,19 @@ class SessionOpenService:
                 )
                 or "No text content in response."
             )
+
+        # Handle empty output — agent may have burned all iterations on tool calls
+        if not output or output.strip() == "" or output == "No text content in response.":
+            logger.error(
+                "session_open: agent returned empty output for user=%s session=%s",
+                user_id, session_id,
+            )
+            return {
+                "response": "",
+                "is_new_user": is_new_user,
+                "silent": True,
+                "session_id": session_id,
+            }
 
         # 8. Check for silent response — agent may include reasoning before WAKEUP_SILENT
         silent = "WAKEUP_SILENT" in output
