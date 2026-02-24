@@ -12,6 +12,8 @@ from typing import List, Optional, Type
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
+from .gmail_rate_limiter import GmailRateLimiter
+
 try:
     from google.oauth2.credentials import Credentials
     from langchain_google_community import GmailToolkit
@@ -415,6 +417,13 @@ class SearchGmailTool(BaseGmailTool):
     async def _arun(self, query: str, max_results: int = 10, account: Optional[str] = None) -> str:
         """Search Gmail messages, optionally across all accounts."""
         try:
+            call_count = 1 + max_results  # 1 list call + N get calls
+            rate_msg = GmailRateLimiter.check_and_increment(
+                self.user_id, account or "all", call_count
+            )
+            if rate_msg:
+                return rate_msg
+
             context = "scheduler" if "background" in self.agent_name.lower() else "user"
 
             if account:
@@ -525,6 +534,10 @@ class GetGmailTool(BaseGmailTool):
     async def _arun(self, message_id: str, account: str = "") -> str:
         """Get Gmail message by ID from a specific account."""
         try:
+            rate_msg = GmailRateLimiter.check_and_increment(self.user_id, account, 1)
+            if rate_msg:
+                return rate_msg
+
             if not account:
                 return "Error: 'account' parameter is required. Specify the email address of the Gmail account."
 
