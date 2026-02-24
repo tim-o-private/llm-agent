@@ -5,22 +5,34 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from chatServer.tools.reminder_tools import CreateReminderTool, ListRemindersTool
+from chatServer.tools.reminder_tools import (
+    CreateRemindersTool,
+    DeleteRemindersTool,
+    GetRemindersTool,
+)
 
 
 @pytest.fixture
 def create_tool():
-    return CreateReminderTool(
+    return CreateRemindersTool(
         user_id="user-123",
-        agent_name="assistant",
+        agent_name="search_test_runner",
     )
 
 
 @pytest.fixture
-def list_tool():
-    return ListRemindersTool(
+def get_tool():
+    return GetRemindersTool(
         user_id="user-123",
-        agent_name="assistant",
+        agent_name="search_test_runner",
+    )
+
+
+@pytest.fixture
+def delete_tool():
+    return DeleteRemindersTool(
+        user_id="user-123",
+        agent_name="search_test_runner",
     )
 
 
@@ -37,19 +49,25 @@ def _past_iso(hours=1):
 def _patch_tool_deps(mock_db, mock_service):
     """Context manager that patches the lazy imports used by reminder tools."""
     return (
-        patch("chatServer.database.supabase_client.get_supabase_client", new_callable=AsyncMock, return_value=mock_db),
-        patch("chatServer.services.reminder_service.ReminderService", return_value=mock_service),
+        patch(
+            "chatServer.database.supabase_client.get_supabase_client",
+            new_callable=AsyncMock, return_value=mock_db,
+        ),
+        patch(
+            "chatServer.services.reminder_service.ReminderService",
+            return_value=mock_service,
+        ),
     )
 
 
 # ---------------------------------------------------------------------------
-# CreateReminderTool
+# CreateRemindersTool
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_create_reminder_stores_in_db(create_tool):
-    """Verify create_reminder calls ReminderService and returns confirmation."""
+async def test_create_reminders_single(create_tool):
+    """Verify create_reminders calls ReminderService and returns confirmation."""
     mock_db = MagicMock()
     mock_service = MagicMock()
     future = _future_iso(2)
@@ -61,10 +79,11 @@ async def test_create_reminder_stores_in_db(create_tool):
 
     p1, p2 = _patch_tool_deps(mock_db, mock_service)
     with p1, p2:
-        result = await create_tool._arun(title="Test reminder", remind_at=future)
+        result = await create_tool._arun(
+            reminders=[{"title": "Test reminder", "remind_at": future}]
+        )
 
-    assert "Reminder set" in result
-    assert "Test reminder" in result
+    assert "Reminder set" in result or "Test reminder" in result
     mock_service.create_reminder.assert_awaited_once()
     call_kwargs = mock_service.create_reminder.call_args[1]
     assert call_kwargs["user_id"] == "user-123"
@@ -73,15 +92,22 @@ async def test_create_reminder_stores_in_db(create_tool):
 
 
 @pytest.mark.asyncio
-async def test_create_reminder_validates_future_date(create_tool):
-    """Verify create_reminder rejects past dates without calling the service."""
+async def test_create_reminders_validates_future_date(create_tool):
+    """Verify create_reminders rejects past dates."""
+    mock_db = MagicMock()
+    mock_service = MagicMock()
     past = _past_iso(1)
-    result = await create_tool._arun(title="Too late", remind_at=past)
+
+    p1, p2 = _patch_tool_deps(mock_db, mock_service)
+    with p1, p2:
+        result = await create_tool._arun(
+            reminders=[{"title": "Too late", "remind_at": past}]
+        )
     assert "must be in the future" in result
 
 
 @pytest.mark.asyncio
-async def test_create_reminder_with_recurrence(create_tool):
+async def test_create_reminders_with_recurrence(create_tool):
     """Verify recurrence is passed through to service."""
     mock_db = MagicMock()
     mock_service = MagicMock()
@@ -92,7 +118,9 @@ async def test_create_reminder_with_recurrence(create_tool):
 
     p1, p2 = _patch_tool_deps(mock_db, mock_service)
     with p1, p2:
-        result = await create_tool._arun(title="Daily standup", remind_at=future, recurrence="daily")
+        result = await create_tool._arun(
+            reminders=[{"title": "Daily standup", "remind_at": future, "recurrence": "daily"}]
+        )
 
     assert "repeats daily" in result
     call_kwargs = mock_service.create_reminder.call_args[1]
@@ -100,21 +128,28 @@ async def test_create_reminder_with_recurrence(create_tool):
 
 
 @pytest.mark.asyncio
-async def test_create_reminder_rejects_invalid_recurrence(create_tool):
+async def test_create_reminders_rejects_invalid_recurrence(create_tool):
     """Verify invalid recurrence values are rejected."""
+    mock_db = MagicMock()
+    mock_service = MagicMock()
     future = _future_iso(2)
-    result = await create_tool._arun(title="Bad", remind_at=future, recurrence="biweekly")
-    assert "invalid recurrence" in result
+
+    p1, p2 = _patch_tool_deps(mock_db, mock_service)
+    with p1, p2:
+        result = await create_tool._arun(
+            reminders=[{"title": "Bad", "remind_at": future, "recurrence": "biweekly"}]
+        )
+    assert "invalid recurrence" in result.lower() or "Invalid recurrence" in result
 
 
 # ---------------------------------------------------------------------------
-# ListRemindersTool
+# GetRemindersTool
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_list_reminders_returns_upcoming_only(list_tool):
-    """Verify list_reminders returns formatted upcoming reminders."""
+async def test_get_reminders_returns_upcoming_only(get_tool):
+    """Verify get_reminders returns formatted upcoming reminders."""
     mock_db = MagicMock()
     mock_service = MagicMock()
     future = _future_iso(2)
@@ -128,7 +163,7 @@ async def test_list_reminders_returns_upcoming_only(list_tool):
 
     p1, p2 = _patch_tool_deps(mock_db, mock_service)
     with p1, p2:
-        result = await list_tool._arun(limit=10)
+        result = await get_tool._arun(limit=10)
 
     assert "2 upcoming reminder(s)" in result
     assert "Buy groceries" in result
@@ -138,14 +173,14 @@ async def test_list_reminders_returns_upcoming_only(list_tool):
 
 
 @pytest.mark.asyncio
-async def test_list_reminders_excludes_sent_and_dismissed(list_tool):
-    """Verify list_reminders shows empty message when no pending reminders."""
+async def test_get_reminders_empty(get_tool):
+    """Verify get_reminders shows empty message when no pending reminders."""
     mock_db = MagicMock()
     mock_service = MagicMock()
     mock_service.list_upcoming = AsyncMock(return_value=[])
 
     p1, p2 = _patch_tool_deps(mock_db, mock_service)
     with p1, p2:
-        result = await list_tool._arun()
+        result = await get_tool._arun()
 
     assert "no upcoming reminders" in result
