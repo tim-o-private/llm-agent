@@ -74,6 +74,22 @@ class ScheduleService:
         logger.info(f"Created schedule {result.data[0]['id']} for user {user_id}")
         return result.data[0]
 
+    async def get_schedule(self, schedule_id: str, user_id: str) -> dict | None:
+        """Fetch a single schedule by ID, scoped to user.
+
+        Returns:
+            Schedule dict or None if not found.
+        """
+        result = (
+            await self.db.table("agent_schedules")
+            .select("*")
+            .eq("id", schedule_id)
+            .eq("user_id", user_id)
+            .maybe_single()
+            .execute()
+        )
+        return result.data
+
     async def delete_schedule(self, schedule_id: str, user_id: str) -> bool:
         """Soft-delete a schedule by setting active = false, scoped to the user.
 

@@ -9,77 +9,72 @@ from typing import Any, Dict, List, Optional, Type
 from pydantic import BaseModel, ConfigDict, Field, create_model
 
 from chatServer.database.connection import get_db_connection
-from chatServer.tools.email_digest_tool import EmailDigestTool
-from chatServer.tools.gmail_tools import GmailDigestTool, GmailGetMessageTool, GmailSearchTool
+from chatServer.tools.gmail_tools import GetGmailTool, SearchGmailTool
 from chatServer.tools.memory_tools import (
-    DeleteMemoryTool,
-    FetchMemoryTool,
-    GetContextInfoTool,
+    CreateMemoriesTool,
+    DeleteMemoriesTool,
+    GetContextTool,
+    GetEntitiesTool,
+    GetMemoriesTool,
     LinkMemoriesTool,
-    ListEntitiesTool,
-    RecallMemoryTool,
     SearchEntitiesTool,
-    SearchMemoryTool,
+    SearchMemoriesTool,
     SetProjectTool,
-    StoreMemoryTool,
-    UpdateMemoryTool,
+    UpdateMemoriesTool,
 )
-from chatServer.tools.reminder_tools import CreateReminderTool, ListRemindersTool
-from chatServer.tools.schedule_tools import CreateScheduleTool, DeleteScheduleTool, ListSchedulesTool
-from chatServer.tools.task_tools import CreateTaskTool, DeleteTaskTool, GetTasksTool, GetTaskTool, UpdateTaskTool
+from chatServer.tools.reminder_tools import CreateRemindersTool, DeleteRemindersTool, GetRemindersTool
+from chatServer.tools.schedule_tools import CreateSchedulesTool, DeleteSchedulesTool, GetSchedulesTool
+from chatServer.tools.task_tools import CreateTasksTool, DeleteTasksTool, GetTasksTool, UpdateTasksTool
 from chatServer.tools.update_instructions_tool import UpdateInstructionsTool
 from core.agents.customizable_agent import CustomizableAgentExecutor
 from core.tools.crud_tool import CRUDTool, CRUDToolInput
 from supabase import Client as SupabaseClient
 from supabase import create_client
-
-# Example imports for specific tool subclasses (USER ACTION: Add actual tool class imports here)
-# from core.tools.agent_memory_tools import CreateMemoryTool, FetchMemoryTool, UpdateMemoryTool, DeleteMemoryTool
 from utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
 
-# Tool registry: maps tool_type string from DB to Python class
-# Option 2: Registering generic CRUDTool to be configured by DB.
+# Tool registry: maps tools.type column value → Python class.
+# The canonical migration (SPEC-019) sets correct type values; legacy aliases
+# kept only for safety during migration rollback.
 TOOL_REGISTRY: Dict[str, Type] = {
     "CRUDTool": CRUDTool,
-    "GmailDigestTool": GmailDigestTool,
-    "GmailSearchTool": GmailSearchTool,
-    "GmailGetMessageTool": GmailGetMessageTool,
-    "EmailDigestTool": EmailDigestTool,
-    "StoreMemoryTool": StoreMemoryTool,
-    "RecallMemoryTool": RecallMemoryTool,
-    "SearchMemoryTool": SearchMemoryTool,
-    "FetchMemoryTool": FetchMemoryTool,
-    "DeleteMemoryTool": DeleteMemoryTool,
-    "UpdateMemoryTool": UpdateMemoryTool,
+    # Gmail
+    "SearchGmailTool": SearchGmailTool,
+    "GetGmailTool": GetGmailTool,
+    "GmailTool": None,  # Special handling — uses config.tool_class
+    # Memory
+    "CreateMemoriesTool": CreateMemoriesTool,
+    "SearchMemoriesTool": SearchMemoriesTool,
+    "GetMemoriesTool": GetMemoriesTool,
+    "DeleteMemoriesTool": DeleteMemoriesTool,
+    "UpdateMemoriesTool": UpdateMemoriesTool,
     "SetProjectTool": SetProjectTool,
     "LinkMemoriesTool": LinkMemoriesTool,
-    "ListEntitiesTool": ListEntitiesTool,
+    "GetEntitiesTool": GetEntitiesTool,
     "SearchEntitiesTool": SearchEntitiesTool,
-    "GetContextInfoTool": GetContextInfoTool,
-    "GmailTool": None,  # Special handling - uses tool_class config to determine specific class
-    "CreateReminderTool": CreateReminderTool,
-    "ListRemindersTool": ListRemindersTool,
-    "CreateScheduleTool": CreateScheduleTool,
-    "DeleteScheduleTool": DeleteScheduleTool,
-    "ListSchedulesTool": ListSchedulesTool,
-    "UpdateInstructionsTool": UpdateInstructionsTool,
+    "GetContextTool": GetContextTool,
+    # Tasks
     "GetTasksTool": GetTasksTool,
-    "GetTaskTool": GetTaskTool,
-    "CreateTaskTool": CreateTaskTool,
-    "UpdateTaskTool": UpdateTaskTool,
-    "DeleteTaskTool": DeleteTaskTool,
-    # Add other distinct, non-CRUDTool Python classes here if any.
-    # The string key (e.g., "CRUDTool") must match the 'type' column
-    # (or ENUM value as string) in your agent_tools table for these tools.
+    "CreateTasksTool": CreateTasksTool,
+    "UpdateTasksTool": UpdateTasksTool,
+    "DeleteTasksTool": DeleteTasksTool,
+    # Reminders
+    "GetRemindersTool": GetRemindersTool,
+    "CreateRemindersTool": CreateRemindersTool,
+    "DeleteRemindersTool": DeleteRemindersTool,
+    # Schedules
+    "GetSchedulesTool": GetSchedulesTool,
+    "CreateSchedulesTool": CreateSchedulesTool,
+    "DeleteSchedulesTool": DeleteSchedulesTool,
+    # Instructions
+    "UpdateInstructionsTool": UpdateInstructionsTool,
 }
 
-# Gmail tool class registry for GmailTool type
+# Gmail tool class registry for GmailTool type (config.tool_class → class)
 GMAIL_TOOL_CLASSES: Dict[str, Type] = {
-    "GmailDigestTool": GmailDigestTool,
-    "GmailSearchTool": GmailSearchTool,
-    "GmailGetMessageTool": GmailGetMessageTool,
+    "SearchGmailTool": SearchGmailTool,
+    "GetGmailTool": GetGmailTool,
 }
 
 # Agent registry: maps agent_name to specialized agent classes
@@ -394,10 +389,14 @@ def load_tools_from_db(
 
             # Inject memory_client for memory tools; strip Supabase kwargs they don't need
             _memory_tool_types = (
+                "CreateMemoriesTool", "SearchMemoriesTool", "GetMemoriesTool",
+                "DeleteMemoriesTool", "UpdateMemoriesTool",
+                "SetProjectTool", "LinkMemoriesTool", "GetEntitiesTool",
+                "SearchEntitiesTool", "GetContextTool",
+                # Legacy DB type strings
                 "StoreMemoryTool", "RecallMemoryTool", "SearchMemoryTool",
                 "FetchMemoryTool", "DeleteMemoryTool", "UpdateMemoryTool",
-                "SetProjectTool", "LinkMemoriesTool", "ListEntitiesTool",
-                "SearchEntitiesTool", "GetContextInfoTool",
+                "ListEntitiesTool", "GetContextInfoTool",
             )
             if db_tool_type_str in _memory_tool_types:
                 if memory_client:
@@ -728,6 +727,7 @@ def load_agent_executor_db(
         tools=instantiated_tools,
         memory_notes=memory_notes,
         last_message_at=last_message_at,
+        prompt_template=agent_db_config.get("prompt_template"),
     )
 
     agent_config_for_executor = {
@@ -858,6 +858,7 @@ async def load_agent_executor_db_async(
         tools=instantiated_tools,
         memory_notes=memory_notes,
         last_message_at=last_message_at,
+        prompt_template=agent_db_config.get("prompt_template"),
     )
 
     agent_config_for_executor = {
@@ -894,7 +895,7 @@ async def _fetch_agent_config_from_db_async(agent_name: str) -> Optional[Dict[st
             async with conn.cursor() as cur:
                 await cur.execute("""
                     SELECT id, agent_name, soul, identity, llm_config,
-                           created_at, updated_at
+                           prompt_template, created_at, updated_at
                     FROM agent_configurations
                     WHERE agent_name = %s
                 """, (agent_name,))

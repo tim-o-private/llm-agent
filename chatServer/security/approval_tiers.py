@@ -38,65 +38,37 @@ class ApprovalTier(Enum):
 TOOL_APPROVAL_DEFAULTS: dict[str, tuple[ApprovalTier, ApprovalTier]] = {
     # Format: "tool_name": (tier, default_for_user_configurable)
 
-    # Gmail tools - reading is safe, sending is not
-    "gmail_search": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
-    "gmail_get_message": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
-    "gmail_get_thread": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
-    "gmail_send_message": (ApprovalTier.REQUIRES_APPROVAL, ApprovalTier.REQUIRES_APPROVAL),
-    "gmail_create_draft": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.AUTO_APPROVE),
-    "gmail_archive": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.AUTO_APPROVE),
-    "gmail_trash": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.REQUIRES_APPROVAL),
-    "gmail_mark_read": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.AUTO_APPROVE),
-    "gmail_mark_unread": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.AUTO_APPROVE),
-    "gmail_add_label": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.AUTO_APPROVE),
-    "gmail_remove_label": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.AUTO_APPROVE),
-
-    # Task tools - CRUD operations
-    "create_task": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.AUTO_APPROVE),
+    # Task tools
     "get_tasks": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
-    "get_task": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
-    "update_task": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.AUTO_APPROVE),
-    "delete_task": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.REQUIRES_APPROVAL),
-
-    # File tools - reading is safe, writing needs review
-    "read_file": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
-    "list_files": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
-    "write_file": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.REQUIRES_APPROVAL),
-
-    # Memory tools (legacy CRUD-based)
-    "memory_store": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
-    "memory_search": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
-    "memory_delete": (ApprovalTier.REQUIRES_APPROVAL, ApprovalTier.REQUIRES_APPROVAL),
+    "create_tasks": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.AUTO_APPROVE),
+    "update_tasks": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.AUTO_APPROVE),
+    "delete_tasks": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.REQUIRES_APPROVAL),
 
     # Reminder tools
-    "create_reminder": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.AUTO_APPROVE),
-    "list_reminders": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
-
-    # LTM memory tools (legacy)
-    "save_memory": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.AUTO_APPROVE),
-    "read_memory": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
-
-    # min-memory tools
-    "store_memory": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
-    "recall": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
-    "search_memory": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
-    "fetch_memory": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
-    "delete_memory": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
-    "update_memory": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
-    "set_project": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
-    "link_memories": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
-    "list_entities": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
-    "search_entities": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
-    "get_context_info": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
-
-    # Email digest tools
-    "email_digest": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
-    "gmail_digest": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+    "get_reminders": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+    "create_reminders": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.AUTO_APPROVE),
+    "delete_reminders": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.REQUIRES_APPROVAL),
 
     # Schedule tools
-    "create_schedule": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.AUTO_APPROVE),
-    "delete_schedule": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.REQUIRES_APPROVAL),
-    "list_schedules": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+    "get_schedules": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+    "create_schedules": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.AUTO_APPROVE),
+    "delete_schedules": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.REQUIRES_APPROVAL),
+
+    # Gmail tools
+    "search_gmail": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+    "get_gmail": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+
+    # Memory tools
+    "create_memories": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+    "search_memories": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+    "get_memories": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+    "update_memories": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+    "delete_memories": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+    "set_project": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+    "link_memories": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+    "get_entities": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+    "search_entities": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+    "get_context": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
 
     # Update instructions
     "update_instructions": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.REQUIRES_APPROVAL),

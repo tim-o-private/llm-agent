@@ -2,11 +2,10 @@
 
 import pytest
 
-from chatServer.tools.email_digest_tool import EmailDigestTool
-from chatServer.tools.gmail_tools import GmailSearchTool
-from chatServer.tools.memory_tools import StoreMemoryTool
-from chatServer.tools.reminder_tools import CreateReminderTool
-from chatServer.tools.schedule_tools import CreateScheduleTool
+from chatServer.tools.gmail_tools import SearchGmailTool
+from chatServer.tools.memory_tools import CreateMemoriesTool
+from chatServer.tools.reminder_tools import GetRemindersTool
+from chatServer.tools.schedule_tools import GetSchedulesTool
 from chatServer.tools.task_tools import GetTasksTool
 from chatServer.tools.update_instructions_tool import UpdateInstructionsTool
 
@@ -40,7 +39,7 @@ class TestGetTasksToolPromptSection:
     def test_web_mentions_actionable(self):
         """GetTasksTool.prompt_section('web') mentions actionable context."""
         result = GetTasksTool.prompt_section("web")
-        assert "actionable" in result.lower() or "create_task" in result.lower()
+        assert "actionable" in result.lower() or "create_tasks" in result.lower()
 
     def test_heartbeat_mentions_overdue_or_stale(self):
         """GetTasksTool.prompt_section('heartbeat') mentions overdue or stale."""
@@ -60,159 +59,159 @@ class TestGetTasksToolPromptSection:
         assert result == web_result
 
 
-class TestStoreMemoryToolPromptSection:
-    """Tests for StoreMemoryTool.prompt_section()."""
+class TestCreateMemoriesToolPromptSection:
+    """Tests for CreateMemoriesTool.prompt_section()."""
 
     def test_web_returns_string(self):
-        """StoreMemoryTool.prompt_section('web') returns non-None string."""
-        result = StoreMemoryTool.prompt_section("web")
+        """CreateMemoriesTool.prompt_section('web') returns non-None string."""
+        result = CreateMemoriesTool.prompt_section("web")
         assert isinstance(result, str)
         assert len(result) > 0
 
     def test_telegram_returns_string(self):
-        """StoreMemoryTool.prompt_section('telegram') returns non-None string."""
-        result = StoreMemoryTool.prompt_section("telegram")
+        """CreateMemoriesTool.prompt_section('telegram') returns non-None string."""
+        result = CreateMemoriesTool.prompt_section("telegram")
         assert isinstance(result, str)
         assert len(result) > 0
 
     def test_heartbeat_returns_none(self):
-        """StoreMemoryTool.prompt_section('heartbeat') returns None."""
-        result = StoreMemoryTool.prompt_section("heartbeat")
+        """CreateMemoriesTool.prompt_section('heartbeat') returns None."""
+        result = CreateMemoriesTool.prompt_section("heartbeat")
         assert result is None
 
     def test_scheduled_returns_none(self):
-        """StoreMemoryTool.prompt_section('scheduled') returns None."""
-        result = StoreMemoryTool.prompt_section("scheduled")
+        """CreateMemoriesTool.prompt_section('scheduled') returns None."""
+        result = CreateMemoriesTool.prompt_section("scheduled")
         assert result is None
 
-    def test_web_mentions_store_and_recall(self):
-        """StoreMemoryTool.prompt_section('web') mentions store_memory and recall."""
-        result = StoreMemoryTool.prompt_section("web")
-        assert "store_memory" in result.lower()
-        assert "recall" in result.lower()
+    def test_web_mentions_create_and_search(self):
+        """CreateMemoriesTool.prompt_section('web') mentions create_memories and search_memories."""
+        result = CreateMemoriesTool.prompt_section("web")
+        assert "create_memories" in result.lower()
+        assert "search_memories" in result.lower()
 
     def test_web_and_telegram_same(self):
-        """StoreMemoryTool prompt sections for web and telegram are the same."""
-        web = StoreMemoryTool.prompt_section("web")
-        telegram = StoreMemoryTool.prompt_section("telegram")
+        """CreateMemoriesTool prompt sections for web and telegram are the same."""
+        web = CreateMemoriesTool.prompt_section("web")
+        telegram = CreateMemoriesTool.prompt_section("telegram")
         assert web == telegram
 
 
-class TestGmailSearchToolPromptSection:
-    """Tests for GmailSearchTool.prompt_section()."""
+class TestSearchGmailToolPromptSection:
+    """Tests for SearchGmailTool.prompt_section()."""
 
     def test_web_returns_string(self):
-        """GmailSearchTool.prompt_section('web') returns non-None string."""
-        result = GmailSearchTool.prompt_section("web")
+        """SearchGmailTool.prompt_section('web') returns non-None string."""
+        result = SearchGmailTool.prompt_section("web")
         assert isinstance(result, str)
         assert len(result) > 0
 
     def test_telegram_returns_string(self):
-        """GmailSearchTool.prompt_section('telegram') returns non-None string."""
-        result = GmailSearchTool.prompt_section("telegram")
+        """SearchGmailTool.prompt_section('telegram') returns non-None string."""
+        result = SearchGmailTool.prompt_section("telegram")
         assert isinstance(result, str)
         assert len(result) > 0
 
     def test_heartbeat_returns_string(self):
-        """GmailSearchTool.prompt_section('heartbeat') returns non-None string."""
-        result = GmailSearchTool.prompt_section("heartbeat")
+        """SearchGmailTool.prompt_section('heartbeat') returns non-None string."""
+        result = SearchGmailTool.prompt_section("heartbeat")
         assert isinstance(result, str)
         assert len(result) > 0
 
     def test_scheduled_returns_none(self):
-        """GmailSearchTool.prompt_section('scheduled') returns None."""
-        result = GmailSearchTool.prompt_section("scheduled")
+        """SearchGmailTool.prompt_section('scheduled') returns None."""
+        result = SearchGmailTool.prompt_section("scheduled")
         assert result is None
 
     def test_web_differs_from_heartbeat(self):
-        """GmailSearchTool.prompt_section('web') differs from heartbeat."""
-        web = GmailSearchTool.prompt_section("web")
-        heartbeat = GmailSearchTool.prompt_section("heartbeat")
+        """SearchGmailTool.prompt_section('web') differs from heartbeat."""
+        web = SearchGmailTool.prompt_section("web")
+        heartbeat = SearchGmailTool.prompt_section("heartbeat")
         assert web != heartbeat
 
     def test_heartbeat_mentions_unread(self):
-        """GmailSearchTool.prompt_section('heartbeat') mentions unread."""
-        result = GmailSearchTool.prompt_section("heartbeat")
+        """SearchGmailTool.prompt_section('heartbeat') mentions unread."""
+        result = SearchGmailTool.prompt_section("heartbeat")
         assert "unread" in result.lower()
 
     def test_web_and_telegram_same(self):
-        """GmailSearchTool prompt sections for web and telegram are the same."""
-        web = GmailSearchTool.prompt_section("web")
-        telegram = GmailSearchTool.prompt_section("telegram")
+        """SearchGmailTool prompt sections for web and telegram are the same."""
+        web = SearchGmailTool.prompt_section("web")
+        telegram = SearchGmailTool.prompt_section("telegram")
         assert web == telegram
 
 
-class TestCreateReminderToolPromptSection:
-    """Tests for CreateReminderTool.prompt_section()."""
+class TestGetRemindersToolPromptSection:
+    """Tests for GetRemindersTool.prompt_section()."""
 
     def test_web_returns_string(self):
-        """CreateReminderTool.prompt_section('web') returns non-None string."""
-        result = CreateReminderTool.prompt_section("web")
+        """GetRemindersTool.prompt_section('web') returns non-None string."""
+        result = GetRemindersTool.prompt_section("web")
         assert isinstance(result, str)
         assert len(result) > 0
 
     def test_telegram_returns_string(self):
-        """CreateReminderTool.prompt_section('telegram') returns non-None string."""
-        result = CreateReminderTool.prompt_section("telegram")
+        """GetRemindersTool.prompt_section('telegram') returns non-None string."""
+        result = GetRemindersTool.prompt_section("telegram")
         assert isinstance(result, str)
         assert len(result) > 0
 
     def test_heartbeat_returns_none(self):
-        """CreateReminderTool.prompt_section('heartbeat') returns None."""
-        result = CreateReminderTool.prompt_section("heartbeat")
+        """GetRemindersTool.prompt_section('heartbeat') returns None."""
+        result = GetRemindersTool.prompt_section("heartbeat")
         assert result is None
 
     def test_scheduled_returns_none(self):
-        """CreateReminderTool.prompt_section('scheduled') returns None."""
-        result = CreateReminderTool.prompt_section("scheduled")
+        """GetRemindersTool.prompt_section('scheduled') returns None."""
+        result = GetRemindersTool.prompt_section("scheduled")
         assert result is None
 
-    def test_web_mentions_create_reminder(self):
-        """CreateReminderTool.prompt_section('web') mentions create_reminder."""
-        result = CreateReminderTool.prompt_section("web")
-        assert "create_reminder" in result.lower()
+    def test_web_mentions_create_reminders(self):
+        """GetRemindersTool.prompt_section('web') mentions create_reminders."""
+        result = GetRemindersTool.prompt_section("web")
+        assert "create_reminders" in result.lower()
 
     def test_web_and_telegram_same(self):
-        """CreateReminderTool prompt sections for web and telegram are the same."""
-        web = CreateReminderTool.prompt_section("web")
-        telegram = CreateReminderTool.prompt_section("telegram")
+        """GetRemindersTool prompt sections for web and telegram are the same."""
+        web = GetRemindersTool.prompt_section("web")
+        telegram = GetRemindersTool.prompt_section("telegram")
         assert web == telegram
 
 
-class TestCreateScheduleToolPromptSection:
-    """Tests for CreateScheduleTool.prompt_section()."""
+class TestGetSchedulesToolPromptSection:
+    """Tests for GetSchedulesTool.prompt_section()."""
 
     def test_web_returns_string(self):
-        """CreateScheduleTool.prompt_section('web') returns non-None string."""
-        result = CreateScheduleTool.prompt_section("web")
+        """GetSchedulesTool.prompt_section('web') returns non-None string."""
+        result = GetSchedulesTool.prompt_section("web")
         assert isinstance(result, str)
         assert len(result) > 0
 
     def test_telegram_returns_string(self):
-        """CreateScheduleTool.prompt_section('telegram') returns non-None string."""
-        result = CreateScheduleTool.prompt_section("telegram")
+        """GetSchedulesTool.prompt_section('telegram') returns non-None string."""
+        result = GetSchedulesTool.prompt_section("telegram")
         assert isinstance(result, str)
         assert len(result) > 0
 
     def test_heartbeat_returns_none(self):
-        """CreateScheduleTool.prompt_section('heartbeat') returns None."""
-        result = CreateScheduleTool.prompt_section("heartbeat")
+        """GetSchedulesTool.prompt_section('heartbeat') returns None."""
+        result = GetSchedulesTool.prompt_section("heartbeat")
         assert result is None
 
     def test_scheduled_returns_none(self):
-        """CreateScheduleTool.prompt_section('scheduled') returns None."""
-        result = CreateScheduleTool.prompt_section("scheduled")
+        """GetSchedulesTool.prompt_section('scheduled') returns None."""
+        result = GetSchedulesTool.prompt_section("scheduled")
         assert result is None
 
-    def test_web_mentions_create_schedule(self):
-        """CreateScheduleTool.prompt_section('web') mentions create_schedule."""
-        result = CreateScheduleTool.prompt_section("web")
-        assert "create_schedule" in result.lower()
+    def test_web_mentions_create_schedules(self):
+        """GetSchedulesTool.prompt_section('web') mentions create_schedules."""
+        result = GetSchedulesTool.prompt_section("web")
+        assert "create_schedules" in result.lower()
 
     def test_web_and_telegram_same(self):
-        """CreateScheduleTool prompt sections for web and telegram are the same."""
-        web = CreateScheduleTool.prompt_section("web")
-        telegram = CreateScheduleTool.prompt_section("telegram")
+        """GetSchedulesTool prompt sections for web and telegram are the same."""
+        web = GetSchedulesTool.prompt_section("web")
+        telegram = GetSchedulesTool.prompt_section("telegram")
         assert web == telegram
 
 
@@ -253,55 +252,16 @@ class TestUpdateInstructionsToolPromptSection:
         assert web == telegram
 
 
-class TestEmailDigestToolPromptSection:
-    """Tests for EmailDigestTool.prompt_section()."""
-
-    def test_web_returns_string(self):
-        """EmailDigestTool.prompt_section('web') returns non-None string."""
-        result = EmailDigestTool.prompt_section("web")
-        assert isinstance(result, str)
-        assert len(result) > 0
-
-    def test_telegram_returns_string(self):
-        """EmailDigestTool.prompt_section('telegram') returns non-None string."""
-        result = EmailDigestTool.prompt_section("telegram")
-        assert isinstance(result, str)
-        assert len(result) > 0
-
-    def test_scheduled_returns_string(self):
-        """EmailDigestTool.prompt_section('scheduled') returns non-None string."""
-        result = EmailDigestTool.prompt_section("scheduled")
-        assert isinstance(result, str)
-        assert len(result) > 0
-
-    def test_heartbeat_returns_none(self):
-        """EmailDigestTool.prompt_section('heartbeat') returns None."""
-        result = EmailDigestTool.prompt_section("heartbeat")
-        assert result is None
-
-    def test_scheduled_mentions_notification(self):
-        """EmailDigestTool.prompt_section('scheduled') mentions notification."""
-        result = EmailDigestTool.prompt_section("scheduled")
-        assert "notification" in result.lower()
-
-    def test_web_and_telegram_same(self):
-        """EmailDigestTool prompt sections for web and telegram are the same."""
-        web = EmailDigestTool.prompt_section("web")
-        telegram = EmailDigestTool.prompt_section("telegram")
-        assert web == telegram
-
-
 class TestPromptSectionLengthLimits:
     """Tests that all prompt sections respect length limits."""
 
     @pytest.mark.parametrize("tool_class", [
         GetTasksTool,
-        StoreMemoryTool,
-        GmailSearchTool,
-        CreateReminderTool,
-        CreateScheduleTool,
+        CreateMemoriesTool,
+        SearchGmailTool,
+        GetRemindersTool,
+        GetSchedulesTool,
         UpdateInstructionsTool,
-        EmailDigestTool,
     ])
     @pytest.mark.parametrize("channel", ["web", "telegram", "heartbeat", "scheduled"])
     def test_prompt_section_length_under_300_chars(self, tool_class, channel):
@@ -319,12 +279,11 @@ class TestPromptSectionConsistency:
 
     @pytest.mark.parametrize("tool_class", [
         GetTasksTool,
-        StoreMemoryTool,
-        GmailSearchTool,
-        CreateReminderTool,
-        CreateScheduleTool,
+        CreateMemoriesTool,
+        SearchGmailTool,
+        GetRemindersTool,
+        GetSchedulesTool,
         UpdateInstructionsTool,
-        EmailDigestTool,
     ])
     def test_prompt_section_returns_str_or_none(self, tool_class):
         """All tool classes have prompt_section() that returns str or None."""

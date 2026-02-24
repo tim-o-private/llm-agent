@@ -197,14 +197,16 @@ class BackgroundTaskService:
         try:
             logger.info(f"Executing scheduled agent {agent_name} for user {user_id} (schedule {schedule_id})")
 
-            # Email digest schedules use the dedicated EmailDigestService
-            # for backward compatibility (it has its own storage table and extraction logic)
+            # TODO: SPEC-020 — Remove email digest special case. The agent should
+            # use search_gmail and reason about results instead of a dedicated service.
+            # Keeping for now to avoid breaking existing scheduled digests.
             is_email_digest = (
                 'email digest' in prompt.lower()
                 and config.get('schedule_type') != 'heartbeat'
             )
 
             if is_email_digest:
+                logger.warning("Email digest schedule detected — this path is deprecated (SPEC-020)")
                 from ..services.email_digest_service import EmailDigestService
 
                 service = EmailDigestService(user_id, context="scheduled")

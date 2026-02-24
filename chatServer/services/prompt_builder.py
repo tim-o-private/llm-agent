@@ -1,5 +1,7 @@
 """Prompt builder service — assembles agent system prompt from sections."""
 
+import re
+import string
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -46,7 +48,7 @@ SESSION_OPEN_BOOTSTRAP_GUIDANCE = (
     "3. Share what you found: 'You have X emails, Y tasks, Z reminders.'\n"
     "   If tools are empty or not connected, say so plainly.\n"
     "4. Based on what you found, suggest ONE concrete next step.\n"
-    "5. Call store_memory to record initial observations about their setup.\n\n"
+    "5. Call create_memories to record initial observations about their setup.\n\n"
     "Do NOT ask about communication preferences or priorities.\n"
     "Learn those from how they respond to you."
 )
@@ -74,7 +76,7 @@ ONBOARDING_SECTION = (
     "1. Use your tools first — check emails, tasks, reminders.\n"
     "2. Introduce yourself briefly using your identity.\n"
     "3. Share what you found and suggest one concrete next step.\n"
-    "4. Call store_memory to record initial observations about their setup.\n\n"
+    "4. Call create_memories to record initial observations about their setup.\n\n"
     "Do NOT ask about communication preferences or priorities.\n"
     "Learn those from how they respond to you."
 )
@@ -83,9 +85,24 @@ INTERACTION_LEARNING_GUIDANCE = (
     "Learn from every interaction:\n"
     "- Notice communication patterns (terse replies = wants concise responses).\n"
     "- Infer preferences from behavior, don't wait to be told.\n"
-    "- After every few exchanges, call store_memory to record observations.\n"
+    "- After every few exchanges, call create_memories to record observations.\n"
     "  Use memory_type 'core_identity' for user facts, 'episodic' for events/decisions.\n"
-    "- Use recall before answering questions about the user's preferences or history."
+    "- Use search_memories before answering questions about the user's preferences or history."
+)
+
+OPERATING_MODEL = (
+    "Every conversation starts with awareness. Before responding:\n"
+    "1. Check tasks (get_tasks) for what's active, overdue, or due today.\n"
+    "2. Recall what you know about this person (search_memories).\n"
+    "3. Respond informed by what you found — don't announce that you did this.\n\n"
+    "When the user mentions something they need to do — create a task. "
+    "Don't ask permission. If they don't want it, they'll say so. "
+    "Break vague goals into concrete next steps.\n\n"
+    "When you have Gmail access, scan for actionable items — things that need "
+    "replies, deadlines mentioned, commitments made. Turn these into tasks "
+    "when appropriate.\n\n"
+    "When the user says they finished something, mark it complete. "
+    "The task list should always reflect reality."
 )
 
 def _format_time_context(last_message_at: datetime | None) -> str:
@@ -105,6 +122,107 @@ def _format_time_context(last_message_at: datetime | None) -> str:
     return f"Your last interaction was {hours} hour{'s' if hours > 1 else ''} ago."
 
 
+def _format_identity_str(identity: dict | None) -> str:
+    """Format identity dict into a single line."""
+    if not identity:
+        return ""
+    name = identity.get("name") or "an AI assistant"
+    description = identity.get("description") or "a personal assistant"
+    vibe = identity.get("vibe") or ""
+    line = f"You are {name} — {description}."
+    if vibe:
+        line += f" {vibe}"
+    return line
+
+
+def _format_tool_guidance(tools: list | None, channel: str) -> str:
+    """Collect prompt_section() from all tool classes."""
+    if not tools:
+        return ""
+    seen_classes: set = set()
+    guidance_lines: list[str] = []
+    for tool in tools:
+        tool_cls = type(tool)
+        if tool_cls in seen_classes:
+            continue
+        seen_classes.add(tool_cls)
+        try:
+            if hasattr(tool_cls, "prompt_section"):
+                section = tool_cls.prompt_section(channel)
+                if section:
+                    guidance_lines.append(section)
+        except Exception:
+            pass
+    return "\n".join(guidance_lines)
+
+
+def _format_instructions_str(user_instructions: str | None) -> str:
+    """Format user instructions with fallback and hint text."""
+    if user_instructions:
+        truncated = user_instructions[:MAX_INSTRUCTIONS_LENGTH]
+        text = truncated
+        if len(user_instructions) > MAX_INSTRUCTIONS_LENGTH:
+            text += "\n(Instructions truncated at 2000 characters.)"
+    else:
+        text = "(No custom instructions set.)"
+    text += (
+        "\nThe user can change these by telling you things like "
+        '"always do X" or "never do Y". '
+        "When they do, use the update_instructions tool to persist the change."
+    )
+    return text
+
+
+def _format_memory_notes_str(memory_notes: str | None) -> str:
+    """Format memory notes section."""
+    if not memory_notes:
+        return ""
+    return f"These are your accumulated notes about this user:\n{memory_notes[:4000]}"
+
+
+def _format_session_str(
+    channel: str,
+    memory_notes: str | None,
+    user_instructions: str | None,
+    last_message_at: datetime | None,
+) -> str:
+    """Format session open / onboarding section."""
+    is_new_user = not memory_notes and not user_instructions
+    if channel == "session_open":
+        if is_new_user:
+            return SESSION_OPEN_BOOTSTRAP_GUIDANCE
+        time_context = _format_time_context(last_message_at)
+        return SESSION_OPEN_RETURNING_GUIDANCE.format(time_context=time_context)
+    if channel in ("web", "telegram") and is_new_user:
+        return ONBOARDING_SECTION
+    return ""
+
+
+def _compute_section_values(
+    soul: str,
+    identity: dict | None,
+    channel: str,
+    user_instructions: str | None,
+    timezone: str | None,
+    tools: list | None,
+    memory_notes: str | None,
+    last_message_at: datetime | None,
+) -> dict[str, str]:
+    """Compute all placeholder values for prompt assembly."""
+    return {
+        "identity": _format_identity_str(identity),
+        "soul": soul or "You are a helpful assistant.",
+        "operating_model": OPERATING_MODEL if channel in ("web", "telegram", "session_open") else "",
+        "channel_guidance": CHANNEL_GUIDANCE.get(channel, CHANNEL_GUIDANCE["web"]),
+        "current_time": _get_current_time(timezone),
+        "memory_notes": _format_memory_notes_str(memory_notes),
+        "user_instructions": _format_instructions_str(user_instructions),
+        "tool_guidance": _format_tool_guidance(tools, channel),
+        "interaction_learning": INTERACTION_LEARNING_GUIDANCE if channel in ("web", "telegram") else "",
+        "session_section": _format_session_str(channel, memory_notes, user_instructions, last_message_at),
+    }
+
+
 def build_agent_prompt(
     soul: str,
     identity: dict | None,
@@ -114,6 +232,7 @@ def build_agent_prompt(
     tools: list | None = None,
     memory_notes: str | None = None,
     last_message_at: datetime | None = None,
+    prompt_template: str | None = None,
 ) -> str:
     """Assemble the agent system prompt from layered sections.
 
@@ -127,91 +246,54 @@ def build_agent_prompt(
         memory_notes: LTM notes string or None. Used for onboarding detection.
         last_message_at: Timestamp of most recent message in session. Used by
             session_open channel to format time context for the agent.
+        prompt_template: string.Template with $placeholder syntax from
+            agent_configurations.prompt_template. None = use hardcoded assembly.
 
     Returns:
         Assembled system prompt string.
     """
+    # Compute all section values used by both paths
+    values = _compute_section_values(
+        soul=soul,
+        identity=identity,
+        channel=channel,
+        user_instructions=user_instructions,
+        timezone=timezone,
+        tools=tools,
+        memory_notes=memory_notes,
+        last_message_at=last_message_at,
+    )
+
+    # Template path: substitute placeholders and strip empty sections
+    if prompt_template:
+        rendered = string.Template(prompt_template).safe_substitute(values)
+        # Remove sections that are just a header with empty content
+        rendered = re.sub(r'## \w[\w ]*\n\s*\n', '', rendered)
+        # Collapse triple+ newlines to double
+        rendered = re.sub(r'\n{3,}', '\n\n', rendered).strip()
+        return rendered
+
+    # Hardcoded assembly path (fallback when no DB template)
     sections: list[str] = []
 
-    # 1. Identity
-    if identity:
-        name = identity.get("name") or "an AI assistant"
-        description = identity.get("description") or "a personal assistant"
-        vibe = identity.get("vibe") or ""
-        identity_line = f"You are {name} — {description}."
-        if vibe:
-            identity_line += f" {vibe}"
-        sections.append(f"## Identity\n{identity_line}")
-
-    # 2. Soul
-    effective_soul = soul or "You are a helpful assistant."
-    sections.append(f"## Soul\n{effective_soul}")
-
-    # 3. Channel
-    guidance = CHANNEL_GUIDANCE.get(channel, CHANNEL_GUIDANCE["web"])
-    sections.append(f"## Channel\nYou are responding via {channel}. {guidance}")
-
-    # 4. Current Time
-    now = _get_current_time(timezone)
-    sections.append(f"## Current Time\n{now}")
-
-    # 5. What You Know (pre-loaded memory)
-    if memory_notes:
-        truncated_notes = memory_notes[:4000]
-        sections.append(
-            f"## What You Know\n"
-            f"These are your accumulated notes about this user:\n{truncated_notes}"
-        )
-
-    # 6. User Instructions
-    if user_instructions:
-        truncated = user_instructions[:MAX_INSTRUCTIONS_LENGTH]
-        instructions_text = truncated
-        if len(user_instructions) > MAX_INSTRUCTIONS_LENGTH:
-            instructions_text += "\n(Instructions truncated at 2000 characters.)"
-    else:
-        instructions_text = "(No custom instructions set.)"
-    instructions_text += (
-        "\nThe user can change these by telling you things like "
-        '"always do X" or "never do Y". '
-        "When they do, use the update_instructions tool to persist the change."
-    )
-    sections.append(f"## User Instructions\n{instructions_text}")
-
-    # 7. Tool Guidance
-    if tools:
-        seen_classes = set()
-        guidance_lines = []
-        for tool in tools:
-            tool_cls = type(tool)
-            if tool_cls in seen_classes:
-                continue
-            seen_classes.add(tool_cls)
-            try:
-                if hasattr(tool_cls, "prompt_section"):
-                    section = tool_cls.prompt_section(channel)
-                    if section:
-                        guidance_lines.append(section)
-            except Exception:
-                pass  # Never fail the prompt build for a single tool
-        if guidance_lines:
-            sections.append("## Tool Guidance\n" + "\n".join(guidance_lines))
-
-    # 8. Interaction Learning (web/telegram only)
-    if channel in ("web", "telegram"):
-        sections.append(f"## Interaction Learning\n{INTERACTION_LEARNING_GUIDANCE}")
-
-    # 9. Session Open / Onboarding
-    is_new_user = not memory_notes and not user_instructions
-    if channel == "session_open":
-        if is_new_user:
-            sections.append(f"## Session Open\n{SESSION_OPEN_BOOTSTRAP_GUIDANCE}")
-        else:
-            time_context = _format_time_context(last_message_at)
-            guidance = SESSION_OPEN_RETURNING_GUIDANCE.format(time_context=time_context)
-            sections.append(f"## Session Open\n{guidance}")
-    elif channel in ("web", "telegram") and is_new_user:
-        sections.append(f"## Onboarding\n{ONBOARDING_SECTION}")
+    if values["identity"]:
+        sections.append(f"## Identity\n{values['identity']}")
+    sections.append(f"## Soul\n{values['soul']}")
+    if values["operating_model"]:
+        sections.append(f"## How You Operate\n{values['operating_model']}")
+    sections.append(f"## Channel\nYou are responding via {channel}. {values['channel_guidance']}")
+    sections.append(f"## Current Time\n{values['current_time']}")
+    if values["memory_notes"]:
+        sections.append(f"## What You Know\n{values['memory_notes']}")
+    sections.append(f"## User Instructions\n{values['user_instructions']}")
+    if values["tool_guidance"]:
+        sections.append(f"## Tool Guidance\n{values['tool_guidance']}")
+    if values["interaction_learning"]:
+        sections.append(f"## Interaction Learning\n{values['interaction_learning']}")
+    if values["session_section"]:
+        # Pick the right header based on channel
+        header = "Session Open" if channel == "session_open" else "Onboarding"
+        sections.append(f"## {header}\n{values['session_section']}")
 
     return "\n\n".join(sections)
 

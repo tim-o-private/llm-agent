@@ -1,6 +1,6 @@
 """Schedule tools for agent integration.
 
-Provides CreateScheduleTool, DeleteScheduleTool, and ListSchedulesTool for LangChain agents.
+Provides GetSchedulesTool, CreateSchedulesTool, and DeleteSchedulesTool for LangChain agents.
 Follows the same BaseTool pattern as reminder_tools.py.
 """
 
@@ -49,37 +49,25 @@ def _human_readable_cron(cron_expr: str) -> str:
         return cron_expr
 
 
-class CreateScheduleInput(BaseModel):
-    """Input schema for create_schedule tool."""
+# --- GetSchedulesTool ---
 
-    prompt: str = Field(..., description="The prompt to send to the agent on each scheduled run")
-    schedule_cron: str = Field(
-        ...,
-        description=(
-            "Cron expression defining the schedule (e.g. '0 7 * * *' for daily at 7 AM UTC, "
-            "'0 9 * * 1' for every Monday at 9 AM UTC). Uses standard 5-field cron syntax."
-        ),
-    )
-    agent_name: str = Field(
-        default="assistant",
-        description="Name of the agent to run (defaults to 'assistant')",
-    )
-    config: Optional[dict] = Field(
-        default=None,
-        description="Optional configuration: model_override, notify_channels, schedule_type",
-    )
+class GetSchedulesInput(BaseModel):
+    """Input schema for get_schedules tool."""
+
+    id: Optional[str] = Field(default=None, description="Optional schedule UUID to fetch a single schedule")
+    active_only: bool = Field(default=True, description="If true, only show active schedules")
 
 
-class CreateScheduleTool(BaseTool):
-    """Create a recurring agent schedule."""
+class GetSchedulesTool(BaseTool):
+    """Get the user's agent schedules, optionally filtered by ID."""
 
-    name: str = "create_schedule"
+    name: str = "get_schedules"
     description: str = (
-        "Create a recurring schedule that runs an agent with a given prompt on a cron schedule. "
-        "Use this when the user wants something done periodically (e.g. daily summaries, weekly reports). "
-        "The schedule_cron must be a valid 5-field cron expression."
+        "Get the user's recurring agent schedules. Shows each schedule's prompt, "
+        "cron expression, agent, and next run time. Optionally pass an id to fetch a single schedule. "
+        "Use this when the user asks about their scheduled tasks."
     )
-    args_schema: Type[BaseModel] = CreateScheduleInput
+    args_schema: Type[BaseModel] = GetSchedulesInput
 
     user_id: str
     agent_name: Optional[str] = None
@@ -90,90 +78,14 @@ class CreateScheduleTool(BaseTool):
     def prompt_section(cls, channel: str) -> str | None:
         """Return behavioral guidance for the agent prompt, or None to omit."""
         if channel in ("web", "telegram"):
-            return "Schedules: When the user wants recurring work (daily summaries, weekly reports), use create_schedule with a cron expression. Use list_schedules to show existing schedules."  # noqa: E501
+            return "Schedules: When the user wants recurring work (daily summaries, weekly reports), use create_schedules with a cron expression. Use get_schedules to show existing schedules."  # noqa: E501
         else:
             return None
 
-    def _run(
-        self,
-        prompt: str,
-        schedule_cron: str,
-        agent_name: str = "assistant",
-        config: Optional[dict] = None,
-    ) -> str:
-        return "create_schedule requires async execution. Use _arun."
+    def _run(self, id: Optional[str] = None, active_only: bool = True) -> str:
+        return "get_schedules requires async execution. Use _arun."
 
-    async def _arun(
-        self,
-        prompt: str,
-        schedule_cron: str,
-        agent_name: str = "assistant",
-        config: Optional[dict] = None,
-    ) -> str:
-        try:
-            if not croniter.is_valid(schedule_cron):
-                return f"Error: invalid cron expression '{schedule_cron}'. Use standard 5-field cron syntax."
-
-            from chatServer.database.scoped_client import UserScopedClient
-            from chatServer.database.supabase_client import get_supabase_client
-            from chatServer.services.schedule_service import ScheduleService
-
-            raw_client = await get_supabase_client()
-            db = UserScopedClient(raw_client, self.user_id)
-            service = ScheduleService(db)
-            await service.create_schedule(
-                user_id=self.user_id,
-                agent_name=agent_name,
-                schedule_cron=schedule_cron,
-                prompt=prompt,
-                config=config,
-            )
-
-            # Compute human-readable description and next run time
-            cron = croniter(schedule_cron, datetime.now(timezone.utc))
-            next_run = cron.get_next(datetime)
-            next_run_str = next_run.strftime("%Y-%m-%d %H:%M UTC")
-
-            # Build a human-readable cron description
-            human_cron = _human_readable_cron(schedule_cron)
-
-            return (
-                f"Schedule created: {prompt} \u2014 runs {human_cron} "
-                f"(next: {next_run_str})"
-            )
-
-        except ValueError as e:
-            return f"Error: {e}"
-        except Exception as e:
-            logger.error(f"create_schedule failed for user {self.user_id}: {e}")
-            return f"Failed to create schedule: {e}"
-
-
-class DeleteScheduleInput(BaseModel):
-    """Input schema for delete_schedule tool."""
-
-    schedule_id: str = Field(..., description="The UUID of the schedule to delete")
-
-
-class DeleteScheduleTool(BaseTool):
-    """Delete an agent schedule."""
-
-    name: str = "delete_schedule"
-    description: str = (
-        "Delete a recurring schedule by its ID. "
-        "Use this when the user wants to stop a scheduled task."
-    )
-    args_schema: Type[BaseModel] = DeleteScheduleInput
-
-    user_id: str
-    agent_name: Optional[str] = None
-    supabase_url: Optional[str] = None
-    supabase_key: Optional[str] = None
-
-    def _run(self, schedule_id: str) -> str:
-        return "delete_schedule requires async execution. Use _arun."
-
-    async def _arun(self, schedule_id: str) -> str:
+    async def _arun(self, id: Optional[str] = None, active_only: bool = True) -> str:
         try:
             from chatServer.database.scoped_client import UserScopedClient
             from chatServer.database.supabase_client import get_supabase_client
@@ -181,54 +93,16 @@ class DeleteScheduleTool(BaseTool):
 
             raw_client = await get_supabase_client()
             db = UserScopedClient(raw_client, self.user_id)
-            service = ScheduleService(db)
-            deleted = await service.delete_schedule(schedule_id=schedule_id, user_id=self.user_id)
 
-            if deleted:
-                return f"Schedule {schedule_id} deleted successfully."
+            service = ScheduleService(db)
+
+            if id:
+                schedule = await service.get_schedule(schedule_id=id, user_id=self.user_id)
+                if not schedule:
+                    return f"Schedule {id} not found or does not belong to you."
+                schedules = [schedule]
             else:
-                return f"Schedule {schedule_id} not found or does not belong to you."
-
-        except Exception as e:
-            logger.error(f"delete_schedule failed for user {self.user_id}: {e}")
-            return f"Failed to delete schedule: {e}"
-
-
-class ListSchedulesInput(BaseModel):
-    """Input schema for list_schedules tool."""
-
-    active_only: bool = Field(default=True, description="If true, only show active schedules")
-
-
-class ListSchedulesTool(BaseTool):
-    """List the user's agent schedules."""
-
-    name: str = "list_schedules"
-    description: str = (
-        "List the user's recurring agent schedules. Shows each schedule's prompt, "
-        "cron expression, agent, and next run time. "
-        "Use this when the user asks about their scheduled tasks."
-    )
-    args_schema: Type[BaseModel] = ListSchedulesInput
-
-    user_id: str
-    agent_name: Optional[str] = None
-    supabase_url: Optional[str] = None
-    supabase_key: Optional[str] = None
-
-    def _run(self, active_only: bool = True) -> str:
-        return "list_schedules requires async execution. Use _arun."
-
-    async def _arun(self, active_only: bool = True) -> str:
-        try:
-            from chatServer.database.scoped_client import UserScopedClient
-            from chatServer.database.supabase_client import get_supabase_client
-            from chatServer.services.schedule_service import ScheduleService
-
-            raw_client = await get_supabase_client()
-            db = UserScopedClient(raw_client, self.user_id)
-            service = ScheduleService(db)
-            schedules = await service.list_schedules(user_id=self.user_id, active_only=active_only)
+                schedules = await service.list_schedules(user_id=self.user_id, active_only=active_only)
 
             if not schedules:
                 return "You have no active schedules." if active_only else "You have no schedules."
@@ -263,5 +137,135 @@ class ListSchedulesTool(BaseTool):
             return "\n".join(lines)
 
         except Exception as e:
-            logger.error(f"list_schedules failed for user {self.user_id}: {e}")
-            return f"Failed to list schedules: {e}"
+            logger.error(f"get_schedules failed for user {self.user_id}: {e}")
+            return f"Failed to get schedules: {e}"
+
+
+# --- CreateSchedulesTool ---
+
+class CreateSchedulesInput(BaseModel):
+    """Input schema for create_schedules tool."""
+
+    schedules: list[dict] = Field(
+        ...,
+        description=(
+            "List of schedule objects to create. Each dict should have: "
+            "prompt (str, required), schedule_cron (str, required, 5-field cron), "
+            "agent_name (str, optional, defaults to 'assistant'), "
+            "config (dict, optional: model_override, notify_channels, schedule_type)"
+        ),
+    )
+
+
+class CreateSchedulesTool(BaseTool):
+    """Create one or more recurring agent schedules."""
+
+    name: str = "create_schedules"
+    description: str = (
+        "Create one or more recurring schedules that run an agent with a given prompt on a cron schedule. "
+        "Use this when the user wants something done periodically (e.g. daily summaries, weekly reports). "
+        "Each schedule needs a prompt and a valid 5-field cron expression."
+    )
+    args_schema: Type[BaseModel] = CreateSchedulesInput
+
+    user_id: str
+    agent_name: Optional[str] = None
+    supabase_url: Optional[str] = None
+    supabase_key: Optional[str] = None
+
+    def _run(self, schedules: list[dict]) -> str:
+        return "create_schedules requires async execution. Use _arun."
+
+    async def _arun(self, schedules: list[dict]) -> str:
+        from chatServer.database.scoped_client import UserScopedClient
+        from chatServer.database.supabase_client import get_supabase_client
+        from chatServer.services.schedule_service import ScheduleService
+
+        raw_client = await get_supabase_client()
+        db = UserScopedClient(raw_client, self.user_id)
+        service = ScheduleService(db)
+
+        results = []
+        for idx, entry in enumerate(schedules):
+            prompt = entry.get("prompt", "")
+            schedule_cron = entry.get("schedule_cron", "")
+            agent_name = entry.get("agent_name", "assistant")
+            config = entry.get("config")
+
+            try:
+                if not croniter.is_valid(schedule_cron):
+                    results.append(f"#{idx + 1}: Error — invalid cron expression '{schedule_cron}'")
+                    continue
+
+                await service.create_schedule(
+                    user_id=self.user_id,
+                    agent_name=agent_name,
+                    schedule_cron=schedule_cron,
+                    prompt=prompt,
+                    config=config,
+                )
+
+                cron = croniter(schedule_cron, datetime.now(timezone.utc))
+                next_run = cron.get_next(datetime)
+                next_run_str = next_run.strftime("%Y-%m-%d %H:%M UTC")
+                human_cron = _human_readable_cron(schedule_cron)
+
+                results.append(f"#{idx + 1}: Created — \"{prompt}\" runs {human_cron} (next: {next_run_str})")
+
+            except ValueError as e:
+                results.append(f"#{idx + 1}: Error — {e}")
+            except Exception as e:
+                logger.error(f"create_schedules item {idx + 1} failed for user {self.user_id}: {e}")
+                results.append(f"#{idx + 1}: Failed — {e}")
+
+        return "\n".join(results)
+
+
+# --- DeleteSchedulesTool ---
+
+class DeleteSchedulesInput(BaseModel):
+    """Input schema for delete_schedules tool."""
+
+    ids: list[str] = Field(..., description="List of schedule UUIDs to delete")
+
+
+class DeleteSchedulesTool(BaseTool):
+    """Delete one or more agent schedules."""
+
+    name: str = "delete_schedules"
+    description: str = (
+        "Delete one or more recurring schedules by their IDs. "
+        "Use this when the user wants to stop scheduled tasks."
+    )
+    args_schema: Type[BaseModel] = DeleteSchedulesInput
+
+    user_id: str
+    agent_name: Optional[str] = None
+    supabase_url: Optional[str] = None
+    supabase_key: Optional[str] = None
+
+    def _run(self, ids: list[str]) -> str:
+        return "delete_schedules requires async execution. Use _arun."
+
+    async def _arun(self, ids: list[str]) -> str:
+        from chatServer.database.scoped_client import UserScopedClient
+        from chatServer.database.supabase_client import get_supabase_client
+        from chatServer.services.schedule_service import ScheduleService
+
+        raw_client = await get_supabase_client()
+        db = UserScopedClient(raw_client, self.user_id)
+        service = ScheduleService(db)
+
+        results = []
+        for schedule_id in ids:
+            try:
+                deleted = await service.delete_schedule(schedule_id=schedule_id, user_id=self.user_id)
+                if deleted:
+                    results.append(f"{schedule_id}: deleted")
+                else:
+                    results.append(f"{schedule_id}: not found or not yours")
+            except Exception as e:
+                logger.error(f"delete_schedules failed for {schedule_id}, user {self.user_id}: {e}")
+                results.append(f"{schedule_id}: failed — {e}")
+
+        return "\n".join(results)

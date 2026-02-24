@@ -6,10 +6,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from chatServer.tools.gmail_tools import (
-    GmailDigestTool,
-    GmailGetMessageTool,
-    GmailSearchTool,
+    GetGmailTool,
     GmailToolProvider,
+    SearchGmailTool,
 )
 
 # --- GmailToolProvider tests ---
@@ -186,8 +185,8 @@ async def test_token_refresh_no_refresh_token_logs_warning():
 
 
 def _make_search_tool():
-    """Create a GmailSearchTool with test config."""
-    return GmailSearchTool(
+    """Create a SearchGmailTool with test config."""
+    return SearchGmailTool(
         user_id="user-1",
         agent_name="search_test_runner",
         supabase_url="https://test.supabase.co",
@@ -281,8 +280,8 @@ async def test_search_partial_failure():
 
 
 def _make_get_message_tool():
-    """Create a GmailGetMessageTool with test config."""
-    return GmailGetMessageTool(
+    """Create a GetGmailTool with test config."""
+    return GetGmailTool(
         user_id="user-1",
         agent_name="search_test_runner",
         supabase_url="https://test.supabase.co",
@@ -321,137 +320,3 @@ async def test_get_message_with_account():
     mock_get.assert_called_once_with("user-1", "work@gmail.com", "user")
 
 
-# --- GmailDigestTool tests ---
-
-
-def _make_digest_tool():
-    """Create a GmailDigestTool with test config."""
-    return GmailDigestTool(
-        user_id="user-1",
-        agent_name="search_test_runner",
-        supabase_url="https://test.supabase.co",
-        supabase_key="test-key",
-    )
-
-
-@pytest.mark.asyncio
-async def test_digest_single_account():
-    """Digest with account param targets only that account."""
-    tool = _make_digest_tool()
-
-    mock_provider = AsyncMock()
-    mock_provider.account_email = "work@gmail.com"
-
-    with patch.object(GmailToolProvider, "get_provider_for_account", new_callable=AsyncMock) as mock_get:
-        mock_get.return_value = mock_provider
-
-        with patch.object(tool, "_digest_single", new_callable=AsyncMock) as mock_digest:
-            mock_digest.return_value = "3 unread emails"
-
-            result = await tool._arun(account="work@gmail.com")
-
-    assert result == "3 unread emails"
-
-
-@pytest.mark.asyncio
-async def test_digest_all_accounts():
-    """Digest without account param aggregates all accounts."""
-    tool = _make_digest_tool()
-
-    provider1 = AsyncMock()
-    provider1.account_email = "work@gmail.com"
-    provider2 = AsyncMock()
-    provider2.account_email = "personal@gmail.com"
-
-    with patch.object(GmailToolProvider, "get_all_providers", new_callable=AsyncMock) as mock_all:
-        mock_all.return_value = [provider1, provider2]
-
-        with patch.object(tool, "_digest_single", new_callable=AsyncMock) as mock_digest:
-            mock_digest.side_effect = ["5 work emails", "2 personal emails"]
-
-            result = await tool._arun()
-
-    assert "=== work@gmail.com ===" in result
-    assert "5 work emails" in result
-    assert "=== personal@gmail.com ===" in result
-    assert "2 personal emails" in result
-    assert "2 accounts" in result
-
-
-@pytest.mark.asyncio
-async def test_digest_no_accounts():
-    """Digest with no accounts should return helpful message."""
-    tool = _make_digest_tool()
-
-    with patch.object(GmailToolProvider, "get_all_providers", new_callable=AsyncMock) as mock_all:
-        mock_all.return_value = []
-
-        result = await tool._arun()
-
-    assert "No Gmail accounts connected" in result
-
-
-@pytest.mark.asyncio
-async def test_digest_partial_failure():
-    """Digest should include error notes for failing accounts."""
-    tool = _make_digest_tool()
-
-    provider1 = AsyncMock()
-    provider1.account_email = "work@gmail.com"
-    provider2 = AsyncMock()
-    provider2.account_email = "broken@gmail.com"
-
-    with patch.object(GmailToolProvider, "get_all_providers", new_callable=AsyncMock) as mock_all:
-        mock_all.return_value = [provider1, provider2]
-
-        with patch.object(tool, "_digest_single", new_callable=AsyncMock) as mock_digest:
-            mock_digest.side_effect = ["5 work emails", Exception("Auth error")]
-
-            result = await tool._arun()
-
-    assert "=== work@gmail.com ===" in result
-    assert "5 work emails" in result
-    assert "=== broken@gmail.com (error) ===" in result
-    assert "Auth error" in result
-
-
-@pytest.mark.asyncio
-async def test_digest_single_query_uses_after_timestamp():
-    """_digest_single must build query with after:<unix_ts>, not newer_than: (invalid for hours)."""
-    tool = _make_digest_tool()
-
-    mock_search_tool = AsyncMock()
-    mock_search_tool.name = "search_gmail"
-    mock_search_tool.arun = AsyncMock(return_value="No messages found")
-
-    mock_provider = MagicMock()
-    mock_provider.account_email = "work@gmail.com"
-    mock_provider.get_gmail_tools = AsyncMock(return_value=[mock_search_tool])
-
-    await tool._digest_single(mock_provider, hours_back=24, include_read=False, max_emails=20)
-
-    mock_search_tool.arun.assert_called_once()
-    query_arg = mock_search_tool.arun.call_args[0][0]["query"]
-    assert query_arg.startswith("after:"), f"Expected query to start with 'after:', got: {query_arg!r}"
-    assert "is:unread" in query_arg
-    assert "newer_than:" not in query_arg
-
-
-@pytest.mark.asyncio
-async def test_digest_single_query_omits_unread_when_include_read():
-    """_digest_single should not append is:unread when include_read=True."""
-    tool = _make_digest_tool()
-
-    mock_search_tool = AsyncMock()
-    mock_search_tool.name = "search_gmail"
-    mock_search_tool.arun = AsyncMock(return_value="No messages found")
-
-    mock_provider = MagicMock()
-    mock_provider.account_email = "work@gmail.com"
-    mock_provider.get_gmail_tools = AsyncMock(return_value=[mock_search_tool])
-
-    await tool._digest_single(mock_provider, hours_back=4, include_read=True, max_emails=20)
-
-    query_arg = mock_search_tool.arun.call_args[0][0]["query"]
-    assert query_arg.startswith("after:")
-    assert "is:unread" not in query_arg
