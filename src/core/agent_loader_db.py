@@ -30,7 +30,6 @@ from core.agents.customizable_agent import CustomizableAgentExecutor
 from core.tools.crud_tool import CRUDTool, CRUDToolInput
 from supabase import Client as SupabaseClient
 from supabase import create_client
-
 from utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
