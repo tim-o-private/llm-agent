@@ -1,13 +1,12 @@
 """Tests for Gmail tools — metadata search, format, defaults."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 from chatServer.tools.gmail_tools import (
     GetGmailTool,
+    GmailSearchInput,
     MetadataGmailSearch,
     SearchGmailTool,
-    GmailSearchInput,
 )
 
 
