@@ -5,6 +5,17 @@ description: PostgreSQL and Supabase database patterns. Use when writing SQL mig
 
 # Database Patterns
 
+## Principles That Apply
+
+| ID | Rule | Enforcement |
+|----|------|-------------|
+| A3 | Supabase REST+RLS for user CRUD; psycopg for framework ops | Reviewer |
+| A8 | All tables: RLS enabled + `is_record_owner()` policy | `validate-patterns.sh` BLOCKS |
+| A9 | UUID FKs with ON DELETE, never `agent_name TEXT` | `validate-patterns.sh` BLOCKS |
+| A10 | Entity "foo" → table `foos`, migration `create_foos.sql` | Reviewer |
+
+For full rationale on any principle: `.claude/skills/architecture-principles/reference.md`
+
 ## Core Rule
 
 All data lives in one PostgreSQL database on Supabase. No SQLite, Redis, MongoDB, or additional data stores.

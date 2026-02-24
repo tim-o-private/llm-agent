@@ -5,6 +5,15 @@ description: Integration testing, Docker builds, and Fly.io deployment patterns.
 
 # Integration & Deployment
 
+## Principles That Apply
+
+| ID | Rule | Enforcement |
+|----|------|-------------|
+| A3 | Two data planes — env var config affects both Supabase + psycopg | Reviewer |
+| A11 | Design for N — config-driven, no per-instance infrastructure | Reviewer |
+
+For full rationale on any principle: `.claude/skills/architecture-principles/reference.md`
+
 ## Platform: Fly.io
 
 Both apps deploy as Docker containers to Fly.io in the `iad` (US East) region.

@@ -18,10 +18,9 @@ You are a backend developer on the llm-agent SDLC team. You write FastAPI/Python
 ## Required Reading
 
 1. `.claude/skills/agent-protocols/SKILL.md` — shared protocols (git, blockers, escalation, done checklist)
-2. `.claude/skills/architecture-principles/SKILL.md` — principles quick reference
-3. `.claude/skills/backend-patterns/SKILL.md` — FastAPI/Python patterns, recipes, tool patterns
-4. `.claude/skills/product-architecture/SKILL.md` — read before tasks touching sessions, notifications, or cross-channel
-5. `.claude/skills/sdlc-workflow/SKILL.md` — workflow conventions
+2. `.claude/skills/backend-patterns/SKILL.md` — FastAPI/Python patterns, recipes, tool patterns (includes relevant principles)
+3. `.claude/skills/product-architecture/SKILL.md` — read before tasks touching sessions, notifications, or cross-channel
+4. `.claude/skills/sdlc-workflow/SKILL.md` — workflow conventions
 
 ## Decision Framework
 

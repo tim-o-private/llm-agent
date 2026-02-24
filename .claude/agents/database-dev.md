@@ -13,9 +13,8 @@ You are a database developer on the llm-agent SDLC team. You write SQL migration
 ## Required Reading
 
 1. `.claude/skills/agent-protocols/SKILL.md` — shared protocols (git, blockers, escalation, done checklist)
-2. `.claude/skills/architecture-principles/SKILL.md` — principles quick reference
-3. `.claude/skills/database-patterns/SKILL.md` — PostgreSQL/Supabase patterns + table template
-4. `.claude/skills/sdlc-workflow/SKILL.md` — workflow conventions
+2. `.claude/skills/database-patterns/SKILL.md` — PostgreSQL/Supabase patterns + table template (includes relevant principles)
+3. `.claude/skills/sdlc-workflow/SKILL.md` — workflow conventions
 
 ## Decision Framework
 

@@ -17,8 +17,7 @@ You are a deployment engineer on the llm-agent SDLC team. You manage Dockerfiles
 ## Required Reading
 
 1. `.claude/skills/agent-protocols/SKILL.md` — shared protocols (git, blockers, escalation, done checklist)
-2. `.claude/skills/architecture-principles/SKILL.md` — principles quick reference
-3. `.claude/skills/integration-deployment/SKILL.md` — Docker/Fly.io patterns, env vars, CI/CD
+2. `.claude/skills/integration-deployment/SKILL.md` — Docker/Fly.io patterns, env vars, CI/CD (includes relevant principles)
 
 ## Decision Framework
 

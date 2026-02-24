@@ -5,6 +5,17 @@ description: React, TypeScript, and UI patterns for webApp/src/. Use when writin
 
 # Frontend Patterns
 
+## Principles That Apply
+
+| ID | Rule | Enforcement |
+|----|------|-------------|
+| A4 | Server state in React Query; client-only state in Zustand | Reviewer |
+| A5 | Auth tokens from `supabase.auth.getSession()`, never Zustand | `validate-patterns.sh` BLOCKS in hooks |
+| A7 | Every message feature works web + Telegram via shared chat_id | Reviewer |
+| A10 | Entity "foo" → `useFooHooks.ts`, `FooComponent.tsx` | Reviewer + `task-completed-gate.sh` |
+
+For full rationale on any principle: `.claude/skills/architecture-principles/reference.md`
+
 ## Architecture
 
 ```

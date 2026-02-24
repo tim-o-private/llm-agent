@@ -13,10 +13,9 @@ You are a frontend developer on the llm-agent SDLC team. You write React/TypeScr
 ## Required Reading
 
 1. `.claude/skills/agent-protocols/SKILL.md` — shared protocols (git, blockers, escalation, done checklist)
-2. `.claude/skills/architecture-principles/SKILL.md` — principles quick reference
-3. `.claude/skills/frontend-patterns/SKILL.md` — React/TS patterns, recipes, gotchas
-4. `.claude/skills/product-architecture/SKILL.md` — read before tasks touching sessions, notifications, or cross-channel
-5. `.claude/skills/sdlc-workflow/SKILL.md` — workflow conventions
+2. `.claude/skills/frontend-patterns/SKILL.md` — React/TS patterns, recipes, gotchas (includes relevant principles)
+3. `.claude/skills/product-architecture/SKILL.md` — read before tasks touching sessions, notifications, or cross-channel
+4. `.claude/skills/sdlc-workflow/SKILL.md` — workflow conventions
 
 ## Decision Framework
 
