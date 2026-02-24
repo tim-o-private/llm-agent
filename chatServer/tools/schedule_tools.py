@@ -94,21 +94,14 @@ class GetSchedulesTool(BaseTool):
             raw_client = await get_supabase_client()
             db = UserScopedClient(raw_client, self.user_id)
 
+            service = ScheduleService(db)
+
             if id:
-                # Fetch a single schedule by ID
-                result = (
-                    await db.table("agent_schedules")
-                    .select("*")
-                    .eq("id", id)
-                    .eq("user_id", self.user_id)
-                    .maybe_single()
-                    .execute()
-                )
-                if not result.data:
+                schedule = await service.get_schedule(schedule_id=id, user_id=self.user_id)
+                if not schedule:
                     return f"Schedule {id} not found or does not belong to you."
-                schedules = [result.data]
+                schedules = [schedule]
             else:
-                service = ScheduleService(db)
                 schedules = await service.list_schedules(user_id=self.user_id, active_only=active_only)
 
             if not schedules:
