@@ -504,6 +504,7 @@ def load_agent_executor_db(
     channel: str = "web",
     use_cache: bool = True,  # Default to using cache for better performance
     last_message_at=None,
+    bootstrap_context: Optional[str] = None,
 ) -> CustomizableAgentExecutor:
     """
     Loads an agent's configuration and its associated tools from the database,
@@ -728,6 +729,7 @@ def load_agent_executor_db(
         memory_notes=memory_notes,
         last_message_at=last_message_at,
         prompt_template=agent_db_config.get("prompt_template"),
+        bootstrap_context=bootstrap_context,
     )
 
     agent_config_for_executor = {
@@ -761,6 +763,7 @@ async def load_agent_executor_db_async(
     log_level: int = logging.INFO,
     channel: str = "web",
     last_message_at=None,
+    bootstrap_context: Optional[str] = None,
 ) -> CustomizableAgentExecutor:
     """Async version of load_agent_executor_db.
 
@@ -859,6 +862,7 @@ async def load_agent_executor_db_async(
         memory_notes=memory_notes,
         last_message_at=last_message_at,
         prompt_template=agent_db_config.get("prompt_template"),
+        bootstrap_context=bootstrap_context,
     )
 
     agent_config_for_executor = {
