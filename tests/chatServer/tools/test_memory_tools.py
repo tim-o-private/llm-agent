@@ -241,7 +241,7 @@ class TestPromptSections:
     def test_store_memory_prompt_for_web(self):
         section = StoreMemoryTool.prompt_section("web")
         assert section is not None
-        assert "create_memories" in section
+        assert "core_identity" in section
         assert "search_memories" in section
 
     def test_store_memory_prompt_for_telegram(self):
