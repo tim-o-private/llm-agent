@@ -72,9 +72,22 @@ TOOL_APPROVAL_DEFAULTS: dict[str, tuple[ApprovalTier, ApprovalTier]] = {
     "create_reminder": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.AUTO_APPROVE),
     "list_reminders": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
 
-    # LTM memory tools
+    # LTM memory tools (legacy)
     "save_memory": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.AUTO_APPROVE),
     "read_memory": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+
+    # min-memory tools
+    "store_memory": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+    "recall": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+    "search_memory": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+    "fetch_memory": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+    "delete_memory": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+    "update_memory": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+    "set_project": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+    "link_memories": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+    "list_entities": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+    "search_entities": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+    "get_context_info": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
 
     # Email digest tools
     "email_digest": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),

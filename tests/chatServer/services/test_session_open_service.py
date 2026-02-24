@@ -10,25 +10,18 @@ from chatServer.services.session_open_service import SessionOpenService
 _SVC = "chatServer.services.session_open_service"
 
 
-def _mock_supabase(has_memory=False, has_instructions=False):
-    """Build a mock supabase client with chained query responses.
+def _mock_supabase(has_instructions=False):
+    """Build a mock supabase client.
 
-    The real supabase client is a sync object (table/select/eq are sync,
-    execute is async). We use MagicMock for sync parts and AsyncMock for execute.
+    Only mocks user_agent_prompt_customizations (for _has_instructions).
+    _has_memory is patched separately since it now queries min-memory, not Supabase.
     """
     client = MagicMock()
 
     def table_side_effect(table_name):
         mock_table = MagicMock()
 
-        if table_name == "agent_long_term_memory":
-            resp = MagicMock()
-            resp.data = {"id": "mem-1"} if has_memory else None
-            mock_table.select.return_value = mock_table
-            mock_table.eq.return_value = mock_table
-            mock_table.maybe_single.return_value = mock_table
-            mock_table.execute = AsyncMock(return_value=resp)
-        elif table_name == "user_agent_prompt_customizations":
+        if table_name == "user_agent_prompt_customizations":
             resp = MagicMock()
             resp.data = {"id": "instr-1"} if has_instructions else None
             mock_table.select.return_value = mock_table
@@ -63,28 +56,29 @@ def _mock_get_db_connection(last_message_at=None):
 _DB_CONN = "chatServer.database.connection.get_db_connection"
 
 
-def _patch_svc(mock_executor, last_message_at=None):
+def _patch_svc(mock_executor, last_message_at=None, has_memory=False):
     """Return a tuple of context managers for the common service patches."""
     return (
         patch(f"{_SVC}.load_agent_executor_db_async", return_value=mock_executor),
         patch(_DB_CONN, new=_mock_get_db_connection(last_message_at)),
+        patch(f"{_SVC}.SessionOpenService._has_memory", new_callable=AsyncMock, return_value=has_memory),
     )
 
 
 @pytest.mark.asyncio
 async def test_new_user_returns_is_new_user_true():
-    """New user -> is_new_user=True, silent=False, bootstrap trigger used."""
-    mock_client = _mock_supabase(has_memory=False, has_instructions=False)
+    """New user (no memory, no instructions) -> is_new_user=True, bootstrap trigger."""
+    mock_client = _mock_supabase(has_instructions=False)
     service = SessionOpenService(mock_client)
     mock_executor = AsyncMock()
     mock_executor.tools = []
-    mock_executor.ainvoke = AsyncMock(return_value={"output": "Hello! I'm Clarity."})
-    p_loader, p_db = _patch_svc(mock_executor)
+    mock_executor.ainvoke = AsyncMock(return_value={"output": "Hello! I'm your assistant."})
+    p_loader, p_db, p_mem = _patch_svc(mock_executor, has_memory=False)
 
-    with p_loader, p_db, patch.object(
+    with p_loader, p_db, p_mem, patch.object(
         service, "_persist_ai_message", new_callable=AsyncMock
     ) as mock_persist:
-        result = await service.run(user_id="u1", agent_name="clarity", session_id="s1")
+        result = await service.run(user_id="u1", agent_name="assistant", session_id="s1")
 
     assert result["is_new_user"] is True
     assert result["silent"] is False
@@ -94,19 +88,39 @@ async def test_new_user_returns_is_new_user_true():
 
 
 @pytest.mark.asyncio
+async def test_returning_user_with_memory_not_new():
+    """User with min-memory memories -> is_new_user=False (memory alone is sufficient)."""
+    mock_client = _mock_supabase(has_instructions=False)
+    service = SessionOpenService(mock_client)
+    mock_executor = AsyncMock()
+    mock_executor.tools = []
+    mock_executor.ainvoke = AsyncMock(return_value={"output": "Morning! 2 tasks due."})
+    p_loader, p_db, p_mem = _patch_svc(mock_executor, has_memory=True)
+
+    with p_loader, p_db, p_mem, patch.object(
+        service, "_persist_ai_message", new_callable=AsyncMock
+    ):
+        result = await service.run(user_id="u1", agent_name="assistant", session_id="s1")
+
+    assert result["is_new_user"] is False
+    call_args = mock_executor.ainvoke.call_args[0][0]
+    assert "User returned" in call_args["input"]
+
+
+@pytest.mark.asyncio
 async def test_returning_user_wakeup_silent():
     """Returning user, agent returns 'WAKEUP_SILENT' -> silent=True, no persistence."""
-    mock_client = _mock_supabase(has_memory=True, has_instructions=True)
+    mock_client = _mock_supabase(has_instructions=True)
     service = SessionOpenService(mock_client)
     mock_executor = AsyncMock()
     mock_executor.tools = []
     mock_executor.ainvoke = AsyncMock(return_value={"output": "WAKEUP_SILENT"})
-    p_loader, p_db = _patch_svc(mock_executor)
+    p_loader, p_db, p_mem = _patch_svc(mock_executor, has_memory=True)
 
-    with p_loader, p_db, patch.object(
+    with p_loader, p_db, p_mem, patch.object(
         service, "_persist_ai_message", new_callable=AsyncMock
     ) as mock_persist:
-        result = await service.run(user_id="u1", agent_name="clarity", session_id="s1")
+        result = await service.run(user_id="u1", agent_name="assistant", session_id="s1")
 
     assert result["silent"] is True
     assert result["is_new_user"] is False
@@ -115,20 +129,21 @@ async def test_returning_user_wakeup_silent():
 
 @pytest.mark.asyncio
 async def test_returning_user_greeting_persisted():
-    """Returning user, agent returns greeting -> silent=False, AI message persisted."""
-    mock_client = _mock_supabase(has_memory=True, has_instructions=False)
+    """Returning user (has memory, no instructions), agent greets -> persisted."""
+    mock_client = _mock_supabase(has_instructions=False)
     service = SessionOpenService(mock_client)
     mock_executor = AsyncMock()
     mock_executor.tools = []
     mock_executor.ainvoke = AsyncMock(return_value={"output": "Morning! 2 tasks due today."})
-    p_loader, p_db = _patch_svc(mock_executor)
+    p_loader, p_db, p_mem = _patch_svc(mock_executor, has_memory=True)
 
-    with p_loader, p_db, patch.object(
+    with p_loader, p_db, p_mem, patch.object(
         service, "_persist_ai_message", new_callable=AsyncMock
     ) as mock_persist:
-        result = await service.run(user_id="u1", agent_name="clarity", session_id="s1")
+        result = await service.run(user_id="u1", agent_name="assistant", session_id="s1")
 
     assert result["silent"] is False
+    assert result["is_new_user"] is False
     assert result["response"] == "Morning! 2 tasks due today."
     mock_persist.assert_awaited_once_with("s1", "Morning! 2 tasks due today.")
 
@@ -136,7 +151,7 @@ async def test_returning_user_greeting_persisted():
 @pytest.mark.asyncio
 async def test_content_block_list_normalized():
     """Content block list output normalized to string."""
-    mock_client = _mock_supabase(has_memory=True, has_instructions=True)
+    mock_client = _mock_supabase(has_instructions=True)
     service = SessionOpenService(mock_client)
     mock_executor = AsyncMock()
     mock_executor.tools = []
@@ -146,12 +161,12 @@ async def test_content_block_list_normalized():
             {"type": "text", "text": "world!"},
         ]
     })
-    p_loader, p_db = _patch_svc(mock_executor)
+    p_loader, p_db, p_mem = _patch_svc(mock_executor, has_memory=True)
 
-    with p_loader, p_db, patch.object(
+    with p_loader, p_db, p_mem, patch.object(
         service, "_persist_ai_message", new_callable=AsyncMock
     ):
-        result = await service.run(user_id="u1", agent_name="clarity", session_id="s1")
+        result = await service.run(user_id="u1", agent_name="assistant", session_id="s1")
 
     assert result["response"] == "Hello world!"
 
@@ -160,7 +175,7 @@ async def test_content_block_list_normalized():
 async def test_deterministic_silence_recent_returning_user():
     """Returning user seen < 5 min ago → silent without invoking agent."""
     ts = datetime.now(timezone.utc)  # just now
-    mock_client = _mock_supabase(has_memory=True, has_instructions=True)
+    mock_client = _mock_supabase(has_instructions=True)
     service = SessionOpenService(mock_client)
     mock_executor = AsyncMock()
     mock_executor.tools = []
@@ -169,9 +184,10 @@ async def test_deterministic_silence_recent_returning_user():
     with (
         patch(f"{_SVC}.load_agent_executor_db_async", return_value=mock_executor) as mock_loader,
         patch(_DB_CONN, new=_mock_get_db_connection(ts)),
+        patch(f"{_SVC}.SessionOpenService._has_memory", new_callable=AsyncMock, return_value=True),
         patch.object(service, "_persist_ai_message", new_callable=AsyncMock) as mock_persist,
     ):
-        result = await service.run(user_id="u1", agent_name="clarity", session_id="s1")
+        result = await service.run(user_id="u1", agent_name="assistant", session_id="s1")
 
     assert result["silent"] is True
     assert result["is_new_user"] is False
@@ -184,17 +200,17 @@ async def test_deterministic_silence_recent_returning_user():
 async def test_deterministic_silence_skipped_for_new_user():
     """New user is never deterministically silenced, even with recent last_message_at."""
     ts = datetime.now(timezone.utc)  # just now
-    mock_client = _mock_supabase(has_memory=False, has_instructions=False)
+    mock_client = _mock_supabase(has_instructions=False)
     service = SessionOpenService(mock_client)
     mock_executor = AsyncMock()
     mock_executor.tools = []
-    mock_executor.ainvoke = AsyncMock(return_value={"output": "Hello! I'm Clarity."})
-    p_loader, p_db = _patch_svc(mock_executor, last_message_at=ts)
+    mock_executor.ainvoke = AsyncMock(return_value={"output": "Hello! I'm your assistant."})
+    p_loader, p_db, p_mem = _patch_svc(mock_executor, last_message_at=ts, has_memory=False)
 
-    with p_loader, p_db, patch.object(
+    with p_loader, p_db, p_mem, patch.object(
         service, "_persist_ai_message", new_callable=AsyncMock
     ):
-        result = await service.run(user_id="u1", agent_name="clarity", session_id="s1")
+        result = await service.run(user_id="u1", agent_name="assistant", session_id="s1")
 
     assert result["is_new_user"] is True
     assert result["silent"] is False
@@ -204,7 +220,7 @@ async def test_deterministic_silence_skipped_for_new_user():
 @pytest.mark.asyncio
 async def test_agent_loaded_with_session_open_channel():
     """Agent loaded with channel='session_open'."""
-    mock_client = _mock_supabase(has_memory=True, has_instructions=True)
+    mock_client = _mock_supabase(has_instructions=True)
     service = SessionOpenService(mock_client)
     mock_executor = AsyncMock()
     mock_executor.tools = []
@@ -213,9 +229,10 @@ async def test_agent_loaded_with_session_open_channel():
     with (
         patch(f"{_SVC}.load_agent_executor_db_async", return_value=mock_executor) as mock_loader,
         patch(_DB_CONN, new=_mock_get_db_connection()),
+        patch(f"{_SVC}.SessionOpenService._has_memory", new_callable=AsyncMock, return_value=True),
         patch.object(service, "_persist_ai_message", new_callable=AsyncMock),
     ):
-        await service.run(user_id="u1", agent_name="clarity", session_id="s1")
+        await service.run(user_id="u1", agent_name="assistant", session_id="s1")
 
     mock_loader.assert_awaited_once()
     call_kwargs = mock_loader.call_args[1]
@@ -226,7 +243,7 @@ async def test_agent_loaded_with_session_open_channel():
 async def test_last_message_at_passed_to_loader():
     """last_message_at from DB passed through to agent loader."""
     ts = datetime(2026, 2, 22, 10, 0, 0, tzinfo=timezone.utc)
-    mock_client = _mock_supabase(has_memory=True, has_instructions=True)
+    mock_client = _mock_supabase(has_instructions=True)
     service = SessionOpenService(mock_client)
     mock_executor = AsyncMock()
     mock_executor.tools = []
@@ -235,9 +252,101 @@ async def test_last_message_at_passed_to_loader():
     with (
         patch(f"{_SVC}.load_agent_executor_db_async", return_value=mock_executor) as mock_loader,
         patch(_DB_CONN, new=_mock_get_db_connection(ts)),
+        patch(f"{_SVC}.SessionOpenService._has_memory", new_callable=AsyncMock, return_value=True),
         patch.object(service, "_persist_ai_message", new_callable=AsyncMock),
     ):
-        await service.run(user_id="u1", agent_name="clarity", session_id="s1")
+        await service.run(user_id="u1", agent_name="assistant", session_id="s1")
 
     call_kwargs = mock_loader.call_args[1]
     assert call_kwargs["last_message_at"] == ts
+
+
+# --- _has_memory unit tests (min-memory integration) ---
+
+
+@pytest.mark.asyncio
+async def test_has_memory_returns_true_for_list_results():
+    """_has_memory returns True when min-memory returns non-empty list."""
+    mock_client = MagicMock()
+    service = SessionOpenService(mock_client)
+
+    with (
+        patch("os.getenv", side_effect=lambda k, d="": {"MEMORY_SERVER_URL": "http://mem:8000", "MEMORY_SERVER_BACKEND_KEY": "key"}.get(k, d)),
+        patch("src.core.agent_loader_db._resolve_memory_user_id", new_callable=AsyncMock, return_value="google-oauth2|123"),
+        patch("chatServer.services.memory_client.MemoryClient") as mock_mem_cls,
+    ):
+        mock_mem = MagicMock()
+        mock_mem.call_tool = AsyncMock(return_value=[{"id": "m1", "text": "pref"}])
+        mock_mem_cls.return_value = mock_mem
+        result = await service._has_memory(mock_client, "u1", "assistant")
+
+    assert result is True
+
+
+@pytest.mark.asyncio
+async def test_has_memory_returns_true_for_dict_with_memories():
+    """_has_memory returns True when min-memory returns dict with memories key."""
+    mock_client = MagicMock()
+    service = SessionOpenService(mock_client)
+
+    with (
+        patch("os.getenv", side_effect=lambda k, d="": {"MEMORY_SERVER_URL": "http://mem:8000", "MEMORY_SERVER_BACKEND_KEY": "key"}.get(k, d)),
+        patch("src.core.agent_loader_db._resolve_memory_user_id", new_callable=AsyncMock, return_value="google-oauth2|123"),
+        patch("chatServer.services.memory_client.MemoryClient") as mock_mem_cls,
+    ):
+        mock_mem = MagicMock()
+        mock_mem.call_tool = AsyncMock(return_value={"memories": [{"text": "pref"}]})
+        mock_mem_cls.return_value = mock_mem
+        result = await service._has_memory(mock_client, "u1", "assistant")
+
+    assert result is True
+
+
+@pytest.mark.asyncio
+async def test_has_memory_returns_false_for_empty_results():
+    """_has_memory returns False when min-memory returns empty list."""
+    mock_client = MagicMock()
+    service = SessionOpenService(mock_client)
+
+    with (
+        patch("os.getenv", side_effect=lambda k, d="": {"MEMORY_SERVER_URL": "http://mem:8000", "MEMORY_SERVER_BACKEND_KEY": "key"}.get(k, d)),
+        patch("src.core.agent_loader_db._resolve_memory_user_id", new_callable=AsyncMock, return_value="google-oauth2|123"),
+        patch("chatServer.services.memory_client.MemoryClient") as mock_mem_cls,
+    ):
+        mock_mem = MagicMock()
+        mock_mem.call_tool = AsyncMock(return_value=[])
+        mock_mem_cls.return_value = mock_mem
+        result = await service._has_memory(mock_client, "u1", "assistant")
+
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_has_memory_returns_false_when_env_vars_unset():
+    """_has_memory returns False when MEMORY_SERVER_URL is not set."""
+    mock_client = MagicMock()
+    service = SessionOpenService(mock_client)
+
+    with patch("os.getenv", return_value=""):
+        result = await service._has_memory(mock_client, "u1", "assistant")
+
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_has_memory_returns_false_on_error():
+    """_has_memory returns False (non-fatal) when min-memory is unreachable."""
+    mock_client = MagicMock()
+    service = SessionOpenService(mock_client)
+
+    with (
+        patch("os.getenv", side_effect=lambda k, d="": {"MEMORY_SERVER_URL": "http://mem:8000", "MEMORY_SERVER_BACKEND_KEY": "key"}.get(k, d)),
+        patch("src.core.agent_loader_db._resolve_memory_user_id", new_callable=AsyncMock, return_value="u1"),
+        patch("chatServer.services.memory_client.MemoryClient") as mock_mem_cls,
+    ):
+        mock_mem = MagicMock()
+        mock_mem.call_tool = AsyncMock(side_effect=RuntimeError("Connection refused"))
+        mock_mem_cls.return_value = mock_mem
+        result = await service._has_memory(mock_client, "u1", "assistant")
+
+    assert result is False

@@ -1,150 +1,328 @@
-"""Memory tools for agent long-term memory persistence.
+"""Memory tools backed by min-memory MCP server.
 
-TODO: SPEC-017 — memory_tools uses sync Supabase client (create_client).
-Migrate to async UserScopedClient when sync wrapper is available.
+Thin LangChain wrappers around MemoryClient.call_tool(). Each tool maps 1:1
+to a min-memory MCP tool — no duplicated logic.
 """
 
 import logging
-import os
-from typing import Type
+from typing import Any, Type
 
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
-from supabase import Client as SupabaseClient
-from supabase import create_client
-
 logger = logging.getLogger(__name__)
 
-MAX_NOTES_LENGTH = 4000
 
+# ---------------------------------------------------------------------------
+# Base class — all memory tools share this pattern
+# ---------------------------------------------------------------------------
 
-class SaveMemoryInput(BaseModel):
-    """Input schema for SaveMemoryTool."""
+class _MemoryToolBase(BaseTool):
+    """Base for memory tools that delegate to MemoryClient."""
 
-    notes: str = Field(
-        ...,
-        description="The memory notes to save. These replace any existing notes for this agent.",
-    )
+    memory_client: Any = Field(..., description="MemoryClient instance")
+    user_id: str = Field(..., description="User ID for logging")
+    agent_name: str = Field(..., description="Agent name for logging")
 
-
-class SaveMemoryTool(BaseTool):
-    """Save or update long-term memory notes for this user and agent."""
-
-    name: str = "save_memory"
-    description: str = (
-        "Save or update your long-term memory notes. "
-        "Use this to remember important information about the user across sessions, "
-        "such as preferences, ongoing projects, key dates, or anything the user asks you to remember. "
-        "Notes are scoped to this user and agent — other agents cannot see them. "
-        "Maximum 4000 characters."
-    )
-    args_schema: Type[BaseModel] = SaveMemoryInput
-
-    user_id: str = Field(..., description="User ID for scoping")
-    agent_name: str = Field(..., description="Agent name for scoping")
-    supabase_url: str = Field(default="", description="Supabase URL")
-    supabase_key: str = Field(default="", description="Supabase service key")
+    # Subclasses set this to the min-memory MCP tool name
+    _mcp_tool_name: str = ""
 
     @classmethod
     def prompt_section(cls, channel: str) -> str | None:
-        """Return behavioral guidance for the agent prompt, or None to omit."""
-        if channel in ("web", "telegram"):
-            return "Memory: Before answering questions about the user's preferences, past conversations, or projects, call read_memory first. When the user shares something worth remembering, call save_memory immediately."  # noqa: E501
-        else:
-            return None
+        return None
 
-    def _get_client(self) -> SupabaseClient:
-        url = self.supabase_url or os.getenv("SUPABASE_URL", "")
-        key = self.supabase_key or os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-        if not url or not key:
-            raise RuntimeError("Supabase configuration missing for memory tool.")
-        return create_client(url, key)
+    def _run(self, **kwargs: Any) -> str:
+        return f"{self.name} requires async execution."
 
-    def _run(self, notes: str) -> str:
-        """Synchronous run — not used in async context."""
-        return "save_memory requires async execution. Use _arun."
-
-    async def _arun(self, notes: str) -> str:
-        """Save or update long-term memory notes."""
-        truncated = False
-        if len(notes) > MAX_NOTES_LENGTH:
-            notes = notes[:MAX_NOTES_LENGTH]
-            truncated = True
-            logger.warning(
-                f"Memory notes for user={self.user_id}, agent={self.agent_name} "
-                f"truncated to {MAX_NOTES_LENGTH} characters."
-            )
-
+    async def _call_mcp(self, args: dict[str, Any]) -> str:
+        """Call min-memory and return result as string."""
         try:
-            client = self._get_client()
-            client.table("agent_long_term_memory").upsert(
-                {
-                    "user_id": self.user_id,
-                    "agent_name": self.agent_name,
-                    "notes": notes,
-                },
-                on_conflict="user_id,agent_name",
-            ).execute()
-
-            msg = "Memory notes saved successfully."
-            if truncated:
-                msg += f" (Note: truncated to {MAX_NOTES_LENGTH} characters.)"
-            logger.info(f"Saved memory notes for user={self.user_id}, agent={self.agent_name}")
-            return msg
-
+            result = await self.memory_client.call_tool(self._mcp_tool_name, args)
+            logger.info("%s for user=%s, agent=%s", self.name, self.user_id, self.agent_name)
+            return str(result)
         except Exception as e:
-            logger.error(f"Failed to save memory notes for user={self.user_id}, agent={self.agent_name}: {e}")
-            return f"Failed to save memory notes: {e}"
+            logger.error("Failed %s for user=%s, agent=%s: %s", self.name, self.user_id, self.agent_name, e)
+            return f"Failed to {self.name}: {e}"
 
 
-class ReadMemoryTool(BaseTool):
-    """Read long-term memory notes for this user and agent."""
+# ---------------------------------------------------------------------------
+# Input schemas
+# ---------------------------------------------------------------------------
 
-    name: str = "read_memory"
-    description: str = (
-        "Read your long-term memory notes for this user. "
-        "Returns any previously saved notes about the user's preferences, ongoing projects, "
-        "key dates, or other information you were asked to remember. "
-        "Notes are scoped to this user and agent."
+class StoreMemoryInput(BaseModel):
+    text: str = Field(..., description="The memory text to store.")
+    memory_type: str = Field(..., description="Type: core_identity, project_context, task_instruction, or episodic.")
+    entity: str = Field(..., description="Entity this memory is about (e.g., user name, project name).")
+    scope: str = Field(..., description="Scope: global, project, or task.")
+    tags: list[str] = Field(default_factory=list, description="Optional tags for categorization.")
+    project: str = Field(default="", description="Project name (required when scope is project or task).")
+    task_id: str = Field(default="", description="Task ID (required when scope is task).")
+
+
+class RecallInput(BaseModel):
+    query: str = Field(..., description="What to recall — describe what you're looking for.")
+    limit: int = Field(default=10, description="Max number of memories to return.")
+    memory_type: list[str] = Field(default_factory=list, description="Filter by memory types.")
+    scope: str = Field(default="", description="Filter by scope: global, project, or task.")
+    project: str = Field(default="", description="Filter by project name.")
+
+
+class SearchMemoryInput(BaseModel):
+    query: str = Field(..., description="Search query to find relevant memories.")
+
+
+class FetchMemoryInput(BaseModel):
+    id: str = Field(..., description="The ID of the memory to fetch.")
+
+
+class DeleteMemoryInput(BaseModel):
+    memory_id: str = Field(..., description="The ID of the memory to delete.")
+
+
+class UpdateMemoryInput(BaseModel):
+    memory_id: str = Field(..., description="The ID of the memory to update.")
+    text: str = Field(default="", description="New text content (re-embeds if changed).")
+    memory_type: str = Field(
+        default="", description="New type: core_identity, project_context, task_instruction, or episodic.",
     )
+    scope: str = Field(default="", description="New scope: global, project, or task.")
+    entity: str = Field(default="", description="New entity name.")
+    project: str = Field(default="", description="New project name.")
+    task_id: str = Field(default="", description="New task ID.")
+    tags: list[str] = Field(default_factory=list, description="New tags (replaces existing).")
+    status: str = Field(default="", description="New status.")
+    priority: int | None = Field(default=None, description="New priority.")
 
-    user_id: str = Field(..., description="User ID for scoping")
-    agent_name: str = Field(..., description="Agent name for scoping")
-    supabase_url: str = Field(default="", description="Supabase URL")
-    supabase_key: str = Field(default="", description="Supabase service key")
 
-    def _get_client(self) -> SupabaseClient:
-        url = self.supabase_url or os.getenv("SUPABASE_URL", "")
-        key = self.supabase_key or os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-        if not url or not key:
-            raise RuntimeError("Supabase configuration missing for memory tool.")
-        return create_client(url, key)
+class SetProjectInput(BaseModel):
+    project: str = Field(..., description="Project name to validate or create.")
 
-    def _run(self) -> str:
-        """Synchronous run — not used in async context."""
-        return "read_memory requires async execution. Use _arun."
+
+class LinkMemoriesInput(BaseModel):
+    memory_id: str = Field(..., description="ID of the source memory.")
+    related_id: str = Field(..., description="ID of the related memory.")
+    relation_type: str = Field(..., description="Relationship: supports, contradicts, supersedes, refines, depends_on, implements, or example_of.")  # noqa: E501
+
+
+class ListEntitiesInput(BaseModel):
+    scope: str = Field(default="", description="Filter by scope.")
+    project: str = Field(default="", description="Filter by project.")
+    memory_type: str = Field(default="", description="Filter by memory type.")
+
+
+class SearchEntitiesInput(BaseModel):
+    query: str = Field(..., description="Entity name to search for.")
+    limit: int = Field(default=5, description="Max results.")
+
+
+class EmptyInput(BaseModel):
+    """No arguments required."""
+    pass
+
+
+# ---------------------------------------------------------------------------
+# Tools
+# ---------------------------------------------------------------------------
+
+class StoreMemoryTool(_MemoryToolBase):
+    """Store a memory about the user or a project."""
+
+    name: str = "store_memory"
+    description: str = (
+        "Store a memory. Use proactively when you learn something — preferences, "
+        "habits, projects, decisions, or communication style. Don't wait to be asked."
+    )
+    args_schema: Type[BaseModel] = StoreMemoryInput
+    _mcp_tool_name: str = "store_memory"
+
+    @classmethod
+    def prompt_section(cls, channel: str) -> str | None:
+        if channel in ("web", "telegram"):
+            return (
+                "Memory: Proactively observe and record. When you learn something about the user "
+                "— from their messages, email patterns, task habits, or tone — call store_memory. "
+                "Don't wait to be asked. Use recall before answering questions about the user's "
+                "preferences, past decisions, or projects."
+            )
+        return None
+
+    async def _arun(self, text: str, memory_type: str, entity: str, scope: str,
+                    tags: list[str] | None = None, project: str = "", task_id: str = "") -> str:
+        args: dict[str, Any] = {"text": text, "memory_type": memory_type, "entity": entity, "scope": scope}
+        if tags:
+            args["tags"] = tags
+        if project:
+            args["project"] = project
+        if task_id:
+            args["task_id"] = task_id
+        return await self._call_mcp(args)
+
+
+class RecallMemoryTool(_MemoryToolBase):
+    """Recall memories relevant to a query (semantic search with context)."""
+
+    name: str = "recall"
+    description: str = (
+        "Recall memories relevant to a query. Returns semantically similar memories "
+        "with hierarchical context (merges global + project scopes). Use before answering "
+        "questions about preferences, past decisions, or projects."
+    )
+    args_schema: Type[BaseModel] = RecallInput
+    _mcp_tool_name: str = "retrieve_context"
+
+    async def _arun(self, query: str, limit: int = 10, memory_type: list[str] | None = None,
+                    scope: str = "", project: str = "") -> str:
+        args: dict[str, Any] = {"query": query, "limit": limit}
+        if memory_type:
+            args["memory_type"] = memory_type
+        if scope:
+            args["scope"] = scope
+        if project:
+            args["project"] = project
+        return await self._call_mcp(args)
+
+
+class SearchMemoryTool(_MemoryToolBase):
+    """Semantic vector search for memories."""
+
+    name: str = "search_memory"
+    description: str = "Search for memories matching a query. Returns matching memories ranked by relevance."
+    args_schema: Type[BaseModel] = SearchMemoryInput
+    _mcp_tool_name: str = "search"
+
+    async def _arun(self, query: str) -> str:
+        return await self._call_mcp({"query": query})
+
+
+class FetchMemoryTool(_MemoryToolBase):
+    """Fetch a specific memory by ID."""
+
+    name: str = "fetch_memory"
+    description: str = "Fetch a specific memory by its ID. Use after search to get full details."
+    args_schema: Type[BaseModel] = FetchMemoryInput
+    _mcp_tool_name: str = "fetch"
+
+    async def _arun(self, id: str) -> str:
+        return await self._call_mcp({"id": id})
+
+
+class DeleteMemoryTool(_MemoryToolBase):
+    """Soft-delete a memory by ID."""
+
+    name: str = "delete_memory"
+    description: str = (
+        "Delete a memory. Use when the user asks you to forget something "
+        "or when information is outdated."
+    )
+    args_schema: Type[BaseModel] = DeleteMemoryInput
+    _mcp_tool_name: str = "delete_memory"
+
+    async def _arun(self, memory_id: str) -> str:
+        return await self._call_mcp({"memory_id": memory_id})
+
+
+class UpdateMemoryTool(_MemoryToolBase):
+    """Update an existing memory's text and/or metadata."""
+
+    name: str = "update_memory"
+    description: str = (
+        "Update an existing memory's text and/or metadata fields. "
+        "Only provided fields are changed."
+    )
+    args_schema: Type[BaseModel] = UpdateMemoryInput
+    _mcp_tool_name: str = "update_memory"
+
+    async def _arun(self, memory_id: str, text: str = "", memory_type: str = "",
+                    scope: str = "", entity: str = "", project: str = "",
+                    task_id: str = "", tags: list[str] | None = None,
+                    status: str = "", priority: int | None = None) -> str:
+        args: dict[str, Any] = {"memory_id": memory_id}
+        if text:
+            args["text"] = text
+        if memory_type:
+            args["memory_type"] = memory_type
+        if scope:
+            args["scope"] = scope
+        if entity:
+            args["entity"] = entity
+        if project:
+            args["project"] = project
+        if task_id:
+            args["task_id"] = task_id
+        if tags:
+            args["tags"] = tags
+        if status:
+            args["status"] = status
+        if priority is not None:
+            args["priority"] = priority
+        return await self._call_mcp(args)
+
+
+class SetProjectTool(_MemoryToolBase):
+    """Validate or create a project scope."""
+
+    name: str = "set_project"
+    description: str = "Validate a project exists in memory or create it. Returns project summary with memory counts."
+    args_schema: Type[BaseModel] = SetProjectInput
+    _mcp_tool_name: str = "set_project"
+
+    async def _arun(self, project: str) -> str:
+        return await self._call_mcp({"project": project})
+
+
+class LinkMemoriesTool(_MemoryToolBase):
+    """Create a relationship between two memories."""
+
+    name: str = "link_memories"
+    description: str = (
+        "Link two memories with a relationship (supports, contradicts, supersedes, "
+        "refines, depends_on, implements, example_of). Use to connect related decisions or facts."
+    )
+    args_schema: Type[BaseModel] = LinkMemoriesInput
+    _mcp_tool_name: str = "link_memories"
+
+    async def _arun(self, memory_id: str, related_id: str, relation_type: str) -> str:
+        return await self._call_mcp({"memory_id": memory_id, "related_id": related_id, "relation_type": relation_type})
+
+
+class ListEntitiesTool(_MemoryToolBase):
+    """List all known entities."""
+
+    name: str = "list_entities"
+    description: str = "List all entities in memory with optional filtering by scope, project, or memory type."
+    args_schema: Type[BaseModel] = ListEntitiesInput
+    _mcp_tool_name: str = "list_entities"
+
+    async def _arun(self, scope: str = "", project: str = "", memory_type: str = "") -> str:
+        args: dict[str, Any] = {}
+        if scope:
+            args["scope"] = scope
+        if project:
+            args["project"] = project
+        if memory_type:
+            args["memory_type"] = memory_type
+        return await self._call_mcp(args)
+
+
+class SearchEntitiesTool(_MemoryToolBase):
+    """Fuzzy search for entity names."""
+
+    name: str = "search_entities"
+    description: str = "Search for entities by name. Use before storing to avoid creating duplicate entities."
+    args_schema: Type[BaseModel] = SearchEntitiesInput
+    _mcp_tool_name: str = "search_entities"
+
+    async def _arun(self, query: str, limit: int = 5) -> str:
+        return await self._call_mcp({"query": query, "limit": limit})
+
+
+class GetContextInfoTool(_MemoryToolBase):
+    """Get environment context info."""
+
+    name: str = "get_context_info"
+    description: str = "Get environment context: current user identity, active project, and metadata."
+    args_schema: Type[BaseModel] = EmptyInput
+    _mcp_tool_name: str = "get_context_info"
 
     async def _arun(self) -> str:
-        """Read long-term memory notes."""
-        try:
-            client = self._get_client()
-            result = (
-                client.table("agent_long_term_memory")
-                .select("notes")
-                .eq("user_id", self.user_id)
-                .eq("agent_name", self.agent_name)
-                .maybe_single()
-                .execute()
-            )
-
-            if result.data and result.data.get("notes"):
-                logger.info(f"Read memory notes for user={self.user_id}, agent={self.agent_name}")
-                return result.data["notes"]
-
-            logger.info(f"No memory notes found for user={self.user_id}, agent={self.agent_name}")
-            return "(No memory notes yet.)"
-
-        except Exception as e:
-            logger.error(f"Failed to read memory notes for user={self.user_id}, agent={self.agent_name}: {e}")
-            return f"Failed to read memory notes: {e}"
+        return await self._call_mcp({})
