@@ -198,7 +198,7 @@ class TestCheckDueReminders:
             sys.modules["chatServer.services.reminder_service"] = fake_mod
 
             with patch(
-                "chatServer.services.background_tasks.get_supabase_client",
+                "chatServer.services.background_tasks.create_system_client",
                 new_callable=AsyncMock,
                 return_value=mock_db_client,
             ):

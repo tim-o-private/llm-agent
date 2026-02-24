@@ -42,6 +42,11 @@ case "$FILE_PATH" in
       echo "$BAD" >&2
       exit 2
     fi
+    # A8: Block SystemClient/get_system_client in routers — routers must use user-scoped access
+    if grep -qP 'get_system_client|SystemClient' "$FILE_PATH" 2>/dev/null; then
+      echo "BLOCKED: 'SystemClient' or 'get_system_client' in router. Per A8, routers must use 'get_user_scoped_client'. Background operations belong in services." >&2
+      exit 2
+    fi
     ;;
   */webApp/src/api/hooks/*.ts|*/webApp/src/api/hooks/*.tsx)
     # A5: Block useAuthStore in API hooks — auth must come from supabase.auth.getSession()
@@ -50,7 +55,28 @@ case "$FILE_PATH" in
       exit 2
     fi
     ;;
+  */chatServer/services/*.py)
+    # A8: Block raw get_supabase_client in services — must use get_user_scoped_client or get_system_client
+    if grep -qP 'get_supabase_client' "$FILE_PATH" 2>/dev/null; then
+      # Allow the re-export in supabase_client.py itself
+      case "$FILE_PATH" in */database/supabase_client.py) ;; *)
+        echo "BLOCKED: 'get_supabase_client' in service. Per A8/SPEC-017, services must use 'get_user_scoped_client' (user-facing) or 'get_system_client' (background). Raw client bypasses user scoping." >&2
+        exit 2
+      ;; esac
+    fi
+    ;;
   */chatServer/tools/*.py)
+    # A8: Warn about sync create_client — should use async scoped/system client
+    # gmail_tools.py and memory_tools.py have TODOs for this (sync → async migration)
+    if grep -qP 'from supabase import.*create_client' "$FILE_PATH" 2>/dev/null; then
+      # Don't block existing files with TODOs, but block NEW files using the pattern
+      case "$FILE_PATH" in
+        *gmail_tools.py|*memory_tools.py) ;; # Known TODOs — SPEC-017 deferred
+        *)
+          echo "BLOCKED: 'create_client' in tool file. Per A8/SPEC-017, tools must use UserScopedClient (via get_supabase_client + wrapper) or create_user_scoped_client(). See chatServer/tools/reminder_tools.py for the pattern." >&2
+          exit 2
+        ;; esac
+    fi
     # A10: Tool name must follow verb_resource pattern
     if grep -qP 'name\s*=\s*"[^"]*"' "$FILE_PATH" 2>/dev/null; then
       NAMES=$(grep -oP 'name\s*=\s*"\K[^"]+' "$FILE_PATH" 2>/dev/null || true)

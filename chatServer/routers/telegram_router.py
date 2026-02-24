@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from ..channels.telegram_bot import get_telegram_bot_service
-from ..database.supabase_client import get_supabase_client
+from ..database.supabase_client import get_user_scoped_client
 from ..dependencies.auth import get_current_user
 from ..services.telegram_linking_service import (
     create_linking_token,
@@ -76,7 +76,7 @@ async def telegram_webhook(request: Request):
 @router.get("/link-token", response_model=LinkTokenResponse)
 async def get_link_token(
     user_id: str = Depends(get_current_user),
-    db=Depends(get_supabase_client),
+    db=Depends(get_user_scoped_client),
 ):
     """
     Generate a one-time linking token.
@@ -103,7 +103,7 @@ async def get_link_token(
 @router.get("/status", response_model=TelegramStatusResponse)
 async def get_status(
     user_id: str = Depends(get_current_user),
-    db=Depends(get_supabase_client),
+    db=Depends(get_user_scoped_client),
 ):
     """Check if user has Telegram linked."""
     status = await get_telegram_status(db, user_id)
@@ -113,7 +113,7 @@ async def get_status(
 @router.post("/unlink", response_model=UnlinkResponse)
 async def unlink(
     user_id: str = Depends(get_current_user),
-    db=Depends(get_supabase_client),
+    db=Depends(get_user_scoped_client),
 ):
     """Unlink Telegram account."""
     success = await unlink_telegram_account(db, user_id)

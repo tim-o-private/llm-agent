@@ -114,10 +114,12 @@ class CreateScheduleTool(BaseTool):
             if not croniter.is_valid(schedule_cron):
                 return f"Error: invalid cron expression '{schedule_cron}'. Use standard 5-field cron syntax."
 
+            from chatServer.database.scoped_client import UserScopedClient
             from chatServer.database.supabase_client import get_supabase_client
             from chatServer.services.schedule_service import ScheduleService
 
-            db = await get_supabase_client()
+            raw_client = await get_supabase_client()
+            db = UserScopedClient(raw_client, self.user_id)
             service = ScheduleService(db)
             await service.create_schedule(
                 user_id=self.user_id,
@@ -173,10 +175,12 @@ class DeleteScheduleTool(BaseTool):
 
     async def _arun(self, schedule_id: str) -> str:
         try:
+            from chatServer.database.scoped_client import UserScopedClient
             from chatServer.database.supabase_client import get_supabase_client
             from chatServer.services.schedule_service import ScheduleService
 
-            db = await get_supabase_client()
+            raw_client = await get_supabase_client()
+            db = UserScopedClient(raw_client, self.user_id)
             service = ScheduleService(db)
             deleted = await service.delete_schedule(schedule_id=schedule_id, user_id=self.user_id)
 
@@ -217,10 +221,12 @@ class ListSchedulesTool(BaseTool):
 
     async def _arun(self, active_only: bool = True) -> str:
         try:
+            from chatServer.database.scoped_client import UserScopedClient
             from chatServer.database.supabase_client import get_supabase_client
             from chatServer.services.schedule_service import ScheduleService
 
-            db = await get_supabase_client()
+            raw_client = await get_supabase_client()
+            db = UserScopedClient(raw_client, self.user_id)
             service = ScheduleService(db)
             schedules = await service.list_schedules(user_id=self.user_id, active_only=active_only)
 

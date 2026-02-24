@@ -28,6 +28,7 @@ def _format_task_line(task: dict, index: int) -> str:
         parts.append(f"(due: {due})")
 
     parts.append(f"— {status}")
+    parts.append(f"[id: {task.get('id', '?')}]")
 
     subtask_count = task.get("subtask_count", 0)
     if subtask_count > 0:
@@ -67,12 +68,14 @@ def _format_task_detail(task: dict) -> str:
     return "\n".join(lines)
 
 
-async def _get_task_service():
-    """Get a TaskService instance with the shared async Supabase client."""
+async def _get_task_service(user_id: str):
+    """Get a TaskService instance with a user-scoped Supabase client."""
+    from ..database.scoped_client import UserScopedClient
     from ..database.supabase_client import get_supabase_client
     from ..services.task_service import TaskService
 
-    db = await get_supabase_client()
+    raw_client = await get_supabase_client()
+    db = UserScopedClient(raw_client, user_id)
     return TaskService(db)
 
 
@@ -140,7 +143,7 @@ class GetTasksTool(BaseTool):
         limit: int = 20,
     ) -> str:
         try:
-            service = await _get_task_service()
+            service = await _get_task_service(self.user_id)
             tasks = await service.list_tasks(
                 user_id=self.user_id,
                 status=status,
@@ -192,7 +195,7 @@ class GetTaskTool(BaseTool):
 
     async def _arun(self, task_id: str) -> str:
         try:
-            service = await _get_task_service()
+            service = await _get_task_service(self.user_id)
             task = await service.get_task(user_id=self.user_id, task_id=task_id)
 
             if not task:
@@ -252,7 +255,7 @@ class CreateTaskTool(BaseTool):
         category: Optional[str] = None,
     ) -> str:
         try:
-            service = await _get_task_service()
+            service = await _get_task_service(self.user_id)
             await service.create_task(
                 user_id=self.user_id,
                 title=title,
@@ -334,7 +337,7 @@ class UpdateTaskTool(BaseTool):
         completion_note: Optional[str] = None,
     ) -> str:
         try:
-            service = await _get_task_service()
+            service = await _get_task_service(self.user_id)
             task = await service.update_task(
                 user_id=self.user_id,
                 task_id=task_id,
@@ -406,7 +409,7 @@ class DeleteTaskTool(BaseTool):
 
     async def _arun(self, task_id: str) -> str:
         try:
-            service = await _get_task_service()
+            service = await _get_task_service(self.user_id)
             task = await service.delete_task(user_id=self.user_id, task_id=task_id)
 
             if not task:

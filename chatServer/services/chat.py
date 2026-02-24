@@ -14,7 +14,7 @@ from langchain_core.messages import BaseMessage
 from langchain_postgres import PostgresChatMessageHistory
 
 from ..config.constants import CHAT_MESSAGE_HISTORY_TABLE_NAME, DEFAULT_LOG_LEVEL
-from ..database.supabase_client import get_supabase_client
+from ..database.supabase_client import create_user_scoped_client
 from ..models.chat import ChatRequest, ChatResponse
 from ..protocols.agent_executor import AgentExecutorProtocol
 from ..security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
@@ -274,7 +274,7 @@ class ChatService:
 
             # Wrap tools with approval checking
             try:
-                supabase_client = await get_supabase_client()
+                supabase_client = await create_user_scoped_client(user_id)
                 audit_service = AuditService(supabase_client)
                 pending_actions_service = PendingActionsService(
                     db_client=supabase_client,

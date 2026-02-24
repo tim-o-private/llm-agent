@@ -109,9 +109,9 @@ Enforcement: None. Developers use whatever colors they want.
 
 **Correct:**
 ```
-Rule: Use `Depends(get_supabase_client)` for database access.
-Why: Dependency injection enables testing with mocks, enforces single
-     connection management, and makes the dependency graph explicit.
+Rule: Use `Depends(get_user_scoped_client)` for user-facing database access.
+Why: Auto-injects user_id filtering, prevents cross-user leakage,
+     and makes the dependency graph explicit via FastAPI DI.
 ```
 
 **Incorrect:**
@@ -251,7 +251,7 @@ Agent creates: chatServer/task_handler.py (new pattern, wrong location)
 @router.get("/sessions")
 async def get_sessions(
     user_id: str = Depends(get_current_user),
-    db=Depends(get_supabase_client),
+    db=Depends(get_user_scoped_client),
 ):
     service = ChatHistoryService(db)
     return await service.get_sessions(user_id=user_id)
@@ -341,7 +341,7 @@ AGENT_TOOLS = ["gmail", "memory", "reminders", "schedule"]
 **Rationale:** Supabase REST provides auto-generated APIs with row-level security — ideal for user CRUD where the frontend talks directly to the database or through thin API endpoints. But LangChain's `PostgresChatMessageHistory` needs direct SQL connections for performance and compatibility. Mixing these planes creates confusion about which client to use. The rule is simple: user data goes through Supabase REST (with RLS); framework data goes through direct PostgreSQL.
 
 **Enforcement:**
-- `get_supabase_client` dependency provides the Supabase REST client.
+- `get_user_scoped_client` dependency provides user-scoped Supabase REST access; `get_system_client()` for background services.
 - `chatServer/database/connection.py` provides the direct PostgreSQL connection.
 - Reviewer agent checks that user-facing operations use the Supabase client.
 
@@ -493,39 +493,49 @@ async def store_web_message(self, web_session_id: str, message: str):
 
 ---
 
-### A8: RLS Is the Security Boundary
+### A8: Scoped Access + RLS Defense-in-Depth
 
-**Statement:** Every user-owned table has Row Level Security policies. Application-layer filtering (`WHERE user_id = ...`) is a convenience, not a security control. RLS is the security control.
+**Statement:** The API layer is the primary enforcement point for user data isolation. Routers use `get_user_scoped_client` (auto-injects `user_id` filter). Background services use `get_system_client` (explicit opt-in to unscoped access). Raw `get_supabase_client` is blocked in routers and services. RLS remains as defense-in-depth at the database layer.
 
-**Rationale:** Application code has bugs. A missing `WHERE` clause in one query leaks all users' data. RLS enforces access at the database level — even if the application code is wrong, PostgreSQL will not return rows the user does not own. Defense in depth means the database does not trust the application.
+**Rationale:** Service-role keys bypass RLS entirely, making database-level policies decorative when the backend uses them. SPEC-017 introduced `UserScopedClient` — a wrapper that auto-appends `.eq("user_id", user_id)` on every query to user-scoped tables. This makes cross-user data leakage structurally impossible at the API layer, regardless of developer mistakes. RLS still protects against direct database access (frontend anon key) and serves as a second line of defense.
+
+**Two client types:**
+- **`UserScopedClient`** (via `Depends(get_user_scoped_client)`) — for routers and user-facing tools. Auto-filters by `user_id` on all queries to tables in `USER_SCOPED_TABLES`. Detects and deduplicates existing `user_id` filters. Overwrites `user_id` on insert/upsert to prevent spoofing.
+- **`SystemClient`** (via `get_system_client()`) — for background services (scheduled execution, Telegram bot, cache services). Thin passthrough, no auto-filtering. Requires explicit justification.
 
 **Enforcement:**
-- `validate-patterns.sh` checks migrations for RLS-related patterns.
-- `task-completed-gate.sh` advisory checklist flags migration changes.
-- Reviewer agent verifies new tables have `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` and appropriate policies.
+- `validate-patterns.sh` BLOCKS `get_supabase_client` in `chatServer/services/*.py` — must use scoped or system client.
+- `validate-patterns.sh` BLOCKS `SystemClient`/`get_system_client` in `chatServer/routers/*.py` — routers must use user-scoped access.
+- `validate-patterns.sh` BLOCKS new tables in migrations without `ENABLE ROW LEVEL SECURITY`.
+- Reviewer agent verifies new tables have RLS policies.
 
 **Correct:**
-```sql
--- Migration for new table
-CREATE TABLE reminders (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES auth.users(id),
-    ...
-);
-ALTER TABLE reminders ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users can manage own reminders" ON reminders
-    FOR ALL USING (is_record_owner(user_id));
+```python
+# Router: user-scoped client auto-filters by user_id
+@router.get("/reminders")
+async def get_reminders(
+    user_id: str = Depends(get_current_user),
+    db = Depends(get_user_scoped_client),  # Per A8
+):
+    service = ReminderService(db)
+    return await service.list_reminders()  # No manual user_id filter needed
+
+# Background service: system client for unscoped access
+class ScheduledExecutionService:
+    def __init__(self):
+        self.db = get_system_client()  # Explicit opt-in, justified
 ```
 
 **Incorrect:**
-```sql
--- Table with no RLS — relies entirely on application filtering
-CREATE TABLE reminders (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL,
+```python
+# Raw client in service — BLOCKED by validate-patterns.sh
+from chatServer.database.supabase_client import get_supabase_client
+db = get_supabase_client()  # Bypasses user scoping
+
+# SystemClient in router — BLOCKED
+@router.get("/reminders")
+async def get_reminders(db = Depends(get_system_client)):  # Wrong! Use user-scoped
     ...
-);
--- "We filter by user_id in the service layer"
 ```
 
 ---
@@ -743,7 +753,7 @@ class ReminderService(AbstractTemporalEventService):
 | A5 | Auth via getSession() | reviewer + reference hook |
 | A6 | Tools = capability unit | agent_tools table + BaseTool |
 | A7 | Cross-channel by default | shared chat_id + reviewer |
-| A8 | RLS = security boundary | migration review + validate-patterns |
+| A8 | Scoped access + RLS | validate-patterns BLOCKS raw client in services/routers |
 | A9 | UUID FKs, not name strings | validate-patterns.sh |
 | A10 | Predictable naming | reviewer + task-completed-gate |
 | A11 | Design for N | reviewer |

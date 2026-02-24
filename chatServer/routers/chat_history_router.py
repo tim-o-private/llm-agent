@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
-from ..database.supabase_client import get_supabase_client
+from ..database.supabase_client import get_user_scoped_client
 from ..dependencies.auth import get_current_user
 from ..services.chat_history_service import ChatHistoryService
 
@@ -57,7 +57,7 @@ async def get_sessions(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     user_id: str = Depends(get_current_user),
-    db=Depends(get_supabase_client),
+    db=Depends(get_user_scoped_client),
 ):
     """List chat sessions for the current user."""
     service = ChatHistoryService(db)
@@ -76,7 +76,7 @@ async def get_session_messages(
     limit: int = Query(50, ge=1, le=100),
     before_id: Optional[int] = Query(None, description="Cursor: return messages before this ID"),
     user_id: str = Depends(get_current_user),
-    db=Depends(get_supabase_client),
+    db=Depends(get_user_scoped_client),
 ):
     """Fetch messages for a specific session with cursor-based pagination."""
     service = ChatHistoryService(db)

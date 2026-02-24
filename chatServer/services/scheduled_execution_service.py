@@ -14,7 +14,7 @@ from typing import Any, Dict, Optional
 
 from src.core.agent_loader_db import load_agent_executor_db
 
-from ..database.supabase_client import get_supabase_client
+from ..database.supabase_client import create_user_scoped_client
 from ..security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
 from ..services.audit_service import AuditService
 from ..services.pending_actions import PendingActionsService
@@ -81,7 +81,7 @@ class ScheduledExecutionService:
                 logger.info(f"Applied model override '{model_override}' for scheduled run")
 
             # 2. Create chat_sessions row for this scheduled run
-            supabase_client = await get_supabase_client()
+            supabase_client = await create_user_scoped_client(user_id)
             await supabase_client.table("chat_sessions").insert(
                 {
                     "user_id": user_id,
@@ -212,7 +212,7 @@ class ScheduledExecutionService:
 
             # Store error result
             try:
-                supabase_client = await get_supabase_client()
+                supabase_client = await create_user_scoped_client(user_id)
                 await self._store_result(
                     supabase_client=supabase_client,
                     user_id=user_id,

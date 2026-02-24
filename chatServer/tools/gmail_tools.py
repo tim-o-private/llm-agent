@@ -1,4 +1,8 @@
-"""Gmail tools with multi-account support and automatic token refresh."""
+"""Gmail tools with multi-account support and automatic token refresh.
+
+TODO: SPEC-017 — gmail_tools uses sync Supabase client (create_client).
+Migrate to async UserScopedClient when sync wrapper is available.
+"""
 
 import logging
 import os
