@@ -3,7 +3,6 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAuthStore } from '@/features/auth/useAuthStore';
 import { supabase } from '@/lib/supabaseClient';
 
 const NOTIFICATIONS_QUERY_KEY = 'notifications';
@@ -18,6 +17,8 @@ export interface Notification {
   metadata: Record<string, unknown>;
   read: boolean;
   created_at: string;
+  feedback?: 'useful' | 'not_useful' | null;
+  feedback_at?: string | null;
 }
 
 export interface UnreadCount {
@@ -79,27 +80,37 @@ async function markAllNotificationsRead(): Promise<{ success: boolean; count: nu
   return response.json();
 }
 
+async function submitNotificationFeedback(
+  notificationId: string,
+  feedback: 'useful' | 'not_useful',
+): Promise<{ success: boolean }> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/notifications/${notificationId}/feedback`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ feedback }),
+  });
+  if (!response.ok) throw new Error('Failed to submit feedback');
+  return response.json();
+}
+
 // Hooks
 
 export function useNotifications(unreadOnly = false, limit = 50) {
-  const user = useAuthStore((state) => state.user);
-
   return useQuery<Notification[], Error>({
-    queryKey: [NOTIFICATIONS_QUERY_KEY, user?.id, unreadOnly, limit],
+    queryKey: [NOTIFICATIONS_QUERY_KEY, unreadOnly, limit],
     queryFn: () => fetchNotifications(unreadOnly, limit),
-    enabled: !!user,
     refetchInterval: 15000,
+    retry: false,
   });
 }
 
 export function useUnreadCount() {
-  const user = useAuthStore((state) => state.user);
-
   return useQuery<UnreadCount, Error>({
-    queryKey: [NOTIFICATIONS_QUERY_KEY, 'unread', 'count', user?.id],
+    queryKey: [NOTIFICATIONS_QUERY_KEY, 'unread', 'count'],
     queryFn: fetchUnreadCount,
-    enabled: !!user,
     refetchInterval: 15000,
+    retry: false,
   });
 }
 
@@ -119,6 +130,17 @@ export function useMarkAllRead() {
 
   return useMutation<{ success: boolean; count: number }, Error, void>({
     mutationFn: markAllNotificationsRead,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [NOTIFICATIONS_QUERY_KEY] });
+    },
+  });
+}
+
+export function useSubmitNotificationFeedback() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ notificationId, feedback }: { notificationId: string; feedback: 'useful' | 'not_useful' }) =>
+      submitNotificationFeedback(notificationId, feedback),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [NOTIFICATIONS_QUERY_KEY] });
     },
