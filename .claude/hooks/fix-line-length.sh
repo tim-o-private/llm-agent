@@ -4,8 +4,9 @@
 
 set -euo pipefail
 
-# Get the file path from the tool input
-FILE_PATH=$(echo "$CLAUDE_TOOL_INPUT" | jq -r '.file_path // empty')
+# Get the file path from stdin (Claude Code passes JSON context on stdin)
+INPUT=$(cat)
+FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
 
 # Only process Python files
 [[ "$FILE_PATH" == *.py ]] || exit 0
