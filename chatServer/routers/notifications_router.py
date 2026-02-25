@@ -10,7 +10,7 @@ Provides API endpoints for:
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -37,6 +37,16 @@ class NotificationResponse(BaseModel):
     metadata: Dict[str, Any] = {}
     read: bool
     created_at: datetime
+    feedback: Optional[str] = None
+    feedback_at: Optional[datetime] = None
+
+
+class FeedbackRequest(BaseModel):
+    feedback: Literal["useful", "not_useful"]
+
+
+class FeedbackResponse(BaseModel):
+    success: bool
 
 
 class UnreadCountResponse(BaseModel):
@@ -110,3 +120,21 @@ async def mark_all_read(
     service = NotificationService(db)
     count = await service.mark_all_read(user_id)
     return MarkAllReadResponse(success=True, count=count)
+
+
+@router.post("/{notification_id}/feedback", response_model=FeedbackResponse)
+async def submit_feedback(
+    notification_id: str,
+    body: FeedbackRequest,
+    user_id: str = Depends(get_current_user),
+    db=Depends(get_user_scoped_client),
+):
+    """Submit useful/not_useful feedback for a notification."""
+    service = NotificationService(db)
+    result = await service.submit_feedback(notification_id, body.feedback, user_id)
+    status = result.get("status")
+    if status == "not_found":
+        raise HTTPException(status_code=404, detail="Notification not found")
+    if status == "already_set":
+        raise HTTPException(status_code=409, detail="Feedback already submitted")
+    return FeedbackResponse(success=True)
