@@ -171,10 +171,15 @@ class ScheduledExecutionService:
                 metadata=execution_metadata,
             )
 
-            # 11. Notify user (skip when HEARTBEAT_OK — nothing to report)
+            # 11. Notify user (skip when HEARTBEAT_OK or caller handles its own notification)
+            skip_notification = config.get("skip_notification", False)
             if is_heartbeat_ok:
                 logger.info(
                     f"Heartbeat OK for '{agent_name}' — suppressing notification"
+                )
+            elif skip_notification:
+                logger.info(
+                    f"Notification suppressed for '{agent_name}' (caller handles notification)"
                 )
             else:
                 await self._notify_user(

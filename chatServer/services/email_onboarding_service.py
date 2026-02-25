@@ -111,6 +111,7 @@ class EmailOnboardingService:
                 "config": {
                     "model_override": self.DEFAULT_MODEL,
                     "schedule_type": "scheduled",
+                    "skip_notification": True,
                 },
             }
             result = await service.execute(schedule)
