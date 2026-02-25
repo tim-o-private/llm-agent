@@ -3,7 +3,7 @@
 # Exit 0 = silent pass, Exit 2 = block
 set -euo pipefail
 INPUT=$(cat)
-FILE_PATH=$(echo "$INPUT" | grep -oP '"file_path"\s*:\s*"([^"]*)"' | head -1 | sed 's/.*"\([^"]*\)"/\1/' || true)
+FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty' 2>/dev/null || true)
 [ -z "$FILE_PATH" ] && exit 0
 
 case "$FILE_PATH" in
