@@ -6,9 +6,12 @@ Provides API endpoints for:
 - Getting unread count (for polling)
 - Marking notifications as read
 - Marking all as read
+- Submitting feedback (useful/not useful)
+- Debug: creating test notifications (non-production only)
 """
 
 import logging
+import os
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 
@@ -138,3 +141,41 @@ async def submit_feedback(
     if status == "already_set":
         raise HTTPException(status_code=409, detail="Feedback already submitted")
     return FeedbackResponse(success=True)
+
+
+# =============================================================================
+# Debug endpoint (non-production only)
+# =============================================================================
+
+
+class CreateTestNotificationRequest(BaseModel):
+    title: str = "Test notification"
+    body: str = "This is a test notification for development."
+    category: str = "info"
+
+
+if os.getenv("ENVIRONMENT") != "production":
+
+    @router.post("/debug/create", response_model=NotificationResponse)
+    async def create_test_notification(
+        body: CreateTestNotificationRequest,
+        user_id: str = Depends(get_current_user),
+        db=Depends(get_user_scoped_client),
+    ):
+        """Create a test notification. Only available in non-production environments."""
+        service = NotificationService(db)
+        notification_id = await service.notify_user(
+            user_id=user_id,
+            title=body.title,
+            body=body.body,
+            category=body.category,
+        )
+        return NotificationResponse(
+            id=notification_id,
+            title=body.title,
+            body=body.body,
+            category=body.category,
+            metadata={},
+            read=False,
+            created_at=datetime.utcnow(),
+        )
