@@ -42,19 +42,24 @@ class TestBackgroundTaskService(unittest.TestCase):
                 with patch.object(self.service, 'evict_inactive_executors', new_callable=AsyncMock):
                     with patch.object(self.service, 'run_scheduled_agents', new_callable=AsyncMock):
                         with patch.object(self.service, 'check_due_reminders', new_callable=AsyncMock):
-                            mock_task1 = MagicMock()
-                            mock_task2 = MagicMock()
-                            mock_task3 = MagicMock()
-                            mock_task4 = MagicMock()
-                            mock_create_task.side_effect = [mock_task1, mock_task2, mock_task3, mock_task4]
+                            with patch.object(self.service, 'check_email_processing_jobs', new_callable=AsyncMock):
+                                mock_task1 = MagicMock()
+                                mock_task2 = MagicMock()
+                                mock_task3 = MagicMock()
+                                mock_task4 = MagicMock()
+                                mock_task5 = MagicMock()
+                                mock_create_task.side_effect = [
+                                    mock_task1, mock_task2, mock_task3, mock_task4, mock_task5
+                                ]
 
-                            self.service.start_background_tasks()
+                                self.service.start_background_tasks()
 
-                            self.assertEqual(mock_create_task.call_count, 4)
-                            self.assertEqual(self.service.deactivate_task, mock_task1)
-                            self.assertEqual(self.service.evict_task, mock_task2)
-                            self.assertEqual(self.service.scheduled_agents_task, mock_task3)
-                            self.assertEqual(self.service.reminder_task, mock_task4)
+                                self.assertEqual(mock_create_task.call_count, 5)
+                                self.assertEqual(self.service.deactivate_task, mock_task1)
+                                self.assertEqual(self.service.evict_task, mock_task2)
+                                self.assertEqual(self.service.scheduled_agents_task, mock_task3)
+                                self.assertEqual(self.service.reminder_task, mock_task4)
+                                self.assertEqual(self.service.email_processing_task, mock_task5)
 
 
 class TestBackgroundTaskServiceGlobal(unittest.TestCase):
@@ -157,19 +162,24 @@ class TestBackgroundTaskServiceAsync:
                 with patch.object(service, 'evict_inactive_executors', new_callable=AsyncMock):
                     with patch.object(service, 'run_scheduled_agents', new_callable=AsyncMock):
                         with patch.object(service, 'check_due_reminders', new_callable=AsyncMock):
-                            mock_task1 = MagicMock()
-                            mock_task2 = MagicMock()
-                            mock_task3 = MagicMock()
-                            mock_task4 = MagicMock()
-                            mock_create_task.side_effect = [mock_task1, mock_task2, mock_task3, mock_task4]
+                            with patch.object(service, 'check_email_processing_jobs', new_callable=AsyncMock):
+                                mock_task1 = MagicMock()
+                                mock_task2 = MagicMock()
+                                mock_task3 = MagicMock()
+                                mock_task4 = MagicMock()
+                                mock_task5 = MagicMock()
+                                mock_create_task.side_effect = [
+                                    mock_task1, mock_task2, mock_task3, mock_task4, mock_task5
+                                ]
 
-                            service.start_background_tasks()
+                                service.start_background_tasks()
 
-                            assert mock_create_task.call_count == 4
-                            assert service.deactivate_task == mock_task1
-                            assert service.evict_task == mock_task2
-                            assert service.scheduled_agents_task == mock_task3
-                            assert service.reminder_task == mock_task4
+                                assert mock_create_task.call_count == 5
+                                assert service.deactivate_task == mock_task1
+                                assert service.evict_task == mock_task2
+                                assert service.scheduled_agents_task == mock_task3
+                                assert service.reminder_task == mock_task4
+                                assert service.email_processing_task == mock_task5
 
 
 class TestCheckDueReminders:
