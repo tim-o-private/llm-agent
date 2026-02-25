@@ -1,6 +1,6 @@
 # SPEC-023: Email Onboarding Pipeline
 
-> **Status:** Draft
+> **Status:** In Progress
 > **Author:** Tim + Claude (Product)
 > **Created:** 2026-02-24
 > **Updated:** 2026-02-24
@@ -28,7 +28,7 @@ See `docs/product/PRD-001-make-it-feel-right.md` Workstream 1 for full product c
 - [ ] **AC-04:** `EmailOnboardingService` processes inbox and sent mail for the connected account, covering the last 7 days. Uses `search_gmail` with metadata-only format (SPEC-021 dependency) and `get_gmail` for selective full-body reads when needed for context. [A1, A14]
 - [ ] **AC-05:** Processing extracts and stores as memory entries: key relationships (people the user communicates with, inferred relationship, frequency), recurring patterns (newsletters, project threads, automated notifications), open action items (emails that appear to need replies or have deadlines), and inferred life context (kids' school, home projects, work domain). Memory entries use appropriate types (`core_identity`, `project_context`, `episodic`) and entity links. [A6]
 - [ ] **AC-06:** Processing analyzes sent messages to create a writing style profile: tone (formal/casual), typical length, common phrases, formatting preferences. Stored as a `core_identity` memory entry with entity `writing_style`. [A6]
-- [ ] **AC-07:** Processing completes within 5 minutes for a typical personal email account (~100-200 emails in 7 days). Uses Haiku model for categorization/extraction and Sonnet for final synthesis only. [A14]
+- [ ] **AC-07:** Processing completes within 5 minutes for a typical personal email account (~100-200 emails in 7 days). Uses the agent executor (via `ScheduledExecutionService`) with a configurable model (default Sonnet). [A14]
 
 ### User Notification & Reveal
 
@@ -103,28 +103,22 @@ This mirrors the existing pattern for scheduled agent execution and reminder del
 
 ### 4. Email Onboarding Service
 
+**Architecture decision:** Uses the agent executor via `ScheduledExecutionService` rather than direct LLM calls. This reuses existing infrastructure (tool wrapping, approval system, token refresh) and avoids introducing a new LLM invocation pattern. The agent uses its existing tools (`search_gmail`, `get_gmail`, `create_memories`) to do the work. The onboarding prompt tells it exactly what to extract and how to store it.
+
 The service:
-1. Loads the user's Gmail credentials from `external_api_connections`
-2. Searches inbox (`newer_than:7d`) — gets metadata only (subject, from, date, snippet)
-3. Searches sent (`in:sent newer_than:7d`) — same format
-4. Groups by sender/recipient, identifies patterns
-5. For high-signal emails (looks like action item, important sender), fetches full body via `get_gmail`
-6. Calls LLM (Haiku) to categorize and extract:
-   - Key relationships with inferred context
-   - Recurring patterns (newsletters, project threads)
-   - Open action items
-   - Life domain signals
-7. Calls LLM (Haiku) on sent messages to extract writing style profile
-8. Calls LLM (Sonnet) for final synthesis: cohesive summary for notification
-9. Stores all insights as memory entries via `MemoryClient`
-10. Sends notification via `NotificationService`
+1. Updates job status to `processing`
+2. Builds a detailed onboarding prompt describing what to extract from email
+3. Calls `ScheduledExecutionService.execute()` with a synthetic schedule containing the prompt and `config: {"model_override": "<configurable, default sonnet>"}`
+4. The agent executor handles: loading Gmail credentials, searching inbox/sent, reading high-signal emails, creating memory entries, and producing a summary
+5. The service captures the agent's output as the notification body
+6. Sends notification via `NotificationService`
+7. Updates job status to `complete` (or `failed` with error)
 
 **Token budget estimate:**
-- 200 emails × ~200 tokens (metadata) = 40K tokens input for categorization
+- 200 emails × ~200 tokens (metadata) = 40K tokens input
 - 20 high-signal emails × ~1K tokens (body) = 20K tokens for deep reads
-- Writing style analysis: ~10K tokens of sent messages
-- Synthesis: ~5K tokens
-- Total: ~75K tokens at Haiku rates ≈ $0.02-0.05 per user
+- Agent reasoning + memory creation: ~10K tokens
+- Total: ~70K tokens at Sonnet rates ≈ $0.15-0.25 per user
 
 ### 5. Memory Storage
 
@@ -228,20 +222,18 @@ create_memories(
 
 ## Functional Units (for PR Breakdown)
 
-1. **FU-1:** Migration + models (`feat/SPEC-023-migration`)
+Single branch: `feat/SPEC-023-email-onboarding`
+
+1. **FU-1:** Migration + models (database-dev)
    - `email_processing_jobs` table + RLS
    - Pydantic models
 
-2. **FU-2:** Service + background task integration (`feat/SPEC-023-service`)
-   - `EmailOnboardingService` class
-   - Background task loop addition
-   - OAuth hook in external_api_router
+2. **FU-2:** Service + background task + router hook + notification + tests (backend-dev)
+   - `EmailOnboardingService` class (delegates to `ScheduledExecutionService`)
+   - Background task loop addition in `BackgroundTaskService`
+   - OAuth hook in `external_api_router.py`
+   - Completion notification via `NotificationService`
    - Unit tests
-
-3. **FU-3:** Notification + validation prompt (`feat/SPEC-023-notification`)
-   - Completion notification
-   - Summary formatting
-   - Tests
 
 ## Completeness Checklist
 
@@ -249,7 +241,7 @@ create_memories(
 - [x] Every AC maps to at least one functional unit
 - [x] Every cross-domain boundary has a contract (DB → service → notification)
 - [x] Technical decisions reference principles (A1, A2, A6, A7, A8, A9, A12, A14)
-- [x] Merge order is explicit (FU-1 → FU-2 → FU-3)
+- [x] Merge order is explicit (FU-1 → FU-2, single branch)
 - [x] Out-of-scope is explicit
 - [x] Edge cases documented with expected behavior
 - [x] Testing requirements map to ACs
