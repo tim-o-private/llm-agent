@@ -6,7 +6,7 @@ import { useTaskViewStore } from '@/stores/useTaskViewStore';
 // Mock the store
 vi.mock('@/stores/useTaskViewStore');
 
-const mockUseTaskViewStore = useTaskViewStore as any;
+const mockUseTaskViewStore = useTaskViewStore as unknown as ReturnType<typeof vi.fn> & { getState: ReturnType<typeof vi.fn> };
 
 describe('useTaskKeyboardNavigation', () => {
   // Mock store state and actions
@@ -28,7 +28,7 @@ describe('useTaskKeyboardNavigation', () => {
     vi.useFakeTimers();
 
     // Mock the store selector to return different values based on the property being accessed
-    mockUseTaskViewStore.mockImplementation((selector: any) => {
+    mockUseTaskViewStore.mockImplementation((selector: (state: typeof mockStoreState) => unknown) => {
       return selector(mockStoreState);
     });
     // Also mock getState() — used inside setTimeout callbacks in the hook

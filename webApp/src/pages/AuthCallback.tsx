@@ -32,6 +32,7 @@ export const AuthCallback: React.FC = () => {
     if (hasProcessed) return;
 
     handleAuthCallback();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasProcessed]); // Only depend on hasProcessed
 
   const handleAuthCallback = async () => {

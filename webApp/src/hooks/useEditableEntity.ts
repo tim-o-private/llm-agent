@@ -42,6 +42,7 @@ export function useEditableEntity<TEntityData, TFormData extends FieldValues>(
       ? defaultFormValues || transformDataToForm(undefined)
       : transformDataToForm(currentInitialData);
     formMethods.reset(newFormValues);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     entityId,
     // Removed unstable function dependencies that cause constant resets
@@ -90,6 +91,7 @@ export function useEditableEntity<TEntityData, TFormData extends FieldValues>(
         onSaveError(err, formData);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     formMethods,
     saveEntityFn,

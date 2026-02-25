@@ -18,17 +18,17 @@ beforeEach(() => {
   vi.mocked(useTelegramStatus).mockReturnValue({
     data: { linked: false, linked_at: null },
     isLoading: false,
-  } as any);
+  } as unknown as ReturnType<typeof useTelegramStatus>);
   vi.mocked(useGenerateLinkToken).mockReturnValue({
     data: undefined,
     mutate: mockMutate,
     isPending: false,
     error: null,
-  } as any);
+  } as unknown as ReturnType<typeof useGenerateLinkToken>);
   vi.mocked(useUnlinkTelegram).mockReturnValue({
     mutate: mockUnlinkMutate,
     isPending: false,
-  } as any);
+  } as unknown as ReturnType<typeof useUnlinkTelegram>);
 });
 
 describe('TelegramLink', () => {
@@ -41,7 +41,7 @@ describe('TelegramLink', () => {
     vi.mocked(useTelegramStatus).mockReturnValue({
       data: { linked: true, linked_at: '2026-02-17T00:00:00Z' },
       isLoading: false,
-    } as any);
+    } as unknown as ReturnType<typeof useTelegramStatus>);
 
     render(<TelegramLink />);
     expect(screen.getByText('Connected')).toBeInTheDocument();
@@ -51,7 +51,7 @@ describe('TelegramLink', () => {
     vi.mocked(useTelegramStatus).mockReturnValue({
       data: undefined,
       isLoading: true,
-    } as any);
+    } as unknown as ReturnType<typeof useTelegramStatus>);
 
     render(<TelegramLink />);
     expect(screen.getByText('Checking status...')).toBeInTheDocument();
@@ -63,7 +63,7 @@ describe('TelegramLink', () => {
       mutate: mockMutate,
       isPending: false,
       error: null,
-    } as any);
+    } as unknown as ReturnType<typeof useGenerateLinkToken>);
 
     render(<TelegramLink />);
     expect(screen.getByText(/\/start test-token/)).toBeInTheDocument();
@@ -80,7 +80,7 @@ describe('TelegramLink', () => {
     vi.mocked(useTelegramStatus).mockReturnValue({
       data: { linked: true, linked_at: '2026-02-17T00:00:00Z' },
       isLoading: false,
-    } as any);
+    } as unknown as ReturnType<typeof useTelegramStatus>);
 
     render(<TelegramLink />);
     expect(screen.getByRole('button', { name: 'Disconnect' })).toBeInTheDocument();
@@ -90,7 +90,7 @@ describe('TelegramLink', () => {
     vi.mocked(useTelegramStatus).mockReturnValue({
       data: { linked: true, linked_at: '2026-02-17T00:00:00Z' },
       isLoading: false,
-    } as any);
+    } as unknown as ReturnType<typeof useTelegramStatus>);
 
     render(<TelegramLink />);
     fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
@@ -102,7 +102,7 @@ describe('TelegramLink', () => {
     vi.mocked(useTelegramStatus).mockReturnValue({
       data: { linked: true, linked_at: '2026-02-17T00:00:00Z' },
       isLoading: false,
-    } as any);
+    } as unknown as ReturnType<typeof useTelegramStatus>);
 
     render(<TelegramLink />);
     fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
@@ -119,7 +119,7 @@ describe('TelegramLink', () => {
       mutate: mockMutate,
       isPending: true,
       error: null,
-    } as any);
+    } as unknown as ReturnType<typeof useGenerateLinkToken>);
 
     render(<TelegramLink />);
     expect(screen.getByRole('button', { name: 'Generating...' })).toBeInTheDocument();
@@ -132,7 +132,7 @@ describe('TelegramLink', () => {
       mutate: mockMutate,
       isPending: false,
       error: new Error('Network error'),
-    } as any);
+    } as unknown as ReturnType<typeof useGenerateLinkToken>);
 
     render(<TelegramLink />);
     expect(screen.getByText('Network error')).toBeInTheDocument();
@@ -142,7 +142,7 @@ describe('TelegramLink', () => {
     vi.mocked(useTelegramStatus).mockReturnValue({
       data: { linked: true, linked_at: '2026-02-17T12:00:00Z' },
       isLoading: false,
-    } as any);
+    } as unknown as ReturnType<typeof useTelegramStatus>);
 
     render(<TelegramLink />);
     const dateElements = screen.getAllByText(/Connected/);

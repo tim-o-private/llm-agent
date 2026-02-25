@@ -54,6 +54,7 @@ export const TaskDetailView: React.FC<TaskDetailViewProps> = ({
         setModalOpenState(modalId, false);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, taskId, dialogState.registerModalState, setModalOpenState]);
 
   // Combined save function

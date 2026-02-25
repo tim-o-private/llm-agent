@@ -14,9 +14,9 @@ vi.mock('@/api/hooks/useTaskHooks', () => ({
   useUpdateTaskOrder: () => ({ mutate: vi.fn() }),
 }));
 
-const mockUseTaskStore = useTaskStore as any;
-const mockUseTaskViewStore = useTaskViewStore as any;
-const mockUseTaskStoreInitializer = useTaskStoreInitializer as any;
+const mockUseTaskStore = useTaskStore as unknown as ReturnType<typeof vi.fn>;
+const mockUseTaskViewStore = useTaskViewStore as unknown as ReturnType<typeof vi.fn> & { getState: ReturnType<typeof vi.fn> };
+const mockUseTaskStoreInitializer = useTaskStoreInitializer as unknown as ReturnType<typeof vi.fn>;
 
 describe('TodayView Modal Integration', () => {
   const mockTasks = [
@@ -65,11 +65,11 @@ describe('TodayView Modal Integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockUseTaskStore.mockImplementation((selector: any) => {
+    mockUseTaskStore.mockImplementation((selector: (state: typeof mockTaskStore) => unknown) => {
       return selector(mockTaskStore);
     });
 
-    mockUseTaskViewStore.mockImplementation((selector: any) => {
+    mockUseTaskViewStore.mockImplementation((selector: (state: typeof mockTaskViewStore) => unknown) => {
       return selector(mockTaskViewStore);
     });
     // Also mock getState() — used by useTaskKeyboardNavigation inside setTimeout callbacks

@@ -33,7 +33,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   signInWithProvider: async (provider, includeGmail = false) => {
     set({ loading: true, error: null });
 
-    const options: any = { redirectTo };
+    const options: Record<string, unknown> = { redirectTo };
 
     // If including Gmail, add Gmail scopes and redirect to Gmail callback
     if (includeGmail && provider === 'google') {

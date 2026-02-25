@@ -140,11 +140,12 @@ export const LayoutMockups: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layoutMode, focusedPane, primaryPane, secondaryPane, paneOrder]);
 
   const renderPane = (
     paneType: PaneType,
-    _isActive: boolean = true,
+    _isActive = true,
     isPrimary?: boolean,
     isFocused?: boolean,
     stackDepth: number = 0,

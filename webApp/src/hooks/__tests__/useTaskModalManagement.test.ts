@@ -6,7 +6,7 @@ import { useTaskViewStore } from '@/stores/useTaskViewStore';
 // Mock the store
 vi.mock('@/stores/useTaskViewStore');
 
-const mockUseTaskViewStore = useTaskViewStore as any;
+const mockUseTaskViewStore = useTaskViewStore as unknown as ReturnType<typeof vi.fn>;
 
 describe('useTaskModalManagement', () => {
   // Mock store state and actions
@@ -18,7 +18,7 @@ describe('useTaskModalManagement', () => {
     vi.clearAllMocks();
 
     // Mock the store selector
-    mockUseTaskViewStore.mockImplementation((selector: any) => {
+    mockUseTaskViewStore.mockImplementation((selector: (state: typeof mockStoreState) => unknown) => {
       return selector(mockStoreState);
     });
   });

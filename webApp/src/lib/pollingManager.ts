@@ -1,7 +1,7 @@
 import { PollingConfig, PollingState } from '../types/polling';
 
 export class PollingManager {
-  private intervals: Map<string, NodeJS.Timeout> = new Map();
+  private intervals: Map<string, ReturnType<typeof setInterval>> = new Map();
   private configs: Map<string, PollingConfig> = new Map();
   private state: PollingState = {
     isPolling: false,

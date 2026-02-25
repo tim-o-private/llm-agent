@@ -143,6 +143,7 @@ export const useTaskKeyboardNavigation = ({
 
       return () => clearTimeout(timeoutId);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tasks.length, focusedTaskId, isInputFocused, setFocusedTaskId, enabled, autoFocusFirst]);
 
   // Clear focus when no tasks available

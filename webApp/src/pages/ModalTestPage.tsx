@@ -24,7 +24,7 @@ const ModalTestPage: React.FC = () => {
     modalManagement.closeModal();
   };
 
-  const handleStartFocusSession = (task: any, config: any) => {
+  const handleStartFocusSession = (task: unknown, config: unknown) => {
     console.log('Start focus session:', task, config);
     modalManagement.closeModal();
   };

@@ -9,7 +9,7 @@ interface ColorInfo {
   hexValue?: string;
 }
 
-interface ColorSwatchProps extends ColorInfo {}
+type ColorSwatchProps = ColorInfo;
 
 const ColorSwatch: React.FC<ColorSwatchProps> = ({ name, className, cssVariable, description, hexValue }) => {
   const handleCopy = async () => {
@@ -171,7 +171,7 @@ const ColorSection: React.FC<ColorSectionProps> = ({ title, description, colors 
             ...color,
             hexValue: hexValue || 'N/A',
           };
-        } catch (error) {
+        } catch {
           return {
             ...color,
             hexValue: 'Error',

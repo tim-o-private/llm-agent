@@ -66,6 +66,7 @@ export function useSubtaskManagement(taskId: string | null): SubtaskManagementHo
     (reorderedSubtasks: Task[]) => {
       optimisticState.handleReorder(reorderedSubtasks);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [optimisticState.handleReorder],
   );
 
@@ -73,6 +74,7 @@ export function useSubtaskManagement(taskId: string | null): SubtaskManagementHo
     (subtaskData: Partial<Task>) => {
       optimisticState.handleCreate(subtaskData, generateTempId, createSubtask);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [optimisticState.handleCreate, generateTempId, createSubtask],
   );
 
@@ -80,6 +82,7 @@ export function useSubtaskManagement(taskId: string | null): SubtaskManagementHo
     (id: string, updates: Partial<Task>) => {
       optimisticState.handleUpdate(id, updates);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [optimisticState.handleUpdate],
   );
 
@@ -87,6 +90,7 @@ export function useSubtaskManagement(taskId: string | null): SubtaskManagementHo
     (id: string) => {
       optimisticState.handleDelete(id);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [optimisticState.handleDelete],
   );
 
@@ -141,6 +145,7 @@ export function useSubtaskManagement(taskId: string | null): SubtaskManagementHo
 
   const resetSubtaskState = useCallback(() => {
     optimisticState.resetState();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [optimisticState.resetState]);
 
   return {

@@ -104,7 +104,7 @@ class Logger {
     return messageLevelIndex >= currentLevelIndex;
   }
 
-  private formatMessage(level: LogLevel, component: string, message: string, ...args: any[]): [string, ...any[]] {
+  private formatMessage(level: LogLevel, component: string, message: string, ...args: unknown[]): [string, ...unknown[]] {
     const timestamp = this.config.enableTimestamp ? new Date().toISOString().slice(11, 23) : '';
     const prefix = this.config.prefix ? `[${this.config.prefix}]` : '';
     const levelStr = level.toUpperCase().padEnd(5);
@@ -116,25 +116,25 @@ class Logger {
     return [formattedMessage, ...args];
   }
 
-  debug(component: string, message: string, ...args: any[]): void {
+  debug(component: string, message: string, ...args: unknown[]): void {
     if (this.shouldLog('debug')) {
       console.debug(...this.formatMessage('debug', component, message, ...args));
     }
   }
 
-  info(component: string, message: string, ...args: any[]): void {
+  info(component: string, message: string, ...args: unknown[]): void {
     if (this.shouldLog('info')) {
       console.info(...this.formatMessage('info', component, message, ...args));
     }
   }
 
-  warn(component: string, message: string, ...args: any[]): void {
+  warn(component: string, message: string, ...args: unknown[]): void {
     if (this.shouldLog('warn')) {
       console.warn(...this.formatMessage('warn', component, message, ...args));
     }
   }
 
-  error(component: string, message: string, ...args: any[]): void {
+  error(component: string, message: string, ...args: unknown[]): void {
     if (this.shouldLog('error')) {
       console.error(...this.formatMessage('error', component, message, ...args));
     }
@@ -146,10 +146,10 @@ export const logger = Logger.getInstance();
 
 // Convenience functions for common usage patterns
 export const createComponentLogger = (componentName: string) => ({
-  debug: (message: string, ...args: any[]) => logger.debug(componentName, message, ...args),
-  info: (message: string, ...args: any[]) => logger.info(componentName, message, ...args),
-  warn: (message: string, ...args: any[]) => logger.warn(componentName, message, ...args),
-  error: (message: string, ...args: any[]) => logger.error(componentName, message, ...args),
+  debug: (message: string, ...args: unknown[]) => logger.debug(componentName, message, ...args),
+  info: (message: string, ...args: unknown[]) => logger.info(componentName, message, ...args),
+  warn: (message: string, ...args: unknown[]) => logger.warn(componentName, message, ...args),
+  error: (message: string, ...args: unknown[]) => logger.error(componentName, message, ...args),
 });
 
 // Global functions for runtime control
@@ -158,7 +158,7 @@ export const getLogLevel = () => Logger.getLevel();
 
 // Make logger available globally for debugging
 if (typeof window !== 'undefined') {
-  (window as any).__logger = {
+  (window as Record<string, unknown>).__logger = {
     setLevel: setLogLevel,
     getLevel: getLogLevel,
     instance: logger,

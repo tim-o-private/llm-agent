@@ -1,6 +1,9 @@
 module.exports = {
   root: true,
   env: { browser: true, es2020: true },
+  globals: {
+    URLSearchParams: 'readonly',
+  },
   extends: [
     'eslint:recommended',
     '@typescript-eslint/recommended',
@@ -16,11 +19,23 @@ module.exports = {
     ],
     // Custom rule to prevent hardcoded Tailwind colors
     'no-hardcoded-colors': 'error',
+    // Allow unused variables/parameters prefixed with _ (intentionally unused)
+    '@typescript-eslint/no-unused-vars': ['error', {
+      varsIgnorePattern: '^_',
+      argsIgnorePattern: '^_',
+      caughtErrorsIgnorePattern: '^_',
+    }],
   },
   overrides: [
     {
       files: ['**/*.{ts,tsx}'],
       rules: {
+        // Allow unused variables/parameters prefixed with _ (intentionally unused)
+        '@typescript-eslint/no-unused-vars': ['error', {
+          varsIgnorePattern: '^_',
+          argsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        }],
         // Custom rule to detect forbidden color classes
         'no-restricted-syntax': [
           'error',

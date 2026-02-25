@@ -47,7 +47,7 @@ export function useStoreTokens() {
   const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
 
-  return useMutation<any, Error, StoreTokensParams>({
+  return useMutation<unknown, Error, StoreTokensParams>({
     mutationFn: async (params) => {
       if (!user) throw new Error('User not authenticated');
 
@@ -154,7 +154,7 @@ export function useRevokeTokens() {
   const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
 
-  return useMutation<any, Error, string>({
+  return useMutation<unknown, Error, string>({
     mutationFn: async (serviceName) => {
       if (!user) throw new Error('User not authenticated');
 
@@ -213,7 +213,7 @@ export function useDisconnectConnection() {
   const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
 
-  return useMutation<any, Error, string>({
+  return useMutation<unknown, Error, string>({
     mutationFn: async (connectionId) => {
       if (!user) throw new Error('User not authenticated');
 

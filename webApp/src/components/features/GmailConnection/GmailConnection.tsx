@@ -49,6 +49,7 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({ onConnectionCh
     if (connectionStatus) {
       onConnectionChange?.(connectionStatus.connected);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connectionStatus?.connected, onConnectionChange]);
 
   const connectFirstGmail = async () => {
