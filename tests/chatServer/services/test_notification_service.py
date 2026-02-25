@@ -118,7 +118,42 @@ async def test_notify_user_routes_to_telegram_when_linked(service, db_client):
             body="Something happened",
         )
 
-        mock_bot.send_notification.assert_awaited_once_with("chat-999", "*Alert*\n\nSomething happened")
+        mock_bot.send_notification.assert_awaited_once()
+        call_args = mock_bot.send_notification.call_args
+        assert call_args[0][0] == "chat-999"
+        assert call_args[0][1] == "*Alert*\n\nSomething happened"
+
+
+@pytest.mark.asyncio
+async def test_telegram_notification_includes_feedback_keyboard(service, db_client):
+    """Telegram notification should include inline keyboard with nfb_ callback data."""
+    _setup_insert_chain(db_client, data=[{"id": "notif-feedback-1"}])
+
+    mock_bot = MagicMock()
+    mock_bot.send_notification = AsyncMock()
+    mock_telegram_module = MagicMock()
+    mock_telegram_module.get_telegram_bot_service.return_value = mock_bot
+
+    with (
+        patch.object(service, "_get_telegram_chat_id", new_callable=AsyncMock, return_value="chat-999"),
+        patch.dict("sys.modules", {"chatServer.channels.telegram_bot": mock_telegram_module}),
+    ):
+        await service.notify_user(
+            user_id="user-1",
+            title="Reminder",
+            body="Don't forget",
+        )
+
+        mock_bot.send_notification.assert_awaited_once()
+        call_kwargs = mock_bot.send_notification.call_args[1]
+        reply_markup = call_kwargs.get("reply_markup")
+        assert reply_markup is not None
+        buttons = reply_markup.inline_keyboard[0]
+        assert len(buttons) == 2
+        assert buttons[0].text == "👍 Useful"
+        assert buttons[0].callback_data == "nfb_notif-feedback-1_useful"
+        assert buttons[1].text == "👎 Not useful"
+        assert buttons[1].callback_data == "nfb_notif-feedback-1_not_useful"
 
 
 @pytest.mark.asyncio

@@ -68,6 +68,7 @@ class NotificationService:
                 title=title,
                 body=body,
                 metadata=metadata,
+                notification_id=notification_id,
             )
 
         return notification_id
@@ -297,6 +298,7 @@ class NotificationService:
         title: str,
         body: str,
         metadata: Dict[str, Any],
+        notification_id: Optional[str] = None,
     ) -> None:
         """Send notification via Telegram if user has it linked."""
         chat_id = await self._get_telegram_chat_id(user_id)
@@ -304,6 +306,8 @@ class NotificationService:
             return
 
         try:
+            from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
             from ..channels.telegram_bot import get_telegram_bot_service
 
             bot_service = get_telegram_bot_service()
@@ -311,7 +315,19 @@ class NotificationService:
                 return
 
             text = f"*{title}*\n\n{body}"
-            await bot_service.send_notification(chat_id, text)
+            keyboard = None
+            if notification_id:
+                keyboard = InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(
+                        text="👍 Useful",
+                        callback_data=f"nfb_{notification_id}_useful",
+                    ),
+                    InlineKeyboardButton(
+                        text="👎 Not useful",
+                        callback_data=f"nfb_{notification_id}_not_useful",
+                    ),
+                ]])
+            await bot_service.send_notification(chat_id, text, reply_markup=keyboard)
 
         except Exception as e:
             logger.warning(f"Failed to send Telegram notification to user {user_id}: {e}")

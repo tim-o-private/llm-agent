@@ -279,6 +279,13 @@ class TestPromptSections:
     def test_store_memory_prompt_none_for_scheduled(self):
         assert StoreMemoryTool.prompt_section("scheduled") is None
 
+    def test_prompt_section_includes_feedback_guidance(self):
+        """prompt_section should mention feedback recall guidance."""
+        section = StoreMemoryTool.prompt_section("web")
+        assert section is not None
+        assert "feedback" in section
+        assert "search_memories" in section
+
     def test_other_tools_prompt_always_none(self):
         for cls in (RecallMemoryTool, SearchMemoryTool, FetchMemoryTool, DeleteMemoryTool,
                     UpdateMemoryTool, SetProjectTool, LinkMemoriesTool, ListEntitiesTool,

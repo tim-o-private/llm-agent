@@ -18,6 +18,8 @@ from aiogram import Bot, Dispatcher, Router, types
 from aiogram.filters import CommandStart
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+from ..services.notification_service import NotificationService
+
 logger = logging.getLogger(__name__)
 
 router = Router()
@@ -230,6 +232,68 @@ async def handle_approval_callback(callback: types.CallbackQuery) -> None:
     except Exception as e:
         logger.error(f"Error handling approval callback: {e}", exc_info=True)
         await callback.answer("Error processing action.")
+
+
+@router.callback_query(lambda c: c.data and c.data.startswith("nfb_"))
+async def handle_feedback_callback(callback: types.CallbackQuery) -> None:
+    """Handle notification feedback button presses."""
+    if not callback.data:
+        return
+
+    # Format: nfb_{uuid}_useful or nfb_{uuid}_not_useful
+    # UUIDs use hyphens, so parse from the right to avoid underscore collisions
+    rest = callback.data[4:]  # skip "nfb_"
+    if rest.endswith("_useful") and not rest.endswith("_not_useful"):
+        notification_id = rest[:-len("_useful")]
+        feedback = "useful"
+    elif rest.endswith("_not_useful"):
+        notification_id = rest[:-len("_not_useful")]
+        feedback = "not_useful"
+    else:
+        await callback.answer("Invalid feedback")
+        return
+
+    chat_id = str(callback.message.chat.id) if callback.message else None
+    if not chat_id:
+        return
+
+    bot_service = get_telegram_bot_service()
+    if not bot_service or not bot_service._db_client:
+        await callback.answer("Bot not ready. Try again.")
+        return
+
+    try:
+        result = (
+            await bot_service._db_client.table("user_channels")
+            .select("user_id")
+            .eq("channel_type", "telegram")
+            .eq("channel_id", chat_id)
+            .eq("is_active", True)
+            .single()
+            .execute()
+        )
+
+        if not result.data:
+            await callback.answer("Account not linked.")
+            return
+
+        user_id = result.data["user_id"]
+
+        notification_service = NotificationService(bot_service._db_client)
+        outcome = await notification_service.submit_feedback(notification_id, feedback, user_id)
+
+        if outcome["status"] == "ok":
+            await callback.answer("Got it, thanks!")
+            if callback.message:
+                await callback.message.edit_reply_markup(reply_markup=None)
+        elif outcome["status"] == "already_set":
+            await callback.answer("Already recorded!")
+        else:
+            await callback.answer("Notification not found")
+
+    except Exception as e:
+        logger.error(f"Error handling feedback callback: {e}", exc_info=True)
+        await callback.answer("Error processing feedback.")
 
 
 @router.message()

@@ -144,8 +144,8 @@ class CreateMemoriesTool(_MemoryToolBase):
                 "- memory_type 'episodic': specific events, decisions, feedback, corrections\n"
                 "- Create entities for people, organizations, and projects the user mentions\n"
                 "- Record priority signals: what the user reacts to, dismisses, or corrects\n"
-                "- Use search_memories before answering questions about the user's preferences "
-                "or history"
+                "- Use search_memories before answering about preferences or history\n"
+                "- Before surfacing proactively, check search_memories(tags=['feedback'])."
             )
         return None
 
