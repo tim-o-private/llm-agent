@@ -4,8 +4,16 @@
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
-interface RequestOptions extends RequestInit {
+interface RequestOptions {
+  method?: string;
   headers?: Record<string, string>;
+  body?: string;
+  signal?: AbortSignal;
+  mode?: RequestMode;
+  credentials?: RequestCredentials;
+  cache?: RequestCache;
+  redirect?: RequestRedirect;
+  referrerPolicy?: ReferrerPolicy;
 }
 
 class APIClient {
@@ -64,14 +72,14 @@ class APIClient {
     return this.request<T[]>(`/api/${table}${queryString}`);
   }
 
-  async insert<T>(table: string, data: any): Promise<T> {
+  async insert<T>(table: string, data: Record<string, unknown>): Promise<T> {
     return this.request<T>(`/api/${table}`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
-  async update<T>(table: string, id: string, data: any): Promise<T> {
+  async update<T>(table: string, id: string, data: Record<string, unknown>): Promise<T> {
     return this.request<T>(`/api/${table}?id=eq.${id}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
@@ -85,7 +93,7 @@ class APIClient {
   }
 
   // Chat gateway methods
-  async sendChatMessage(message: string, sessionId?: string, agentName?: string): Promise<any> {
+  async sendChatMessage(message: string, sessionId?: string, agentName?: string): Promise<unknown> {
     return this.request('/chat', {
       method: 'POST',
       body: JSON.stringify({
@@ -97,7 +105,7 @@ class APIClient {
   }
 
   // Health check
-  async health(): Promise<any> {
+  async health(): Promise<unknown> {
     return this.request('/health');
   }
 }

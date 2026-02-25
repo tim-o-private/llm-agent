@@ -118,7 +118,42 @@ async def test_notify_user_routes_to_telegram_when_linked(service, db_client):
             body="Something happened",
         )
 
-        mock_bot.send_notification.assert_awaited_once_with("chat-999", "*Alert*\n\nSomething happened")
+        mock_bot.send_notification.assert_awaited_once()
+        call_args = mock_bot.send_notification.call_args
+        assert call_args[0][0] == "chat-999"
+        assert call_args[0][1] == "*Alert*\n\nSomething happened"
+
+
+@pytest.mark.asyncio
+async def test_telegram_notification_includes_feedback_keyboard(service, db_client):
+    """Telegram notification should include inline keyboard with nfb_ callback data."""
+    _setup_insert_chain(db_client, data=[{"id": "notif-feedback-1"}])
+
+    mock_bot = MagicMock()
+    mock_bot.send_notification = AsyncMock()
+    mock_telegram_module = MagicMock()
+    mock_telegram_module.get_telegram_bot_service.return_value = mock_bot
+
+    with (
+        patch.object(service, "_get_telegram_chat_id", new_callable=AsyncMock, return_value="chat-999"),
+        patch.dict("sys.modules", {"chatServer.channels.telegram_bot": mock_telegram_module}),
+    ):
+        await service.notify_user(
+            user_id="user-1",
+            title="Reminder",
+            body="Don't forget",
+        )
+
+        mock_bot.send_notification.assert_awaited_once()
+        call_kwargs = mock_bot.send_notification.call_args[1]
+        reply_markup = call_kwargs.get("reply_markup")
+        assert reply_markup is not None
+        buttons = reply_markup.inline_keyboard[0]
+        assert len(buttons) == 2
+        assert buttons[0].text == "👍 Useful"
+        assert buttons[0].callback_data == "nfb_notif-feedback-1_useful"
+        assert buttons[1].text == "👎 Not useful"
+        assert buttons[1].callback_data == "nfb_notif-feedback-1_not_useful"
 
 
 @pytest.mark.asyncio
@@ -249,3 +284,110 @@ async def test_body_truncation_at_10000_chars(service, db_client):
     insert_call = db_client.table.return_value.insert.call_args
     inserted_body = insert_call[0][0]["body"]
     assert len(inserted_body) == 10000
+
+
+# ---------------------------------------------------------------------------
+# submit_feedback
+# ---------------------------------------------------------------------------
+
+
+def _setup_maybe_single_chain(db_client, data=None):
+    """Set up mock chain for table(...).select(...).eq(...).maybe_single().execute()."""
+    mock_result = MagicMock(data=data)
+    mock_execute = AsyncMock(return_value=mock_result)
+    chain = db_client.table.return_value.select.return_value
+    chain.eq.return_value = chain
+    chain.maybe_single.return_value = chain
+    chain.execute = mock_execute
+    return mock_execute
+
+
+@pytest.mark.asyncio
+async def test_submit_feedback_updates_notification(service, db_client):
+    """Verify UPDATE is called with feedback and feedback_at when notification exists."""
+    row = {"id": "notif-1", "feedback": None, "category": "info", "title": "Hello"}
+    _setup_maybe_single_chain(db_client, data=row)
+    _setup_update_chain(db_client)
+
+    with patch.dict("os.environ", {"MEMORY_SERVER_URL": "", "MEMORY_SERVER_BACKEND_KEY": ""}):
+        result = await service.submit_feedback("notif-1", "useful", "user-1")
+
+    assert result == {"status": "ok"}
+    db_client.table.return_value.update.assert_called_once_with(
+        {"feedback": "useful", "feedback_at": "now()"}
+    )
+    eq_calls = [call.args for call in db_client.table.return_value.update.return_value.eq.call_args_list]
+    assert ("id", "notif-1") in eq_calls
+    assert ("user_id", "user-1") in eq_calls
+
+
+@pytest.mark.asyncio
+async def test_submit_feedback_stores_memory(service, db_client):
+    """Verify MemoryClient.call_tool is called with correct args on successful feedback."""
+    row = {"id": "notif-2", "feedback": None, "category": "agent_result", "title": "Agent ran"}
+    _setup_maybe_single_chain(db_client, data=row)
+    _setup_update_chain(db_client)
+
+    with (
+        patch.dict("os.environ", {"MEMORY_SERVER_URL": "http://mem", "MEMORY_SERVER_BACKEND_KEY": "key123"}),
+        patch("chatServer.services.notification_service.MemoryClient") as MockMemoryClient,
+    ):
+        mock_client = MagicMock()
+        mock_client.call_tool = AsyncMock(return_value={})
+        MockMemoryClient.return_value = mock_client
+
+        result = await service.submit_feedback("notif-2", "not_useful", "user-1")
+
+    assert result == {"status": "ok"}
+    MockMemoryClient.assert_called_once_with(base_url="http://mem", backend_key="key123", user_id="user-1")
+    mock_client.call_tool.assert_awaited_once()
+    call_args = mock_client.call_tool.call_args
+    assert call_args[0][0] == "store_memory"
+    payload = call_args[0][1]
+    assert payload["entity"] == "notification_preference"
+    assert "not_useful" in payload["text"]
+    assert "agent_result" in payload["tags"]
+    assert "not_useful" in payload["tags"]
+
+
+@pytest.mark.asyncio
+async def test_submit_feedback_returns_409_on_duplicate(service, db_client):
+    """Returns already_set when notification already has feedback."""
+    row = {"id": "notif-3", "feedback": "useful", "category": "info", "title": "Hi"}
+    _setup_maybe_single_chain(db_client, data=row)
+
+    result = await service.submit_feedback("notif-3", "not_useful", "user-1")
+
+    assert result == {"status": "already_set"}
+    db_client.table.return_value.update.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_submit_feedback_returns_404_when_not_found(service, db_client):
+    """Returns not_found when notification doesn't exist for this user."""
+    _setup_maybe_single_chain(db_client, data=None)
+
+    result = await service.submit_feedback("notif-missing", "useful", "user-1")
+
+    assert result == {"status": "not_found"}
+    db_client.table.return_value.update.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_submit_feedback_memory_failure_does_not_block(service, db_client):
+    """Memory storage failure should not prevent successful feedback submission."""
+    row = {"id": "notif-4", "feedback": None, "category": "info", "title": "Test"}
+    _setup_maybe_single_chain(db_client, data=row)
+    _setup_update_chain(db_client)
+
+    with (
+        patch.dict("os.environ", {"MEMORY_SERVER_URL": "http://mem", "MEMORY_SERVER_BACKEND_KEY": "key"}),
+        patch("chatServer.services.notification_service.MemoryClient") as MockMemoryClient,
+    ):
+        mock_client = MagicMock()
+        mock_client.call_tool = AsyncMock(side_effect=RuntimeError("memory server down"))
+        MockMemoryClient.return_value = mock_client
+
+        result = await service.submit_feedback("notif-4", "useful", "user-1")
+
+    assert result == {"status": "ok"}

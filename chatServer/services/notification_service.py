@@ -7,7 +7,10 @@ Routes notifications to appropriate channels:
 """
 
 import logging
+import os
 from typing import Any, Dict, List, Optional
+
+from chatServer.services.memory_client import MemoryClient
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +68,7 @@ class NotificationService:
                 title=title,
                 body=body,
                 metadata=metadata,
+                notification_id=notification_id,
             )
 
         return notification_id
@@ -175,6 +179,87 @@ class NotificationService:
             logger.error(f"Failed to mark all notifications as read for user {user_id}: {e}")
             return 0
 
+    async def submit_feedback(
+        self,
+        notification_id: str,
+        feedback: str,  # "useful" | "not_useful"
+        user_id: str,
+    ) -> dict:
+        """
+        Submit feedback for a notification.
+
+        Returns a dict with 'status' key:
+        - 'ok' on success
+        - 'not_found' if notification doesn't exist for this user
+        - 'already_set' if feedback was already submitted
+        """
+        # 1. Fetch the notification
+        try:
+            result = (
+                await self.db.table("notifications")
+                .select("id, feedback, category, title")
+                .eq("id", notification_id)
+                .eq("user_id", user_id)
+                .maybe_single()
+                .execute()
+            )
+        except Exception as e:
+            logger.error(f"Failed to fetch notification {notification_id}: {e}")
+            return {"status": "not_found"}
+
+        if not result.data:
+            return {"status": "not_found"}
+
+        row = result.data
+        if row.get("feedback") is not None:
+            return {"status": "already_set"}
+
+        # 2. Update the notification
+        try:
+            await (
+                self.db.table("notifications")
+                .update({"feedback": feedback, "feedback_at": "now()"})
+                .eq("id", notification_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+        except Exception as e:
+            logger.error(f"Failed to update feedback for notification {notification_id}: {e}")
+            raise
+
+        # 3. Store memory (best-effort)
+        category = row.get("category", "info")
+        title = row.get("title", "")
+        try:
+            mem_url = os.getenv("MEMORY_SERVER_URL", "")
+            mem_key = os.getenv("MEMORY_SERVER_BACKEND_KEY", "")
+            if mem_url and mem_key:
+                memory_client = MemoryClient(base_url=mem_url, backend_key=mem_key, user_id=user_id)
+                continuation = (
+                    "Continue surfacing similar items."
+                    if feedback == "useful"
+                    else "Reduce priority for similar items."
+                )
+                text = (
+                    f"User marked a '{category}' notification as {feedback}. "
+                    f"Notification was about: {title}. "
+                    f"{continuation}"
+                )
+                await memory_client.call_tool(
+                    "store_memory",
+                    {
+                        "text": text,
+                        "memory_type": "core_identity",
+                        "entity": "notification_preference",
+                        "scope": "global",
+                        "tags": ["feedback", category, feedback],
+                    },
+                )
+        except Exception as e:
+            logger.warning(f"Failed to store notification feedback memory for user {user_id}: {e}")
+
+        return {"status": "ok"}
+
     async def _store_web_notification(
         self,
         user_id: str,
@@ -213,6 +298,7 @@ class NotificationService:
         title: str,
         body: str,
         metadata: Dict[str, Any],
+        notification_id: Optional[str] = None,
     ) -> None:
         """Send notification via Telegram if user has it linked."""
         chat_id = await self._get_telegram_chat_id(user_id)
@@ -220,6 +306,8 @@ class NotificationService:
             return
 
         try:
+            from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
             from ..channels.telegram_bot import get_telegram_bot_service
 
             bot_service = get_telegram_bot_service()
@@ -227,7 +315,19 @@ class NotificationService:
                 return
 
             text = f"*{title}*\n\n{body}"
-            await bot_service.send_notification(chat_id, text)
+            keyboard = None
+            if notification_id:
+                keyboard = InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(
+                        text="👍 Useful",
+                        callback_data=f"nfb_{notification_id}_useful",
+                    ),
+                    InlineKeyboardButton(
+                        text="👎 Not useful",
+                        callback_data=f"nfb_{notification_id}_not_useful",
+                    ),
+                ]])
+            await bot_service.send_notification(chat_id, text, reply_markup=keyboard)
 
         except Exception as e:
             logger.warning(f"Failed to send Telegram notification to user {user_id}: {e}")

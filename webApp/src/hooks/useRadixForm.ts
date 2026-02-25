@@ -38,7 +38,7 @@ export interface UseRadixFormReturn<FormData> {
   // Actions
   handleSave: () => Promise<void>;
   handleCancel: () => void;
-  handleFieldChange: (field: keyof FormData, value: any) => void;
+  handleFieldChange: (field: keyof FormData, value: unknown) => void;
 
   // Form state for external components
   formState: {
@@ -120,7 +120,7 @@ export function useRadixForm<EntityType, FormData>({
     onCancel?.();
   }, [entity, transformToForm, onCancel]);
 
-  const handleFieldChange = React.useCallback((field: keyof FormData, value: any) => {
+  const handleFieldChange = React.useCallback((field: keyof FormData, value: unknown) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   }, []);
 

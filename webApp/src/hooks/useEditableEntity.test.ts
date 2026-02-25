@@ -50,14 +50,7 @@ const mockTrigger = vi.fn();
 const mockHandleSubmit = vi.fn((onValid: SubmitHandler<TaskFormData>) => {
   return async (event?: BaseSyntheticEvent): Promise<void> => {
     const data = mockGetValues(); // mockGetValues() is already set up to return TaskFormData
-    try {
-      await onValid(data, event);
-    } catch (error) {
-      // RHF might handle errors from onValid; for this mock, we can choose to let them propagate or log them.
-      // Letting them propagate is often fine for testing the calling code's error handling.
-      // console.error('Error in onValid callback during mockHandleSubmit:', error);
-      throw error;
-    }
+    await onValid(data, event);
   };
 });
 

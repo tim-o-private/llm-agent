@@ -274,7 +274,7 @@ const useKeyboardNavigation = (
 
 // Task-related keyboard shortcuts hook
 const useTaskKeyboardShortcuts = (
-  displayTasks: any[],
+  displayTasks: { id: string }[],
   focusedTaskId: string | null,
   setFocusedTaskId: (id: string | null) => void,
   setIsFastInputUiFocused: (focused: boolean) => void,

@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Bell, Check, CheckCheck } from 'lucide-react';
+import { Bell, Check, CheckCheck, ThumbsUp, ThumbsDown } from 'lucide-react';
 import {
   useUnreadCount,
   useNotifications,
   useMarkNotificationRead,
   useMarkAllRead,
+  useSubmitNotificationFeedback,
   type Notification,
 } from '@/api/hooks/useNotificationHooks';
 
@@ -19,8 +20,24 @@ const categoryStyles: Record<string, string> = {
 const NotificationItem: React.FC<{
   notification: Notification;
   onMarkRead: (id: string) => void;
-}> = ({ notification, onMarkRead }) => {
+  onSubmitFeedback: (id: string, feedback: 'useful' | 'not_useful') => void;
+  feedbackPending?: boolean;
+}> = ({ notification, onMarkRead, onSubmitFeedback, feedbackPending }) => {
   const borderClass = categoryStyles[notification.category] || categoryStyles.info;
+
+  const thumbsUpClass =
+    notification.feedback === 'useful'
+      ? 'text-brand-primary'
+      : notification.feedback === 'not_useful'
+        ? 'opacity-30 text-text-secondary'
+        : 'text-text-secondary';
+
+  const thumbsDownClass =
+    notification.feedback === 'not_useful'
+      ? 'text-brand-primary'
+      : notification.feedback === 'useful'
+        ? 'opacity-30 text-text-secondary'
+        : 'text-text-secondary';
 
   return (
     <div className={`px-3 py-2 border-l-2 ${borderClass} ${notification.read ? 'opacity-60' : 'bg-ui-bg-alt'}`}>
@@ -36,6 +53,32 @@ const NotificationItem: React.FC<{
               minute: '2-digit',
             })}
           </p>
+          <div className="flex items-center gap-1 mt-1">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onSubmitFeedback(notification.id, 'useful');
+              }}
+              disabled={feedbackPending}
+              className={`p-1 rounded hover:bg-ui-interactive-bg transition-colors disabled:cursor-not-allowed ${thumbsUpClass}`}
+              aria-label="Mark as helpful"
+              title="Helpful"
+            >
+              <ThumbsUp className="h-3 w-3" />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onSubmitFeedback(notification.id, 'not_useful');
+              }}
+              disabled={feedbackPending}
+              className={`p-1 rounded hover:bg-ui-interactive-bg transition-colors disabled:cursor-not-allowed ${thumbsDownClass}`}
+              aria-label="Mark as not helpful"
+              title="Not helpful"
+            >
+              <ThumbsDown className="h-3 w-3" />
+            </button>
+          </div>
         </div>
         {!notification.read && (
           <button
@@ -62,6 +105,7 @@ export const NotificationBadge: React.FC = () => {
   const { data: notifications } = useNotifications(false, 20);
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllRead();
+  const submitFeedback = useSubmitNotificationFeedback();
 
   const unreadCount = countData?.count || 0;
 
@@ -113,7 +157,13 @@ export const NotificationBadge: React.FC = () => {
           <div className="max-h-80 overflow-y-auto divide-y divide-ui-border">
             {notifications && notifications.length > 0 ? (
               notifications.map((n) => (
-                <NotificationItem key={n.id} notification={n} onMarkRead={(id) => markRead.mutate(id)} />
+                <NotificationItem
+                  key={n.id}
+                  notification={n}
+                  onMarkRead={(id) => markRead.mutate(id)}
+                  onSubmitFeedback={(id, feedback) => submitFeedback.mutate({ notificationId: id, feedback })}
+                  feedbackPending={submitFeedback.isPending}
+                />
               ))
             ) : (
               <div className="px-3 py-6 text-center text-sm text-text-secondary">No notifications</div>

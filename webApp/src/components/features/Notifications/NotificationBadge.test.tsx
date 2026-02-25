@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 
@@ -6,6 +7,7 @@ vi.mock('@/api/hooks/useNotificationHooks', () => ({
   useNotifications: vi.fn(),
   useMarkNotificationRead: vi.fn(),
   useMarkAllRead: vi.fn(),
+  useSubmitNotificationFeedback: vi.fn(),
 }));
 
 import {
@@ -13,6 +15,7 @@ import {
   useNotifications,
   useMarkNotificationRead,
   useMarkAllRead,
+  useSubmitNotificationFeedback,
 } from '@/api/hooks/useNotificationHooks';
 import { NotificationBadge } from './NotificationBadge';
 
@@ -20,6 +23,7 @@ const mockUseUnreadCount = vi.mocked(useUnreadCount);
 const mockUseNotifications = vi.mocked(useNotifications);
 const mockMarkRead = vi.fn();
 const mockMarkAllRead = vi.fn();
+const mockSubmitFeedback = vi.fn();
 
 const sampleNotifications = [
   {
@@ -49,6 +53,10 @@ describe('NotificationBadge', () => {
     mockUseNotifications.mockReturnValue({ data: [] } as any);
     vi.mocked(useMarkNotificationRead).mockReturnValue({ mutate: mockMarkRead } as any);
     vi.mocked(useMarkAllRead).mockReturnValue({ mutate: mockMarkAllRead } as any);
+    vi.mocked(useSubmitNotificationFeedback).mockReturnValue({
+      mutate: mockSubmitFeedback,
+      isPending: false,
+    } as any);
   });
 
   it('renders bell icon', () => {
@@ -140,5 +148,60 @@ describe('NotificationBadge', () => {
     mockUseUnreadCount.mockReturnValue({ data: { count: 5 } } as any);
     render(<NotificationBadge />);
     expect(screen.getByTitle('5 unread notifications')).toBeInTheDocument();
+  });
+
+  it('renders feedback buttons for notifications without feedback', () => {
+    mockUseNotifications.mockReturnValue({ data: sampleNotifications } as any);
+    render(<NotificationBadge />);
+    fireEvent.click(screen.getByTitle('Notifications'));
+
+    const helpfulButtons = screen.getAllByTitle('Helpful');
+    const notHelpfulButtons = screen.getAllByTitle('Not helpful');
+    expect(helpfulButtons).toHaveLength(2);
+    expect(notHelpfulButtons).toHaveLength(2);
+  });
+
+  it('dims non-selected button when feedback already submitted', () => {
+    const notificationsWithFeedback = [
+      {
+        ...sampleNotifications[0],
+        feedback: 'useful' as const,
+        feedback_at: '2026-02-17T11:00:00Z',
+      },
+    ];
+    mockUseNotifications.mockReturnValue({ data: notificationsWithFeedback } as any);
+    render(<NotificationBadge />);
+    fireEvent.click(screen.getByTitle('Notifications'));
+
+    const thumbsDownButton = screen.getByTitle('Not helpful');
+    expect(thumbsDownButton).toHaveClass('opacity-30');
+
+    const thumbsUpButton = screen.getByTitle('Helpful');
+    expect(thumbsUpButton).toHaveClass('text-brand-primary');
+  });
+
+  it('disables buttons while submitting feedback', () => {
+    vi.mocked(useSubmitNotificationFeedback).mockReturnValue({
+      mutate: mockSubmitFeedback,
+      isPending: true,
+    } as any);
+    mockUseNotifications.mockReturnValue({ data: sampleNotifications } as any);
+    render(<NotificationBadge />);
+    fireEvent.click(screen.getByTitle('Notifications'));
+
+    const helpfulButtons = screen.getAllByTitle('Helpful');
+    const notHelpfulButtons = screen.getAllByTitle('Not helpful');
+    helpfulButtons.forEach((btn) => expect(btn).toBeDisabled());
+    notHelpfulButtons.forEach((btn) => expect(btn).toBeDisabled());
+  });
+
+  it('calls mutation with correct notification ID and feedback value', () => {
+    mockUseNotifications.mockReturnValue({ data: sampleNotifications } as any);
+    render(<NotificationBadge />);
+    fireEvent.click(screen.getByTitle('Notifications'));
+
+    const helpfulButtons = screen.getAllByTitle('Helpful');
+    fireEvent.click(helpfulButtons[0]);
+    expect(mockSubmitFeedback).toHaveBeenCalledWith({ notificationId: 'n1', feedback: 'useful' });
   });
 });

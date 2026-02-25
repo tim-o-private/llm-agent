@@ -50,7 +50,7 @@ export interface PendingCount {
 }
 
 // Helper to get auth headers
-async function getAuthHeaders(): Promise<HeadersInit> {
+async function getAuthHeaders(): Promise<Record<string, string>> {
   const {
     data: { session },
   } = await supabase.auth.getSession();

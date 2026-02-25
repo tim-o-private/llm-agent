@@ -46,6 +46,7 @@ These tools predate the `verb_resource` naming convention. Each rename requires:
 | P2 | Morning briefing (consolidated) | Single notification: email digest + due reminders + calendar + priorities from LTM |
 | P2 | Multi-account email | OAuth per email account; agent triages across all accounts |
 | P2 | Calendar integration | Google Calendar read access for scheduling context |
+| P2 | Inline chat notifications (web) | Web notifications currently live under a bell icon dropdown — disconnected from the chat flow. Telegram shows them inline in the conversation, which feels more natural. Move proactive notifications (heartbeat, agent results) into the chat stream so feedback happens in context, not in a separate UI. Bell icon becomes a fallback/history view. |
 | P2 | Notification preferences UI | Settings page for per-category channel routing |
 | P2 | Consolidate dual-access tables to single path | `tasks`, `chat_sessions`, `external_api_connections` are accessed both directly from frontend (anon key + RLS) and via backend (service_role + UserScopedClient). Both paths enforce user isolation, but dual access creates race conditions (concurrent agent + user edits). Consolidate to API-only access. Depends on SPEC-017. |
 | P2 | Execution results dashboard | View past scheduled runs in webApp |

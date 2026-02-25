@@ -29,6 +29,7 @@ export default [
         clearTimeout: 'readonly',
         setInterval: 'readonly',
         clearInterval: 'readonly',
+        URLSearchParams: 'readonly',
         // DOM types
         HTMLElement: 'readonly',
         HTMLDivElement: 'readonly',
@@ -41,6 +42,12 @@ export default [
         HTMLAnchorElement: 'readonly',
         HTMLSpanElement: 'readonly',
         SVGSVGElement: 'readonly',
+        AbortSignal: 'readonly',
+        RequestMode: 'readonly',
+        RequestCredentials: 'readonly',
+        RequestCache: 'readonly',
+        RequestRedirect: 'readonly',
+        ReferrerPolicy: 'readonly',
         // Event types
         Event: 'readonly',
         KeyboardEvent: 'readonly',
@@ -63,7 +70,14 @@ export default [
     rules: {
       ...typescript.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
-      
+
+      // Allow unused variables/parameters prefixed with _ (intentionally unused)
+      '@typescript-eslint/no-unused-vars': ['error', {
+        varsIgnorePattern: '^_',
+        argsIgnorePattern: '^_',
+        caughtErrorsIgnorePattern: '^_',
+      }],
+
       // Custom color validation rules
       'no-restricted-syntax': [
         'error',
