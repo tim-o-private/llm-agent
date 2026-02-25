@@ -272,7 +272,7 @@ async def test_submit_feedback_updates_notification(service, db_client):
     """Verify UPDATE is called with feedback and feedback_at when notification exists."""
     row = {"id": "notif-1", "feedback": None, "category": "info", "title": "Hello"}
     _setup_maybe_single_chain(db_client, data=row)
-    update_mock = _setup_update_chain(db_client)
+    _setup_update_chain(db_client)
 
     with patch.dict("os.environ", {"MEMORY_SERVER_URL": "", "MEMORY_SERVER_BACKEND_KEY": ""}):
         result = await service.submit_feedback("notif-1", "useful", "user-1")
