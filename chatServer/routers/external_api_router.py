@@ -83,6 +83,19 @@ async def create_api_connection(
             # Convert row to dict
             columns = [desc[0] for desc in cur.description]
             connection_dict = dict(zip(columns, result))
+
+            # Queue email onboarding job for Gmail connections
+            if connection_data.service_name == "gmail":
+                connection_id = connection_dict["id"]
+                await cur.execute(
+                    """
+                    INSERT INTO email_processing_jobs (user_id, connection_id, status)
+                    VALUES (%s, %s, 'pending')
+                    ON CONFLICT DO NOTHING
+                    """,
+                    (user_id, connection_id),
+                )
+
             return ExternalAPIConnectionResponse(**connection_dict)
 
     except Exception as e:

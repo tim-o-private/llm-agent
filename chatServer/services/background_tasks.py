@@ -22,6 +22,7 @@ class BackgroundTaskService:
         self.evict_task: Optional[asyncio.Task] = None
         self.scheduled_agents_task: Optional[asyncio.Task] = None
         self.reminder_task: Optional[asyncio.Task] = None
+        self.email_processing_task: Optional[asyncio.Task] = None
         self._agent_executor_cache: Optional[Dict[Tuple[str, str], Any]] = None
         self.agent_schedules: Dict[str, Dict] = {}
         self._last_schedule_check: Optional[datetime] = None
@@ -241,6 +242,96 @@ class BackgroundTaskService:
         except Exception as e:
             logger.error(f"Scheduled agent execution failed for schedule {schedule_id}: {e}", exc_info=True)
 
+    async def check_email_processing_jobs(self) -> None:
+        """Check for pending email processing jobs every 60 seconds."""
+        while True:
+            await asyncio.sleep(60)
+            logger.debug("Running task: check_email_processing_jobs")
+
+            db_manager = get_database_manager()
+            if db_manager.pool is None:
+                logger.warning("db_pool not available, skipping email processing task cycle.")
+                continue
+
+            try:
+                async with db_manager.pool.connection() as conn:
+                    async with conn.cursor() as cur:
+                        await cur.execute(
+                            "SELECT id, user_id, connection_id, status FROM email_processing_jobs"
+                            " WHERE status = 'pending' LIMIT 10"
+                        )
+                        jobs = await cur.fetchall()
+
+                for job_row in jobs:
+                    job_id, user_id, connection_id, status = job_row
+                    job = {
+                        "id": str(job_id),
+                        "user_id": str(user_id),
+                        "connection_id": str(connection_id),
+                        "status": status,
+                    }
+                    await self._process_email_job(job)
+
+            except Exception as e:
+                logger.error(f"Error in check_email_processing_jobs: {e}", exc_info=True)
+
+    async def _process_email_job(self, job: dict) -> None:
+        """Process a single email onboarding job with status tracking."""
+        import json
+
+        job_id = job["id"]
+        db_manager = get_database_manager()
+
+        try:
+            # Mark as processing
+            async with db_manager.pool.connection() as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute(
+                        "UPDATE email_processing_jobs SET status = 'processing', started_at = NOW()"
+                        " WHERE id = %s",
+                        (job_id,),
+                    )
+
+            from ..services.email_onboarding_service import EmailOnboardingService
+
+            service = EmailOnboardingService()
+            result = await service.process_job(job)
+
+            # Mark complete or failed
+            async with db_manager.pool.connection() as conn:
+                async with conn.cursor() as cur:
+                    if result.get("success"):
+                        output = result.get("output", "")
+                        result_summary = json.dumps({"output_preview": output[:500] if output else ""})
+                        await cur.execute(
+                            "UPDATE email_processing_jobs"
+                            " SET status = 'complete', completed_at = NOW(), result_summary = %s"
+                            " WHERE id = %s",
+                            (result_summary, job_id),
+                        )
+                    else:
+                        error_msg = result.get("error", "Unknown error")
+                        await cur.execute(
+                            "UPDATE email_processing_jobs"
+                            " SET status = 'failed', completed_at = NOW(), error_message = %s"
+                            " WHERE id = %s",
+                            (error_msg, job_id),
+                        )
+
+        except Exception as e:
+            logger.error(f"Email processing job {job_id} failed: {e}", exc_info=True)
+            try:
+                async with db_manager.pool.connection() as conn:
+                    async with conn.cursor() as cur:
+                        await cur.execute(
+                            "UPDATE email_processing_jobs"
+                            " SET status = 'failed', completed_at = NOW(), error_message = %s"
+                            " WHERE id = %s",
+                            (str(e), job_id),
+                        )
+            except Exception as db_err:
+                logger.error(f"Failed to update job {job_id} to failed: {db_err}")
+
     async def check_due_reminders(self) -> None:
         """Check for and deliver due reminders every 60 seconds."""
         while True:
@@ -279,7 +370,11 @@ class BackgroundTaskService:
         self.evict_task = asyncio.create_task(self.evict_inactive_executors())
         self.scheduled_agents_task = asyncio.create_task(self.run_scheduled_agents())
         self.reminder_task = asyncio.create_task(self.check_due_reminders())
-        logger.info("Background tasks for session cleanup, cache eviction, scheduled agents, and reminders started.")
+        self.email_processing_task = asyncio.create_task(self.check_email_processing_jobs())
+        logger.info(
+            "Background tasks for session cleanup, cache eviction, scheduled agents, "
+            "reminders, and email processing started."
+        )
 
     async def stop_background_tasks(self) -> None:
         """Stop all background tasks gracefully."""
@@ -314,6 +409,14 @@ class BackgroundTaskService:
                 await self.reminder_task
             except asyncio.CancelledError:
                 logger.info("Reminder delivery task successfully cancelled.")
+
+        if self.email_processing_task:
+            self.email_processing_task.cancel()
+            logger.info("Email processing task cancelling...")
+            try:
+                await self.email_processing_task
+            except asyncio.CancelledError:
+                logger.info("Email processing task successfully cancelled.")
 
 
 # Global instance for use in main.py
