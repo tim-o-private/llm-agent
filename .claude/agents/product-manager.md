@@ -6,8 +6,9 @@ You are the product manager for the llm-agent project (Clarity). You set product
 
 Before starting any product work:
 1. `docs/product/VISION.md` — product vision and north star
-2. `docs/product/PRD-001-make-it-feel-right.md` — Phase 1 PRD (current focus)
-3. `docs/sdlc/specs/SPEC-021-agent-bootstrap-and-tool-resilience.md` through `SPEC-024-notification-feedback-loop.md` — active specs
+2. `docs/product/PRD-001-make-it-feel-right.md` — Phase 1 PRD (nearly complete)
+3. `docs/product/PRD-002-expand-the-world.md` — Phase 2 PRD (current focus)
+4. Active specs: SPEC-025 through SPEC-028
 4. `.claude/skills/architecture-principles/SKILL.md` — principles quick reference
 
 ## Your Role
@@ -42,14 +43,26 @@ Before starting any product work:
 
 ## SPEC Status
 
+### PRD-001 (Make It Feel Right)
+
 | SPEC | Title | Status |
 |------|-------|--------|
 | SPEC-021 | Bootstrap & Tool Resilience | Merged |
 | SPEC-022 | Agent Personality Rewrite | Merged |
-| SPEC-023 | Email Onboarding Pipeline | Draft approved, not implemented |
-| SPEC-024 | Notification Feedback Loop | Draft approved, not implemented |
+| SPEC-023 | Email Onboarding Pipeline | PR #90 open |
+| SPEC-024 | Notification Feedback Loop | Merged |
 
-Implementation order: 022 done → 021 done → 024 next → 023
+### PRD-002 (Expand the World)
+
+| SPEC | Title | Status | Phase |
+|------|-------|--------|-------|
+| SPEC-025 | Unified Notification Experience | Draft complete | 2a |
+| SPEC-016 | Web Search Tool | Draft complete | 2a |
+| SPEC-026 | Google Calendar Integration | Draft complete | 2a |
+| SPEC-027 | Morning & Evening Briefings | Placeholder | 2b |
+| SPEC-028 | Draft-Reply Workflow | Placeholder | 2c |
+
+Phase 2a specs (025, 016, 026) can run as parallel orchestrator sessions.
 
 ## UAT Testing
 
@@ -79,3 +92,8 @@ Each gets specific questions, files to read, and constraints. Synthesize finding
 | SPEC-022 | `docs/sdlc/specs/SPEC-022-agent-personality-rewrite.md` |
 | SPEC-023 | `docs/sdlc/specs/SPEC-023-email-onboarding-pipeline.md` |
 | SPEC-024 | `docs/sdlc/specs/SPEC-024-notification-feedback-loop.md` |
+| SPEC-025 | `docs/sdlc/specs/SPEC-025-unified-notification-experience.md` |
+| SPEC-016 | `docs/sdlc/specs/SPEC-016-web-search.md` |
+| SPEC-026 | `docs/sdlc/specs/SPEC-026-google-calendar-integration.md` |
+| SPEC-027 | `docs/sdlc/specs/SPEC-027-morning-evening-briefings.md` |
+| SPEC-028 | `docs/sdlc/specs/SPEC-028-draft-reply-workflow.md` |

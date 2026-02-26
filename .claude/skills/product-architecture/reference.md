@@ -136,6 +136,52 @@ if hasattr(agent_executor, "tools") and agent_executor.tools:
     wrap_tools_with_approval(agent_executor.tools, approval_context)
 ```
 
+## Platform Primitives (Detailed)
+
+These are the reusable infrastructure components. New features should compose these, not reinvent them.
+
+### Jobs Queue (`jobs` table, SPEC-026)
+
+Universal background job queue. Any trigger (cron, event, user action) inserts a row; `JobRunnerService` dispatches to a registered handler by `job_type`.
+
+**Adding a new job type:**
+1. Write an async handler function in `chatServer/services/job_handlers.py`
+2. Register it: `job_runner.register_handler('my_job_type', handle_my_job)`
+3. Create jobs from wherever: `await job_service.create(job_type='my_job_type', input={...}, user_id=...)`
+
+**Job lifecycle:** `pending` → `claimed` (atomic via SKIP LOCKED) → `running` → `complete`/`failed`
+**Retry:** Automatic with exponential backoff (30s × 2^retry_count, capped at 15min)
+**Key files:** `chatServer/services/job_service.py`, `chatServer/services/job_runner_service.py`, `chatServer/services/job_handlers.py`
+
+### Pending Actions (`pending_actions` table)
+
+Human-in-the-loop approval queue. The agent proposes an action; the user approves or rejects.
+
+**When to use:** Any Act-tier capability where the agent does something on the user's behalf.
+**When NOT to use:** Background work that doesn't need approval — use the jobs queue instead.
+**Key files:** `chatServer/services/pending_actions.py`
+
+### Notifications (`notifications` table + `NotificationService`)
+
+Routes messages to users across channels (web DB, Telegram bot).
+
+**When to use:** Any proactive communication to the user.
+**Key files:** `chatServer/services/notification_service.py`
+
+### Agent Schedules (`agent_schedules` table)
+
+Cron-based trigger configuration. Evaluates cron expressions and creates jobs.
+
+**When to use:** Recurring background work. The schedule creates jobs; the jobs queue executes them.
+**Not for:** One-off deferred work — use `jobs.scheduled_for` instead.
+
+### External API Connections (`external_api_connections` table)
+
+OAuth credential storage with provider abstraction.
+
+**When to use:** Any new external service integration (Google, Slack, etc.).
+**Key files:** `chatServer/services/langchain_auth_bridge.py`, `chatServer/routers/external_api_router.py`
+
 ### Content Block Normalization
 All channels must handle the list-of-dicts response format:
 ```python
