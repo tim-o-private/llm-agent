@@ -349,7 +349,7 @@ async def test_approve_passes_agent_name(db_client):
     )
 
     # Mock get_action to return a pending action with agent_name in context
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
     from uuid import UUID
 
     from chatServer.services.pending_actions import PendingAction
@@ -360,9 +360,9 @@ async def test_approve_passes_agent_name(db_client):
         tool_name="send_email",
         tool_args={"to": "test@example.com", "body": "Hello"},
         status="pending",
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
-        expires_at=datetime.utcnow() + timedelta(hours=24),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
         context={"session_id": "sess-1", "agent_name": "clarity"},
     )
 

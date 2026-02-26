@@ -1,6 +1,6 @@
 # SPEC-025: Unified Notification Experience
 
-> **Status:** Draft
+> **Status:** In Progress
 > **Author:** Tim + Claude (Product)
 > **Created:** 2026-02-24
 > **Updated:** 2026-02-26
@@ -28,10 +28,10 @@ See `docs/product/PRD-001-make-it-feel-right.md` Workstream 3 and the "Inline ch
 
 ### Three-tier notification types
 
-| Type | Stored in DB | Chat stream | Telegram | Purpose |
+| Type | Stored in DB | Web timeline | Telegram | Purpose |
 |------|-------------|-------------|----------|---------|
 | `agent_only` | No | No | No | Internal agent signals (heartbeat findings). Agent sees via memory/context. |
-| `silent` | Yes | Yes | No | Background updates the user can see without being interrupted (processing status, FYI items). |
+| `silent` | Yes | No | No | Audit trail entries not shown to user (follow-up notifications after approval, processing confirmations). Queryable by ID for cross-referencing. |
 | `notify` | Yes | Yes | Yes | Things that need attention (action items, approval requests, reminders, digests). |
 
 ### Kill the bell dropdown
@@ -64,6 +64,10 @@ This is not a simple wiring fix. Tool classes are LangChain `BaseTool` subclasse
 
 **Why not reuse the cached agent executor:** The executor cache is keyed by `(user_id, agent_name)` and carries LangChain state (memory, wrapped tools). Reaching into the cache to find a tool would couple the approval path to the chat path, create race conditions when the executor is mid-turn, and would still have the approval wrapper attached. Clean instantiation is simpler and safer.
 
+### `silent` type visibility semantics
+
+`silent` notifications are stored in the DB but **never shown in the web chat timeline and never sent to Telegram**. They exist for audit trail and cross-referencing (e.g., follow-up notifications after approval). The `useChatTimeline` filter drops all `silent` notifications. If a future spec needs visible-but-quiet notifications (chat stream only, no Telegram), introduce a new type — don't overload `silent`.
+
 ### Client-side timeline merge (MVP)
 
 Frontend merges messages + notifications into a single timeline sorted by `created_at`. Three separate data sources (chat messages, notifications, actions) composed client-side. Unified backend API endpoint is a future optimization. Notification polling reduced from 15s to 5s to match chat responsiveness.
@@ -83,7 +87,7 @@ Frontend merges messages + notifications into a single timeline sorted by `creat
 - [ ] **AC-06:** `tool_wrapper.py` creates a notification (type=`notify`, `requires_approval=True`) instead of only inserting into `pending_actions`. It still inserts into `pending_actions` (for execution tracking), then creates the notification with `pending_action_id` linking to it. [A1, A12]
 - [ ] **AC-07:** The tool wrapper return message changes from "STOP: ... Do NOT retry" to a softer message: "I've requested approval for '{tool_name}'. You'll see it in the chat — approve or reject when you're ready." The agent continues conversationally instead of halting. [A14]
 - [ ] **AC-08:** Existing `POST /api/actions/{action_id}/approve` and `/reject` endpoints continue to work unchanged. The frontend calls these from inline buttons. [A1]
-- [ ] **AC-09:** When an action is approved and executed via the existing endpoint, a follow-up `silent` notification is created: "Approved: {tool_name} — {brief result}". This closes the loop in the chat stream. [A7]
+- [ ] **AC-09:** When an action is approved and executed via the existing endpoint, a follow-up `silent` notification is created: "Approved: {tool_name} — {brief result}". The follow-up notification sets `pending_action_id` to the same action ID as the original approval notification (enables deduplication in AC-28). [A7]
 
 ### Backend: Post-Approval Tool Execution
 
@@ -115,14 +119,14 @@ Frontend merges messages + notifications into a single timeline sorted by `creat
 ### Frontend: Approval Card Lifecycle
 
 - [ ] **AC-27:** The `useChatTimeline` filter keeps approval notifications in the timeline regardless of `action_status`. Current filter drops non-pending approvals — change to `if (n.requires_approval) return true;`. The `ApprovalInlineMessage` component already handles all states (pending/approved/rejected/expired). [A14]
-- [ ] **AC-28:** The `useChatTimeline` filter suppresses `silent` follow-up notifications from the web timeline when they share a `pending_action_id` with an already-rendered approval card. This prevents duplicate entries for the same action. Telegram still receives the follow-up separately (different channel, expected behavior). [A7, A14]
-- [ ] **AC-29:** The `ApprovalInlineMessage` component renders the execution result inline after approval. The result text comes from the follow-up notification body (via `pending_action_id` lookup in the notifications data) or from the approval API response stored in component state. Shows "Executed successfully." or "Failed: {error}" below the status line. See `docs/ux/interaction-patterns.md` Section 7 for the full state table. [A13]
+- [ ] **AC-28:** `silent` notifications are never shown in the web timeline (the existing `if (n.type === 'silent') return false` filter handles this). The follow-up notification created in AC-09 sets `pending_action_id` so it can be looked up by the `ApprovalInlineMessage` component for displaying the execution result (AC-29). No deduplication logic needed — `silent` is invisible by definition. [A7, A14]
+- [ ] **AC-29:** The `ApprovalInlineMessage` component renders the execution result inline after approval. The result comes from the approve API response (`ActionResult.result.execution_result`) stored in component state via `onApproveResult` callback. The component adds `executionResult: string | null` and `executionError: string | null` state. On approve success: shows "Executed successfully." (or the result text if available). On approve failure: shows "Failed: {error}". The existing toast in `useApproveAction.onSuccess` is removed (replaced by inline display). Shows an intermediate "Running..." state while the mutation is pending. See `docs/ux/interaction-patterns.md` Section 7 for the full state table and border colors per state. [A13]
 
 ### Agent Continuation After Approval
 
 - [ ] **AC-30:** After a tool is approved and executed, the frontend automatically sends a follow-up chat message to the agent with the execution result. The message is formatted as: `[Action approved: {tool_name}. Result: {execution_result}]`. This triggers the agent to respond conversationally with the outcome. [A12, A14]
 - [ ] **AC-31:** After a tool is rejected, the frontend automatically sends a follow-up chat message to the agent: `[Action rejected: {tool_name}. Reason: {reason or "User declined."}]`. The agent acknowledges the rejection and can adjust its approach. [A12, A14]
-- [ ] **AC-32:** The follow-up chat messages from AC-30 and AC-31 are sent by the `useApproveAction` and `useRejectAction` hooks' `onSuccess` callbacks. They use the existing chat endpoint (`POST /api/chat`) with the same `session_id` as the original conversation. The messages appear in the timeline as user messages (since they come from the frontend). [A1, A4]
+- [ ] **AC-32:** The mutation variable types change to carry context needed for the follow-up. `useApproveAction` changes from `useMutation<ActionResult, Error, string>` to `useMutation<ActionResult, Error, { actionId: string; sessionId: string; toolName: string }>`. `useRejectAction` adds `sessionId` and `toolName` to its existing `{ actionId, reason }` variable type. The `onSuccess` callbacks use `sendMessageApi()` (from `useChatApiHooks.ts`) to send the follow-up via `POST /api/chat` with the `sessionId` from the mutation variable. `ApprovalInlineMessage` passes `activeChatId` (from `useChatStore`) and `action_tool_name` (from the notification metadata) when calling `mutate()`. [A1, A4]
 
 ### Telegram: Alignment
 
@@ -141,6 +145,9 @@ Frontend merges messages + notifications into a single timeline sorted by `creat
 | `chatServer/services/tool_execution.py` | Standalone tool executor for post-approval execution |
 | `tests/chatServer/services/test_tool_execution.py` | Tests for tool resolution, instantiation, and execution |
 | `tests/chatServer/services/test_notification_types.py` | Tests for type-based routing |
+| `webApp/src/api/hooks/useChatTimeline.test.ts` | Tests for timeline merge, approval persistence, silent filtering |
+| `webApp/src/api/hooks/useActionsHooks.test.ts` | Tests for mutation variable types, follow-up chat messages |
+| `webApp/src/components/ui/chat/ApprovalInlineMessage.test.tsx` | Tests for execution result display, state transitions |
 
 ### Files to Modify
 
@@ -151,12 +158,13 @@ Frontend merges messages + notifications into a single timeline sorted by `creat
 | `chatServer/services/pending_actions.py` | Add `notification_id` tracking (optional, for cross-reference) |
 | `chatServer/routers/actions.py` | Wire `ToolExecutionService` into `_build_pending_actions_service()` |
 | `chatServer/channels/telegram_bot.py` | Respect `type` field, skip `agent_only`/`silent` |
-| `chatServer/services/background_tasks.py` | Heartbeat findings → `agent_only` type |
+| `chatServer/services/scheduled_execution_service.py` | Heartbeat findings → `agent_only` type (already implemented — verify) |
 | `chatServer/routers/actions.py` | On approve/reject, create follow-up `silent` notification (already done in current code) |
 | `webApp/src/stores/useChatStore.ts` | Merge notifications into message timeline |
 | `webApp/src/api/hooks/useNotificationHooks.ts` | Reduce polling to 5s, add notification type to interface |
 | `webApp/src/components/ui/chat/MessageBubble.tsx` | Route `notification`/`approval` senders to new components |
-| `webApp/src/components/ChatPanelV1.tsx` | Remove references to old notification/action panels |
+| `webApp/src/api/hooks/useActionsHooks.ts` | Change mutation variable types for AC-32, remove toast for AC-29, add follow-up chat message in onSuccess for AC-30/31 |
+| `webApp/src/components/ui/chat/ApprovalInlineMessage.tsx` | Add execution result display (AC-29), intermediate "Running..." state, per-state border colors |
 
 ### Files to Remove/Deprecate
 
@@ -419,8 +427,8 @@ class ToolExecutionService:
         constructor_kwargs = {
             "user_id": user_id,
             "agent_name": agent_name,
-            "supabase_url": settings.SUPABASE_URL,
-            "supabase_key": settings.SUPABASE_SERVICE_ROLE_KEY,
+            "supabase_url": settings.supabase_url,
+            "supabase_key": settings.supabase_service_key,
             "name": tool_name,
             "description": f"Post-approval execution of {tool_name}",
         }
@@ -523,6 +531,33 @@ This is a minor interface change — the `tool_executor` callable gains an optio
 - **SPEC-024** (notification feedback loop) — must be merged first. This spec builds on the feedback buttons and moves them inline.
 - **SPEC-021/022** — already merged. Personality and bootstrap are prerequisite for the agent nudge behavior to feel right.
 
+### Current State (already implemented)
+
+Several parts of this spec are already implemented on the `feat/SPEC-025-unified-notifications` branch. Agents assigned to these FUs should verify rather than rebuild:
+
+| Item | Status | Notes |
+|------|--------|-------|
+| DB migration (type, requires_approval, pending_action_id, session_id) | Done | `20260226000001_notification_types.sql`, `20260226000002_notifications_session_id.sql` |
+| `NotificationService.notify_user()` type routing | Done | `agent_only`/`silent`/`notify` routing, `requires_approval`, `pending_action_id`, `session_id` params all wired |
+| `tool_wrapper.py` creates notification + pending_action | Done | Soft return message implemented |
+| `actions.py` follow-up notification on approve/reject | Done | `resolve_approval_notification()` + silent follow-up |
+| `ToolExecutionService` | Done | `tool_execution.py` exists, wired in `_build_pending_actions_service()` |
+| `agent_name` passthrough in `approve_action()` | Done | Reads from `action.context` |
+| Heartbeat → `agent_only` (AC-10) | Done | In `scheduled_execution_service.py` line 387-397 |
+| Polling interval 5s (AC-15) | Done | `useNotificationHooks.ts` line 109 |
+| `useChatTimeline.ts` merge logic | Done | Messages + notifications merged by timestamp |
+| `ApprovalInlineMessage.tsx` | Partial | Renders pending/approved/rejected states; missing: execution result display, "Running..." state, per-state border colors, follow-up chat message |
+| `NotificationInlineMessage.tsx` | Done | Renders with feedback buttons |
+| Bell dropdown removed (AC-16) | Done | FU-4 |
+| PendingActionsPanel removed (AC-17) | Done | FU-4 |
+| `usePendingActions`/`usePendingCount` removed (AC-18) | Done | FU-4 |
+
+**Remaining work** is concentrated in FU-6: approval card lifecycle (AC-27, AC-28, AC-29) and agent continuation (AC-30, AC-31, AC-32). Plus tests for `ToolExecutionService` (FU-5 gap).
+
+### Legacy cleanup: `notify_pending_actions()`
+
+`NotificationService.notify_pending_actions()` creates aggregate "N actions pending approval" notifications. Under the new model, individual approval notifications are created at queue time by the tool wrapper (AC-06). The aggregate method is now dead code but is still called from `scheduled_execution_service.py` line 402. Remove the call site — the method itself can stay for backward compatibility but should not be invoked.
+
 ## Testing Requirements
 
 ### Unit Tests (required)
@@ -588,16 +623,23 @@ This is a minor interface change — the `tool_executor` callable gains an optio
 | AC-18 | Frontend | `test_pending_hooks_removed` |
 | AC-19 | Unit | `test_telegram_skips_silent_and_agent_only` |
 | AC-20 | Unit | Existing Telegram approval test (unchanged) |
+| AC-27 | Frontend | `test_approval_card_persists_after_resolution` (`webApp/src/api/hooks/useChatTimeline.test.ts`) |
+| AC-28 | Frontend | `test_silent_notifications_filtered` (`webApp/src/api/hooks/useChatTimeline.test.ts`) |
+| AC-29 | Frontend | `test_approval_card_shows_execution_result` (`webApp/src/components/ui/chat/ApprovalInlineMessage.test.tsx`) |
+| AC-30 | Frontend | `test_approve_sends_followup_chat_message` (`webApp/src/api/hooks/useActionsHooks.test.ts`) |
+| AC-31 | Frontend | `test_reject_sends_followup_chat_message` (`webApp/src/api/hooks/useActionsHooks.test.ts`) |
+| AC-32 | Frontend | `test_mutation_passes_session_id` (`webApp/src/api/hooks/useActionsHooks.test.ts`) |
 
 ### Manual Verification (UAT)
 
 - [ ] Agent requests tool approval — notification appears inline in chat with approve/reject buttons
-- [ ] Click "Approve" — button disables, shows "Approved", **tool actually executes**, follow-up notification appears with execution result
+- [ ] Click "Approve" — shows "Running...", then "Approved" with execution result inline in the card, agent responds with outcome
 - [ ] Click "Approve" on a tool that fails execution — follow-up notification shows "Failed: {error}" (not HTTP 500)
 - [ ] Click "Reject" — button disables, shows "Rejected"
 - [ ] Agent continues conversation after approval request (no blocking)
 - [ ] If user ignores approval and keeps chatting, agent nudges about pending approval
-- [ ] Silent notification appears in chat stream without Telegram ping
+- [ ] Silent notifications do NOT appear in chat stream or Telegram (verify DB storage only)
+- [ ] After approving a tool, the agent continues the conversation (receives follow-up message and responds)
 - [ ] Heartbeat does NOT appear in chat stream (agent_only)
 - [ ] Feedback buttons (thumbs up/down) work on inline notifications
 - [ ] Bell icon is gone from navigation
@@ -653,20 +695,18 @@ This is a minor interface change — the `tool_executor` callable gains an optio
    - Update navigation layout
 
 5. **FU-5:** Post-approval tool execution (`feat/SPEC-025-tool-executor`)
-   - `ToolExecutionService` class (tool resolution, instantiation, direct `_arun()`)
-   - `GmailTool` dynamic import path (reads `config.tool_class`, imports from `chatServer.tools.gmail_tools`)
-   - Memory tool rejection guard (clear error for tools needing MCP `memory_client`)
-   - `ToolExecutionError` exception class
-   - Wire `ToolExecutionService` into `actions.py` router's `_build_pending_actions_service()`
-   - Update `PendingActionsService.approve_action()` to pass `agent_name` from `action.context` to `tool_executor`
-   - Unit tests: tool resolution, Gmail dynamic import, memory tool rejection, instantiation, execution success/failure, unknown tool, missing registry entry, agent_name passthrough
+   - **Already implemented:** `ToolExecutionService` class, `ToolExecutionError`, GmailTool dynamic import, memory tool guard, wiring in `actions.py`, `agent_name` passthrough
+   - **Remaining:** Unit tests in `tests/chatServer/services/test_tool_execution.py` — tool resolution, Gmail dynamic import, memory tool rejection, instantiation, execution success/failure, unknown tool, missing registry entry, agent_name passthrough
+   - **Remaining:** Set `pending_action_id` column (not just metadata) on follow-up notifications in `actions.py` `approve_action()` and `reject_action()` (per AC-09)
 
 6. **FU-6:** Approval card lifecycle + agent continuation (`feat/SPEC-025-card-lifecycle`)
-   - `useChatTimeline` filter: keep approval notifications regardless of status (AC-27)
-   - `useChatTimeline` filter: suppress `silent` follow-ups that share `pending_action_id` with existing approval cards (AC-28)
-   - `ApprovalInlineMessage`: render execution result inline in resolved state (AC-29)
-   - `useApproveAction` / `useRejectAction` `onSuccess`: send follow-up chat message to agent with result (AC-30, AC-31, AC-32)
-   - Frontend tests for card persistence, deduplication, and agent continuation
+   - `useChatTimeline` filter: keep approval notifications regardless of `action_status` — change line 28-31 to `if (n.requires_approval) return true;` (AC-27)
+   - `ApprovalInlineMessage`: add `executionResult`/`executionError` state, intermediate "Running..." state while mutation is pending, per-state border colors (`border-l-success-indicator` for approved, `border-l-destructive` for failed, `border-l-ui-border` for rejected/expired), render result text below status line (AC-29)
+   - `useApproveAction`: change mutation variable type from `string` to `{ actionId: string; sessionId: string; toolName: string }`. In `onSuccess`: remove toast, extract `result.result?.execution_result`, call `sendMessageApi()` with follow-up message `[Action approved: {toolName}. Result: {result}]` using `sessionId` from mutation variable (AC-30, AC-32)
+   - `useRejectAction`: add `sessionId` and `toolName` to mutation variable type. In `onSuccess`: remove toast, call `sendMessageApi()` with `[Action rejected: {toolName}. Reason: {reason or "User declined."}]` (AC-31, AC-32)
+   - `ApprovalInlineMessage`: pass `activeChatId` (from `useChatStore`) and `action_tool_name` (from notification metadata) when calling `approveAction.mutate()` / `rejectAction.mutate()` (AC-32)
+   - Remove `notify_pending_actions()` call from `scheduled_execution_service.py`
+   - Frontend tests for card persistence and agent continuation
    - Playwright UI acceptance test: approval card lifecycle (red→green)
 
 Merge order: FU-1 → FU-2 → FU-5 → FU-3 → FU-4 → FU-6

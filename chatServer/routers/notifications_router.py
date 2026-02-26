@@ -12,7 +12,7 @@ Provides API endpoints for:
 
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -184,5 +184,5 @@ if os.getenv("ENVIRONMENT") != "production":
             category=body.category,
             metadata={},
             read=False,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         )

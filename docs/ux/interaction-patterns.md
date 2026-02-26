@@ -261,7 +261,7 @@ RESOLVED (after approve + execution):
 └──────────────────────────────────────────────────────┘
 ```
 
-**Why not a separate follow-up notification?** The backend still creates a `silent` follow-up notification (for Telegram delivery and audit trail). But the web frontend suppresses it from the timeline when it shares a `pending_action_id` with an already-rendered approval card. The card itself shows the result. On Telegram, the follow-up still sends as a separate message — that's natural for the medium.
+**Why not a separate follow-up notification?** The backend creates a `silent` follow-up notification for audit trail purposes, but `silent` notifications are never shown in the web timeline. The approval card itself shows the result (via the approve API response, stored in component state). The `silent` follow-up shares the same `pending_action_id` as the original approval notification, enabling cross-referencing if needed.
 
 ### States
 
@@ -323,7 +323,7 @@ Regular notifications (agent observations, status updates, feedback requests) al
 | Signal | Type | Channel |
 |--------|------|---------|
 | Agent internal finding (heartbeat) | `agent_only` | Memory only — not stored, not shown |
-| Background status update (processing complete, sync done) | `silent` | Chat stream only — no Telegram |
+| Audit trail entry (approval follow-up, processing confirmation) | `silent` | Stored in DB — not shown in web timeline or Telegram |
 | Something that needs attention (approval, reminder, digest) | `notify` | Chat stream + Telegram |
 | Agent's conversational response | Regular chat message | Chat stream (+ Telegram echo if linked) |
 
@@ -363,7 +363,7 @@ Agent responds conversationally: reports outcome, suggests next steps
 The simplest approach: after resolution, the frontend sends a follow-up chat message on behalf of the system. The message is prefixed to distinguish it from user input:
 
 ```
-[System: Action 'delete_tasks' was approved and executed. Result: Task deleted successfully.]
+[Action approved: delete_tasks. Result: Task deleted successfully.]
 ```
 
 The agent receives this as input on its next turn and responds naturally:

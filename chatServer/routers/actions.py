@@ -193,6 +193,7 @@ async def approve_action(
                 category="agent_result",
                 type="silent",
                 metadata={"tool_name": tool_name, "action_id": str(action_id)},
+                pending_action_id=str(action_id),
                 session_id=action_session_id,
             )
         except Exception as notif_err:
@@ -247,6 +248,7 @@ async def reject_action(
                 category="agent_result",
                 type="silent",
                 metadata={"tool_name": tool_name, "action_id": str(action_id)},
+                pending_action_id=str(action_id),
                 session_id=action_session_id,
             )
         except Exception as notif_err:
