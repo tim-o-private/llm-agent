@@ -87,10 +87,10 @@ Frontend merges messages + notifications into a single timeline sorted by `creat
 
 ### Backend: Post-Approval Tool Execution
 
-- [ ] **AC-21:** A new `ToolExecutionService` class in `chatServer/services/tool_execution.py` provides a `execute_tool(user_id, tool_name, tool_args, agent_name)` method. It resolves the tool's Python class via `TOOL_REGISTRY`, instantiates the `BaseTool` subclass with the required context (`user_id`, `agent_name`, `supabase_url`, `supabase_key`), calls `_arun(**tool_args)`, and returns the string result. Tools are instantiated **without** the approval wrapper. [A1, A6]
-- [ ] **AC-22:** `ToolExecutionService` resolves tool class by querying `tools` table: `SELECT type FROM tools WHERE name = :tool_name`. The `type` value is the key into `TOOL_REGISTRY`. If the tool name is not found in the DB or the type is not in the registry, execution fails with a clear error. [A3, A6]
-- [ ] **AC-23:** `ToolExecutionService` handles tool config from the `tools` table: for tools that require DB config (Gmail tools with `tool_class`, CRUDTool with `table_name`/`method`), the service reads `tools.config` JSONB and passes it to the constructor. This mirrors the existing `load_tools_from_db()` instantiation logic. [A6]
-- [ ] **AC-24:** `PendingActionsService` is constructed with a `tool_executor` callable in the `actions.py` router. The `_build_pending_actions_service()` helper creates a `ToolExecutionService` and passes its `execute_tool` method as the `tool_executor` parameter. [A1]
+- [ ] **AC-21:** A new `ToolExecutionService` class in `chatServer/services/tool_execution.py` provides an `execute_tool(tool_name, tool_args, user_id, agent_name)` method. It resolves the tool's Python class via `TOOL_REGISTRY`, instantiates the `BaseTool` subclass with the required context (`user_id`, `agent_name`, `supabase_url`, `supabase_key`), calls `_arun(**tool_args)`, and returns the string result. Tools are instantiated **without** the approval wrapper. Memory tools (`_memory_tool_types` in `agent_loader_db.py`) are rejected with a clear error — they require an MCP `memory_client` that is not available outside the agent loop. [A1, A6]
+- [ ] **AC-22:** `ToolExecutionService` resolves tool class by querying `tools` table: `SELECT type, config FROM tools WHERE name = :tool_name`. The `type` value is the key into `TOOL_REGISTRY`. Special case: `GmailTool` type has `TOOL_REGISTRY` value `None` — the executor reads `config.tool_class` from the DB row and dynamically imports the class (same pattern as `load_tools_from_db()`). If the tool name is not found in the DB, the type is not in the registry, or dynamic import fails, execution fails with a clear error. [A3, A6]
+- [ ] **AC-23:** `ToolExecutionService` handles tool config from the `tools` table: for tools that require DB config (Gmail tools with `tool_class`, CRUDTool with `table_name`/`method`), the service reads `tools.config` JSONB and passes it to the constructor. This mirrors the existing `load_tools_from_db()` instantiation logic, including the `GmailTool` dynamic import path. [A6]
+- [ ] **AC-24:** `PendingActionsService` is constructed with a `tool_executor` callable in the `actions.py` router. The `_build_pending_actions_service()` helper creates a `ToolExecutionService` and passes its `execute_tool` method as the `tool_executor` parameter. The callable signature is extended to include `agent_name` (extracted from `pending_actions.context` by `approve_action()`). `PendingActionsService.approve_action()` is updated to pass `agent_name=action.context.get("agent_name")` to the `tool_executor`. [A1]
 - [ ] **AC-25:** When `approve_action()` succeeds with a tool executor, the `pending_actions` row transitions through `pending` -> `approved` -> `executed` (on success) or `approved` -> `executed` with error (on failure). The `execution_result` JSONB column stores the tool output or error. [A8]
 - [ ] **AC-26:** Execution failures do NOT propagate as HTTP 500 to the user. The approve endpoint returns success with `execution_error` in the response body, and the follow-up notification (AC-09) includes the error message. The user sees "Approved: {tool_name} -- Failed: {error}" in the chat stream. [A1]
 
@@ -111,6 +111,18 @@ Frontend merges messages + notifications into a single timeline sorted by `creat
 - [ ] **AC-16:** The `NotificationBadge` component (bell icon dropdown) is removed from the navigation header. [A14]
 - [ ] **AC-17:** The `PendingActionsPanel` component is removed. Approval requests render inline via AC-13. [A14]
 - [ ] **AC-18:** The `usePendingActions` and `usePendingCount` polling hooks are removed. Action data is fetched only when rendering an inline approval notification (on-demand via the existing approve/reject endpoints). [A4]
+
+### Frontend: Approval Card Lifecycle
+
+- [ ] **AC-27:** The `useChatTimeline` filter keeps approval notifications in the timeline regardless of `action_status`. Current filter drops non-pending approvals — change to `if (n.requires_approval) return true;`. The `ApprovalInlineMessage` component already handles all states (pending/approved/rejected/expired). [A14]
+- [ ] **AC-28:** The `useChatTimeline` filter suppresses `silent` follow-up notifications from the web timeline when they share a `pending_action_id` with an already-rendered approval card. This prevents duplicate entries for the same action. Telegram still receives the follow-up separately (different channel, expected behavior). [A7, A14]
+- [ ] **AC-29:** The `ApprovalInlineMessage` component renders the execution result inline after approval. The result text comes from the follow-up notification body (via `pending_action_id` lookup in the notifications data) or from the approval API response stored in component state. Shows "Executed successfully." or "Failed: {error}" below the status line. See `docs/ux/interaction-patterns.md` Section 7 for the full state table. [A13]
+
+### Agent Continuation After Approval
+
+- [ ] **AC-30:** After a tool is approved and executed, the frontend automatically sends a follow-up chat message to the agent with the execution result. The message is formatted as: `[Action approved: {tool_name}. Result: {execution_result}]`. This triggers the agent to respond conversationally with the outcome. [A12, A14]
+- [ ] **AC-31:** After a tool is rejected, the frontend automatically sends a follow-up chat message to the agent: `[Action rejected: {tool_name}. Reason: {reason or "User declined."}]`. The agent acknowledges the rejection and can adjust its approach. [A12, A14]
+- [ ] **AC-32:** The follow-up chat messages from AC-30 and AC-31 are sent by the `useApproveAction` and `useRejectAction` hooks' `onSuccess` callbacks. They use the existing chat endpoint (`POST /api/chat`) with the same `session_id` as the original conversation. The messages appear in the timeline as user messages (since they come from the frontend). [A1, A4]
 
 ### Telegram: Alignment
 
@@ -313,10 +325,20 @@ and calls _arun() directly — bypassing the LangChain agent executor and the
 approval wrapper.
 """
 
+import importlib
 import logging
-from typing import Any, Optional
+from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+# Memory tools require an MCP memory_client that doesn't exist outside
+# the agent loop. Block them from post-approval execution.
+_MEMORY_TOOL_TYPES = {
+    "CreateMemoriesTool", "SearchMemoriesTool", "GetMemoriesTool",
+    "DeleteMemoriesTool", "UpdateMemoriesTool", "SetProjectTool",
+    "LinkMemoriesTool", "GetEntitiesTool", "SearchEntitiesTool",
+    "GetContextTool",
+}
 
 
 class ToolExecutionService:
@@ -340,13 +362,14 @@ class ToolExecutionService:
         """
         Execute a tool by name.
 
-        1. Look up tool type from `tools` table by name
-        2. Resolve Python class from TOOL_REGISTRY
-        3. Instantiate with user context (no approval wrapper)
-        4. Call _arun(**tool_args) directly
+        1. Look up tool type + config from `tools` table by name
+        2. Resolve Python class from TOOL_REGISTRY (with GmailTool dynamic import)
+        3. Reject memory tools (need MCP client unavailable here)
+        4. Instantiate with user context (no approval wrapper)
+        5. Call _arun(**tool_args) directly
         """
-        from ..config.settings import settings
         from src.core.agent_loader_db import TOOL_REGISTRY
+        from ..config.settings import settings
 
         # Step 1: Resolve tool type from DB
         result = await self.db.table("tools") \
@@ -361,14 +384,38 @@ class ToolExecutionService:
         tool_type = result.data["type"]
         tool_config = result.data.get("config") or {}
 
-        # Step 2: Resolve Python class
+        # Step 2: Reject memory tools — they need memory_client (MCP)
+        if tool_type in _MEMORY_TOOL_TYPES:
+            raise ToolExecutionError(
+                f"Tool '{tool_name}' (type {tool_type}) is a memory tool and cannot "
+                f"be executed post-approval — memory tools require an MCP client "
+                f"that is only available inside the agent loop."
+            )
+
+        # Step 3: Resolve Python class
         tool_class = TOOL_REGISTRY.get(tool_type)
-        if tool_class is None:
+
+        if tool_class is None and tool_type == "GmailTool":
+            # GmailTool uses dynamic import from config.tool_class
+            # (same pattern as load_tools_from_db)
+            gmail_class_name = tool_config.get("tool_class")
+            if not gmail_class_name:
+                raise ToolExecutionError(
+                    f"GmailTool '{tool_name}' has no tool_class in config"
+                )
+            try:
+                module = importlib.import_module("chatServer.tools.gmail_tools")
+                tool_class = getattr(module, gmail_class_name)
+            except (ImportError, AttributeError) as e:
+                raise ToolExecutionError(
+                    f"Failed to import Gmail tool class '{gmail_class_name}': {e}"
+                ) from e
+        elif tool_class is None:
             raise ToolExecutionError(
                 f"Tool type '{tool_type}' for '{tool_name}' not in TOOL_REGISTRY"
             )
 
-        # Step 3: Build constructor kwargs
+        # Step 4: Build constructor kwargs
         constructor_kwargs = {
             "user_id": user_id,
             "agent_name": agent_name,
@@ -382,7 +429,7 @@ class ToolExecutionService:
         if tool_config:
             constructor_kwargs.update(tool_config)
 
-        # Step 4: Instantiate and execute
+        # Step 5: Instantiate and execute
         try:
             tool_instance = tool_class(**constructor_kwargs)
         except Exception as e:
@@ -418,11 +465,12 @@ def _build_pending_actions_service(db: UserScopedClient):
     audit_service = AuditService(db)
     tool_exec_service = ToolExecutionService(db)
 
-    async def tool_executor(tool_name: str, tool_args: dict, user_id: str):
+    async def tool_executor(tool_name: str, tool_args: dict, user_id: str, agent_name: str = None):
         return await tool_exec_service.execute_tool(
             tool_name=tool_name,
             tool_args=tool_args,
             user_id=user_id,
+            agent_name=agent_name,
         )
 
     return PendingActionsService(
@@ -432,17 +480,40 @@ def _build_pending_actions_service(db: UserScopedClient):
     )
 ```
 
-The `tool_executor` callable signature matches what `PendingActionsService.approve_action()` already expects (line 168): `await self.tool_executor(tool_name=..., tool_args=..., user_id=...)`. No changes to the `PendingActionsService` interface are needed.
+**`PendingActionsService.approve_action()` change:** The `tool_executor` call (line 168) must be updated to pass `agent_name` from the action's context:
+
+```python
+# In approve_action(), change the tool_executor call from:
+execution_result = await self.tool_executor(
+    tool_name=action.tool_name,
+    tool_args=action.tool_args,
+    user_id=user_id,
+)
+
+# To:
+execution_result = await self.tool_executor(
+    tool_name=action.tool_name,
+    tool_args=action.tool_args,
+    user_id=user_id,
+    agent_name=action.context.get("agent_name"),
+)
+```
+
+This is a minor interface change — the `tool_executor` callable gains an optional `agent_name` kwarg. Existing callers that don't pass it are unaffected (defaults to `None`).
 
 **Why this is safe:**
 - The tool is instantiated fresh, without `wrap_tools_with_approval()`. No approval re-trigger.
 - The `_arun()` method creates its own `UserScopedClient` internally (standard tool pattern), so RLS is properly enforced for the user's data.
-- `ToolExecutionService` uses the same `TOOL_REGISTRY` and instantiation pattern as `load_tools_from_db()`, keeping tool resolution consistent.
-- The `pending_actions.context` JSONB already stores `agent_name` — the router passes it through.
+- `ToolExecutionService` uses the same `TOOL_REGISTRY` and instantiation pattern as `load_tools_from_db()`, keeping tool resolution consistent — including the `GmailTool` dynamic import path.
+- The `pending_actions.context` JSONB already stores `agent_name` — `approve_action()` passes it through to the executor.
+- Memory tools are blocked explicitly — they require an MCP `memory_client` that is only available inside the agent loop. All 10 memory tools are currently `auto_approve` tier, so this path is unreachable in practice, but the guard prevents silent failures if tiers change.
+- The `tools` table query works via `UserScopedClient` because `tools` is not in `USER_SCOPED_TABLES` (queries pass through unmodified) and the underlying `AsyncClient` uses the service role key.
 
 **Failure modes:**
 - Tool name not in `tools` table: `ToolExecutionError` with clear message. Action stays `approved`, never transitions to `executed`.
-- Tool type not in `TOOL_REGISTRY`: Same behavior. Suggests a DB/code mismatch (should not happen if migrations are consistent).
+- Tool type not in `TOOL_REGISTRY` (and not `GmailTool`): `ToolExecutionError`. Suggests a DB/code mismatch.
+- `GmailTool` with missing or invalid `tool_class` in config: `ToolExecutionError` with import details.
+- Memory tool type: `ToolExecutionError` explaining MCP dependency. Should not happen (all auto_approve), but guarded.
 - Tool instantiation fails (bad config): `ToolExecutionError`. Stored in `execution_result.error`.
 - Tool `_arun()` raises: Caught by `PendingActionsService.approve_action()` existing `except Exception` block (line 183). Status set to `executed` with error.
 - All failures create a follow-up notification (AC-09/AC-26) so the user sees the error in the chat stream.
@@ -465,12 +536,17 @@ The `tool_executor` callable signature matches what `PendingActionsService.appro
 - Tool wrapper returns soft message (not "STOP")
 - Approve action creates follow-up `silent` notification
 - `ToolExecutionService.execute_tool()` resolves tool class from DB and `TOOL_REGISTRY`
+- `ToolExecutionService` resolves `GmailTool` type via dynamic import from `config.tool_class`
+- `ToolExecutionService` rejects memory tool types with clear error
 - `ToolExecutionService` instantiates tool with correct user context (no approval wrapper)
+- `ToolExecutionService` passes `agent_name` through to tool constructor
 - `ToolExecutionService` returns tool output on success
 - `ToolExecutionService` raises `ToolExecutionError` for unknown tool name
 - `ToolExecutionService` raises `ToolExecutionError` for unregistered tool type
+- `ToolExecutionService` raises `ToolExecutionError` for `GmailTool` with missing `tool_class` config
 - `ToolExecutionService` raises `ToolExecutionError` on `_arun()` failure (with original error chained)
 - `_build_pending_actions_service()` provides `tool_executor` to `PendingActionsService`
+- `approve_action()` passes `agent_name` from `action.context` to `tool_executor`
 - End-to-end: approve action -> tool executes -> `execution_result` stored -> follow-up notification created
 - Heartbeat findings use `agent_only` type
 
@@ -496,10 +572,10 @@ The `tool_executor` callable signature matches what `PendingActionsService.appro
 | AC-08 | Unit | Existing approve/reject tests (unchanged) |
 | AC-09 | Unit | `test_approve_creates_followup_notification` |
 | AC-10 | Unit | `test_heartbeat_uses_agent_only_type` |
-| AC-21 | Unit | `test_execute_tool_resolves_and_runs`, `test_execute_tool_no_wrapper` |
-| AC-22 | Unit | `test_execute_tool_unknown_name`, `test_execute_tool_unregistered_type` |
+| AC-21 | Unit | `test_execute_tool_resolves_and_runs`, `test_execute_tool_no_wrapper`, `test_execute_tool_rejects_memory_tool` |
+| AC-22 | Unit | `test_execute_tool_unknown_name`, `test_execute_tool_unregistered_type`, `test_execute_tool_gmail_dynamic_import`, `test_execute_tool_gmail_missing_tool_class` |
 | AC-23 | Unit | `test_execute_tool_passes_config` |
-| AC-24 | Unit | `test_build_service_provides_executor` |
+| AC-24 | Unit | `test_build_service_provides_executor`, `test_approve_passes_agent_name` |
 | AC-25 | Unit | `test_approve_action_transitions_to_executed` |
 | AC-26 | Unit | `test_approve_action_execution_error_not_500` |
 | AC-11 | Frontend | `test_chat_store_merges_notifications` |
@@ -540,6 +616,8 @@ The `tool_executor` callable signature matches what `PendingActionsService.appro
 - **Multiple approval requests queued:** Each renders as a separate inline notification. User can approve/reject in any order. No dependency between them.
 - **Tool removed from registry between queue and approval:** If the tool type is no longer in `TOOL_REGISTRY` (code deployed between queue and approve), `ToolExecutionService` raises `ToolExecutionError`. The user sees "Approved: {tool_name} -- Failed: Tool type not in TOOL_REGISTRY" in the follow-up notification. The agent can re-queue if the tool is restored.
 - **Tool config changed between queue and approval:** The tool is instantiated with current DB config at execution time, not the config at queue time. This is correct — if the tool's config was updated (e.g., API key rotation), the execution should use the latest config.
+- **Gmail tool approval (`send_email`):** `send_email` is `requires_approval` and its `tools.type` is `GmailTool`, which maps to `None` in `TOOL_REGISTRY`. The executor uses the `GmailTool` dynamic import path — reading `config.tool_class` from the DB row and importing from `chatServer.tools.gmail_tools`. This is the most common approval-flow tool and must work.
+- **Memory tool tier changed to `requires_approval`:** All 10 memory tools are currently `auto_approve`. If a tier change puts one through the approval flow, the executor rejects it with a clear error explaining the MCP dependency. The user sees the error in the follow-up notification. The agent should not queue memory tools for approval — but the guard prevents a confusing instantiation failure if it happens.
 - **Long-running tool execution on approval:** `_arun()` is awaited in the request handler. If the tool takes >30s (e.g., complex Gmail search), the HTTP request may time out. For MVP, this is acceptable — the action transitions to `executed` in the background via the DB update. Future: move execution to a background task / job queue (SPEC-026).
 - **Approval of tool that was originally auto-approved:** This should not happen (auto-approved tools execute immediately in the chat turn), but if a `pending_actions` row exists for one (e.g., due to a tier change), the executor handles it normally.
 
@@ -576,23 +654,32 @@ The `tool_executor` callable signature matches what `PendingActionsService.appro
 
 5. **FU-5:** Post-approval tool execution (`feat/SPEC-025-tool-executor`)
    - `ToolExecutionService` class (tool resolution, instantiation, direct `_arun()`)
+   - `GmailTool` dynamic import path (reads `config.tool_class`, imports from `chatServer.tools.gmail_tools`)
+   - Memory tool rejection guard (clear error for tools needing MCP `memory_client`)
    - `ToolExecutionError` exception class
    - Wire `ToolExecutionService` into `actions.py` router's `_build_pending_actions_service()`
-   - Pass `agent_name` from `pending_actions.context` to executor
-   - Unit tests: tool resolution, instantiation, execution success/failure, unknown tool, missing registry entry
-   - Integration with existing `PendingActionsService.approve_action()` flow (no interface changes)
+   - Update `PendingActionsService.approve_action()` to pass `agent_name` from `action.context` to `tool_executor`
+   - Unit tests: tool resolution, Gmail dynamic import, memory tool rejection, instantiation, execution success/failure, unknown tool, missing registry entry, agent_name passthrough
 
-Merge order: FU-1 → FU-2 → FU-5 → FU-3 → FU-4
+6. **FU-6:** Approval card lifecycle + agent continuation (`feat/SPEC-025-card-lifecycle`)
+   - `useChatTimeline` filter: keep approval notifications regardless of status (AC-27)
+   - `useChatTimeline` filter: suppress `silent` follow-ups that share `pending_action_id` with existing approval cards (AC-28)
+   - `ApprovalInlineMessage`: render execution result inline in resolved state (AC-29)
+   - `useApproveAction` / `useRejectAction` `onSuccess`: send follow-up chat message to agent with result (AC-30, AC-31, AC-32)
+   - Frontend tests for card persistence, deduplication, and agent continuation
+   - Playwright UI acceptance test: approval card lifecycle (red→green)
 
-FU-1 and FU-2 are backend-only and can be verified independently. FU-5 depends on FU-2 (the approval flow must create `pending_actions` rows with proper context). FU-5 is pure backend and can be verified before frontend work begins. FU-3 depends on FU-1 (type field for filtering) and benefits from FU-5 (approve button actually executes the tool, so the follow-up notification has real content). FU-4 depends on FU-3 (inline components must exist before removing old surfaces).
+Merge order: FU-1 → FU-2 → FU-5 → FU-3 → FU-4 → FU-6
+
+FU-1 and FU-2 are backend-only and can be verified independently. FU-5 depends on FU-2 (the approval flow must create `pending_actions` rows with proper context). FU-5 is pure backend and can be verified before frontend work begins. FU-3 depends on FU-1 (type field for filtering) and benefits from FU-5 (approve button actually executes the tool, so the follow-up notification has real content). FU-4 depends on FU-3 (inline components must exist before removing old surfaces). FU-6 depends on FU-3 + FU-5 (needs inline components and working tool execution to show results and feed back to agent).
 
 ## Completeness Checklist
 
-- [x] Every AC has a stable ID (AC-01 through AC-26)
+- [x] Every AC has a stable ID (AC-01 through AC-32)
 - [x] Every AC maps to at least one functional unit
-- [x] Every cross-domain boundary has a contract (DB → service → frontend, DB → Telegram, DB → tool executor)
+- [x] Every cross-domain boundary has a contract (DB → service → frontend, DB → Telegram, DB → tool executor, frontend → agent continuation)
 - [x] Technical decisions reference principles (A1, A3, A4, A6, A7, A8, A9, A12, A13, A14)
-- [x] Merge order is explicit (FU-1 → FU-2 → FU-5 → FU-3 → FU-4)
+- [x] Merge order is explicit (FU-1 → FU-2 → FU-5 → FU-3 → FU-4 → FU-6)
 - [x] Out-of-scope is explicit
 - [x] Edge cases documented with expected behavior
 - [x] Testing requirements map to ACs

@@ -99,7 +99,20 @@ Reference the Platform Primitives decision tree in `.claude/skills/product-archi
 - `jobs` table has status lifecycle — don't create a new *_jobs table
 ```
 
-**6. Validate Breakdown Completeness** — before spawning any agent, verify:
+**6. UX Contract Phase (for specs with user-visible ACs)**
+
+Before implementation begins, spawn the UX designer (opus) to produce:
+- **Playwright UI acceptance tests** in `tests/uat/playwright/test_spec_NNN_<feature>.py` — executable ACs that target ARIA attributes, initially RED
+- **UX spec** in `docs/ux/SPEC-NNN-ux.md` — component states, copy, accessibility requirements
+
+These become part of the frontend-dev task contract. Frontend-dev's "done" means the Playwright scripts pass.
+
+After the UX designer commits, run the scripts to confirm they fail (red):
+```bash
+python tests/uat/playwright/test_spec_NNN_feature.py
+```
+
+**7. Validate Breakdown Completeness** — before spawning any agent, verify:
 - Every AC has at least one task covering it
 - Every cross-domain contract specifies inputs/outputs completely
 - No task requires a file, service, or table no other task creates
@@ -110,7 +123,7 @@ Reference the Platform Primitives decision tree in `.claude/skills/product-archi
 
 If gaps found: add tasks before proceeding.
 
-**6. Choose Branch Strategy**
+**8. Choose Branch Strategy**
 
 **Single-branch (default):** When FUs are sequential or same-domain:
 ```bash
@@ -157,6 +170,12 @@ WHILE tasks remain incomplete:
 ### Phase 3: UAT and Wrap Up
 
 **UAT (MANDATORY)** — before reporting the PR as ready:
+
+*Playwright UI tests (if UX contract exists):* Run the scripts written by the UX designer. All must pass (green):
+```bash
+python tests/uat/playwright/test_spec_NNN_feature.py
+```
+If any fail, message the frontend-dev with the failure details and screenshots.
 
 *Code-level UAT (no running server):* Import the modified module, call it with representative inputs for each AC, print and verify output covers happy path + edge cases.
 
