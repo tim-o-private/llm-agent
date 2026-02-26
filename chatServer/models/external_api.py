@@ -67,6 +67,16 @@ class ExternalAPIConnectionResponse(BaseModel):
     # for security reasons
 
 
+class StoreGmailTokensRequest(BaseModel):
+    """Request body for storing Gmail OAuth tokens via the backend."""
+    access_token: str = Field(..., min_length=1)
+    refresh_token: Optional[str] = None
+    expires_at: Optional[datetime] = None
+    scopes: List[str] = Field(default_factory=list)
+    service_user_id: Optional[str] = None
+    service_user_email: Optional[str] = None
+
+
 class EmailMessage(BaseModel):
     """Model for email message data from Gmail API."""
     id: str

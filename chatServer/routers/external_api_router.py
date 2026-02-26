@@ -2,7 +2,6 @@
 # @docs memory-bank/patterns/api-patterns.md#pattern-11-fastapi-project-structure
 # @rules memory-bank/rules/api-rules.json#api-004
 
-import json
 import logging
 from typing import List
 
@@ -84,17 +83,6 @@ async def create_api_connection(
             # Convert row to dict
             columns = [desc[0] for desc in cur.description]
             connection_dict = dict(zip(columns, result))
-
-            # Queue email onboarding job for Gmail connections
-            if connection_data.service_name == "gmail":
-                connection_id = connection_dict["id"]
-                await cur.execute(
-                    """
-                    INSERT INTO jobs (user_id, job_type, input)
-                    VALUES (%s, 'email_processing', %s)
-                    """,
-                    (user_id, json.dumps({"connection_id": str(connection_id)})),
-                )
 
             return ExternalAPIConnectionResponse(**connection_dict)
 

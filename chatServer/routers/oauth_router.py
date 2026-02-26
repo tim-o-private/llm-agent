@@ -1,4 +1,4 @@
-"""Router for standalone Google OAuth flow (multi-Gmail account support)."""
+"""Router for Gmail OAuth flows and token storage."""
 
 import logging
 import os
@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from ..dependencies.auth import get_current_user
+from ..models.external_api import StoreGmailTokensRequest
 from ..services.oauth_service import OAuthService
 
 logger = logging.getLogger(__name__)
@@ -16,11 +17,7 @@ router = APIRouter(prefix="/oauth", tags=["oauth"])
 
 
 def _get_oauth_service() -> OAuthService:
-    """Create OAuthService with a service-role Supabase client.
-
-    TODO: SPEC-017 — OAuthService uses sync Supabase client for Google OAuth
-    callback handling (no auth context). Migrate when sync SystemClient is available.
-    """
+    """Create OAuthService with a service-role Supabase client."""
     from supabase import create_client
 
     supabase_url = os.getenv("SUPABASE_URL")
@@ -86,3 +83,33 @@ async def gmail_oauth_callback(
         )
 
     return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
+
+
+@router.post("/gmail/store-tokens")
+async def store_gmail_tokens(
+    body: StoreGmailTokensRequest,
+    user_id: str = Depends(get_current_user),
+    oauth_service: OAuthService = Depends(_get_oauth_service),
+):
+    """Store Gmail tokens via Vault and enqueue email onboarding.
+
+    Called by the frontend after Supabase OAuth (first account).
+    Replaces the previous pattern of calling store_oauth_tokens RPC directly.
+    """
+    try:
+        result = await oauth_service.store_tokens(
+            user_id=user_id,
+            access_token=body.access_token,
+            refresh_token=body.refresh_token,
+            expires_at=body.expires_at.isoformat() if body.expires_at else None,
+            scopes=body.scopes,
+            service_user_id=body.service_user_id,
+            service_user_email=body.service_user_email,
+        )
+        return JSONResponse(content=result)
+    except RuntimeError as e:
+        logger.error(f"Failed to store Gmail tokens for user {user_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )

@@ -1,4 +1,4 @@
-"""Standalone OAuth service for connecting additional Gmail accounts."""
+"""OAuth service for Gmail account connections and token storage."""
 
 import base64
 import json
@@ -7,7 +7,7 @@ import os
 import secrets
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Optional
+from typing import List, Optional
 
 from ..config.settings import get_settings
 
@@ -203,6 +203,10 @@ class OAuthService:
             connection_id = store_result.data.get("connection_id")
 
             logger.info(f"Successfully connected Gmail account {google_email} for user {user_id}")
+
+            # Enqueue email onboarding job
+            self._enqueue_email_onboarding(user_id, str(connection_id))
+
             return OAuthResult(
                 status="success",
                 connection_id=str(connection_id),
@@ -215,6 +219,55 @@ class OAuthService:
         except Exception as e:
             logger.error(f"OAuth callback failed: {e}", exc_info=True)
             return OAuthResult(status="error", error_message="Authentication failed. Please try again.")
+
+    def _enqueue_email_onboarding(self, user_id: str, connection_id: str) -> None:
+        """Insert an email_processing job so the job runner onboards this account."""
+        try:
+            self.supabase.table("jobs").insert({
+                "user_id": user_id,
+                "job_type": "email_processing",
+                "input": {"connection_id": connection_id},
+            }).execute()
+            logger.info(f"Enqueued email_processing job for connection {connection_id}")
+        except Exception as e:
+            # Non-fatal — the account is connected, onboarding can be retried
+            logger.error(f"Failed to enqueue email onboarding job: {e}")
+
+    async def store_tokens(
+        self,
+        user_id: str,
+        access_token: str,
+        refresh_token: Optional[str] = None,
+        expires_at: Optional[str] = None,
+        scopes: Optional[List[str]] = None,
+        service_user_id: Optional[str] = None,
+        service_user_email: Optional[str] = None,
+    ) -> dict:
+        """Store Gmail tokens via Vault RPC and enqueue onboarding job.
+
+        Used by the first-account OAuth flow (Supabase provider auth).
+        The RPC handles Vault encryption and connection upsert.
+        """
+        store_result = self.supabase.rpc("store_oauth_tokens", {
+            "p_user_id": user_id,
+            "p_service_name": "gmail",
+            "p_access_token": access_token,
+            "p_refresh_token": refresh_token,
+            "p_expires_at": expires_at,
+            "p_scopes": scopes or [],
+            "p_service_user_id": service_user_id,
+            "p_service_user_email": service_user_email,
+        }).execute()
+
+        result = store_result.data
+        if not result or not result.get("success"):
+            error = result.get("error", "Unknown error") if result else "No response"
+            raise RuntimeError(f"Failed to store tokens: {error}")
+
+        connection_id = result.get("connection_id")
+        self._enqueue_email_onboarding(user_id, str(connection_id))
+
+        return result
 
     async def _exchange_code_for_tokens(self, code: str) -> dict:
         """Exchange authorization code for tokens via Google's token endpoint."""
