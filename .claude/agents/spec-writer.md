@@ -47,12 +47,21 @@ Before designing anything, understand what already exists:
 - Read the architecture-principles skill for applicable principles
 - Read the relevant domain skills for existing recipes/patterns
 
+### 2b. Check Platform Primitives
+
+Before designing new tables or services, read the **Platform Primitives** section in `.claude/skills/product-architecture/SKILL.md`. If the feature needs background processing, approval, notifications, scheduling, or external API access — use the existing primitive. Only propose new infrastructure if no existing primitive fits.
+
+**Key question:** Does the feature need a table with status lifecycle transitions (pending/processing/complete/failed)? If yes, it's a job — use `job_type` in the `jobs` table, not a new table.
+
+If you identify a genuinely new primitive (not covered by existing ones), flag it explicitly so the user can decide whether to build it generically or as a point solution.
+
 ### 3. Design the Feature
 
 For each decision, check:
 1. Is there a principle (S1-S7, F1-F2, A1-A14) that answers this? → Follow it, cite it.
-2. Is there an existing pattern in a domain skill? → Follow it, reference it.
-3. Is this genuinely ambiguous? → Flag it for the user with options and trade-offs.
+2. Is there a platform primitive that handles this? → Use it, reference it. (See product-architecture skill.)
+3. Is there an existing pattern in a domain skill? → Follow it, reference it.
+4. Is this genuinely ambiguous? → Flag it for the user with options and trade-offs.
 
 ### 4. Draft the Spec
 

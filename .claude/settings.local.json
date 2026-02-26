@@ -13,7 +13,19 @@
       "mcp__clarity-dev__chat_with_clarity",
       "WebFetch(domain:smith.langchain.com)",
       "mcp__langsmith__paginate_runs",
-      "mcp__langsmith__fetch_runs"
+      "mcp__langsmith__fetch_runs",
+      "WebFetch(domain:alexop.dev)",
+      "WebFetch(domain:news.ycombinator.com)",
+      "WebFetch(domain:www.theregister.com)",
+      "WebFetch(domain:autonomee.ai)",
+      "WebFetch(domain:addyosmani.com)",
+      "WebFetch(domain:paddo.dev)",
+      "WebFetch(domain:shipyard.build)",
+      "WebFetch(domain:www.dolthub.com)",
+      "WebFetch(domain:jeongil.dev)",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:claude.com)",
+      "WebFetch(domain:boristane.com)"
     ]
   },
   "prefersReducedMotion": true

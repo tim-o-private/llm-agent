@@ -3,11 +3,11 @@
 > **Status:** Draft
 > **Author:** spec-writer agent
 > **Created:** 2026-02-22
-> **Updated:** 2026-02-22
+> **Updated:** 2026-02-24
 
 ## Goal
 
-Add a web search tool to the assistant agent so it can answer questions about current events, look up documentation, and retrieve up-to-date information from the web. Uses DuckDuckGo (no API key required) via the `duckduckgo-search` Python library. This fills a confirmed gap identified during UAT — the agent currently has no way to access web information.
+Add a web search tool to the assistant agent so it can answer questions about current events, look up documentation, and retrieve up-to-date information from the web. Supports two providers: DuckDuckGo (free, no API key) and Tavily (paid, better quality). Provider is selected via environment variable, defaulting to DuckDuckGo for zero-config operation.
 
 ## Acceptance Criteria
 
@@ -22,6 +22,10 @@ Add a web search tool to the assistant agent so it can answer questions about cu
 - [ ] **AC-09:** Agent prompt includes guidance to use `search_web` for current events, documentation, and up-to-date information. [A6]
 - [ ] **AC-10:** `duckduckgo-search` is listed in both `requirements.txt` (root) and `chatServer/requirements.txt`. [Cross-domain gotcha #1]
 - [ ] **AC-11:** Unit tests cover happy path, no results, network error, and query-too-long cases. [A6]
+- [ ] **AC-12:** `WebSearchService` supports two providers: `duckduckgo` (default) and `tavily`. Provider is selected via `WEB_SEARCH_PROVIDER` env var. [A6]
+- [ ] **AC-13:** When `WEB_SEARCH_PROVIDER=tavily`, the service uses the Tavily API via `TAVILY_API_KEY` env var. Missing API key raises a clear error at search time. [A6]
+- [ ] **AC-14:** `tavily-python` is listed in both `requirements.txt` files. [Cross-domain gotcha #1]
+- [ ] **AC-15:** Unit tests cover both providers (DDG and Tavily paths) with mocked API calls. [A6]
 
 ## Scope
 
@@ -29,11 +33,11 @@ Add a web search tool to the assistant agent so it can answer questions about cu
 
 | File | Purpose |
 |------|---------|
-| `chatServer/services/web_search_service.py` | Service wrapping DuckDuckGo search with error handling |
+| `chatServer/services/web_search_service.py` | Service with provider abstraction (DDG + Tavily) |
 | `chatServer/tools/web_search_tool.py` | `SearchWebTool` BaseTool subclass |
-| `tests/chatServer/services/test_web_search_service.py` | Unit tests for WebSearchService |
+| `tests/chatServer/services/test_web_search_service.py` | Unit tests for WebSearchService (both providers) |
 | `tests/chatServer/tools/test_web_search_tool.py` | Unit tests for SearchWebTool |
-| `supabase/migrations/20260222000001_register_web_search_tool.sql` | DB registration migration |
+| `supabase/migrations/2026MMDD000001_register_web_search_tool.sql` | DB registration migration |
 
 ### Files to Modify
 
@@ -41,49 +45,48 @@ Add a web search tool to the assistant agent so it can answer questions about cu
 |------|--------|
 | `src/core/agent_loader_db.py` | Add `SearchWebTool` to `TOOL_REGISTRY` |
 | `chatServer/security/approval_tiers.py` | Add `search_web` entry |
-| `requirements.txt` | Add `duckduckgo-search` |
-| `chatServer/requirements.txt` | Add `duckduckgo-search` |
+| `requirements.txt` | Add `duckduckgo-search` and `tavily-python` |
+| `chatServer/requirements.txt` | Add `duckduckgo-search` and `tavily-python` |
 
 ### Out of Scope
 
 - Web page content fetching/scraping (separate tool if needed)
 - Caching search results
-- Rate limiting (DuckDuckGo has no API key; rate limits are handled by the library)
 - Search result ranking or re-ranking
 - Image/video search (text results only)
 - Frontend UI changes (tool output renders as normal agent text)
+- Per-user provider selection (global setting only)
+- Rate limiting beyond what the libraries provide natively
 
 ## Technical Approach
 
 ### 1. WebSearchService (`chatServer/services/web_search_service.py`)
 
-Thin service wrapping the `duckduckgo-search` library. See `backend-patterns` skill for service layer conventions.
+Provider-abstracted service. Selects backend via `WEB_SEARCH_PROVIDER` env var.
 
 ```python
 import logging
-from duckduckgo_search import DDGS
+import os
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 class WebSearchService:
-    """Service for performing web searches via DuckDuckGo."""
+    """Web search with swappable providers (DuckDuckGo or Tavily)."""
 
-    def __init__(self, max_results: int = 10):
+    PROVIDERS = ("duckduckgo", "tavily")
+
+    def __init__(self, max_results: int = 10, provider: Optional[str] = None):
         self.max_results = max_results
+        self.provider = provider or os.getenv("WEB_SEARCH_PROVIDER", "duckduckgo")
+        if self.provider not in self.PROVIDERS:
+            raise ValueError(f"Unknown search provider '{self.provider}'. Use: {self.PROVIDERS}")
 
     async def search(self, query: str, max_results: int | None = None) -> list[dict]:
-        """
-        Search DuckDuckGo and return results.
-
-        Args:
-            query: Search query string (max 500 chars).
-            max_results: Override default max results (1-10).
+        """Search and return normalized results.
 
         Returns:
-            List of dicts with keys: title, href, body.
-
-        Raises:
-            ValueError: If query is empty or exceeds 500 chars.
+            List of dicts with keys: title, url, snippet.
         """
         if not query or not query.strip():
             raise ValueError("Search query cannot be empty.")
@@ -92,16 +95,43 @@ class WebSearchService:
 
         limit = min(max_results or self.max_results, 10)
 
+        if self.provider == "tavily":
+            return await self._search_tavily(query, limit)
+        return await self._search_duckduckgo(query, limit)
+
+    async def _search_duckduckgo(self, query: str, limit: int) -> list[dict]:
+        from duckduckgo_search import DDGS
         try:
             ddgs = DDGS()
             results = ddgs.text(query, max_results=limit)
-            return results
+            return [
+                {"title": r.get("title", ""), "url": r.get("href", ""), "snippet": r.get("body", "")}
+                for r in results
+            ]
         except Exception as e:
-            logger.error(f"DuckDuckGo search failed for query '{query[:50]}...': {e}")
+            logger.error(f"DuckDuckGo search failed: {e}")
+            raise
+
+    async def _search_tavily(self, query: str, limit: int) -> list[dict]:
+        from tavily import TavilyClient
+        api_key = os.getenv("TAVILY_API_KEY")
+        if not api_key:
+            raise RuntimeError("TAVILY_API_KEY environment variable is required when using Tavily provider.")
+        try:
+            client = TavilyClient(api_key=api_key)
+            response = client.search(query=query, max_results=limit)
+            return [
+                {"title": r.get("title", ""), "url": r.get("url", ""), "snippet": r.get("content", "")}
+                for r in response.get("results", [])
+            ]
+        except Exception as e:
+            logger.error(f"Tavily search failed: {e}")
             raise
 ```
 
-Note: `duckduckgo-search` uses `httpx` internally and its `text()` method is synchronous. We call it from `_arun` without wrapping in `asyncio.to_thread` since the HTTP call is brief (<2s typical). If latency becomes an issue, a future optimization can wrap it.
+**Key design:** Results are normalized to `{title, url, snippet}` regardless of provider. The tool class doesn't know which provider is active.
+
+Note: Both `duckduckgo-search` and `tavily-python` use synchronous HTTP internally. Called from `_arun` without `asyncio.to_thread` since calls are brief (<2s typical). If latency becomes an issue, wrap in thread pool executor.
 
 ### 2. SearchWebTool (`chatServer/tools/web_search_tool.py`)
 
@@ -124,11 +154,11 @@ class SearchWebInput(BaseModel):
 
 
 class SearchWebTool(BaseTool):
-    """Search the web using DuckDuckGo."""
+    """Search the web for current information."""
 
     name: str = "search_web"
     description: str = (
-        "Search the web for current information using DuckDuckGo. "
+        "Search the web for current information. "
         "Returns titles, URLs, and snippets. Use this when the user asks about "
         "current events, documentation, recent news, or anything requiring "
         "up-to-date web information."
@@ -164,8 +194,8 @@ class SearchWebTool(BaseTool):
             lines = [f"Found {len(results)} result(s) for \"{query}\":\n"]
             for i, r in enumerate(results, 1):
                 title = r.get("title", "No title")
-                url = r.get("href", "")
-                snippet = r.get("body", "")
+                url = r.get("url", "")
+                snippet = r.get("snippet", "")
                 lines.append(f"{i}. **{title}**")
                 if url:
                     lines.append(f"   {url}")
@@ -224,20 +254,25 @@ TOOL_APPROVAL_DEFAULTS: dict[str, tuple[ApprovalTier, ApprovalTier]] = {
 
 ### Dependencies
 
-- `duckduckgo-search` Python package (pip: `duckduckgo-search`)
+- `duckduckgo-search` Python package (default provider, no API key needed)
+- `tavily-python` Python package (optional provider, requires `TAVILY_API_KEY`)
 - No database tables needed beyond the existing `agent_tools` and `tools` tables
-- No new environment variables required
+- New env vars (optional): `WEB_SEARCH_PROVIDER` (default: `duckduckgo`), `TAVILY_API_KEY`
 
 ## Testing Requirements
 
 ### Unit Tests (required)
 
 **`tests/chatServer/services/test_web_search_service.py`:**
-- Test successful search returns list of results
+- Test successful DDG search returns normalized results (title, url, snippet)
+- Test successful Tavily search returns normalized results
 - Test empty query raises ValueError
 - Test query over 500 chars raises ValueError
 - Test max_results capping at 10
-- Test network error handling (mock DDGS to raise exception)
+- Test DDG network error handling (mock DDGS to raise exception)
+- Test Tavily without API key raises RuntimeError
+- Test Tavily network error handling (mock TavilyClient to raise exception)
+- Test unknown provider raises ValueError
 
 **`tests/chatServer/tools/test_web_search_tool.py`:**
 - Test `_arun` happy path returns formatted output
@@ -259,6 +294,9 @@ TOOL_APPROVAL_DEFAULTS: dict[str, tuple[ApprovalTier, ApprovalTier]] = {
 | AC-08 | Unit | `test_prompt_section_all_channels` |
 | AC-09 | Unit | `test_prompt_section_content` |
 | AC-11 | Unit | All of the above |
+| AC-12 | Unit | `test_ddg_provider`, `test_tavily_provider` |
+| AC-13 | Unit | `test_tavily_missing_api_key` |
+| AC-15 | Unit | `test_ddg_search_normalized`, `test_tavily_search_normalized` |
 
 ### Manual Verification (UAT)
 
@@ -269,44 +307,42 @@ TOOL_APPROVAL_DEFAULTS: dict[str, tuple[ApprovalTier, ApprovalTier]] = {
 - [ ] Verify results are relevant and well-formatted
 - [ ] Ask agent a factual question it should search for (e.g., "Who won the Super Bowl this year?")
 - [ ] Verify agent proactively uses search rather than guessing
+- [ ] (If Tavily configured) Set `WEB_SEARCH_PROVIDER=tavily` and `TAVILY_API_KEY`, restart, verify same behavior
 
 ## Edge Cases
 
-- **No results:** DuckDuckGo returns empty list for obscure queries. Tool returns "No results found" message with suggestion to rephrase.
-- **Network error/timeout:** `duckduckgo-search` raises an exception if network is unavailable. Tool catches and returns "Web search is temporarily unavailable."
-- **Query too long:** Queries over 500 characters are rejected before calling DuckDuckGo with a clear error message.
+- **No results:** Provider returns empty list for obscure queries. Tool returns "No results found" message with suggestion to rephrase.
+- **Network error/timeout:** Provider raises an exception if network is unavailable. Tool catches and returns "Web search is temporarily unavailable."
+- **Query too long:** Queries over 500 characters are rejected before calling any provider with a clear error message.
 - **Empty query:** Empty or whitespace-only queries raise ValueError, caught by tool.
-- **Special characters in query:** DuckDuckGo handles URL encoding internally; no special handling needed.
-- **Rate limiting:** DuckDuckGo may rate-limit heavy usage. The `duckduckgo-search` library handles retries internally. If rate-limited, the exception is caught as a general network error.
+- **Special characters in query:** Both providers handle URL encoding internally; no special handling needed.
+- **Rate limiting (DDG):** DuckDuckGo may rate-limit heavy usage. The `duckduckgo-search` library handles retries internally. If rate-limited, the exception is caught as a general network error.
+- **Tavily without API key:** Clear RuntimeError at search time, not at import/init time. Service initializes fine; error surfaces only when search is attempted.
+- **Invalid provider name:** ValueError at `WebSearchService.__init__()` with list of valid providers.
 
 ## Functional Units (for PR Breakdown)
 
-1. **FU-1: DB Registration** (`feat/SPEC-016-db`)
+1. **FU-1: DB + Dependencies** (single branch, `feat/SPEC-016-web-search`)
    - Migration: add `SearchWebTool` enum value, insert `agent_tools` row for assistant agent
    - Modify `approval_tiers.py`: add `search_web` entry
+   - Add `duckduckgo-search` and `tavily-python` to both `requirements.txt` files
    - Assigned to: database-dev
 
-2. **FU-2: Service + Tool** (`feat/SPEC-016-service`)
-   - Create `chatServer/services/web_search_service.py`
+2. **FU-2: Service + Tool + Tests**
+   - Create `chatServer/services/web_search_service.py` (provider abstraction)
    - Create `chatServer/tools/web_search_tool.py`
    - Modify `src/core/agent_loader_db.py`: add to `TOOL_REGISTRY`
-   - Add `duckduckgo-search` to both `requirements.txt` files
-   - Assigned to: backend-dev
-
-3. **FU-3: Tests + Approval Tier** (`feat/SPEC-016-tests`)
    - Create `tests/chatServer/services/test_web_search_service.py`
    - Create `tests/chatServer/tools/test_web_search_tool.py`
    - Assigned to: backend-dev
 
 ### Merge Order
 
-FU-1 → FU-2 → FU-3 (linear; FU-2 depends on enum from FU-1, FU-3 tests code from FU-2)
-
-Note: FU-2 and FU-3 could be a single PR if preferred, since they're both backend-dev and tightly coupled. The split is for review clarity.
+FU-1 → FU-2 (single branch; FU-2 depends on enum and tool registration from FU-1)
 
 ## Completeness Checklist
 
-- [x] Every AC has a stable ID (AC-01 through AC-11)
+- [x] Every AC has a stable ID (AC-01 through AC-15)
 - [x] Every AC maps to at least one functional unit
 - [x] Technical decisions reference principles (A6, A7, A10)
 - [x] Merge order is explicit and acyclic
@@ -314,3 +350,4 @@ Note: FU-2 and FU-3 could be a single PR if preferred, since they're both backen
 - [x] Edge cases documented with expected behavior
 - [x] Testing requirements map to ACs
 - [x] Cross-domain gotchas addressed (dual requirements.txt)
+- [x] Provider abstraction documented with normalized result format

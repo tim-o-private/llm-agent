@@ -59,13 +59,21 @@ cd webApp && pnpm lint
 - [ ] Schema/API names match cross-domain contracts
 - [ ] Response shapes match what downstream consumers expect
 
+#### Primitive Reuse (A11)
+- [ ] Does this create a new table with status lifecycle columns? → Should use `jobs` table with a `job_type`
+- [ ] Does this create a new polling loop? → Should register a job handler in `JobRunnerService`
+- [ ] Does this create a new preferences/config table? → Should use LTM or existing JSONB config
+- [ ] Does this create a new notification delivery path? → Should use `NotificationService`
+
+Reference: Platform Primitives section in `.claude/skills/product-architecture/SKILL.md`
+
 #### Principle Compliance
 
 Check the principles most relevant to the domain:
 - **Database:** A8 (RLS), A9 (UUID FKs), A3 (data planes)
 - **Backend:** A1 (thin routers), A5 (auth), A6 (tools), A10 (naming)
 - **Frontend:** A4 (React Query vs Zustand), A5 (auth), A10 (naming)
-- **All:** A10 (naming), A14 (pragmatic progressivism)
+- **All:** A10 (naming), A11 (design for N), A14 (pragmatic progressivism)
 
 #### Testing
 - [ ] Every new function/file has corresponding tests

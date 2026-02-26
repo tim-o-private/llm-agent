@@ -21,6 +21,10 @@ Prioritized task queue. Items move to specs when ready for implementation.
 | P1 | SPEC-012 | [Unified Agent Invocation Service](specs/SPEC-012-agent-invocation-service.md) | Draft — 4 functional units |
 | P1 | SPEC-013 | [Agent Task Tools](specs/SPEC-013-agent-task-tools.md) | Draft — 5 functional units |
 | P2 | SPEC-016 | [Web Search Tool](specs/SPEC-016-web-search.md) | Draft — 3 functional units |
+| P1 | SPEC-026 | [Universal Job Queue & Scheduler](specs/SPEC-026-universal-job-queue.md) | Draft |
+| P2 | SPEC-027 | [Google Calendar Integration](specs/SPEC-027-google-calendar-integration.md) | Draft |
+| P2 | SPEC-028 | [Morning & Evening Briefings](specs/SPEC-028-morning-evening-briefings.md) | Placeholder |
+| P2 | SPEC-029 | [Draft-Reply Workflow](specs/SPEC-029-draft-reply-workflow.md) | Placeholder |
 
 ## Backlog Items (Not Yet Specced)
 
