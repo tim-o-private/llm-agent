@@ -10,6 +10,9 @@ from croniter import croniter
 from ..config.constants import SCHEDULED_TASK_INTERVAL_SECONDS, SESSION_INSTANCE_TTL_SECONDS
 from ..database.connection import get_database_manager
 from ..database.supabase_client import create_system_client
+from .job_handlers import handle_agent_invocation, handle_email_processing, handle_reminder_delivery
+from .job_runner_service import JobRunnerService
+from .job_service import JobService
 
 logger = logging.getLogger(__name__)
 
@@ -22,10 +25,12 @@ class BackgroundTaskService:
         self.evict_task: Optional[asyncio.Task] = None
         self.scheduled_agents_task: Optional[asyncio.Task] = None
         self.reminder_task: Optional[asyncio.Task] = None
-        self.email_processing_task: Optional[asyncio.Task] = None
+        self.job_runner_task: Optional[asyncio.Task] = None
         self._agent_executor_cache: Optional[Dict[Tuple[str, str], Any]] = None
         self.agent_schedules: Dict[str, Dict] = {}
         self._last_schedule_check: Optional[datetime] = None
+        self._job_service = None
+        self._job_runner = None
 
     def set_agent_executor_cache(self, cache: Dict[Tuple[str, str], Any]) -> None:
         """Set the agent executor cache reference for eviction tasks."""
@@ -186,8 +191,7 @@ class BackgroundTaskService:
         """Execute a single scheduled agent.
 
         Email digest schedules use EmailDigestService for backward compatibility.
-        All other schedules use ScheduledExecutionService which properly loads
-        agents from DB and wraps tools with the approval system.
+        All other schedules enqueue an agent_invocation job via the job queue.
         """
         schedule_id = schedule.get('id')
         user_id = schedule.get('user_id')
@@ -196,7 +200,7 @@ class BackgroundTaskService:
         config = schedule.get('config', {})
 
         try:
-            logger.info(f"Executing scheduled agent {agent_name} for user {user_id} (schedule {schedule_id})")
+            logger.info(f"Scheduling agent {agent_name} for user {user_id} (schedule {schedule_id})")
 
             # TODO: SPEC-020 — Remove email digest special case. The agent should
             # use search_gmail and reason about results instead of a dedicated service.
@@ -222,158 +226,82 @@ class BackgroundTaskService:
                 else:
                     logger.error(f"Scheduled email digest failed for user {user_id}: {result.get('error')}")
             else:
-                # All other schedules use ScheduledExecutionService
-                from ..services.scheduled_execution_service import ScheduledExecutionService
-
-                service = ScheduledExecutionService()
-                result = await service.execute(schedule)
-
-                if result.get("success"):
-                    logger.info(
-                        f"Scheduled agent {agent_name} completed for user {user_id} "
-                        f"({result.get('duration_ms', 0)}ms)"
-                    )
-                else:
+                # All other schedules enqueue an agent_invocation job
+                if self._job_service is None:
                     logger.error(
-                        f"Scheduled agent {agent_name} failed for user {user_id}: "
-                        f"{result.get('error')}"
+                        f"job_service not initialized, cannot enqueue agent_invocation "
+                        f"for schedule {schedule_id}"
                     )
+                    return
+
+                await self._job_service.create(
+                    job_type='agent_invocation',
+                    input={
+                        'id': schedule_id,
+                        'user_id': user_id,
+                        'agent_name': agent_name,
+                        'prompt': prompt,
+                        'config': config,
+                    },
+                    user_id=user_id,
+                )
+                logger.info(
+                    f"Enqueued agent_invocation job for {agent_name} (schedule {schedule_id})"
+                )
 
         except Exception as e:
             logger.error(f"Scheduled agent execution failed for schedule {schedule_id}: {e}", exc_info=True)
 
-    async def check_email_processing_jobs(self) -> None:
-        """Check for pending email processing jobs every 60 seconds."""
-        while True:
-            await asyncio.sleep(60)
-            logger.debug("Running task: check_email_processing_jobs")
-
-            db_manager = get_database_manager()
-            if db_manager.pool is None:
-                logger.warning("db_pool not available, skipping email processing task cycle.")
-                continue
-
-            try:
-                async with db_manager.pool.connection() as conn:
-                    async with conn.cursor() as cur:
-                        await cur.execute(
-                            "SELECT id, user_id, connection_id, status FROM email_processing_jobs"
-                            " WHERE status = 'pending' LIMIT 10"
-                        )
-                        jobs = await cur.fetchall()
-
-                for job_row in jobs:
-                    job_id, user_id, connection_id, status = job_row
-                    job = {
-                        "id": str(job_id),
-                        "user_id": str(user_id),
-                        "connection_id": str(connection_id),
-                        "status": status,
-                    }
-                    await self._process_email_job(job)
-
-            except Exception as e:
-                logger.error(f"Error in check_email_processing_jobs: {e}", exc_info=True)
-
-    async def _process_email_job(self, job: dict) -> None:
-        """Process a single email onboarding job with status tracking."""
-        import json
-
-        job_id = job["id"]
-        db_manager = get_database_manager()
-
-        try:
-            # Mark as processing
-            async with db_manager.pool.connection() as conn:
-                async with conn.cursor() as cur:
-                    await cur.execute(
-                        "UPDATE email_processing_jobs SET status = 'processing', started_at = NOW()"
-                        " WHERE id = %s",
-                        (job_id,),
-                    )
-
-            from ..services.email_onboarding_service import EmailOnboardingService
-
-            service = EmailOnboardingService()
-            result = await service.process_job(job)
-
-            # Mark complete or failed
-            async with db_manager.pool.connection() as conn:
-                async with conn.cursor() as cur:
-                    if result.get("success"):
-                        output = result.get("output", "")
-                        result_summary = json.dumps({"output_preview": output[:500] if output else ""})
-                        await cur.execute(
-                            "UPDATE email_processing_jobs"
-                            " SET status = 'complete', completed_at = NOW(), result_summary = %s"
-                            " WHERE id = %s",
-                            (result_summary, job_id),
-                        )
-                    else:
-                        error_msg = result.get("error", "Unknown error")
-                        await cur.execute(
-                            "UPDATE email_processing_jobs"
-                            " SET status = 'failed', completed_at = NOW(), error_message = %s"
-                            " WHERE id = %s",
-                            (error_msg, job_id),
-                        )
-
-        except Exception as e:
-            logger.error(f"Email processing job {job_id} failed: {e}", exc_info=True)
-            try:
-                async with db_manager.pool.connection() as conn:
-                    async with conn.cursor() as cur:
-                        await cur.execute(
-                            "UPDATE email_processing_jobs"
-                            " SET status = 'failed', completed_at = NOW(), error_message = %s"
-                            " WHERE id = %s",
-                            (str(e), job_id),
-                        )
-            except Exception as db_err:
-                logger.error(f"Failed to update job {job_id} to failed: {db_err}")
-
     async def check_due_reminders(self) -> None:
-        """Check for and deliver due reminders every 60 seconds."""
+        """Check for due reminders every 60 seconds and enqueue delivery jobs."""
         while True:
             await asyncio.sleep(60)
             logger.debug("Running task: check_due_reminders")
 
             try:
+                if self._job_service is None:
+                    logger.warning("job_service not available, skipping reminder enqueue cycle.")
+                    continue
+
                 db_client = await create_system_client()
 
-                from ..services.notification_service import NotificationService
                 from ..services.reminder_service import ReminderService
 
                 reminder_service = ReminderService(db_client)
-                notification_service = NotificationService(db_client)
-
                 due = await reminder_service.get_due_reminders()
+
                 for reminder in due:
                     try:
-                        await notification_service.notify_user(
-                            user_id=reminder["user_id"],
-                            title=f"Reminder: {reminder['title']}",
-                            body=reminder.get("body") or reminder["title"],
-                            category="reminder",
-                            metadata={"reminder_id": str(reminder["id"])},
+                        await self._job_service.create(
+                            job_type='reminder_delivery',
+                            input={
+                                'reminder_id': str(reminder['id']),
+                                'user_id': reminder['user_id'],
+                            },
+                            user_id=reminder['user_id'],
                         )
-                        await reminder_service.mark_sent(reminder["id"])
-                        await reminder_service.handle_recurrence(reminder)
                     except Exception as e:
-                        logger.error(f"Failed to deliver reminder {reminder.get('id')}: {e}")
+                        logger.error(f"Failed to enqueue reminder {reminder.get('id')}: {e}")
             except Exception as e:
                 logger.error(f"Error in check_due_reminders: {e}", exc_info=True)
 
     def start_background_tasks(self) -> None:
         """Start all background tasks."""
+        db_manager = get_database_manager()
+        self._job_service = JobService(db_manager.pool)
+        self._job_runner = JobRunnerService(self._job_service)
+        self._job_runner.register_handler('email_processing', handle_email_processing)
+        self._job_runner.register_handler('agent_invocation', handle_agent_invocation)
+        self._job_runner.register_handler('reminder_delivery', handle_reminder_delivery)
+
         self.deactivate_task = asyncio.create_task(self.deactivate_stale_chat_session_instances())
         self.evict_task = asyncio.create_task(self.evict_inactive_executors())
         self.scheduled_agents_task = asyncio.create_task(self.run_scheduled_agents())
         self.reminder_task = asyncio.create_task(self.check_due_reminders())
-        self.email_processing_task = asyncio.create_task(self.check_email_processing_jobs())
+        self.job_runner_task = asyncio.create_task(self._job_runner.run())
         logger.info(
             "Background tasks for session cleanup, cache eviction, scheduled agents, "
-            "reminders, and email processing started."
+            "reminders, and job runner started."
         )
 
     async def stop_background_tasks(self) -> None:
@@ -410,13 +338,13 @@ class BackgroundTaskService:
             except asyncio.CancelledError:
                 logger.info("Reminder delivery task successfully cancelled.")
 
-        if self.email_processing_task:
-            self.email_processing_task.cancel()
-            logger.info("Email processing task cancelling...")
+        if self.job_runner_task:
+            self.job_runner_task.cancel()
+            logger.info("Job runner task cancelling...")
             try:
-                await self.email_processing_task
+                await self.job_runner_task
             except asyncio.CancelledError:
-                logger.info("Email processing task successfully cancelled.")
+                logger.info("Job runner task successfully cancelled.")
 
 
 # Global instance for use in main.py
