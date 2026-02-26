@@ -72,9 +72,6 @@ TOOL_APPROVAL_DEFAULTS: dict[str, tuple[ApprovalTier, ApprovalTier]] = {
 
     # Update instructions
     "update_instructions": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.REQUIRES_APPROVAL),
-
-    # Web search - read-only, no user data
-    "search_web": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
 }
 
 # Default tier for unknown tools (fail-safe)
