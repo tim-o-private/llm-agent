@@ -1,6 +1,6 @@
 """Unit tests for JobRunnerService."""
 
-from unittest.mock import AsyncMock, MagicMock, call
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 

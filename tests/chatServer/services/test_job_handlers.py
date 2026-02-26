@@ -8,16 +8,21 @@ import pytest
 
 
 def _inject_module(name, **attrs):
-    """Inject a fake module into sys.modules and return a cleanup function."""
+    """Inject a fake module into sys.modules, returning (module, original)."""
     mod = types.ModuleType(name)
     for k, v in attrs.items():
         setattr(mod, k, v)
+    original = sys.modules.get(name)
     sys.modules[name] = mod
-    return mod
+    return mod, original
 
 
-def _cleanup_module(name):
-    sys.modules.pop(name, None)
+def _restore_module(name, original):
+    """Restore a module in sys.modules to its original state."""
+    if original is None:
+        sys.modules.pop(name, None)
+    else:
+        sys.modules[name] = original
 
 
 # ---------------------------------------------------------------------------
@@ -35,7 +40,7 @@ async def test_handle_email_processing_success():
     )
     mock_service_cls = MagicMock(return_value=mock_service_instance)
 
-    mod = _inject_module(
+    _, original = _inject_module(
         "chatServer.services.email_onboarding_service",
         EmailOnboardingService=mock_service_cls,
     )
@@ -50,7 +55,7 @@ async def test_handle_email_processing_success():
         }
         result = await handle_email_processing(job)
     finally:
-        _cleanup_module("chatServer.services.email_onboarding_service")
+        _restore_module("chatServer.services.email_onboarding_service", original)
 
     assert result["success"] is True
     mock_service_instance.process_job.assert_called_once()
@@ -71,7 +76,7 @@ async def test_handle_email_processing_failure_raises():
     )
     mock_service_cls = MagicMock(return_value=mock_service_instance)
 
-    mod = _inject_module(
+    _, original = _inject_module(
         "chatServer.services.email_onboarding_service",
         EmailOnboardingService=mock_service_cls,
     )
@@ -86,7 +91,7 @@ async def test_handle_email_processing_failure_raises():
         with pytest.raises(RuntimeError, match="LLM error"):
             await handle_email_processing(job)
     finally:
-        _cleanup_module("chatServer.services.email_onboarding_service")
+        _restore_module("chatServer.services.email_onboarding_service", original)
 
 
 # ---------------------------------------------------------------------------
@@ -104,7 +109,7 @@ async def test_handle_agent_invocation_success():
     )
     mock_service_cls = MagicMock(return_value=mock_service_instance)
 
-    mod = _inject_module(
+    _, original = _inject_module(
         "chatServer.services.scheduled_execution_service",
         ScheduledExecutionService=mock_service_cls,
     )
@@ -126,7 +131,7 @@ async def test_handle_agent_invocation_success():
     try:
         result = await handle_agent_invocation(job)
     finally:
-        _cleanup_module("chatServer.services.scheduled_execution_service")
+        _restore_module("chatServer.services.scheduled_execution_service", original)
 
     assert result["success"] is True
     mock_service_instance.execute.assert_called_once_with(schedule)
@@ -143,7 +148,7 @@ async def test_handle_agent_invocation_failure_raises():
     )
     mock_service_cls = MagicMock(return_value=mock_service_instance)
 
-    mod = _inject_module(
+    _, original = _inject_module(
         "chatServer.services.scheduled_execution_service",
         ScheduledExecutionService=mock_service_cls,
     )
@@ -158,7 +163,7 @@ async def test_handle_agent_invocation_failure_raises():
         with pytest.raises(RuntimeError, match="Agent crashed"):
             await handle_agent_invocation(job)
     finally:
-        _cleanup_module("chatServer.services.scheduled_execution_service")
+        _restore_module("chatServer.services.scheduled_execution_service", original)
 
 
 # ---------------------------------------------------------------------------
@@ -188,12 +193,13 @@ async def test_handle_reminder_delivery_success():
 
     mock_db_client = AsyncMock()
 
-    # Services are lazy-imported inside the handler — inject via sys.modules
-    reminder_mod = _inject_module(
+    # Services are lazy-imported inside the handler — inject via sys.modules.
+    # Save originals so other tests aren't polluted.
+    _, orig_reminder = _inject_module(
         "chatServer.services.reminder_service",
         ReminderService=MagicMock(return_value=mock_reminder_svc),
     )
-    notif_mod = _inject_module(
+    _, orig_notif = _inject_module(
         "chatServer.services.notification_service",
         NotificationService=MagicMock(return_value=mock_notification_svc),
     )
@@ -211,8 +217,8 @@ async def test_handle_reminder_delivery_success():
             }
             result = await handle_reminder_delivery(job)
     finally:
-        _cleanup_module("chatServer.services.reminder_service")
-        _cleanup_module("chatServer.services.notification_service")
+        _restore_module("chatServer.services.reminder_service", orig_reminder)
+        _restore_module("chatServer.services.notification_service", orig_notif)
 
     assert result == {"delivered": True, "reminder_id": "rem-1"}
     mock_notification_svc.notify_user.assert_called_once()
@@ -234,7 +240,7 @@ async def test_handle_reminder_delivery_not_found():
 
     mock_db_client = AsyncMock()
 
-    reminder_mod = _inject_module(
+    _, orig_reminder = _inject_module(
         "chatServer.services.reminder_service",
         ReminderService=MagicMock(return_value=mock_reminder_svc),
     )
@@ -252,7 +258,7 @@ async def test_handle_reminder_delivery_not_found():
             }
             result = await handle_reminder_delivery(job)
     finally:
-        _cleanup_module("chatServer.services.reminder_service")
+        _restore_module("chatServer.services.reminder_service", orig_reminder)
 
     assert result == {"skipped": True}
     mock_reminder_svc.mark_sent.assert_not_called()
