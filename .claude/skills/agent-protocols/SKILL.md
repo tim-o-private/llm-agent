@@ -63,8 +63,9 @@ If you discover another agent has committed to files in YOUR claimed task's scop
 - **If tests or lint fail because of files outside your scope, that's OK.** Report the failure to the lead with the file path and error. Do NOT fix files outside your scope to make checks pass.
 - **If imports break because of your changes,** only fix imports IN files you own. If a file outside your scope imports something you changed, flag it — don't edit that file.
 - **NEVER "clean up" old code after implementing a replacement.** The lead decides when old code gets removed, not individual agents.
+- **NEVER use `git checkout --` or `git restore` to discard changes.** These commands destroy uncommitted work. If you see unrelated changes in the working tree, flag them to the lead — don't remove them. (This is enforced by a hook — the command will be blocked.)
 
-**Why:** Uncommitted deletions are invisible to other agents and the lead. If you delete a file another agent or the user depends on, there's no commit to revert — the work is just gone.
+**Why:** Uncommitted deletions and discarded changes are invisible to other agents and the lead. If you delete a file or discard changes another agent or the user depends on, there's no commit to revert — the work is just gone.
 
 **What to do instead:**
 ```
