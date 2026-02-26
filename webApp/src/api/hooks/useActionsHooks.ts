@@ -5,6 +5,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { toast } from '@/components/ui/toast';
+import { sendMessageApi } from './useChatApiHooks';
 
 const ACTIONS_QUERY_KEY = 'actions';
 const NOTIFICATIONS_QUERY_KEY = 'notifications';
@@ -101,14 +102,15 @@ async function fetchAuditHistory(
 export function useApproveAction() {
   const queryClient = useQueryClient();
 
-  return useMutation<ActionResult, Error, string>({
-    mutationFn: approveAction,
-    onSuccess: (result) => {
-      if (result.success) {
-        toast.success('Action approved and executed');
-      } else {
-        toast.error('Action approval failed', result.error);
-      }
+  return useMutation<ActionResult, Error, { actionId: string; sessionId: string; toolName: string }>({
+    mutationFn: ({ actionId }) => approveAction(actionId),
+    onSuccess: async (result, variables) => {
+      const execResult = result.result?.execution_result as string | undefined;
+      await sendMessageApi({
+        message: `[Action approved: ${variables.toolName}. Result: ${execResult ?? 'Executed successfully.'}]`,
+        userId: null,
+        activeChatId: variables.sessionId,
+      });
       queryClient.invalidateQueries({ queryKey: [ACTIONS_QUERY_KEY] });
       queryClient.invalidateQueries({ queryKey: [NOTIFICATIONS_QUERY_KEY] });
     },
@@ -121,10 +123,14 @@ export function useApproveAction() {
 export function useRejectAction() {
   const queryClient = useQueryClient();
 
-  return useMutation<ActionResult, Error, { actionId: string; reason?: string }>({
+  return useMutation<ActionResult, Error, { actionId: string; reason?: string; sessionId: string; toolName: string }>({
     mutationFn: ({ actionId, reason }) => rejectAction(actionId, reason),
-    onSuccess: () => {
-      toast.success('Action rejected');
+    onSuccess: async (_, variables) => {
+      await sendMessageApi({
+        message: `[Action rejected: ${variables.toolName}. Reason: ${variables.reason || 'User declined.'}]`,
+        userId: null,
+        activeChatId: variables.sessionId,
+      });
       queryClient.invalidateQueries({ queryKey: [ACTIONS_QUERY_KEY] });
       queryClient.invalidateQueries({ queryKey: [NOTIFICATIONS_QUERY_KEY] });
     },

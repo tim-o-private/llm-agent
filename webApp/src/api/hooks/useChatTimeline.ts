@@ -24,11 +24,8 @@ export function useChatTimeline(): ChatMessage[] {
       .filter((n) => {
         // Never show agent-only notifications
         if (n.type === 'agent_only') return false;
-        // Show pending approval notifications; hide resolved ones
-        if (n.requires_approval) {
-          const actionStatus = n.metadata?.action_status as string | undefined;
-          return !actionStatus || actionStatus === 'pending';
-        }
+        // Always show approval cards — resolved cards fold result into the same card (AC-27)
+        if (n.requires_approval) return true;
         // Hide silent notifications and read non-approval notifications
         if (n.type === 'silent') return false;
         if (n.read) return false;

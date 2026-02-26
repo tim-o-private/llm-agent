@@ -119,6 +119,52 @@ describe('useChatTimeline', () => {
     expect(item.action_tool_name).toBe('send_email');
   });
 
+  it('keeps resolved approval cards in timeline (AC-27)', () => {
+    mockUseChatStore.mockReturnValue([] as unknown as ReturnType<typeof useChatStore>);
+    mockUseNotifications.mockReturnValue({
+      data: [
+        {
+          id: 'approval-resolved',
+          title: 'Action approved',
+          body: 'Task deleted',
+          category: 'approval_needed',
+          metadata: { tool_name: 'delete_tasks', action_status: 'approved' },
+          read: true,
+          created_at: '2026-02-17T11:00:00Z',
+          type: 'notify',
+          requires_approval: true,
+          pending_action_id: 'act-1',
+        },
+      ],
+    } as ReturnType<typeof useNotifications>);
+
+    const { result } = renderHook(() => useChatTimeline());
+    expect(result.current).toHaveLength(1);
+    expect(result.current[0].id).toBe('notif-approval-resolved');
+  });
+
+  it('filters out silent notifications (AC-28)', () => {
+    mockUseChatStore.mockReturnValue([] as unknown as ReturnType<typeof useChatStore>);
+    mockUseNotifications.mockReturnValue({
+      data: [
+        {
+          id: 'silent-audit',
+          title: 'Audit trail',
+          body: 'Action completed',
+          category: 'audit',
+          metadata: {},
+          read: false,
+          created_at: '2026-02-17T11:00:00Z',
+          type: 'silent',
+          requires_approval: false,
+        },
+      ],
+    } as ReturnType<typeof useNotifications>);
+
+    const { result } = renderHook(() => useChatTimeline());
+    expect(result.current).toHaveLength(0);
+  });
+
   it('sorts items by timestamp', () => {
     mockUseChatStore.mockReturnValue([
       { id: 'msg-late', text: 'Late', sender: 'user', timestamp: new Date('2026-02-17T12:00:00Z') },
