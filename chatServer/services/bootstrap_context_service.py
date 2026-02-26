@@ -63,7 +63,7 @@ class BootstrapContextService:
             ).eq(
                 "user_id", user_id
             ).eq(
-                "is_deleted", False
+                "deleted", False
             ).in_(
                 "status", ["pending", "in_progress", "planning"]
             ).execute()
@@ -95,8 +95,6 @@ class BootstrapContextService:
                 "id, title, remind_at"
             ).eq(
                 "user_id", user_id
-            ).eq(
-                "is_deleted", False
             ).eq(
                 "status", "pending"
             ).gte(

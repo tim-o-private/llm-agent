@@ -185,7 +185,7 @@ class SessionOpenService:
             resp = await supabase_client.table("user_agent_prompt_customizations").select("id").eq(
                 "user_id", user_id
             ).eq("agent_name", agent_name).maybe_single().execute()
-            return resp.data is not None
+            return resp is not None and resp.data is not None
         except Exception as e:
             logger.warning(f"Failed to check instructions for {user_id}/{agent_name}: {e}")
             return False

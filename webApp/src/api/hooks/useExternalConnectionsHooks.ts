@@ -1,12 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
-import { useAuthStore } from '@/features/auth/useAuthStore';
 import { toast } from '@/components/ui/toast';
 import type { ExternalConnection } from '@/stores/useExternalConnectionsStore';
 
 const EXTERNAL_CONNECTIONS_QUERY_KEY = 'external_connections';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
-// Types for RPC function parameters
+// Types
 interface StoreTokensParams {
   serviceName: string;
   accessToken: string;
@@ -40,35 +40,50 @@ interface ListConnectionsResponse {
   connections: ExternalConnection[];
 }
 
+/** Get current session or throw. Per A5, auth comes from supabase.auth.getSession(). */
+async function getSession() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('User not authenticated');
+  return session;
+}
+
 /**
- * Hook to store OAuth tokens using Vault
+ * Hook to store OAuth tokens via backend endpoint.
+ * The backend handles Vault encryption and enqueues the email onboarding job.
  */
 export function useStoreTokens() {
   const queryClient = useQueryClient();
-  const user = useAuthStore((state) => state.user);
 
   return useMutation<unknown, Error, StoreTokensParams>({
     mutationFn: async (params) => {
-      if (!user) throw new Error('User not authenticated');
+      const session = await getSession();
 
-      const { data, error } = await supabase.rpc('store_oauth_tokens', {
-        p_user_id: user.id,
-        p_service_name: params.serviceName,
-        p_access_token: params.accessToken,
-        p_refresh_token: params.refreshToken || null,
-        p_expires_at: params.expiresAt?.toISOString() || null,
-        p_scopes: params.scopes || [],
-        p_service_user_id: params.serviceUserId || null,
-        p_service_user_email: params.serviceUserEmail || null,
+      const response = await fetch(`${API_BASE_URL}/oauth/gmail/store-tokens`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          access_token: params.accessToken,
+          refresh_token: params.refreshToken || null,
+          expires_at: params.expiresAt?.toISOString() || null,
+          scopes: params.scopes || [],
+          service_user_id: params.serviceUserId || null,
+          service_user_email: params.serviceUserEmail || null,
+        }),
       });
 
-      if (error) throw error;
-      return data;
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Failed to store tokens' }));
+        throw new Error(errorData.detail || `HTTP ${response.status}`);
+      }
+
+      return response.json();
     },
     onSuccess: (_data, variables) => {
       toast.success(`${variables.serviceName} connected successfully`);
-      // Invalidate connections list to refresh UI
-      queryClient.invalidateQueries({ queryKey: [EXTERNAL_CONNECTIONS_QUERY_KEY, user?.id] });
+      queryClient.invalidateQueries({ queryKey: [EXTERNAL_CONNECTIONS_QUERY_KEY] });
     },
     onError: (error) => {
       toast.error('Failed to store tokens', error.message);
@@ -80,23 +95,21 @@ export function useStoreTokens() {
  * Hook to check connection status for a service
  */
 export function useConnectionStatus(serviceName: string) {
-  const user = useAuthStore((state) => state.user);
-
   return useQuery<ConnectionStatusResponse, Error>({
-    queryKey: [EXTERNAL_CONNECTIONS_QUERY_KEY, user?.id, 'status', serviceName],
+    queryKey: [EXTERNAL_CONNECTIONS_QUERY_KEY, 'status', serviceName],
     queryFn: async () => {
-      if (!user) throw new Error('User not authenticated');
+      const session = await getSession();
 
       const { data, error } = await supabase.rpc('check_connection_status', {
-        p_user_id: user.id,
+        p_user_id: session.user.id,
         p_service_name: serviceName,
       });
 
       if (error) throw error;
       return data as ConnectionStatusResponse;
     },
-    enabled: !!user && !!serviceName,
-    staleTime: 30000, // Consider data fresh for 30 seconds
+    enabled: !!serviceName,
+    staleTime: 30000,
   });
 }
 
@@ -104,22 +117,20 @@ export function useConnectionStatus(serviceName: string) {
  * Hook to get detailed connection info for a service
  */
 export function useConnectionInfo(serviceName: string) {
-  const user = useAuthStore((state) => state.user);
-
   return useQuery<ConnectionInfoResponse, Error>({
-    queryKey: [EXTERNAL_CONNECTIONS_QUERY_KEY, user?.id, 'info', serviceName],
+    queryKey: [EXTERNAL_CONNECTIONS_QUERY_KEY, 'info', serviceName],
     queryFn: async () => {
-      if (!user) throw new Error('User not authenticated');
+      const session = await getSession();
 
       const { data, error } = await supabase.rpc('get_connection_info', {
-        p_user_id: user.id,
+        p_user_id: session.user.id,
         p_service_name: serviceName,
       });
 
       if (error) throw error;
       return data as ConnectionInfoResponse;
     },
-    enabled: !!user && !!serviceName,
+    enabled: !!serviceName,
   });
 }
 
@@ -127,15 +138,13 @@ export function useConnectionInfo(serviceName: string) {
  * Hook to list all user connections
  */
 export function useListConnections() {
-  const user = useAuthStore((state) => state.user);
-
   return useQuery<ExternalConnection[], Error>({
-    queryKey: [EXTERNAL_CONNECTIONS_QUERY_KEY, user?.id],
+    queryKey: [EXTERNAL_CONNECTIONS_QUERY_KEY],
     queryFn: async () => {
-      if (!user) throw new Error('User not authenticated');
+      const session = await getSession();
 
       const { data, error } = await supabase.rpc('list_user_connections', {
-        p_user_id: user.id,
+        p_user_id: session.user.id,
       });
 
       if (error) throw error;
@@ -143,7 +152,6 @@ export function useListConnections() {
       const response = data as ListConnectionsResponse;
       return response.connections || [];
     },
-    enabled: !!user,
   });
 }
 
@@ -152,14 +160,13 @@ export function useListConnections() {
  */
 export function useRevokeTokens() {
   const queryClient = useQueryClient();
-  const user = useAuthStore((state) => state.user);
 
   return useMutation<unknown, Error, string>({
     mutationFn: async (serviceName) => {
-      if (!user) throw new Error('User not authenticated');
+      const session = await getSession();
 
       const { data, error } = await supabase.rpc('revoke_oauth_tokens', {
-        p_user_id: user.id,
+        p_user_id: session.user.id,
         p_service_name: serviceName,
       });
 
@@ -168,8 +175,7 @@ export function useRevokeTokens() {
     },
     onSuccess: (_data, serviceName) => {
       toast.success(`${serviceName} disconnected successfully`);
-      // Invalidate connections list to refresh UI
-      queryClient.invalidateQueries({ queryKey: [EXTERNAL_CONNECTIONS_QUERY_KEY, user?.id] });
+      queryClient.invalidateQueries({ queryKey: [EXTERNAL_CONNECTIONS_QUERY_KEY] });
     },
     onError: (error) => {
       toast.error('Failed to revoke tokens', error.message);
@@ -182,15 +188,13 @@ export function useRevokeTokens() {
  * Filters list_user_connections to service_name='gmail'.
  */
 export function useGmailConnections() {
-  const user = useAuthStore((state) => state.user);
-
   return useQuery<ExternalConnection[], Error>({
-    queryKey: [EXTERNAL_CONNECTIONS_QUERY_KEY, user?.id, 'gmail', 'all'],
+    queryKey: [EXTERNAL_CONNECTIONS_QUERY_KEY, 'gmail', 'all'],
     queryFn: async () => {
-      if (!user) throw new Error('User not authenticated');
+      const session = await getSession();
 
       const { data, error } = await supabase.rpc('list_user_connections', {
-        p_user_id: user.id,
+        p_user_id: session.user.id,
       });
 
       if (error) throw error;
@@ -200,7 +204,6 @@ export function useGmailConnections() {
         (c) => c.service_name === 'gmail' && c.is_active
       );
     },
-    enabled: !!user,
     staleTime: 30000,
   });
 }
@@ -211,14 +214,13 @@ export function useGmailConnections() {
  */
 export function useDisconnectConnection() {
   const queryClient = useQueryClient();
-  const user = useAuthStore((state) => state.user);
 
   return useMutation<unknown, Error, string>({
     mutationFn: async (connectionId) => {
-      if (!user) throw new Error('User not authenticated');
+      const session = await getSession();
 
       const { data, error } = await supabase.rpc('revoke_oauth_tokens', {
-        p_user_id: user.id,
+        p_user_id: session.user.id,
         p_service_name: 'gmail',
         p_connection_id: connectionId,
       });
@@ -228,7 +230,7 @@ export function useDisconnectConnection() {
     },
     onSuccess: () => {
       toast.success('Gmail account disconnected');
-      queryClient.invalidateQueries({ queryKey: [EXTERNAL_CONNECTIONS_QUERY_KEY, user?.id] });
+      queryClient.invalidateQueries({ queryKey: [EXTERNAL_CONNECTIONS_QUERY_KEY] });
     },
     onError: (error) => {
       toast.error('Failed to disconnect account', error.message);
