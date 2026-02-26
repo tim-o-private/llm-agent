@@ -24,6 +24,7 @@ CANONICAL_TOOL_NAMES = {
     "update_memories", "delete_memories",
     "set_project", "link_memories",
     "get_entities", "search_entities", "get_context",
+    "search_web",
 }
 
 
