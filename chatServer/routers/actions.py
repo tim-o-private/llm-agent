@@ -96,6 +96,13 @@ def _build_audit_service(db: UserScopedClient):
     return AuditService(db)
 
 
+def _build_notification_service(db: UserScopedClient):
+    """Build a NotificationService with a user-scoped client."""
+    from ..services.notification_service import NotificationService
+
+    return NotificationService(db)
+
+
 # =============================================================================
 # Endpoints
 # =============================================================================
@@ -152,7 +159,22 @@ async def approve_action(
     """Approve a pending action. Executes and logs to audit trail."""
     try:
         service = _build_pending_actions_service(db)
+        action = await service.get_action(action_id, user_id)
+        tool_name = action.tool_name if action else action_id
         result = await service.approve_action(action_id, user_id)
+
+        notification_service = _build_notification_service(db)
+        try:
+            await notification_service.notify_user(
+                user_id=user_id,
+                title=f"Approved: {tool_name}",
+                body="Executed successfully." if result.success else f"Execution failed: {result.error}",
+                category="agent_result",
+                type="silent",
+                metadata={"tool_name": tool_name, "action_id": str(action_id)},
+            )
+        except Exception as notif_err:
+            logger.warning(f"Failed to create approval follow-up notification (non-fatal): {notif_err}")
 
         if result.success:
             return ActionResultResponse(
@@ -181,7 +203,25 @@ async def reject_action(
     """Reject a pending action."""
     try:
         service = _build_pending_actions_service(db)
+        action = await service.get_action(action_id, user_id)
+        tool_name = action.tool_name if action else action_id
         success = await service.reject_action(action_id, user_id, reason=request.reason)
+
+        notification_service = _build_notification_service(db)
+        try:
+            body = "Action was rejected."
+            if request.reason:
+                body += f" Reason: {request.reason}"
+            await notification_service.notify_user(
+                user_id=user_id,
+                title=f"Rejected: {tool_name}",
+                body=body,
+                category="agent_result",
+                type="silent",
+                metadata={"tool_name": tool_name, "action_id": str(action_id)},
+            )
+        except Exception as notif_err:
+            logger.warning(f"Failed to create rejection follow-up notification (non-fatal): {notif_err}")
 
         if success:
             return ActionResultResponse(success=True, message="Action rejected")

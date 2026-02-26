@@ -394,6 +394,7 @@ async def handle_message(message: types.Message) -> None:
             db_client=bot_service._db_client,
             audit_service=audit_service,
         )
+        notification_service = NotificationService(bot_service._db_client)
         approval_context = ApprovalContext(
             user_id=user_id,
             session_id=session_id,
@@ -401,6 +402,7 @@ async def handle_message(message: types.Message) -> None:
             db_client=bot_service._db_client,
             pending_actions_service=pending_service,
             audit_service=audit_service,
+            notification_service=notification_service,
         )
         if hasattr(agent_executor, "tools") and agent_executor.tools:
             wrap_tools_with_approval(agent_executor.tools, approval_context)

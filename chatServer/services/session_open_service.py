@@ -9,6 +9,7 @@ from src.core.agent_loader_db import load_agent_executor_db_async
 
 from ..security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
 from ..services.audit_service import AuditService
+from ..services.notification_service import NotificationService
 from ..services.pending_actions import PendingActionsService
 from .bootstrap_context_service import BootstrapContextService
 
@@ -82,6 +83,7 @@ class SessionOpenService:
             db_client=supabase_client,
             audit_service=audit_service,
         )
+        notification_service = NotificationService(supabase_client)
         approval_context = ApprovalContext(
             user_id=user_id,
             session_id=session_id,
@@ -89,6 +91,7 @@ class SessionOpenService:
             db_client=supabase_client,
             pending_actions_service=pending_actions_service,
             audit_service=audit_service,
+            notification_service=notification_service,
         )
         if hasattr(agent_executor, "tools") and agent_executor.tools:
             wrap_tools_with_approval(agent_executor.tools, approval_context)
