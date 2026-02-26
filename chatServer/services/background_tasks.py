@@ -237,7 +237,7 @@ class BackgroundTaskService:
                 await self._job_service.create(
                     job_type='agent_invocation',
                     input={
-                        'id': schedule_id,
+                        'id': str(schedule_id),
                         'user_id': user_id,
                         'agent_name': agent_name,
                         'prompt': prompt,

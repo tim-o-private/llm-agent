@@ -47,7 +47,9 @@ class JobRunnerService:
                         logger.error(f"Error expiring stale jobs: {e}", exc_info=True)
                     self._last_expiry_check = now
 
-                job = await self._job_service.claim_next()
+                job = await self._job_service.claim_next(
+                    job_types=list(self._handlers.keys()) if self._handlers else None
+                )
                 if job is not None:
                     asyncio.create_task(self._dispatch(job))
 
