@@ -169,6 +169,7 @@ class PendingActionsService:
                     tool_name=action.tool_name,
                     tool_args=action.tool_args,
                     user_id=user_id,
+                    agent_name=action.context.get("agent_name"),
                 )
 
                 await self.db.table("pending_actions") \

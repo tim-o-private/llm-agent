@@ -84,9 +84,24 @@ def _build_pending_actions_service(db: UserScopedClient):
     """Build a PendingActionsService with a user-scoped client."""
     from ..services.audit_service import AuditService
     from ..services.pending_actions import PendingActionsService
+    from ..services.tool_execution import ToolExecutionService
 
     audit_service = AuditService(db)
-    return PendingActionsService(db_client=db, audit_service=audit_service)
+    tool_exec_service = ToolExecutionService(db)
+
+    async def tool_executor(tool_name: str, tool_args: dict, user_id: str, agent_name: str = None):
+        return await tool_exec_service.execute_tool(
+            tool_name=tool_name,
+            tool_args=tool_args,
+            user_id=user_id,
+            agent_name=agent_name,
+        )
+
+    return PendingActionsService(
+        db_client=db,
+        tool_executor=tool_executor,
+        audit_service=audit_service,
+    )
 
 
 def _build_audit_service(db: UserScopedClient):
