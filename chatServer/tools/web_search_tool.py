@@ -9,8 +9,6 @@ from typing import Optional, Type
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
-from ..services.web_search_service import WebSearchService
-
 logger = logging.getLogger(__name__)
 
 
@@ -50,6 +48,8 @@ class SearchWebTool(BaseTool):
         return "search_web requires async execution. Use _arun."
 
     async def _arun(self, query: str, max_results: int = 5) -> str:
+        from ..services.web_search_service import WebSearchService
+
         try:
             service = WebSearchService()
             results = await service.search(query=query, max_results=max_results)
