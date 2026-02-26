@@ -127,7 +127,7 @@ export const testModalOperations = () => {
 
 // Make functions available globally for console testing
 if (typeof window !== 'undefined') {
-  const w = window as Record<string, unknown>;
+  const w = window as unknown as Record<string, unknown>;
   w.testModalHook = testModalHook;
   w.checkModalState = checkModalState;
   w.simulateKey = simulateKey;

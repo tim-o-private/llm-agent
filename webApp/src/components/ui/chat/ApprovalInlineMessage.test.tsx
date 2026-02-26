@@ -31,17 +31,17 @@ beforeEach(() => {
   vi.mocked(useApproveAction).mockReturnValue({
     mutate: mockApproveMutate,
     isPending: false,
-  } as ReturnType<typeof useApproveAction>);
+  } as unknown as ReturnType<typeof useApproveAction>);
 
   vi.mocked(useRejectAction).mockReturnValue({
     mutate: mockRejectMutate,
     isPending: false,
-  } as ReturnType<typeof useRejectAction>);
+  } as unknown as ReturnType<typeof useRejectAction>);
 
   vi.mocked(useMarkNotificationRead).mockReturnValue({
     mutate: mockMarkReadMutate,
     isPending: false,
-  } as ReturnType<typeof useMarkNotificationRead>);
+  } as unknown as ReturnType<typeof useMarkNotificationRead>);
 
   // Return activeChatId for the selector-based call
   vi.mocked(useChatStore).mockReturnValue('test-session-id' as unknown as ReturnType<typeof useChatStore>);
@@ -127,7 +127,7 @@ describe('ApprovalInlineMessage', () => {
     vi.mocked(useApproveAction).mockReturnValue({
       mutate: mockApproveMutate,
       isPending: true,
-    } as ReturnType<typeof useApproveAction>);
+    } as unknown as ReturnType<typeof useApproveAction>);
 
     render(<ApprovalInlineMessage message={baseMessage} />);
     const approveBtn = screen.getByRole('button', { name: /approve action/i }) as HTMLButtonElement;
@@ -149,7 +149,7 @@ describe('ApprovalInlineMessage', () => {
         cb?.onSuccess?.({ success: true, message: 'ok', result: { execution_result: 'Task deleted.' } });
       }),
       isPending: false,
-    } as ReturnType<typeof useApproveAction>);
+    } as unknown as ReturnType<typeof useApproveAction>);
 
     render(<ApprovalInlineMessage message={baseMessage} />);
     act(() => {
@@ -165,7 +165,7 @@ describe('ApprovalInlineMessage', () => {
         cb?.onSuccess?.({ success: true, message: 'ok' });
       }),
       isPending: false,
-    } as ReturnType<typeof useApproveAction>);
+    } as unknown as ReturnType<typeof useApproveAction>);
 
     render(<ApprovalInlineMessage message={baseMessage} />);
     act(() => {
@@ -178,7 +178,7 @@ describe('ApprovalInlineMessage', () => {
     vi.mocked(useApproveAction).mockReturnValue({
       mutate: vi.fn(),
       isPending: true,
-    } as ReturnType<typeof useApproveAction>);
+    } as unknown as ReturnType<typeof useApproveAction>);
 
     const msg = { ...baseMessage, action_status: 'approved' };
     render(<ApprovalInlineMessage message={msg} />);
