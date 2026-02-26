@@ -3,7 +3,7 @@
 > **Status:** Draft
 > **Author:** Tim + Claude (Product)
 > **Created:** 2026-02-24
-> **Updated:** 2026-02-24
+> **Updated:** 2026-02-26
 
 ## Goal
 
@@ -46,6 +46,24 @@ Approval requests are `notify` notifications with `requires_approval = true`. Th
 
 When the agent needs approval, it creates a `notify` notification with inline buttons and continues the conversation. If the user ignores the approval and keeps chatting, the agent nudges conversationally: "Hey, scroll up and approve that request before I can do this." No blocking state machine. The `pending_actions` table is kept for execution tracking and audit, but it's no longer the primary approval queue.
 
+### Tool execution after approval (the executor gap)
+
+Today, `PendingActionsService` accepts an optional `tool_executor` callable, but it is **never provided**. Both `actions.py` router and `chat.py` construct `PendingActionsService` without one. When a user clicks "Approve," the action is marked approved in the database but the tool never runs. The log says: _"No tool executor configured, action {id} marked approved but not executed."_
+
+This is not a simple wiring fix. Tool classes are LangChain `BaseTool` subclasses that self-construct their DB clients inside `_arun()`. They need `user_id`, `agent_name`, `supabase_url`, and `supabase_key` at instantiation time, and their `_arun()` is normally called by the agent executor within a chat turn. When execution happens post-approval (outside a chat turn), there is no agent executor, no active LangChain chain, and the tool must not re-trigger the approval wrapper (which would create an infinite approval loop).
+
+**Design: `ToolExecutionService` as standalone executor.** A new service that:
+1. Looks up the tool class from `TOOL_REGISTRY` by matching `pending_actions.tool_name` against `tools.name` to get the `tools.type` value, then resolving the class.
+2. Instantiates the tool with `user_id`, `agent_name` (from `pending_actions.context`), and Supabase credentials from settings.
+3. Calls `_arun(**tool_args)` directly -- bypassing the LangChain agent executor and the approval wrapper entirely.
+4. Returns the result to `PendingActionsService`, which stores it in `execution_result` and creates the follow-up notification.
+
+**Why a service, not a lambda:** The executor needs DB access (to look up the tool type), config access (Supabase credentials), and must be testable in isolation. A closure or lambda passed into `PendingActionsService` would hide these dependencies. A proper service follows A1 (fat services) and is mockable in tests.
+
+**Why bypass the wrapper:** The approval wrapper is applied by `wrap_tools_with_approval()` during chat processing. Post-approval execution is a separate path. The tool is instantiated fresh, without the wrapper, so there is no risk of re-triggering approval. This is safe because the approval check already happened -- the `pending_actions` row's status is `approved` by the time execution begins.
+
+**Why not reuse the cached agent executor:** The executor cache is keyed by `(user_id, agent_name)` and carries LangChain state (memory, wrapped tools). Reaching into the cache to find a tool would couple the approval path to the chat path, create race conditions when the executor is mid-turn, and would still have the approval wrapper attached. Clean instantiation is simpler and safer.
+
 ### Client-side timeline merge (MVP)
 
 Frontend merges messages + notifications into a single timeline sorted by `created_at`. Three separate data sources (chat messages, notifications, actions) composed client-side. Unified backend API endpoint is a future optimization. Notification polling reduced from 15s to 5s to match chat responsiveness.
@@ -66,6 +84,15 @@ Frontend merges messages + notifications into a single timeline sorted by `creat
 - [ ] **AC-07:** The tool wrapper return message changes from "STOP: ... Do NOT retry" to a softer message: "I've requested approval for '{tool_name}'. You'll see it in the chat — approve or reject when you're ready." The agent continues conversationally instead of halting. [A14]
 - [ ] **AC-08:** Existing `POST /api/actions/{action_id}/approve` and `/reject` endpoints continue to work unchanged. The frontend calls these from inline buttons. [A1]
 - [ ] **AC-09:** When an action is approved and executed via the existing endpoint, a follow-up `silent` notification is created: "Approved: {tool_name} — {brief result}". This closes the loop in the chat stream. [A7]
+
+### Backend: Post-Approval Tool Execution
+
+- [ ] **AC-21:** A new `ToolExecutionService` class in `chatServer/services/tool_execution.py` provides a `execute_tool(user_id, tool_name, tool_args, agent_name)` method. It resolves the tool's Python class via `TOOL_REGISTRY`, instantiates the `BaseTool` subclass with the required context (`user_id`, `agent_name`, `supabase_url`, `supabase_key`), calls `_arun(**tool_args)`, and returns the string result. Tools are instantiated **without** the approval wrapper. [A1, A6]
+- [ ] **AC-22:** `ToolExecutionService` resolves tool class by querying `tools` table: `SELECT type FROM tools WHERE name = :tool_name`. The `type` value is the key into `TOOL_REGISTRY`. If the tool name is not found in the DB or the type is not in the registry, execution fails with a clear error. [A3, A6]
+- [ ] **AC-23:** `ToolExecutionService` handles tool config from the `tools` table: for tools that require DB config (Gmail tools with `tool_class`, CRUDTool with `table_name`/`method`), the service reads `tools.config` JSONB and passes it to the constructor. This mirrors the existing `load_tools_from_db()` instantiation logic. [A6]
+- [ ] **AC-24:** `PendingActionsService` is constructed with a `tool_executor` callable in the `actions.py` router. The `_build_pending_actions_service()` helper creates a `ToolExecutionService` and passes its `execute_tool` method as the `tool_executor` parameter. [A1]
+- [ ] **AC-25:** When `approve_action()` succeeds with a tool executor, the `pending_actions` row transitions through `pending` -> `approved` -> `executed` (on success) or `approved` -> `executed` with error (on failure). The `execution_result` JSONB column stores the tool output or error. [A8]
+- [ ] **AC-26:** Execution failures do NOT propagate as HTTP 500 to the user. The approve endpoint returns success with `execution_error` in the response body, and the follow-up notification (AC-09) includes the error message. The user sees "Approved: {tool_name} -- Failed: {error}" in the chat stream. [A1]
 
 ### Backend: Heartbeat Reclassification
 
@@ -99,6 +126,8 @@ Frontend merges messages + notifications into a single timeline sorted by `creat
 | `supabase/migrations/2026MMDD000001_notification_types.sql` | Add `type`, `requires_approval`, `pending_action_id` columns |
 | `webApp/src/components/ui/chat/NotificationInlineMessage.tsx` | Inline notification component for chat stream |
 | `webApp/src/components/ui/chat/ApprovalInlineMessage.tsx` | Inline approval component for chat stream |
+| `chatServer/services/tool_execution.py` | Standalone tool executor for post-approval execution |
+| `tests/chatServer/services/test_tool_execution.py` | Tests for tool resolution, instantiation, and execution |
 | `tests/chatServer/services/test_notification_types.py` | Tests for type-based routing |
 
 ### Files to Modify
@@ -108,9 +137,10 @@ Frontend merges messages + notifications into a single timeline sorted by `creat
 | `chatServer/services/notification_service.py` | Add `type` param to `notify_user()`, route based on type |
 | `chatServer/security/tool_wrapper.py` | Create notification + pending_action on approval queue, soften return message |
 | `chatServer/services/pending_actions.py` | Add `notification_id` tracking (optional, for cross-reference) |
+| `chatServer/routers/actions.py` | Wire `ToolExecutionService` into `_build_pending_actions_service()` |
 | `chatServer/channels/telegram_bot.py` | Respect `type` field, skip `agent_only`/`silent` |
 | `chatServer/services/background_tasks.py` | Heartbeat findings → `agent_only` type |
-| `chatServer/routers/actions_router.py` | On approve/reject, create follow-up `silent` notification |
+| `chatServer/routers/actions.py` | On approve/reject, create follow-up `silent` notification (already done in current code) |
 | `webApp/src/stores/useChatStore.ts` | Merge notifications into message timeline |
 | `webApp/src/api/hooks/useNotificationHooks.ts` | Reduce polling to 5s, add notification type to interface |
 | `webApp/src/components/ui/chat/MessageBubble.tsx` | Route `notification`/`approval` senders to new components |
@@ -269,6 +299,154 @@ Merge logic: fetch notifications via existing hook, map to ChatMessage with `sen
 
 **ApprovalInlineMessage:** Renders with warning border, tool name, expandable args preview, approve/reject buttons. Calls existing `/api/actions/{action_id}/approve` or `/reject`. Disables buttons optimistically. Shows result state after resolution.
 
+### 7. Post-Approval Tool Execution (`ToolExecutionService`)
+
+The core problem: tools need to be executed outside the LangChain agent loop, after the user approves. The `ToolExecutionService` handles resolution, instantiation, and direct invocation.
+
+```python
+# chatServer/services/tool_execution.py
+"""
+Standalone tool executor for post-approval execution.
+
+Resolves a tool by name, instantiates the BaseTool subclass with user context,
+and calls _arun() directly — bypassing the LangChain agent executor and the
+approval wrapper.
+"""
+
+import logging
+from typing import Any, Optional
+
+logger = logging.getLogger(__name__)
+
+
+class ToolExecutionService:
+    """
+    Executes tools by name outside the LangChain agent loop.
+
+    Used by PendingActionsService after user approval. Instantiates tool
+    classes from TOOL_REGISTRY with proper user context.
+    """
+
+    def __init__(self, db_client):
+        self.db = db_client
+
+    async def execute_tool(
+        self,
+        tool_name: str,
+        tool_args: dict,
+        user_id: str,
+        agent_name: Optional[str] = None,
+    ) -> str:
+        """
+        Execute a tool by name.
+
+        1. Look up tool type from `tools` table by name
+        2. Resolve Python class from TOOL_REGISTRY
+        3. Instantiate with user context (no approval wrapper)
+        4. Call _arun(**tool_args) directly
+        """
+        from ..config.settings import settings
+        from src.core.agent_loader_db import TOOL_REGISTRY
+
+        # Step 1: Resolve tool type from DB
+        result = await self.db.table("tools") \
+            .select("type, config") \
+            .eq("name", tool_name) \
+            .single() \
+            .execute()
+
+        if not result.data:
+            raise ToolExecutionError(f"Tool '{tool_name}' not found in tools table")
+
+        tool_type = result.data["type"]
+        tool_config = result.data.get("config") or {}
+
+        # Step 2: Resolve Python class
+        tool_class = TOOL_REGISTRY.get(tool_type)
+        if tool_class is None:
+            raise ToolExecutionError(
+                f"Tool type '{tool_type}' for '{tool_name}' not in TOOL_REGISTRY"
+            )
+
+        # Step 3: Build constructor kwargs
+        constructor_kwargs = {
+            "user_id": user_id,
+            "agent_name": agent_name,
+            "supabase_url": settings.SUPABASE_URL,
+            "supabase_key": settings.SUPABASE_SERVICE_ROLE_KEY,
+            "name": tool_name,
+            "description": f"Post-approval execution of {tool_name}",
+        }
+
+        # Merge tool-specific config (same pattern as load_tools_from_db)
+        if tool_config:
+            constructor_kwargs.update(tool_config)
+
+        # Step 4: Instantiate and execute
+        try:
+            tool_instance = tool_class(**constructor_kwargs)
+        except Exception as e:
+            raise ToolExecutionError(
+                f"Failed to instantiate tool '{tool_name}' (class {tool_class.__name__}): {e}"
+            ) from e
+
+        try:
+            result = await tool_instance._arun(**tool_args)
+            logger.info(f"Post-approval execution of '{tool_name}' succeeded for user {user_id}")
+            return result
+        except Exception as e:
+            logger.error(f"Post-approval execution of '{tool_name}' failed: {e}")
+            raise ToolExecutionError(
+                f"Tool '{tool_name}' execution failed: {e}"
+            ) from e
+
+
+class ToolExecutionError(Exception):
+    """Raised when post-approval tool execution fails."""
+    pass
+```
+
+**Wiring in `actions.py` router:**
+
+```python
+# In _build_pending_actions_service:
+def _build_pending_actions_service(db: UserScopedClient):
+    from ..services.audit_service import AuditService
+    from ..services.pending_actions import PendingActionsService
+    from ..services.tool_execution import ToolExecutionService
+
+    audit_service = AuditService(db)
+    tool_exec_service = ToolExecutionService(db)
+
+    async def tool_executor(tool_name: str, tool_args: dict, user_id: str):
+        return await tool_exec_service.execute_tool(
+            tool_name=tool_name,
+            tool_args=tool_args,
+            user_id=user_id,
+        )
+
+    return PendingActionsService(
+        db_client=db,
+        tool_executor=tool_executor,
+        audit_service=audit_service,
+    )
+```
+
+The `tool_executor` callable signature matches what `PendingActionsService.approve_action()` already expects (line 168): `await self.tool_executor(tool_name=..., tool_args=..., user_id=...)`. No changes to the `PendingActionsService` interface are needed.
+
+**Why this is safe:**
+- The tool is instantiated fresh, without `wrap_tools_with_approval()`. No approval re-trigger.
+- The `_arun()` method creates its own `UserScopedClient` internally (standard tool pattern), so RLS is properly enforced for the user's data.
+- `ToolExecutionService` uses the same `TOOL_REGISTRY` and instantiation pattern as `load_tools_from_db()`, keeping tool resolution consistent.
+- The `pending_actions.context` JSONB already stores `agent_name` — the router passes it through.
+
+**Failure modes:**
+- Tool name not in `tools` table: `ToolExecutionError` with clear message. Action stays `approved`, never transitions to `executed`.
+- Tool type not in `TOOL_REGISTRY`: Same behavior. Suggests a DB/code mismatch (should not happen if migrations are consistent).
+- Tool instantiation fails (bad config): `ToolExecutionError`. Stored in `execution_result.error`.
+- Tool `_arun()` raises: Caught by `PendingActionsService.approve_action()` existing `except Exception` block (line 183). Status set to `executed` with error.
+- All failures create a follow-up notification (AC-09/AC-26) so the user sees the error in the chat stream.
+
 ### Dependencies
 
 - **SPEC-024** (notification feedback loop) — must be merged first. This spec builds on the feedback buttons and moves them inline.
@@ -286,6 +464,14 @@ Merge logic: fetch notifications via existing hook, map to ChatMessage with `sen
 - Tool wrapper creates both pending_action AND notification on approval queue
 - Tool wrapper returns soft message (not "STOP")
 - Approve action creates follow-up `silent` notification
+- `ToolExecutionService.execute_tool()` resolves tool class from DB and `TOOL_REGISTRY`
+- `ToolExecutionService` instantiates tool with correct user context (no approval wrapper)
+- `ToolExecutionService` returns tool output on success
+- `ToolExecutionService` raises `ToolExecutionError` for unknown tool name
+- `ToolExecutionService` raises `ToolExecutionError` for unregistered tool type
+- `ToolExecutionService` raises `ToolExecutionError` on `_arun()` failure (with original error chained)
+- `_build_pending_actions_service()` provides `tool_executor` to `PendingActionsService`
+- End-to-end: approve action -> tool executes -> `execution_result` stored -> follow-up notification created
 - Heartbeat findings use `agent_only` type
 
 **Frontend:**
@@ -310,6 +496,12 @@ Merge logic: fetch notifications via existing hook, map to ChatMessage with `sen
 | AC-08 | Unit | Existing approve/reject tests (unchanged) |
 | AC-09 | Unit | `test_approve_creates_followup_notification` |
 | AC-10 | Unit | `test_heartbeat_uses_agent_only_type` |
+| AC-21 | Unit | `test_execute_tool_resolves_and_runs`, `test_execute_tool_no_wrapper` |
+| AC-22 | Unit | `test_execute_tool_unknown_name`, `test_execute_tool_unregistered_type` |
+| AC-23 | Unit | `test_execute_tool_passes_config` |
+| AC-24 | Unit | `test_build_service_provides_executor` |
+| AC-25 | Unit | `test_approve_action_transitions_to_executed` |
+| AC-26 | Unit | `test_approve_action_execution_error_not_500` |
 | AC-11 | Frontend | `test_chat_store_merges_notifications` |
 | AC-12 | Frontend | `test_notification_inline_renders_feedback` |
 | AC-13 | Frontend | `test_approval_inline_renders_buttons` |
@@ -324,7 +516,8 @@ Merge logic: fetch notifications via existing hook, map to ChatMessage with `sen
 ### Manual Verification (UAT)
 
 - [ ] Agent requests tool approval — notification appears inline in chat with approve/reject buttons
-- [ ] Click "Approve" — button disables, shows "Approved", follow-up notification appears in chat
+- [ ] Click "Approve" — button disables, shows "Approved", **tool actually executes**, follow-up notification appears with execution result
+- [ ] Click "Approve" on a tool that fails execution — follow-up notification shows "Failed: {error}" (not HTTP 500)
 - [ ] Click "Reject" — button disables, shows "Rejected"
 - [ ] Agent continues conversation after approval request (no blocking)
 - [ ] If user ignores approval and keeps chatting, agent nudges about pending approval
@@ -345,6 +538,10 @@ Merge logic: fetch notifications via existing hook, map to ChatMessage with `sen
 - **`agent_only` audit trail:** Since agent_only notifications aren't stored, they leave no DB trace. This is intentional — the agent stores relevant findings in memory. If audit is needed later, we add a separate `agent_events` table (future).
 - **Migration backward compatibility:** Default `type='notify'` means all existing notifications keep appearing. No data loss.
 - **Multiple approval requests queued:** Each renders as a separate inline notification. User can approve/reject in any order. No dependency between them.
+- **Tool removed from registry between queue and approval:** If the tool type is no longer in `TOOL_REGISTRY` (code deployed between queue and approve), `ToolExecutionService` raises `ToolExecutionError`. The user sees "Approved: {tool_name} -- Failed: Tool type not in TOOL_REGISTRY" in the follow-up notification. The agent can re-queue if the tool is restored.
+- **Tool config changed between queue and approval:** The tool is instantiated with current DB config at execution time, not the config at queue time. This is correct — if the tool's config was updated (e.g., API key rotation), the execution should use the latest config.
+- **Long-running tool execution on approval:** `_arun()` is awaited in the request handler. If the tool takes >30s (e.g., complex Gmail search), the HTTP request may time out. For MVP, this is acceptable — the action transitions to `executed` in the background via the DB update. Future: move execution to a background task / job queue (SPEC-026).
+- **Approval of tool that was originally auto-approved:** This should not happen (auto-approved tools execute immediately in the chat turn), but if a `pending_actions` row exists for one (e.g., due to a tier change), the executor handles it normally.
 
 ## Functional Units (for PR Breakdown)
 
@@ -377,17 +574,27 @@ Merge logic: fetch notifications via existing hook, map to ChatMessage with `sen
    - Remove all imports/references
    - Update navigation layout
 
-Merge order: FU-1 → FU-2 → FU-3 → FU-4
+5. **FU-5:** Post-approval tool execution (`feat/SPEC-025-tool-executor`)
+   - `ToolExecutionService` class (tool resolution, instantiation, direct `_arun()`)
+   - `ToolExecutionError` exception class
+   - Wire `ToolExecutionService` into `actions.py` router's `_build_pending_actions_service()`
+   - Pass `agent_name` from `pending_actions.context` to executor
+   - Unit tests: tool resolution, instantiation, execution success/failure, unknown tool, missing registry entry
+   - Integration with existing `PendingActionsService.approve_action()` flow (no interface changes)
 
-FU-1 and FU-2 are backend-only and can be verified independently. FU-3 depends on FU-1 (type field for filtering). FU-4 depends on FU-3 (inline components must exist before removing old surfaces).
+Merge order: FU-1 → FU-2 → FU-5 → FU-3 → FU-4
+
+FU-1 and FU-2 are backend-only and can be verified independently. FU-5 depends on FU-2 (the approval flow must create `pending_actions` rows with proper context). FU-5 is pure backend and can be verified before frontend work begins. FU-3 depends on FU-1 (type field for filtering) and benefits from FU-5 (approve button actually executes the tool, so the follow-up notification has real content). FU-4 depends on FU-3 (inline components must exist before removing old surfaces).
 
 ## Completeness Checklist
 
-- [x] Every AC has a stable ID (AC-01 through AC-20)
+- [x] Every AC has a stable ID (AC-01 through AC-26)
 - [x] Every AC maps to at least one functional unit
-- [x] Every cross-domain boundary has a contract (DB → service → frontend, DB → Telegram)
-- [x] Technical decisions reference principles (A1, A4, A7, A8, A9, A12, A13, A14)
-- [x] Merge order is explicit (FU-1 → FU-2 → FU-3 → FU-4)
+- [x] Every cross-domain boundary has a contract (DB → service → frontend, DB → Telegram, DB → tool executor)
+- [x] Technical decisions reference principles (A1, A3, A4, A6, A7, A8, A9, A12, A13, A14)
+- [x] Merge order is explicit (FU-1 → FU-2 → FU-5 → FU-3 → FU-4)
 - [x] Out-of-scope is explicit
 - [x] Edge cases documented with expected behavior
 - [x] Testing requirements map to ACs
+- [x] Post-approval execution path avoids approval re-trigger (no wrapper on fresh tool instance)
+- [x] Failure modes documented with user-visible behavior
