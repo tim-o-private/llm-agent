@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabaseClient';
 import { useStoreTokens } from '@/api/hooks/useExternalConnectionsHooks';
@@ -23,21 +23,20 @@ export const AuthCallback: React.FC = () => {
     isError: false,
     message: 'Processing authentication...',
   });
-  const [hasProcessed, setHasProcessed] = useState(false);
+  const hasProcessedRef = useRef(false);
 
   const storeTokensMutation = useStoreTokens();
 
   useEffect(() => {
-    // Prevent duplicate processing
-    if (hasProcessed) return;
+    // Ref guard survives React StrictMode double-effect (state doesn't)
+    if (hasProcessedRef.current) return;
+    hasProcessedRef.current = true;
 
     handleAuthCallback();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasProcessed]); // Only depend on hasProcessed
+  }, []);
 
   const handleAuthCallback = async () => {
-    // Mark as processed immediately to prevent duplicates
-    setHasProcessed(true);
 
     try {
       const service = searchParams.get('service');
