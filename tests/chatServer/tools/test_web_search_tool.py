@@ -19,7 +19,7 @@ class TestSearchWebToolArun:
             {"title": "First Result", "url": "https://example.com/1", "snippet": "A great snippet"},
             {"title": "Second Result", "url": "https://example.com/2", "snippet": "Another snippet"},
         ]
-        with patch("chatServer.tools.web_search_tool.WebSearchService") as mock_svc_cls:
+        with patch("chatServer.services.web_search_service.WebSearchService") as mock_svc_cls:
             mock_svc_cls.return_value.search = AsyncMock(return_value=results)
             output = await tool._arun(query="test query")
 
@@ -32,7 +32,7 @@ class TestSearchWebToolArun:
 
     @pytest.mark.asyncio
     async def test_arun_no_results_returns_message(self, tool):
-        with patch("chatServer.tools.web_search_tool.WebSearchService") as mock_svc_cls:
+        with patch("chatServer.services.web_search_service.WebSearchService") as mock_svc_cls:
             mock_svc_cls.return_value.search = AsyncMock(return_value=[])
             output = await tool._arun(query="obscure query")
 
@@ -40,7 +40,7 @@ class TestSearchWebToolArun:
 
     @pytest.mark.asyncio
     async def test_arun_network_error_returns_friendly_message(self, tool):
-        with patch("chatServer.tools.web_search_tool.WebSearchService") as mock_svc_cls:
+        with patch("chatServer.services.web_search_service.WebSearchService") as mock_svc_cls:
             mock_svc_cls.return_value.search = AsyncMock(side_effect=Exception("connection refused"))
             output = await tool._arun(query="test query")
 
@@ -48,7 +48,7 @@ class TestSearchWebToolArun:
 
     @pytest.mark.asyncio
     async def test_arun_value_error_returns_invalid_query(self, tool):
-        with patch("chatServer.tools.web_search_tool.WebSearchService") as mock_svc_cls:
+        with patch("chatServer.services.web_search_service.WebSearchService") as mock_svc_cls:
             mock_svc_cls.return_value.search = AsyncMock(side_effect=ValueError("query too long"))
             output = await tool._arun(query="x" * 501)
 
