@@ -23,6 +23,7 @@ Before starting any spec:
 |-------|-------|---------|
 | **database-dev** | `supabase/migrations/`, `chatServer/database/` | Schema, RLS, indexes, migrations |
 | **backend-dev** | `chatServer/`, `src/` | Services, routers, models, API endpoints |
+| **ux-designer** | `docs/ux/` | Interaction design, component specs, copy, accessibility |
 | **frontend-dev** | `webApp/src/` | Components, hooks, pages, stores |
 | **deployment-dev** | Dockerfiles, fly.toml, CI/CD | Docker, Fly.io, env vars, CI/CD |
 | **reviewer** | Read-only | Code review with structured VERDICT |
@@ -31,7 +32,7 @@ Before starting any spec:
 ## Model Selection for Agents
 
 When spawning agents via the Task tool, use the `model` parameter:
-- **`model: "opus"`** — reviewer, spec-writer. Deep reasoning, architectural judgment.
+- **`model: "opus"`** — reviewer, spec-writer, ux-designer. Deep reasoning, architectural/design judgment.
 - **`model: "sonnet"`** — domain agents (database-dev, backend-dev, frontend-dev, deployment-dev). Well-scoped contract execution.
 - **`model: "haiku"`** — simple/mechanical tasks (file moves, config changes, trivially specific contracts).
 

@@ -38,12 +38,15 @@ You run on opus. You delegate ALL implementation to domain agents (sonnet/haiku)
 |-------|-------|-------|---------|
 | **database-dev** | sonnet | `supabase/migrations/`, `chatServer/database/` | Schema, RLS, indexes, migrations |
 | **backend-dev** | sonnet | `chatServer/`, `src/` | Services, routers, models, API endpoints |
+| **ux-designer** | opus | `docs/ux/` | Interaction design, component specs, copy, accessibility |
 | **frontend-dev** | sonnet | `webApp/src/` | Components, hooks, pages, stores |
 | **deployment-dev** | sonnet | Dockerfiles, fly.toml, CI/CD | Docker, Fly.io, env vars |
 | **reviewer** | opus | Read-only | Code review with structured VERDICT |
 | **uat-tester** | sonnet | `tests/uat/` | Flow tests with AC-ID naming |
 
-Only spawn agents you actually need. A backend-only spec doesn't need frontend-dev.
+Only spawn agents you actually need. A backend-only spec doesn't need frontend-dev or ux-designer.
+
+**UX-first flow for frontend specs:** When a spec has user-facing components, spawn ux-designer first to produce a UX spec (`docs/ux/SPEC-NNN-ux.md`). Include that spec in frontend-dev's task contract so they implement to the UX spec, not just the feature spec.
 
 ## Workflow
 
