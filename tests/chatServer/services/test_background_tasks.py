@@ -42,7 +42,7 @@ class TestBackgroundTaskService(unittest.TestCase):
         mock_db_manager = MagicMock()
 
         with patch('chatServer.services.background_tasks.get_database_manager', return_value=mock_db_manager):
-            with patch('chatServer.services.background_tasks.JobService') as mock_job_svc_cls:
+            with patch('chatServer.services.background_tasks.JobService'):
                 with patch('chatServer.services.background_tasks.JobRunnerService') as mock_runner_cls:
                     mock_runner = MagicMock()
                     mock_runner.run = AsyncMock()
