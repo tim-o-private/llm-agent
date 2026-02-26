@@ -36,5 +36,8 @@ tenacity>=9.0.0
 click>=8.0.0
 prompt-toolkit>=3.0.0
 
+duckduckgo-search>=7.0.0
+tavily-python>=0.5.0
+
 # Testing (dev only, but included for CI)
 pytest>=8.0.0
