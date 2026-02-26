@@ -12,8 +12,9 @@ import json
 import os
 import sys
 import time
-import requests
 from pathlib import Path
+
+import requests
 from dotenv import load_dotenv
 
 # Load env from project root
@@ -21,7 +22,7 @@ project_root = Path(__file__).resolve().parent.parent.parent
 load_dotenv(project_root / ".env")
 load_dotenv(project_root / "webApp" / ".env")
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright  # noqa: E402
 
 # --- Config ---
 WEBAPP_URL = os.environ.get("WEBAPP_URL", "http://localhost:3000")
