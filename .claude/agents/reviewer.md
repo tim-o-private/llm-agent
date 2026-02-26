@@ -59,11 +59,16 @@ cd webApp && pnpm lint
 - [ ] Schema/API names match cross-domain contracts
 - [ ] Response shapes match what downstream consumers expect
 
-#### Primitive Reuse (A11)
+#### Primitive Reuse (A11) — BLOCKER if violated
+
 - [ ] Does this create a new table with status lifecycle columns? → Should use `jobs` table with a `job_type`
 - [ ] Does this create a new polling loop? → Should register a job handler in `JobRunnerService`
 - [ ] Does this create a new preferences/config table? → Should use LTM or existing JSONB config
 - [ ] Does this create a new notification delivery path? → Should use `NotificationService`
+- [ ] Does this create a new agent invocation pipeline? → Should use ChatService / ScheduledExecutionService
+- [ ] Does this make direct DB calls from a router? → A1 violation, delegate to service layer
+- [ ] Does this duplicate a service that already exists? → Search for similar services first
+- [ ] **Is the survey line present in the first commit message?** → Agents must log what they checked
 
 Reference: Platform Primitives section in `.claude/skills/product-architecture/SKILL.md`
 

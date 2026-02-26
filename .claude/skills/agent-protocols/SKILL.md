@@ -35,6 +35,73 @@ Read this before starting any task. These protocols apply to all domain agents: 
 - **Stay in scope** — only modify files explicitly listed in your task contract
 - Never push to `main`, never force-push
 
+## Before Writing Code: Mandatory Survey
+
+Every implementation task starts with a survey phase. You must check existing primitives
+before creating anything new. Skip this only for pure bug fixes on existing code.
+
+### Step 1: Check the primitives table
+
+Read `.claude/skills/product-architecture/SKILL.md` — the "Platform Primitives" section.
+If what you're building matches a row in that table, use the existing primitive.
+
+Decision shortcuts:
+- **Has a status lifecycle** (pending/processing/complete/failed)? → It's a job. Use the `jobs` table.
+- **Runs periodically**? → It's a schedule. Use `agent_schedules`.
+- **Tells the user something happened**? → It's a notification. Use `NotificationService`.
+- **Invokes an agent**? → Use the existing agent invocation pipeline (ChatService / ScheduledExecutionService).
+- **Stores user preferences**? → Use `update_instructions` tool or memory.
+- **Needs user approval**? → Use `pending_actions` + approval tiers.
+- **Connects to an external API**? → Use `external_api_connections` + OAuth flow.
+
+### Step 2: Search for similar code
+
+```bash
+# Services
+grep -r "class.*Service" chatServer/services/ | grep -i "<your-domain>"
+
+# Tools
+grep -r "class.*Tool" chatServer/tools/ | grep -i "<your-verb>"
+
+# Tables
+grep "CREATE TABLE" supabase/schema.sql | grep -i "<your-entity>"
+
+# Handlers
+grep -r "async def handle_" chatServer/services/job_handlers.py
+```
+
+### Step 3: Log your findings
+
+Your **first commit message** on any task must include a survey line:
+
+```
+Survey: checked jobs table, NotificationService, existing handlers — no overlap.
+```
+
+or:
+
+```
+Survey: found existing EmailOnboardingService — extending with new method.
+```
+
+If you find >50% overlap with an existing service/table/component, **STOP and message the orchestrator** with:
+- Path to existing implementation
+- Why it does or doesn't solve your need
+- Proposed approach: extend existing vs. create new
+
+Do NOT proceed until you get a response.
+
+### What the reviewer checks
+
+The reviewer will verify:
+- No new tables with status lifecycle columns (use `jobs`)
+- No new polling loops (use `JobRunnerService`)
+- No new notification delivery paths (use `NotificationService`)
+- No duplicate services for existing domains
+- Survey line present in commit message
+
+See the "Primitive Reuse (A11)" section in the reviewer checklist.
+
 ## Before Declaring Done
 
 Your task contract may have been compressed during this session. Before marking complete:

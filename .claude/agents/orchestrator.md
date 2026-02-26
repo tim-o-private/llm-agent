@@ -69,12 +69,35 @@ TeamCreate: team_name="spec-NNN", description="Executing SPEC-NNN: <title>"
 
 **4. Break Into Tasks with Contracts** — follow spec's "Functional Units". Set `addBlockedBy` dependencies: `database-dev → backend-dev → frontend-dev`. Each task contract includes concrete file paths, function signatures, table DDL, endpoint shapes.
 
-**5. Validate Breakdown Completeness** — before spawning any agent, verify:
+**5. Infrastructure Survey** — before writing task contracts, grep for existing primitives that overlap with the spec's scope:
+
+```bash
+# What services already exist in this domain?
+grep -r "class.*Service" chatServer/services/ | grep -i "<domain>"
+
+# What job types are already registered?
+grep -r "register_handler" chatServer/services/job_handlers.py
+
+# What tables exist for this domain?
+grep "CREATE TABLE" supabase/schema.sql | grep -i "<entity>"
+```
+
+Reference the Platform Primitives decision tree in `.claude/skills/product-architecture/SKILL.md`. For each planned new table, service, or background task, verify it doesn't duplicate an existing primitive. Include findings in task contracts:
+
+```
+## Existing infrastructure (DO NOT recreate)
+- `JobRunnerService` handles background polling — register a new handler, don't build a polling loop
+- `NotificationService.notify_user()` delivers to web + Telegram — don't build custom delivery
+- `jobs` table has status lifecycle — don't create a new *_jobs table
+```
+
+**6. Validate Breakdown Completeness** — before spawning any agent, verify:
 - Every AC has at least one task covering it
 - Every cross-domain contract specifies inputs/outputs completely
 - No task requires a file, service, or table no other task creates
 - All test fixtures and shared utilities are accounted for
 - Migration prefixes pre-allocated (no collisions): `ls supabase/migrations/ | grep -oP '^\d{14}' | sort | tail -3`
+- **Every task contract includes an "Existing infrastructure" section** listing what to reuse
 
 If gaps found: add tasks before proceeding.
 
