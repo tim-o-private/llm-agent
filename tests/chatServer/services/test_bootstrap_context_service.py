@@ -139,7 +139,7 @@ class TestBootstrapContextService:
         resp = MagicMock()
         resp.data = []
         mock_db = MagicMock()
-        mock_db.table.return_value.select.return_value.eq.return_value.eq.return_value.eq.return_value.gte.return_value.order.return_value.limit.return_value.execute = AsyncMock(return_value=resp)  # noqa: E501
+        mock_db.table.return_value.select.return_value.eq.return_value.eq.return_value.gte.return_value.order.return_value.limit.return_value.execute = AsyncMock(return_value=resp)  # noqa: E501
 
         service = BootstrapContextService(mock_db)
         result = await service._get_reminders_summary("user-123")
@@ -152,7 +152,7 @@ class TestBootstrapContextService:
             {"id": "r2", "title": "Pay bills", "remind_at": "2026-03-05T09:00:00+00:00"},
         ]
         mock_db = MagicMock()
-        mock_db.table.return_value.select.return_value.eq.return_value.eq.return_value.eq.return_value.gte.return_value.order.return_value.limit.return_value.execute = AsyncMock(return_value=resp)  # noqa: E501
+        mock_db.table.return_value.select.return_value.eq.return_value.eq.return_value.gte.return_value.order.return_value.limit.return_value.execute = AsyncMock(return_value=resp)  # noqa: E501
 
         service = BootstrapContextService(mock_db)
         result = await service._get_reminders_summary("user-123")
