@@ -13,6 +13,7 @@ USER_SCOPED_TABLES: set[str] = {
     "channel_linking_tokens",
     "email_digests",
     "external_api_connections",
+    "jobs",
     "notifications",
     "pending_actions",
     "user_agent_prompt_customizations",
