@@ -26,6 +26,7 @@ from chatServer.tools.reminder_tools import CreateRemindersTool, DeleteReminders
 from chatServer.tools.schedule_tools import CreateSchedulesTool, DeleteSchedulesTool, GetSchedulesTool
 from chatServer.tools.task_tools import CreateTasksTool, DeleteTasksTool, GetTasksTool, UpdateTasksTool
 from chatServer.tools.update_instructions_tool import UpdateInstructionsTool
+from chatServer.tools.web_search_tool import SearchWebTool
 from core.agents.customizable_agent import CustomizableAgentExecutor
 from core.tools.crud_tool import CRUDTool, CRUDToolInput
 from supabase import Client as SupabaseClient
@@ -69,6 +70,8 @@ TOOL_REGISTRY: Dict[str, Type] = {
     "DeleteSchedulesTool": DeleteSchedulesTool,
     # Instructions
     "UpdateInstructionsTool": UpdateInstructionsTool,
+    # Web search
+    "SearchWebTool": SearchWebTool,
 }
 
 # Gmail tool class registry for GmailTool type (config.tool_class → class)
