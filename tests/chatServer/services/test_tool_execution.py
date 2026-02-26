@@ -379,3 +379,94 @@ async def test_approve_passes_agent_name(db_client):
     assert call_kwargs["tool_name"] == "send_email"
     assert call_kwargs["user_id"] == "user-1"
     assert result.success is True
+
+
+# ---------------------------------------------------------------------------
+# approve_action: pending → approved → executed, execution_result stored
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_approve_action_transitions_to_executed(db_client):
+    """AC-25: approve_action() with working executor → pending → approved → executed, result stored."""
+    from datetime import datetime, timedelta, timezone
+    from uuid import UUID
+
+    from chatServer.services.pending_actions import PendingAction, PendingActionsService
+
+    mock_executor = AsyncMock(return_value="execution output")
+    svc = PendingActionsService(db_client=db_client, tool_executor=mock_executor)
+
+    action = PendingAction(
+        id=UUID("00000000-0000-0000-0000-000000000001"),
+        user_id=UUID("00000000-0000-0000-0000-000000000002"),
+        tool_name="create_tasks",
+        tool_args={"title": "Test task"},
+        status="pending",
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+        context={"session_id": "sess-1", "agent_name": "clarity"},
+    )
+
+    db_client.table.return_value.update.return_value.eq.return_value.execute = AsyncMock()
+
+    with patch.object(svc, "get_action", new_callable=AsyncMock, return_value=action), \
+         patch.object(svc, "_update_status", new_callable=AsyncMock) as mock_update_status:
+        result = await svc.approve_action("00000000-0000-0000-0000-000000000001", "user-1")
+
+    # Status transitions: approved first (via _update_status), then executed via direct DB update
+    mock_update_status.assert_awaited_once_with("00000000-0000-0000-0000-000000000001", "approved")
+
+    update_data = db_client.table.return_value.update.call_args[0][0]
+    assert update_data["status"] == "executed"
+    assert "execution_result" in update_data
+    assert "execution output" in update_data["execution_result"]["result"]
+
+    assert result.success is True
+    assert result.result == "execution output"
+
+
+# ---------------------------------------------------------------------------
+# approve_action: executor raises → ActionResult with error, not HTTP 500
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_approve_action_execution_error_not_500(db_client):
+    """AC-26: approve_action() with failing executor returns ActionResult with error, does not raise."""
+    from datetime import datetime, timedelta, timezone
+    from uuid import UUID
+
+    from chatServer.services.pending_actions import PendingAction, PendingActionsService
+
+    mock_executor = AsyncMock(side_effect=RuntimeError("tool exploded"))
+    svc = PendingActionsService(db_client=db_client, tool_executor=mock_executor)
+
+    action = PendingAction(
+        id=UUID("00000000-0000-0000-0000-000000000001"),
+        user_id=UUID("00000000-0000-0000-0000-000000000002"),
+        tool_name="create_tasks",
+        tool_args={"title": "Test task"},
+        status="pending",
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+        context={"session_id": "sess-1", "agent_name": "clarity"},
+    )
+
+    db_client.table.return_value.update.return_value.eq.return_value.execute = AsyncMock()
+
+    with patch.object(svc, "get_action", new_callable=AsyncMock, return_value=action), \
+         patch.object(svc, "_update_status", new_callable=AsyncMock):
+        # Must NOT raise — executor errors are caught and returned as ActionResult
+        result = await svc.approve_action("00000000-0000-0000-0000-000000000001", "user-1")
+
+    # Returns error result, not an exception (no HTTP 500)
+    assert result.success is False
+    assert "tool exploded" in result.error
+
+    # DB updated to executed with error stored in execution_result
+    update_data = db_client.table.return_value.update.call_args[0][0]
+    assert update_data["status"] == "executed"
+    assert update_data["execution_result"] == {"error": "tool exploded"}

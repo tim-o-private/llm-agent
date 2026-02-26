@@ -397,13 +397,5 @@ class ScheduledExecutionService:
                 type=notification_type,
             )
 
-            # Also send a separate approval notification if there are pending actions
-            if pending_count > 0:
-                await notification_service.notify_pending_actions(
-                    user_id=user_id,
-                    pending_count=pending_count,
-                    agent_name=agent_name,
-                )
-
         except Exception as e:
             logger.warning(f"Failed to send notification (non-fatal): {e}")
