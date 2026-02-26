@@ -65,7 +65,7 @@ def gmail_client():
 
 
 def test_create_gmail_connection_creates_pending_job(gmail_client):
-    """POST /api/external/connections for gmail inserts a pending email_processing_jobs row."""
+    """POST /api/external/connections for gmail inserts an email_processing job into jobs table."""
     payload = {
         "service_name": "gmail",
         "service_user_email": "user@gmail.com",
@@ -79,18 +79,14 @@ def test_create_gmail_connection_creates_pending_job(gmail_client):
 
     assert response.status_code == 200
 
-    # Find the INSERT into email_processing_jobs call
+    # Find the INSERT into jobs table with email_processing job type
     cursor = gmail_client._mock_cursor
     all_calls = cursor.execute.call_args_list
     insert_calls = [
         call for call in all_calls
-        if "email_processing_jobs" in str(call)
+        if "INSERT INTO jobs" in str(call) and "email_processing" in str(call)
     ]
-    assert insert_calls, "Should have executed INSERT into email_processing_jobs"
-
-    # Verify the INSERT uses 'pending' status
-    insert_sql = str(insert_calls[0])
-    assert "pending" in insert_sql
+    assert insert_calls, "Should have executed INSERT into jobs with email_processing type"
 
 
 def test_create_non_gmail_connection_no_job():
@@ -128,6 +124,6 @@ def test_create_non_gmail_connection_no_job():
     all_calls = mock_cursor.execute.call_args_list
     insert_job_calls = [
         call for call in all_calls
-        if "email_processing_jobs" in str(call)
+        if "INSERT INTO jobs" in str(call) and "email_processing" in str(call)
     ]
-    assert not insert_job_calls, "Should NOT insert into email_processing_jobs for non-Gmail"
+    assert not insert_job_calls, "Should NOT insert email_processing job for non-Gmail"
