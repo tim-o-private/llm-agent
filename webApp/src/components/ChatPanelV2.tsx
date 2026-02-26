@@ -1,11 +1,14 @@
-import React, { useEffect, useCallback, useRef, useState, Component, type ErrorInfo, type ReactNode } from 'react';
+import React, { useEffect, useCallback, useRef, useState, useMemo, Component, type ErrorInfo, type ReactNode } from 'react';
 import { AssistantRuntimeProvider } from '@assistant-ui/react';
 import { useExternalStoreRuntime } from '@assistant-ui/react';
 import type { ThreadMessageLike, AppendMessage } from '@assistant-ui/react';
-import { Thread } from '@assistant-ui/react-ui';
+import { Thread, Composer } from '@assistant-ui/react-ui';
 import { useChatStore, useInitializeChatStore, type ChatMessage } from '@/stores/useChatStore';
+import { useChatTimeline } from '@/api/hooks/useChatTimeline';
 import { useTaskViewStore } from '@/stores/useTaskViewStore';
 import { MessageHeader } from '@/components/ui/chat/MessageHeader';
+import { NotificationInlineMessage } from '@/components/ui/chat/NotificationInlineMessage';
+import { ApprovalInlineMessage } from '@/components/ui/chat/ApprovalInlineMessage';
 import { ConversationList } from '@/components/features/Conversations';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -67,6 +70,13 @@ export const ChatPanelV2: React.FC<ChatPanelV2Props> = ({ agentId: agentIdProp }
     refreshMessages,
   } = useChatStore();
   const { setInputFocusState } = useTaskViewStore();
+
+  // Get merged timeline for notification/approval items
+  const timeline = useChatTimeline();
+  const notifItems = useMemo(
+    () => timeline.filter((m) => m.sender === 'notification' || m.sender === 'approval'),
+    [timeline],
+  );
 
   // Track running state for the external store
   const [isRunning, setIsRunning] = useState(false);
@@ -305,12 +315,28 @@ export const ChatPanelV2: React.FC<ChatPanelV2Props> = ({ agentId: agentIdProp }
       {/* Conversation history list */}
       <ConversationList agentName={agentId} />
 
-      {/* Assistant-UI Thread with comprehensive theming from assistant-ui-theme.css */}
+      {/* Assistant-UI Thread with inline notification/approval items */}
       <div className="flex-1 min-h-0 relative">
         <AssistantRuntimeProvider runtime={runtime}>
           <ThreadErrorBoundary>
             <div className="h-full">
-              <Thread />
+              <Thread.Root>
+                <Thread.Viewport>
+                  <Thread.Messages />
+                  {/* Notification and approval items injected into the chat timeline (AC-11) */}
+                  {notifItems.map((msg) =>
+                    msg.sender === 'approval' ? (
+                      <ApprovalInlineMessage key={msg.id} message={msg} />
+                    ) : (
+                      <NotificationInlineMessage key={msg.id} message={msg} />
+                    ),
+                  )}
+                  <Thread.ViewportFooter>
+                    <Thread.ScrollToBottom />
+                    <Composer />
+                  </Thread.ViewportFooter>
+                </Thread.Viewport>
+              </Thread.Root>
             </div>
           </ThreadErrorBoundary>
         </AssistantRuntimeProvider>

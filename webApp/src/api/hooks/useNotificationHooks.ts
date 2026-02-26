@@ -19,6 +19,10 @@ export interface Notification {
   created_at: string;
   feedback?: 'useful' | 'not_useful' | null;
   feedback_at?: string | null;
+  // FU-1 notification type system
+  type?: 'agent_only' | 'silent' | 'notify';
+  requires_approval?: boolean;
+  pending_action_id?: string | null;
 }
 
 export interface UnreadCount {
@@ -100,7 +104,7 @@ export function useNotifications(unreadOnly = false, limit = 50) {
   return useQuery<Notification[], Error>({
     queryKey: [NOTIFICATIONS_QUERY_KEY, unreadOnly, limit],
     queryFn: () => fetchNotifications(unreadOnly, limit),
-    refetchInterval: 15000,
+    refetchInterval: 5000,
     retry: false,
   });
 }
@@ -109,7 +113,7 @@ export function useUnreadCount() {
   return useQuery<UnreadCount, Error>({
     queryKey: [NOTIFICATIONS_QUERY_KEY, 'unread', 'count'],
     queryFn: fetchUnreadCount,
-    refetchInterval: 15000,
+    refetchInterval: 5000,
     retry: false,
   });
 }
