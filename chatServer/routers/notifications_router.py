@@ -85,6 +85,7 @@ async def get_notifications(
         unread_only=unread_only,
         limit=min(limit, 100),  # Cap at 100
         offset=offset,
+        exclude_agent_only=True,
     )
     return notifications
 

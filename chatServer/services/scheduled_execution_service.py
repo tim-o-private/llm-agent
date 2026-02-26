@@ -381,6 +381,7 @@ class ScheduledExecutionService:
                 body += f"\n\n_{pending_count} action{'s' if pending_count != 1 else ''} pending your approval._"
 
             schedule_type = config.get("schedule_type", "scheduled")
+            notification_type = "agent_only" if schedule_type == "heartbeat" else "notify"
             category = "heartbeat" if schedule_type == "heartbeat" else "agent_result"
 
             await notification_service.notify_user(
@@ -390,6 +391,7 @@ class ScheduledExecutionService:
                 category=category,
                 metadata={"agent_name": agent_name, "pending_actions": pending_count},
                 channels=channels,
+                type=notification_type,
             )
 
             # Also send a separate approval notification if there are pending actions

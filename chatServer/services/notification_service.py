@@ -35,7 +35,10 @@ class NotificationService:
         category: str = "info",
         metadata: Optional[Dict[str, Any]] = None,
         channels: Optional[List[str]] = None,
-    ) -> str:
+        type: str = "notify",
+        requires_approval: bool = False,
+        pending_action_id: Optional[str] = None,
+    ) -> Optional[str]:
         """
         Send a notification to the user via requested channels.
 
@@ -46,23 +49,36 @@ class NotificationService:
             category: One of: heartbeat, approval_needed, agent_result, error, info
             metadata: Structured context (schedule_id, agent_name, execution_id, etc.)
             channels: List of channels to use. None = all available.
+            type: Delivery tier — 'agent_only' (no store), 'silent' (DB only), 'notify' (DB + Telegram)
+            requires_approval: Whether this notification represents a pending approval request
+            pending_action_id: FK to pending_actions when this is an approval request
 
         Returns:
-            Notification ID
+            Notification ID, or None for agent_only
         """
         metadata = metadata or {}
 
-        # 1. Always store in notifications table (web channel)
+        # agent_only: no storage, no delivery — just a debug log
+        if type == "agent_only":
+            logger.debug(
+                f"agent_only notification for user {user_id} suppressed: {title}"
+            )
+            return None
+
+        # 1. Store in notifications table (web channel)
         notification_id = await self._store_web_notification(
             user_id=user_id,
             title=title,
             body=body,
             category=category,
             metadata=metadata,
+            type=type,
+            requires_approval=requires_approval,
+            pending_action_id=pending_action_id,
         )
 
-        # 2. Send via Telegram if user has it linked and it's requested
-        if channels is None or "telegram" in channels:
+        # 2. Send via Telegram only for 'notify' type
+        if type == "notify" and (channels is None or "telegram" in channels):
             await self._send_telegram_notification(
                 user_id=user_id,
                 title=title,
@@ -110,6 +126,7 @@ class NotificationService:
         unread_only: bool = False,
         limit: int = 50,
         offset: int = 0,
+        exclude_agent_only: bool = False,
     ) -> List[Dict[str, Any]]:
         """Fetch notifications for a user."""
         try:
@@ -123,6 +140,9 @@ class NotificationService:
 
             if unread_only:
                 query = query.eq("read", False)
+
+            if exclude_agent_only:
+                query = query.neq("type", "agent_only")
 
             result = await query.execute()
             return result.data or []
@@ -267,20 +287,26 @@ class NotificationService:
         body: str,
         category: str,
         metadata: Dict[str, Any],
+        type: str = "notify",
+        requires_approval: bool = False,
+        pending_action_id: Optional[str] = None,
     ) -> str:
         """Store notification in the database for web UI polling."""
         try:
+            insert_data: Dict[str, Any] = {
+                "user_id": user_id,
+                "title": title,
+                "body": body[:10000] if body else "",  # Truncate very long bodies
+                "category": category,
+                "metadata": metadata,
+                "type": type,
+                "requires_approval": requires_approval,
+            }
+            if pending_action_id is not None:
+                insert_data["pending_action_id"] = pending_action_id
             result = (
                 await self.db.table("notifications")
-                .insert(
-                    {
-                        "user_id": user_id,
-                        "title": title,
-                        "body": body[:10000] if body else "",  # Truncate very long bodies
-                        "category": category,
-                        "metadata": metadata,
-                    }
-                )
+                .insert(insert_data)
                 .execute()
             )
 
