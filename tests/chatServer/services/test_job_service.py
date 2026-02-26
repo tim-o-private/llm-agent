@@ -213,6 +213,67 @@ async def test_expire_stale_calls_db_function():
 
 
 @pytest.mark.asyncio
+async def test_lifecycle_create_claim_run_complete():
+    """AC-28: Full lifecycle chain — create → claim_next → mark_running → complete."""
+    import uuid
+
+    job_id = uuid.uuid4()
+    pool, cursor = _make_pool()
+
+    # Sequence fetchone returns across all 4 method calls:
+    # 1. create(): INSERT RETURNING → (job_id,)
+    # 2. claim_next() SELECT FOR UPDATE → row with job_id at index 0
+    # 3. claim_next() UPDATE RETURNING → full claimed row
+    # mark_running and complete don't call fetchone.
+    select_row = (job_id, "user-1", "email_processing", "pending", {}, 0, 0, 3, None, None, None)
+    claimed_row = (job_id, "user-1", "email_processing", "claimed", {}, 0, 0, 3, None, None, None, None, None)
+    cursor.fetchone = AsyncMock(side_effect=[
+        (job_id,),    # create RETURNING
+        select_row,   # claim_next SELECT FOR UPDATE
+        claimed_row,  # claim_next UPDATE RETURNING
+    ])
+    cursor.description = [
+        (col,) for col in [
+            "id", "user_id", "job_type", "status", "input", "priority",
+            "retry_count", "max_retries", "scheduled_for", "expires_at",
+            "created_at", "claimed_at", "updated_at",
+        ]
+    ]
+
+    service = JobService(pool)
+
+    # Step 1: create
+    created_id = await service.create(
+        job_type="email_processing",
+        input={"connection_id": "conn-1"},
+        user_id="user-1",
+    )
+    assert created_id == str(job_id)
+
+    # Step 2: claim_next
+    claimed = await service.claim_next()
+    assert claimed is not None
+    assert claimed["id"] == job_id
+    assert claimed["status"] == "claimed"
+
+    # Step 3: mark_running
+    await service.mark_running(created_id)
+
+    # Step 4: complete
+    await service.complete(created_id, {"result": "processed"})
+
+    # Verify all 5 SQL statements executed in order:
+    # INSERT, SELECT FOR UPDATE, UPDATE claimed, UPDATE running, UPDATE complete
+    assert cursor.execute.call_count == 5
+    sqls = [call[0][0] for call in cursor.execute.call_args_list]
+    assert "INSERT INTO jobs" in sqls[0]
+    assert "FOR UPDATE SKIP LOCKED" in sqls[1]
+    assert "status = 'claimed'" in sqls[2]
+    assert "status = 'running'" in sqls[3]
+    assert "status = 'complete'" in sqls[4]
+
+
+@pytest.mark.asyncio
 async def test_backoff_formula():
     """Verify backoff: min(30 * 2^retry_count, 900) seconds."""
     pool, cursor = _make_pool()
