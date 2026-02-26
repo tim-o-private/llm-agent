@@ -38,6 +38,7 @@ class NotificationService:
         type: str = "notify",
         requires_approval: bool = False,
         pending_action_id: Optional[str] = None,
+        session_id: Optional[str] = None,
     ) -> Optional[str]:
         """
         Send a notification to the user via requested channels.
@@ -75,6 +76,7 @@ class NotificationService:
             type=type,
             requires_approval=requires_approval,
             pending_action_id=pending_action_id,
+            session_id=session_id,
         )
 
         # 2. Send via Telegram only for 'notify' type
@@ -127,8 +129,9 @@ class NotificationService:
         limit: int = 50,
         offset: int = 0,
         exclude_agent_only: bool = False,
+        session_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """Fetch notifications for a user."""
+        """Fetch notifications for a user, optionally filtered by session."""
         try:
             query = (
                 self.db.table("notifications")
@@ -143,6 +146,9 @@ class NotificationService:
 
             if exclude_agent_only:
                 query = query.neq("type", "agent_only")
+
+            if session_id:
+                query = query.eq("session_id", session_id)
 
             result = await query.execute()
             return result.data or []
@@ -290,6 +296,7 @@ class NotificationService:
         type: str = "notify",
         requires_approval: bool = False,
         pending_action_id: Optional[str] = None,
+        session_id: Optional[str] = None,
     ) -> str:
         """Store notification in the database for web UI polling."""
         try:
@@ -304,6 +311,8 @@ class NotificationService:
             }
             if pending_action_id is not None:
                 insert_data["pending_action_id"] = pending_action_id
+            if session_id is not None:
+                insert_data["session_id"] = session_id
             result = (
                 await self.db.table("notifications")
                 .insert(insert_data)

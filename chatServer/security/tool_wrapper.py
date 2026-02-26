@@ -133,6 +133,7 @@ def with_approval(
                             type="notify",
                             requires_approval=True,
                             pending_action_id=action_id,
+                            session_id=context.session_id,
                             metadata={
                                 "tool_name": tool_name,
                                 "tool_args": kwargs,

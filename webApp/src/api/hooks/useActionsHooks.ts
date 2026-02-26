@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { toast } from '@/components/ui/toast';
 
 const ACTIONS_QUERY_KEY = 'actions';
+const NOTIFICATIONS_QUERY_KEY = 'notifications';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 // Types
@@ -109,6 +110,7 @@ export function useApproveAction() {
         toast.error('Action approval failed', result.error);
       }
       queryClient.invalidateQueries({ queryKey: [ACTIONS_QUERY_KEY] });
+      queryClient.invalidateQueries({ queryKey: [NOTIFICATIONS_QUERY_KEY] });
     },
     onError: (error) => {
       toast.error('Failed to approve action', error.message);
@@ -124,6 +126,7 @@ export function useRejectAction() {
     onSuccess: () => {
       toast.success('Action rejected');
       queryClient.invalidateQueries({ queryKey: [ACTIONS_QUERY_KEY] });
+      queryClient.invalidateQueries({ queryKey: [NOTIFICATIONS_QUERY_KEY] });
     },
     onError: (error) => {
       toast.error('Failed to reject action', error.message);

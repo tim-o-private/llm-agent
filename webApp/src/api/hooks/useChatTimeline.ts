@@ -4,6 +4,10 @@
  *
  * Follows A4: notifications stay in React Query (server state),
  * messages stay in Zustand (client state); merge is a derived computation.
+ *
+ * Only shows notifications belonging to the current chat session (session_id
+ * filtering) so that unrelated notifications from other chats or background
+ * jobs don't flood the timeline.
  */
 
 import { useMemo } from 'react';
@@ -12,7 +16,8 @@ import { useNotifications } from '@/api/hooks/useNotificationHooks';
 
 export function useChatTimeline(): ChatMessage[] {
   const messages = useChatStore((s) => s.messages);
-  const { data: notifications } = useNotifications(false, 100);
+  const activeChatId = useChatStore((s) => s.activeChatId);
+  const { data: notifications } = useNotifications(false, 100, activeChatId);
 
   const notificationMessages: ChatMessage[] = useMemo(() => {
     return (notifications ?? [])

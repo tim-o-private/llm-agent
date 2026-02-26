@@ -23,10 +23,12 @@ export const ApprovalInlineMessage: React.FC<ApprovalInlineMessageProps> = ({ me
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [message.notification_id]);
 
+  const [optimisticStatus, setOptimisticStatus] = useState<string | null>(null);
+
   const actionId = message.action_id;
   const toolName = message.action_tool_name ?? 'Unknown tool';
   const toolArgs = message.action_tool_args ?? {};
-  const status = message.action_status ?? 'pending';
+  const status = optimisticStatus ?? message.action_status ?? 'pending';
 
   const isPending = status === 'pending';
   const isApproved = status === 'approved';
@@ -78,7 +80,10 @@ export const ApprovalInlineMessage: React.FC<ApprovalInlineMessageProps> = ({ me
       {isPending && actionId && (
         <div className="flex gap-2 mt-2">
           <button
-            onClick={() => approveAction.mutate(actionId)}
+            onClick={() => {
+              setOptimisticStatus('approved');
+              approveAction.mutate(actionId);
+            }}
             disabled={isMutating}
             className="inline-flex items-center gap-1 px-3 py-1 rounded text-xs font-medium bg-success-subtle text-success-strong hover:bg-success-subtle/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label="Approve action"
@@ -87,7 +92,10 @@ export const ApprovalInlineMessage: React.FC<ApprovalInlineMessageProps> = ({ me
             Approve
           </button>
           <button
-            onClick={() => rejectAction.mutate({ actionId })}
+            onClick={() => {
+              setOptimisticStatus('rejected');
+              rejectAction.mutate({ actionId });
+            }}
             disabled={isMutating}
             className="inline-flex items-center gap-1 px-3 py-1 rounded text-xs font-medium bg-destructive-subtle text-destructive hover:bg-destructive-subtle/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label="Reject action"

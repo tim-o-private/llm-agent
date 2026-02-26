@@ -164,6 +164,7 @@ async def approve_action(
         result = await service.approve_action(action_id, user_id)
 
         notification_service = _build_notification_service(db)
+        action_session_id = action.context.get("session_id") if action else None
         try:
             await notification_service.notify_user(
                 user_id=user_id,
@@ -172,6 +173,7 @@ async def approve_action(
                 category="agent_result",
                 type="silent",
                 metadata={"tool_name": tool_name, "action_id": str(action_id)},
+                session_id=action_session_id,
             )
         except Exception as notif_err:
             logger.warning(f"Failed to create approval follow-up notification (non-fatal): {notif_err}")
@@ -208,6 +210,7 @@ async def reject_action(
         success = await service.reject_action(action_id, user_id, reason=request.reason)
 
         notification_service = _build_notification_service(db)
+        action_session_id = action.context.get("session_id") if action else None
         try:
             body = "Action was rejected."
             if request.reason:
@@ -219,6 +222,7 @@ async def reject_action(
                 category="agent_result",
                 type="silent",
                 metadata={"tool_name": tool_name, "action_id": str(action_id)},
+                session_id=action_session_id,
             )
         except Exception as notif_err:
             logger.warning(f"Failed to create rejection follow-up notification (non-fatal): {notif_err}")

@@ -197,9 +197,13 @@ async def test_deterministic_silence_recent_returning_user():
 
 
 @pytest.mark.asyncio
-async def test_deterministic_silence_skipped_for_new_user():
-    """New user is never deterministically silenced, even with recent last_message_at."""
-    ts = datetime.now(timezone.utc)  # just now
+async def test_chat_history_overrides_new_user_detection():
+    """User with chat history is NOT new, even when memory+instructions are empty.
+
+    Chat history is the strongest signal — fragile memory MCP / instructions
+    checks should not override it.
+    """
+    ts = datetime.now(timezone.utc)  # just now → 30s dedup fires
     mock_client = _mock_supabase(has_instructions=False)
     service = SessionOpenService(mock_client)
     mock_executor = AsyncMock()
@@ -212,9 +216,9 @@ async def test_deterministic_silence_skipped_for_new_user():
     ):
         result = await service.run(user_id="u1", agent_name="assistant", session_id="s1")
 
-    assert result["is_new_user"] is True
-    assert result["silent"] is False
-    mock_executor.ainvoke.assert_awaited_once()
+    assert result["is_new_user"] is False  # chat history overrides
+    assert result["silent"] is True  # 30s dedup kicks in
+    mock_executor.ainvoke.assert_not_awaited()  # agent never invoked
 
 
 @pytest.mark.asyncio

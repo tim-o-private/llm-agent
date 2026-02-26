@@ -198,7 +198,7 @@ def _format_session_str(
     bootstrap_context: str | None = None,
 ) -> str:
     """Format session open / onboarding section."""
-    is_new_user = not memory_notes and not user_instructions
+    is_new_user = not memory_notes and not user_instructions and last_message_at is None
     if channel == "session_open":
         if is_new_user:
             return SESSION_OPEN_BOOTSTRAP_GUIDANCE

@@ -23,6 +23,7 @@ export interface Notification {
   type?: 'agent_only' | 'silent' | 'notify';
   requires_approval?: boolean;
   pending_action_id?: string | null;
+  session_id?: string | null;
 }
 
 export interface UnreadCount {
@@ -44,13 +45,14 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 }
 
 // API functions
-async function fetchNotifications(unreadOnly = false, limit = 50, offset = 0): Promise<Notification[]> {
+async function fetchNotifications(unreadOnly = false, limit = 50, offset = 0, sessionId?: string | null): Promise<Notification[]> {
   const headers = await getAuthHeaders();
   const params = new window.URLSearchParams({
     limit: limit.toString(),
     offset: offset.toString(),
   });
   if (unreadOnly) params.append('unread_only', 'true');
+  if (sessionId) params.append('session_id', sessionId);
 
   const response = await fetch(`${API_BASE_URL}/api/notifications?${params}`, { headers });
   if (!response.ok) throw new Error('Failed to fetch notifications');
@@ -100,10 +102,10 @@ async function submitNotificationFeedback(
 
 // Hooks
 
-export function useNotifications(unreadOnly = false, limit = 50) {
+export function useNotifications(unreadOnly = false, limit = 50, sessionId?: string | null) {
   return useQuery<Notification[], Error>({
-    queryKey: [NOTIFICATIONS_QUERY_KEY, unreadOnly, limit],
-    queryFn: () => fetchNotifications(unreadOnly, limit),
+    queryKey: [NOTIFICATIONS_QUERY_KEY, unreadOnly, limit, sessionId],
+    queryFn: () => fetchNotifications(unreadOnly, limit, 0, sessionId),
     refetchInterval: 5000,
     retry: false,
   });
