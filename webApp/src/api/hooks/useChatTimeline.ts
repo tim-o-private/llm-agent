@@ -21,7 +21,19 @@ export function useChatTimeline(): ChatMessage[] {
 
   const notificationMessages: ChatMessage[] = useMemo(() => {
     return (notifications ?? [])
-      .filter((n) => n.type !== 'agent_only')
+      .filter((n) => {
+        // Never show agent-only notifications
+        if (n.type === 'agent_only') return false;
+        // Show pending approval notifications; hide resolved ones
+        if (n.requires_approval) {
+          const actionStatus = n.metadata?.action_status as string | undefined;
+          return !actionStatus || actionStatus === 'pending';
+        }
+        // Hide silent notifications and read non-approval notifications
+        if (n.type === 'silent') return false;
+        if (n.read) return false;
+        return true;
+      })
       .map((n) => ({
         id: `notif-${n.id}`,
         text: n.body,

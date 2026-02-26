@@ -166,6 +166,11 @@ async def approve_action(
         notification_service = _build_notification_service(db)
         action_session_id = action.context.get("session_id") if action else None
         try:
+            await notification_service.resolve_approval_notification(
+                pending_action_id=str(action_id),
+                user_id=user_id,
+                action_status="approved",
+            )
             await notification_service.notify_user(
                 user_id=user_id,
                 title=f"Approved: {tool_name}",
@@ -212,6 +217,11 @@ async def reject_action(
         notification_service = _build_notification_service(db)
         action_session_id = action.context.get("session_id") if action else None
         try:
+            await notification_service.resolve_approval_notification(
+                pending_action_id=str(action_id),
+                user_id=user_id,
+                action_status="rejected",
+            )
             body = "Action was rejected."
             if request.reason:
                 body += f" Reason: {request.reason}"

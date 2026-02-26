@@ -205,6 +205,47 @@ class NotificationService:
             logger.error(f"Failed to mark all notifications as read for user {user_id}: {e}")
             return 0
 
+    async def resolve_approval_notification(
+        self,
+        pending_action_id: str,
+        user_id: str,
+        action_status: str,
+    ) -> bool:
+        """Update the original approval notification after approve/reject.
+
+        Sets action_status in metadata and marks as read so the frontend
+        renders the resolved state and persists it across refreshes.
+        """
+        try:
+            # Find the notification linked to this pending action
+            result = (
+                await self.db.table("notifications")
+                .select("id, metadata")
+                .eq("pending_action_id", pending_action_id)
+                .eq("user_id", user_id)
+                .limit(1)
+                .execute()
+            )
+            if not result.data:
+                logger.warning(f"No notification found for pending_action_id={pending_action_id}")
+                return False
+
+            notif = result.data[0]
+            metadata = notif.get("metadata") or {}
+            metadata["action_status"] = action_status
+
+            await (
+                self.db.table("notifications")
+                .update({"metadata": metadata, "read": True})
+                .eq("id", notif["id"])
+                .eq("user_id", user_id)
+                .execute()
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Failed to resolve approval notification for action {pending_action_id}: {e}")
+            return False
+
     async def submit_feedback(
         self,
         notification_id: str,
