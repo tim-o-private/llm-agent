@@ -2,7 +2,7 @@
 -- Add SearchWebTool type, register in tools table, link to assistant agent
 
 -- 1. Add enum value
-ALTER TYPE agent_tool_type ADD VALUE IF NOT EXISTS 'SearchWebTool';
+-- ALTER TYPE agent_tool_type ADD VALUE IF NOT EXISTS 'SearchWebTool';
 
 -- 2. Register in tools table (idempotent)
 INSERT INTO tools (name, type, description, config, is_active)
