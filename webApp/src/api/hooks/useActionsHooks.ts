@@ -135,5 +135,6 @@ export function useAuditHistory(limit = 50, offset = 0, toolName?: string, appro
   return useQuery<AuditLogEntry[], Error>({
     queryKey: [ACTIONS_QUERY_KEY, 'history', limit, offset, toolName, approvalStatus],
     queryFn: () => fetchAuditHistory(limit, offset, toolName, approvalStatus),
+    enabled: !!supabase.auth,
   });
 }
