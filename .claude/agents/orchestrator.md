@@ -51,7 +51,14 @@ Sonnet can follow a well-defined contract; your job is to write the contract.
 
 ### Phase 1: Setup
 
-**1. Read the Spec** — understand acceptance criteria (with AC-IDs), scope, functional units, dependencies, contracts.
+**1. Read the Spec and Its Context**
+
+- Read the spec: `docs/sdlc/specs/SPEC-NNN-*.md` — understand acceptance criteria (with AC-IDs), scope, functional units, dependencies, contracts.
+- **Read the parent PRD** (`docs/product/PRD-*.md`) — understand what phase this is, what other specs are in the same phase, and what comes after.
+- **Read sibling and downstream specs** in `docs/sdlc/specs/`:
+  - Sibling specs (same phase) — shared tables? overlapping scope?
+  - Downstream specs (later phases) — what will they need from this spec's outputs?
+  - In-progress specs — anyone building something that overlaps?
 
 **2. Ensure Clean Working Tree**
 
@@ -98,6 +105,7 @@ Reference the Platform Primitives decision tree in `.claude/skills/product-archi
 - All test fixtures and shared utilities are accounted for
 - Migration prefixes pre-allocated (no collisions): `ls supabase/migrations/ | grep -oP '^\d{14}' | sort | tail -3`
 - **Every task contract includes an "Existing infrastructure" section** listing what to reuse
+- **Downstream spec needs are met:** If the spec's PRD Context lists downstream dependencies, verify the task contracts produce the interfaces those specs expect (table shapes, service methods, job types)
 
 If gaps found: add tasks before proceeding.
 

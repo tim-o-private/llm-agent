@@ -5,21 +5,109 @@ description: Shared protocols for domain agents — blocker handling, git coordi
 
 # Agent Protocols — Shared Rules for Domain Agents
 
-Read this before starting any task. These protocols apply to all domain agents: backend-dev, frontend-dev, database-dev, deployment-dev, and uat-tester.
+Read this before starting any task. These protocols apply to all domain agents: backend-dev, frontend-dev, database-dev, deployment-dev, reviewer, and uat-tester.
+
+## Task Lifecycle (MANDATORY)
+
+The shared task list is the single source of truth for who's working on what. Use `TaskList` to see all tasks. Use `TaskGet` and `TaskUpdate` to manage your own.
+
+**Before you touch ANY code, you MUST claim your task:**
+
+```
+TaskUpdate: taskId=<id>, status="in_progress", owner="<your-agent-name>"
+```
+
+### Statuses
+
+| Status | Meaning | Who sets it |
+|--------|---------|-------------|
+| `pending` | Available, not started | Lead (at creation) |
+| `in_progress` | Being worked on — **check owner before touching** | Agent claiming it |
+| `completed` | Done, review passed, merged | Agent (after review passes) |
+
+### Rules
+
+1. **Check `TaskList` before starting ANY work.** If a task is `in_progress` with another agent's name, DO NOT work on it or any files it covers.
+2. **Claim before coding.** Set `status: "in_progress"` and `owner: "<your-name>"` as your FIRST action on any task. If you can't claim it (already in_progress), message the lead.
+3. **One agent per task.** Never have two agents working on the same task. If you need help, message the other agent — don't start editing their files.
+4. **Signal review readiness.** When your code is committed, pushed, and ready for review, update the task description to prepend `[REVIEW REQUESTED]` and message the reviewer (or lead):
+   ```
+   TaskUpdate: taskId=<id>, description="[REVIEW REQUESTED] <original description>"
+   ```
+5. **Mark complete only after review passes.** Don't set `completed` until the reviewer sends a PASS verdict. The lifecycle is:
+   ```
+   pending → in_progress (you claim it)
+     → [REVIEW REQUESTED] (code done, pushed, awaiting review)
+     → reviewer finds BLOCKER → you fix → [REVIEW REQUESTED] again
+     → reviewer PASS → completed
+   ```
+6. **Check task list between tasks.** After completing one task, call `TaskList` to find your next available task (pending, no owner, not blocked).
+
+### What the lead does
+
+The lead creates tasks, sets dependencies (`addBlockedBy`), and assigns initial owners. But agents must still verify ownership before starting — the lead may reassign tasks between when you last checked and when you start.
+
+### Conflict resolution
+
+If you discover another agent has committed to files in YOUR claimed task's scope:
+1. `git pull` to see their changes
+2. Message the lead with: "Conflict: [agent] committed to [file] which is in my task [id]"
+3. Do NOT overwrite their changes. Wait for the lead to resolve ownership.
+
+## File Safety — NEVER Delete or Modify Files Outside Your Task
+
+**This is the #1 rule. Violating it can destroy other agents' work or the user's in-progress changes.**
+
+- **Only modify files listed in your task contract.** If a file isn't in your contract, don't touch it — even if you think it's "dead code," "superseded," or "no longer needed."
+- **NEVER delete files** that aren't explicitly listed as deliverables in your task. If you think a file should be removed (e.g., old code replaced by your new code), **flag it to the lead** — don't delete it yourself.
+- **If tests or lint fail because of files outside your scope, that's OK.** Report the failure to the lead with the file path and error. Do NOT fix files outside your scope to make checks pass.
+- **If imports break because of your changes,** only fix imports IN files you own. If a file outside your scope imports something you changed, flag it — don't edit that file.
+- **NEVER "clean up" old code after implementing a replacement.** The lead decides when old code gets removed, not individual agents.
+
+**Why:** Uncommitted deletions are invisible to other agents and the lead. If you delete a file another agent or the user depends on, there's no commit to revert — the work is just gone.
+
+**What to do instead:**
+```
+Message to lead: "FU-3 replaces PendingActionsPanel with ApprovalInlineMessage.
+Old files that may be removable: webApp/src/components/features/Confirmations/.
+Flagging for cleanup — not deleting."
+```
 
 ## When Reviewer Finds a Blocker
 
 1. Read the reviewer's VERDICT — understand WHAT is wrong and WHY (principle ID tells you why)
 2. Fix on your existing branch (new commit — never amend, never force-push)
 3. Run all tests — they must pass
-4. Push and message orchestrator: "Fix committed for [BLOCKER]. Branch: [branch]. Ready for re-review."
+4. Push and message the reviewer directly: "Fix committed for [BLOCKER]. Branch: [branch]. Ready for re-review."
+5. If the reviewer messaged you directly (peer-to-peer review), reply to them. If the lead routed the blocker, message the lead.
 
 ## When You're Stuck
 
 1. Read the error, check architecture-principles skill and your domain skill, attempt ONE fix
-2. If it doesn't work: message orchestrator with what you tried and what went wrong
+2. If it doesn't work: message the lead with what you tried and what went wrong
 3. Do NOT retry the same action more than twice
-4. Do NOT ask the user directly — go through the orchestrator
+4. Do NOT ask the user directly — go through the lead
+
+## Peer Communication
+
+You can message teammates directly for cross-domain coordination. Use `SendMessage` with `recipient` set to their name.
+
+**Handle peer-to-peer (don't escalate):**
+- Cross-domain questions: "What column name did you use for the FK?" → message database-dev
+- Contract validation: "Confirming the endpoint returns `{shape}`" → message backend-dev
+- Review fixes: reviewer tells you what to fix, you fix it and message reviewer back
+- Sharing context: "Here's the table DDL and column names — use these in your hook"
+
+**Escalate to the lead when:**
+- You and a peer disagree on an approach
+- Your task contract doesn't match what you find in the codebase
+- You're blocked and the relevant peer can't help
+- A decision affects the user's product experience or overall architecture
+
+**Communication style:**
+- Be specific and batch information. One message with "table is `foos`, FK column is `foo_id UUID`, index on `(user_id, created_at)`" beats three separate questions.
+- Include file paths and line numbers when referencing code.
+- When asking a peer, state what you need and why: "Need the response shape from `POST /api/foos` so I can type the React Query hook."
 
 ## Git Coordination
 
@@ -84,7 +172,7 @@ or:
 Survey: found existing EmailOnboardingService — extending with new method.
 ```
 
-If you find >50% overlap with an existing service/table/component, **STOP and message the orchestrator** with:
+If you find >50% overlap with an existing service/table/component, **STOP and message the lead** with:
 - Path to existing implementation
 - Why it does or doesn't solve your need
 - Proposed approach: extend existing vs. create new
@@ -102,12 +190,20 @@ The reviewer will verify:
 
 See the "Primitive Reuse (A11)" section in the reviewer checklist.
 
+## Before Requesting Review
+
+When your code is committed and pushed:
+
+1. **Re-read your task:** `TaskGet` — the description is durable storage. Verify every deliverable is committed.
+2. **If you can't remember your full scope, re-read it** — don't guess from what's in front of you.
+3. Run verification (tests + lint) one final time.
+4. Update task: `TaskUpdate` with description prepended with `[REVIEW REQUESTED]`.
+5. Message the reviewer (or lead): "Task [id] ready for review. Branch: [branch]. Commits: [summary]."
+
 ## Before Declaring Done
 
-Your task contract may have been compressed during this session. Before marking complete:
+Only after the reviewer sends a PASS verdict:
 
-1. **Re-read your task:** `TaskGet` with your task ID — the description field is durable storage
-2. **Check every deliverable** listed in the task description against what you've committed
-3. **If you can't remember your full scope, re-read it** — don't guess from what's in front of you
-4. Run verification (tests + lint) one final time
-5. Only then: `TaskUpdate` status to completed + message the orchestrator
+1. `TaskUpdate`: set `status: "completed"`
+2. Message the lead: "Task [id] complete. Review passed."
+3. Call `TaskList` to check for your next available task.
