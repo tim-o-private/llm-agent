@@ -48,7 +48,8 @@ def _standard_patches():
     """Return the common set of patch decorators as a dict of target -> mock."""
     return {
         "load_agent": patch(
-            "chatServer.services.scheduled_execution_service.load_agent_executor_db"
+            "chatServer.services.scheduled_execution_service.load_agent_executor_db_async",
+            new_callable=AsyncMock,
         ),
         "get_supabase": patch(
             "chatServer.services.scheduled_execution_service.create_user_scoped_client",

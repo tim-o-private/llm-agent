@@ -12,7 +12,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-from src.core.agent_loader_db import load_agent_executor_db
+from src.core.agent_loader_db import load_agent_executor_db_async
 
 from ..database.supabase_client import create_user_scoped_client
 from ..security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
@@ -66,7 +66,7 @@ class ScheduledExecutionService:
             )
 
             # 1. Load agent from DB — always fresh, never rely on cache
-            agent_executor = load_agent_executor_db(
+            agent_executor = await load_agent_executor_db_async(
                 agent_name=agent_name,
                 user_id=user_id,
                 session_id=session_id,
@@ -344,7 +344,16 @@ class ScheduledExecutionService:
             if schedule_id:
                 data["schedule_id"] = str(schedule_id)
 
-            await supabase_client.table("agent_execution_results").insert(data).execute()
+            try:
+                await supabase_client.table("agent_execution_results").insert(data).execute()
+            except Exception as insert_err:
+                # FK violation if schedule was deleted — retry without schedule_id
+                if "23503" in str(insert_err) and "schedule_id" in str(insert_err):
+                    logger.warning(f"Schedule {schedule_id} not found, storing result without FK")
+                    data.pop("schedule_id", None)
+                    await supabase_client.table("agent_execution_results").insert(data).execute()
+                else:
+                    raise
             logger.debug(f"Stored execution result for '{agent_name}' (status: {status})")
 
         except Exception as e:
