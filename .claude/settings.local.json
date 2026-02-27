@@ -25,7 +25,8 @@
       "WebFetch(domain:jeongil.dev)",
       "WebFetch(domain:www.npmjs.com)",
       "WebFetch(domain:claude.com)",
-      "WebFetch(domain:boristane.com)"
+      "WebFetch(domain:boristane.com)",
+      "Skill(commit)"
     ]
   },
   "prefersReducedMotion": true

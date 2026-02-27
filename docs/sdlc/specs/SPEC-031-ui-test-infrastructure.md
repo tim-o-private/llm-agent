@@ -15,14 +15,17 @@ The outcome: UX designer writes a Playwright test that declares "I need a user w
 
 - [ ] **AC-01:** A `TestUserManager` class can create an ephemeral Supabase Auth user with email/password, return a valid session (access_token, refresh_token), and hard-delete the user on cleanup. [A8]
 - [ ] **AC-02:** A `TestStateManager` class can seed named scenarios into remote Supabase for a given user_id. At minimum: `empty` (wipe all user data), `chat_history` (N chat sessions with messages), `pending_approval` (pending_action + approval notification), `unread_notifications` (mix of read/unread). [A8]
-- [ ] **AC-03:** `TestStateManager.reset(user_id)` deletes all application data for a user across all user-scoped tables (same tables as `wipe_dev_user.py`), but does NOT delete the Auth user. [A8]
+- [ ] **AC-03:** `TestStateManager.reset(user_id)` deletes all application data for a user across all tables in `USER_SCOPED_TABLES` (from `chatServer/database/user_scoped_tables.py`) plus `chat_message_history`, in FK-safe deletion order. Does NOT delete the Auth user. [A8]
 - [ ] **AC-04:** Playwright tests are pytest-integrated — runnable via `pytest tests/uat/playwright/ -m playwright` with proper fixtures, not standalone scripts with `sys.exit()`. [A4]
 - [ ] **AC-05:** A `test_user` pytest fixture creates an ephemeral user before the test, yields session info (user_id, tokens, email), and deletes the user after the test — including on test failure. [A8]
-- [ ] **AC-06:** A `seeded_page` pytest fixture accepts a scenario name, creates an ephemeral user, seeds the scenario, launches an authenticated Playwright page, and tears everything down after. [A8]
+- [ ] **AC-06:** A `make_seeded_page` factory fixture creates an ephemeral user, seeds a named scenario, launches an authenticated Playwright page, and tears everything down after. Usage: `page = make_seeded_page("pending_approval")`. [A8]
 - [ ] **AC-07:** The existing `conftest_pw.py` auth helpers (`get_authenticated_page`, `screenshot`, `CheckRunner`) are preserved and work with both the old dev-user flow and the new ephemeral-user fixtures. [S5]
-- [ ] **AC-08:** At least one example Playwright test using the new fixtures passes end-to-end — demonstrating the full lifecycle (create user → seed state → authenticate → verify UI → cleanup). [A4]
+- [ ] **AC-08:** At least one example Playwright test using the new fixtures passes end-to-end — demonstrating the full lifecycle (create user → seed `pending_approval` → authenticate → verify approval card visible with `[role="status"]` → cleanup). The smoke test verifies the user sees the seeded state and no other user's data. [A4]
 - [ ] **AC-09:** The `TestStateManager` is importable and usable from non-Playwright contexts (e.g., `chat_with_clarity()` testing, manual scripts). [A8]
 - [ ] **AC-10:** UX designer agent instructions are updated to specify scenario fixtures when writing Playwright tests. [S1]
+- [ ] **AC-11:** A migration adds `user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE` to `chat_message_history`, backfilled from `chat_sessions.user_id` via `session_id` join. After migration, `chat_message_history` is added to `USER_SCOPED_TABLES` and `wipe_dev_user.py`'s `TABLES_IN_ORDER`. [A8, A9]
+- [ ] **AC-12:** `pytest-playwright` is added to both `requirements.txt` files (root and `chatServer/requirements.txt`). [S1]
+- [ ] **AC-13:** A `@pytest.mark.playwright` marker is registered in `tests/uat/playwright/conftest.py` so tests can be selected with `-m playwright`. [A4]
 
 ## Scope
 
@@ -30,6 +33,7 @@ The outcome: UX designer writes a Playwright test that declares "I need a user w
 
 | File | Purpose |
 |------|---------|
+| `supabase/migrations/2026MMDD000001_chat_message_history_user_id.sql` | Add `user_id` column to `chat_message_history`, backfill from `chat_sessions` |
 | `tests/uat/playwright/test_user_manager.py` | `TestUserManager` — creates/deletes ephemeral Supabase Auth users |
 | `tests/uat/playwright/test_state_manager.py` | `TestStateManager` — seeds named scenarios into remote Supabase |
 | `tests/uat/playwright/conftest.py` | pytest fixtures: `test_user`, `seeded_page`, `playwright_instance` |
@@ -45,7 +49,11 @@ The outcome: UX designer writes a Playwright test that declares "I need a user w
 
 | File | Change |
 |------|--------|
-| `tests/uat/playwright/conftest_pw.py` | Add `inject_session(page, session_dict)` helper extracted from inline JS. Keep existing functions. |
+| `tests/uat/playwright/conftest_pw.py` | Add `inject_supabase_session(page, supabase_url, session)` helper extracted from inline JS. Update `get_authenticated_page()` to accept optional `session` parameter (default: dev user). Keep existing functions. |
+| `chatServer/database/user_scoped_tables.py` | Add `"chat_message_history"` to `USER_SCOPED_TABLES` |
+| `scripts/wipe_dev_user.py` | Add `"chat_message_history"` and `"jobs"` to `TABLES_IN_ORDER`. Simplify `chat_message_history` cleanup to use `user_id` directly (remove session_id join). |
+| `requirements.txt` | Add `pytest-playwright` |
+| `chatServer/requirements.txt` | Add `pytest-playwright` |
 | `.claude/agents/ux-designer.md` | Update Playwright workflow to reference scenario fixtures |
 | `.claude/skills/sdlc-workflow/SKILL.md` | Add testing tier reference (state-seeded Playwright vs manual UAT) |
 
@@ -62,18 +70,18 @@ The outcome: UX designer writes a Playwright test that declares "I need a user w
 
 ### 1. TestUserManager (Supabase Admin API)
 
-Uses `supabase-py` admin client with `SUPABASE_SERVICE_ROLE_KEY`:
+Uses `supabase-py` sync client with `SUPABASE_SERVICE_ROLE_KEY`. Synchronous because Playwright's `sync_api` is synchronous — avoids event loop conflicts with `pytest-asyncio` used in backend tests.
 
 ```python
 class TestUserManager:
-    async def create(self, email_prefix: str = "uat") -> TestUser:
+    def create(self, email_prefix: str = "uat") -> TestUser:
         """Create ephemeral user. Returns TestUser with id, email, password, session."""
         # email: uat-{uuid8}@playwright.local
         # password: random UUID
         # admin.create_user(email_confirm=True) — skips email verification
         # sign_in_with_password via anon key — gets ES256 JWT
 
-    async def delete(self, user_id: str) -> None:
+    def delete(self, user_id: str) -> None:
         """Hard-delete user from auth.users. App table data cleaned by TestStateManager."""
         # admin.delete_user(user_id, should_soft_delete=False)
 ```
@@ -86,23 +94,51 @@ Key decisions:
 
 ### 2. TestStateManager (Scenario Seeding)
 
-Uses `supabase-py` with service_role key to bypass RLS for data setup:
+Uses `supabase-py` sync client with service_role key to bypass RLS for data setup. Synchronous for the same reason as `TestUserManager`.
 
 ```python
 class TestStateManager:
-    async def reset(self, user_id: str) -> None:
-        """Delete all app data for user_id. Same table list as wipe_dev_user.py."""
+    def reset(self, user_id: str) -> None:
+        """Delete all app data for user_id across USER_SCOPED_TABLES + chat_message_history."""
 
-    async def seed(self, user_id: str, scenario: str, **kwargs) -> dict:
+    def seed(self, user_id: str, scenario: str, **kwargs) -> dict:
         """Seed a named scenario. Returns dict of created row IDs."""
         # Looks up scenario in registry, calls its seed function
+```
+
+**FK-safe deletion order for `reset()`:** Must delete in this order to avoid FK constraint violations. Import `USER_SCOPED_TABLES` from `chatServer/database/user_scoped_tables.py` as the canonical table set, but use a hardcoded deletion order:
+
+```python
+DELETION_ORDER = [
+    "chat_message_history",        # now has user_id (AC-11), was previously join-only
+    "focus_sessions",              # FK → tasks (RESTRICT)
+    "tasks",                       # self-ref FK (parent_task_id)
+    "agent_execution_results",
+    "agent_schedules",
+    "notifications",               # FK → pending_actions (pending_action_id)
+    "pending_actions",
+    "reminders",
+    "notes",
+    "agent_logs",
+    "agent_long_term_memory",
+    "agent_sessions",
+    "audit_logs",
+    "email_digests",
+    "external_api_connections",
+    "user_channels",
+    "channel_linking_tokens",
+    "user_tool_preferences",
+    "user_agent_prompt_customizations",
+    "jobs",
+    "chat_sessions",               # last — other tables may reference session_id
+]
 ```
 
 Each scenario is a module in `scenarios/` with a `seed(client, user_id, **kwargs)` function:
 
 ```python
 # scenarios/pending_approval.py
-async def seed(client, user_id: str, **kwargs) -> dict:
+def seed(client, user_id: str, **kwargs) -> dict:
     """Creates a pending_action + linked approval notification."""
     action_id = str(uuid.uuid4())
     # Insert into pending_actions
@@ -114,34 +150,48 @@ The scenario registry pattern means agents can add new scenarios without modifyi
 
 ### 3. Pytest Fixtures
 
+All fixtures are synchronous (no `async`) to match Playwright's sync API and avoid event loop conflicts with `pytest-asyncio`.
+
 ```python
 # conftest.py (simplified)
 
 @pytest.fixture
-async def test_user():
+def test_user():
     """Ephemeral user with session. Cleaned up after test."""
     mgr = TestUserManager()
-    user = await mgr.create()
+    user = mgr.create()
     yield user
-    await TestStateManager().reset(user.id)
-    await mgr.delete(user.id)
+    TestStateManager().reset(user.id)
+    mgr.delete(user.id)
 
 @pytest.fixture
-def seeded_page(test_user, request):
-    """Authenticated Playwright page with scenario pre-seeded."""
-    scenario = request.param  # e.g., "pending_approval"
-    # seed scenario
-    # launch browser, inject session
-    # yield page
-    # browser.close()
+def make_seeded_page(test_user, page):
+    """Factory fixture: returns a function that seeds a scenario and returns an authenticated page."""
+    pages = []
+
+    def _make(scenario: str, **kwargs):
+        TestStateManager().seed(test_user.id, scenario, **kwargs)
+        inject_supabase_session(page, SUPABASE_URL, test_user.session)
+        page.goto(f"{WEBAPP_URL}/today")
+        page.wait_for_load_state("networkidle")
+        pages.append(page)
+        return page
+
+    yield _make
+    # cleanup handled by test_user fixture teardown
 
 # Usage in tests:
-@pytest.mark.parametrize("seeded_page", ["pending_approval"], indirect=True)
-def test_ac_13_approval_card_renders(seeded_page):
-    page = seeded_page
-    page.goto(f"{WEBAPP_URL}/today")
-    # ...
+@pytest.mark.playwright
+def test_ac_13_approval_card_renders(make_seeded_page):
+    page = make_seeded_page("pending_approval")
+    approval = page.locator('[role="status"][aria-label*="Approval"]')
+    assert approval.is_visible()
 ```
+
+The factory pattern is preferable to `@pytest.mark.parametrize(..., indirect=True)` because:
+- Reads naturally: `make_seeded_page("pending_approval")` vs opaque `seeded_page` param
+- A single test can seed multiple scenarios if needed
+- UX designer agents don't need to learn the `indirect` pattern
 
 ### 4. Session Injection
 
@@ -155,11 +205,11 @@ def inject_supabase_session(page, supabase_url: str, session: dict):
 
 ### Dependencies
 
-- `supabase-py` (already installed)
+- `supabase-py` (already installed) — sync client for user/state management
 - `playwright` (already installed for existing tests)
-- `pytest-playwright` — evaluate if needed or if raw `sync_playwright` context manager is sufficient
+- `pytest-playwright` — **install in both `requirements.txt` files** (root + `chatServer/requirements.txt`, per gotcha #1). Provides `page`, `browser`, `context` fixtures for pytest.
 - Running `pnpm dev` (chatServer + webApp)
-- `.env` with `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_ANON_KEY`
+- `.env` with `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_ANON_KEY` — note: `.env` uses `export` prefix (bash format); `python-dotenv`'s `load_dotenv()` handles this correctly (strips `export`), as `conftest_pw.py` already demonstrates
 
 ## Testing Requirements
 
@@ -192,11 +242,14 @@ AC-08 is itself a Playwright test — the smoke test proving the infrastructure 
 | AC-03 | `test_reset_clears_all_tables` | Integration |
 | AC-04 | `pytest tests/uat/playwright/ -m playwright` runs | Integration |
 | AC-05 | `test_user_fixture_lifecycle` | Integration |
-| AC-06 | `test_seeded_page_fixture_lifecycle` | Integration |
+| AC-06 | `test_make_seeded_page_fixture_lifecycle` | Integration |
 | AC-07 | Manual: existing `conftest_pw.py` functions still importable | Manual |
 | AC-08 | `test_spec_031_smoke.py::test_full_lifecycle` | Playwright |
 | AC-09 | `test_state_manager_importable_standalone` | Unit |
 | AC-10 | Review of updated `ux-designer.md` | Manual |
+| AC-11 | `test_chat_message_history_has_user_id` | Migration verification |
+| AC-12 | Verify `pytest-playwright` in both `requirements.txt` | Manual |
+| AC-13 | `pytest --co -m playwright` collects tests | Integration |
 
 ### Manual Verification (UAT)
 
@@ -212,23 +265,31 @@ AC-08 is itself a Playwright test — the smoke test proving the infrastructure 
 - **RLS on app tables** — `TestStateManager` uses service_role key to bypass RLS for seeding. This is correct — we're setting up test state, not testing RLS (RLS is tested separately in flow tests).
 - **Token expiry during long tests** — Supabase access tokens expire (default 1hr). For normal Playwright tests this is fine. If tests run longer, the `refresh_token` can be used.
 - **Concurrent test runs** — each test gets its own user, so parallel execution is safe by design. No shared state.
+- **Memory accumulation in ephemeral users** — if a test triggers agent behavior that stores memories (via min-memory), those memories persist after user cleanup since memory cleanup is out of scope. Acceptable because ephemeral users are short-lived and memory is keyed by user_id. Future: add memory wipe to `TestStateManager.reset()` if needed.
+- **`notifications` FK to `pending_actions`** — `notifications.pending_action_id` references `pending_actions(id)`. Must delete `notifications` before `pending_actions` in reset. The deletion order handles this.
+- **`chat_message_history` backfill for existing data** — migration must handle existing rows that have `session_id` but no `user_id`. Use `UPDATE ... SET user_id = (SELECT user_id FROM chat_sessions WHERE chat_sessions.session_id = chat_message_history.session_id)`. Rows with orphaned `session_id` (no matching chat_session) get `NULL` — the column should be nullable to handle this.
 
 ## Functional Units
 
-Single branch, sequential. All Python, no migrations, no frontend changes.
+Single branch, sequential.
 
-1. **FU-1: TestUserManager + TestStateManager** — core classes with `empty` scenario only. Integration tests proving create/seed/reset/delete lifecycle. (`backend-dev`)
-2. **FU-2: Scenario library** — `pending_approval`, `chat_history`, `unread_notifications` scenarios with integration tests. (`backend-dev`)
-3. **FU-3: Pytest fixtures + smoke test** — `conftest.py` with `test_user`, `seeded_page` fixtures. `conftest_pw.py` updated with `inject_supabase_session`. Smoke test proving Playwright + fixtures end-to-end. (`backend-dev`)
-4. **FU-4: Agent + process updates** — update `ux-designer.md` and `SKILL.md` with new testing patterns. (`orchestrator`)
+1. **FU-1: Migration + schema updates** — Add `user_id` to `chat_message_history`, backfill, update `USER_SCOPED_TABLES`, update `wipe_dev_user.py`. Install `pytest-playwright` in both `requirements.txt`. (`database-dev`)
+2. **FU-2: TestUserManager + TestStateManager** — core classes with `empty` scenario only. Integration tests proving create/seed/reset/delete lifecycle. (`backend-dev`)
+3. **FU-3: Scenario library** — `pending_approval`, `chat_history`, `unread_notifications` scenarios with integration tests. (`backend-dev`)
+4. **FU-4: Pytest fixtures + smoke test** — `conftest.py` with `test_user`, `make_seeded_page` fixtures, `@pytest.mark.playwright` marker. `conftest_pw.py` updated with `inject_supabase_session` and optional `session` param on `get_authenticated_page`. Smoke test proving Playwright + fixtures end-to-end. (`backend-dev`)
+5. **FU-5: Agent + process updates** — update `ux-designer.md` and `SKILL.md` with new testing patterns. (`orchestrator`)
+
+Merge order: FU-1 → FU-2 → FU-3 → FU-4 → FU-5
 
 ## Completeness Checklist
 
-- [x] Every AC has a stable ID (AC-01 through AC-10)
+- [x] Every AC has a stable ID (AC-01 through AC-13)
 - [x] Every AC maps to at least one functional unit
-- [x] Every cross-domain boundary has a contract — N/A, single domain (test infrastructure)
-- [x] Technical decisions reference principles (A8, A4, S5, S1)
-- [x] Merge order is explicit — single branch, sequential FUs
+- [x] Every cross-domain boundary has a contract (migration → schema update → test infrastructure)
+- [x] Technical decisions reference principles (A8, A4, A9, S5, S1)
+- [x] Merge order is explicit (FU-1 → FU-2 → FU-3 → FU-4 → FU-5)
 - [x] Out-of-scope is explicit
 - [x] Edge cases documented with expected behavior
 - [x] Testing requirements map to ACs
+- [x] FK-safe deletion order specified for `reset()`
+- [x] Sync/async boundary explicitly addressed
