@@ -47,9 +47,11 @@ export function useChatTimeline(): ChatMessage[] {
       }));
   }, [notifications]);
 
-  return useMemo(() => {
+  const merged = useMemo(() => {
     return [...messages, ...notificationMessages].sort(
       (a, b) => a.timestamp.getTime() - b.timestamp.getTime(),
     );
   }, [messages, notificationMessages]);
+
+  return merged;
 }
