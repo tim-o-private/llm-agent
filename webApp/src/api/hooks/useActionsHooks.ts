@@ -2,6 +2,7 @@
  * React Query hooks for the actions approval system.
  */
 
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { toast } from '@/components/ui/toast';
@@ -141,9 +142,23 @@ export function useRejectAction() {
 }
 
 export function useAuditHistory(limit = 50, offset = 0, toolName?: string, approvalStatus?: string) {
+  const [hasSession, setHasSession] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setHasSession(!!session);
+    });
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setHasSession(!!session);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
   return useQuery<AuditLogEntry[], Error>({
     queryKey: [ACTIONS_QUERY_KEY, 'history', limit, offset, toolName, approvalStatus],
     queryFn: () => fetchAuditHistory(limit, offset, toolName, approvalStatus),
-    enabled: !!supabase.auth,
+    enabled: hasSession,
   });
 }
