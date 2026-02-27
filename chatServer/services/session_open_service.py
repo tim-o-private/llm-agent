@@ -1,5 +1,6 @@
 """Session open service — handles proactive agent greeting on app return."""
 
+import asyncio
 import logging
 from typing import Any, Dict
 
@@ -9,10 +10,16 @@ from src.core.agent_loader_db import load_agent_executor_db_async
 
 from ..security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
 from ..services.audit_service import AuditService
+from ..services.notification_service import NotificationService
 from ..services.pending_actions import PendingActionsService
 from .bootstrap_context_service import BootstrapContextService
 
 logger = logging.getLogger(__name__)
+
+# Per-session lock to prevent concurrent session_open processing.
+# React double-mount / rapid re-init can fire multiple calls before
+# the first one persists its greeting, causing duplicate messages.
+_session_locks: Dict[str, asyncio.Lock] = {}
 
 
 class SessionOpenService:
@@ -27,17 +34,60 @@ class SessionOpenService:
         agent_name: str,
         session_id: str,
     ) -> Dict[str, Any]:
+        # Serialize concurrent session_open calls for the same session.
+        # Without this, React double-mount fires two calls simultaneously,
+        # both see no messages, and both invoke the agent → duplicate greetings.
+        if session_id not in _session_locks:
+            _session_locks[session_id] = asyncio.Lock()
+        async with _session_locks[session_id]:
+            return await self._run_locked(user_id, agent_name, session_id)
+
+    async def _run_locked(
+        self,
+        user_id: str,
+        agent_name: str,
+        session_id: str,
+    ) -> Dict[str, Any]:
         supabase_client = self.db_client
 
-        # 1. Check if user is new (no memory + no instructions)
-        has_memory = await self._has_memory(supabase_client, user_id, agent_name)
-        has_instructions = await self._has_instructions(supabase_client, user_id, agent_name)
-        is_new_user = not has_memory and not has_instructions
-
-        # 2. Get last message timestamp for this session (via direct pg, per A3)
+        # 1. Get last message timestamp FIRST — chat history is the strongest
+        # signal for whether this user is new or returning.
         last_message_at = await self._get_last_message_at(session_id)
 
-        # 2b. Deterministic silence: returning user seen < 5 min ago → skip agent entirely
+        # 2. Check if user is new.  Chat history overrides memory/instructions
+        # checks, which are fragile (memory MCP may be down, user may not have
+        # saved instructions yet but has been chatting for weeks).
+        if last_message_at is not None:
+            is_new_user = False
+        else:
+            has_memory = await self._has_memory(supabase_client, user_id, agent_name)
+            has_instructions = await self._has_instructions(supabase_client, user_id, agent_name)
+            is_new_user = not has_memory and not has_instructions
+
+        # 2b. Dedup: if ANY message exists within 30s, always go silent.
+        # Prevents duplicate greetings from React double-mount or rapid re-init.
+        if last_message_at is not None:
+            from datetime import datetime
+            from datetime import timezone as tz
+
+            elapsed = datetime.now(tz.utc) - (
+                last_message_at.astimezone(tz.utc)
+                if last_message_at.tzinfo
+                else last_message_at.replace(tzinfo=tz.utc)
+            )
+            if elapsed.total_seconds() < 30:
+                logger.info(
+                    "session_open: recent message %.0fs ago — silent (dedup)",
+                    elapsed.total_seconds(),
+                )
+                return {
+                    "response": "WAKEUP_SILENT",
+                    "is_new_user": is_new_user,
+                    "silent": True,
+                    "session_id": session_id,
+                }
+
+        # 2c. Deterministic silence: returning user seen < 5 min ago → skip agent entirely
         if not is_new_user and last_message_at is not None:
             from datetime import datetime
             from datetime import timezone as tz
@@ -82,6 +132,7 @@ class SessionOpenService:
             db_client=supabase_client,
             audit_service=audit_service,
         )
+        notification_service = NotificationService(supabase_client)
         approval_context = ApprovalContext(
             user_id=user_id,
             session_id=session_id,
@@ -89,6 +140,7 @@ class SessionOpenService:
             db_client=supabase_client,
             pending_actions_service=pending_actions_service,
             audit_service=audit_service,
+            notification_service=notification_service,
         )
         if hasattr(agent_executor, "tools") and agent_executor.tools:
             wrap_tools_with_approval(agent_executor.tools, approval_context)

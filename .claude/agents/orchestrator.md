@@ -23,6 +23,7 @@ Before starting any spec:
 |-------|-------|---------|
 | **database-dev** | `supabase/migrations/`, `chatServer/database/` | Schema, RLS, indexes, migrations |
 | **backend-dev** | `chatServer/`, `src/` | Services, routers, models, API endpoints |
+| **ux-designer** | `docs/ux/` | Interaction design, component specs, copy, accessibility |
 | **frontend-dev** | `webApp/src/` | Components, hooks, pages, stores |
 | **deployment-dev** | Dockerfiles, fly.toml, CI/CD | Docker, Fly.io, env vars, CI/CD |
 | **reviewer** | Read-only | Code review with structured VERDICT |
@@ -31,7 +32,7 @@ Before starting any spec:
 ## Model Selection for Agents
 
 When spawning agents via the Task tool, use the `model` parameter:
-- **`model: "opus"`** — reviewer, spec-writer. Deep reasoning, architectural judgment.
+- **`model: "opus"`** — reviewer, spec-writer, ux-designer. Deep reasoning, architectural/design judgment.
 - **`model: "sonnet"`** — domain agents (database-dev, backend-dev, frontend-dev, deployment-dev). Well-scoped contract execution.
 - **`model: "haiku"`** — simple/mechanical tasks (file moves, config changes, trivially specific contracts).
 
@@ -51,7 +52,14 @@ Sonnet can follow a well-defined contract; your job is to write the contract.
 
 ### Phase 1: Setup
 
-**1. Read the Spec** — understand acceptance criteria (with AC-IDs), scope, functional units, dependencies, contracts.
+**1. Read the Spec and Its Context**
+
+- Read the spec: `docs/sdlc/specs/SPEC-NNN-*.md` — understand acceptance criteria (with AC-IDs), scope, functional units, dependencies, contracts.
+- **Read the parent PRD** (`docs/product/PRD-*.md`) — understand what phase this is, what other specs are in the same phase, and what comes after.
+- **Read sibling and downstream specs** in `docs/sdlc/specs/`:
+  - Sibling specs (same phase) — shared tables? overlapping scope?
+  - Downstream specs (later phases) — what will they need from this spec's outputs?
+  - In-progress specs — anyone building something that overlaps?
 
 **2. Ensure Clean Working Tree**
 
@@ -69,16 +77,53 @@ TeamCreate: team_name="spec-NNN", description="Executing SPEC-NNN: <title>"
 
 **4. Break Into Tasks with Contracts** — follow spec's "Functional Units". Set `addBlockedBy` dependencies: `database-dev → backend-dev → frontend-dev`. Each task contract includes concrete file paths, function signatures, table DDL, endpoint shapes.
 
-**5. Validate Breakdown Completeness** — before spawning any agent, verify:
+**5. Infrastructure Survey** — before writing task contracts, grep for existing primitives that overlap with the spec's scope:
+
+```bash
+# What services already exist in this domain?
+grep -r "class.*Service" chatServer/services/ | grep -i "<domain>"
+
+# What job types are already registered?
+grep -r "register_handler" chatServer/services/job_handlers.py
+
+# What tables exist for this domain?
+grep "CREATE TABLE" supabase/schema.sql | grep -i "<entity>"
+```
+
+Reference the Platform Primitives decision tree in `.claude/skills/product-architecture/SKILL.md`. For each planned new table, service, or background task, verify it doesn't duplicate an existing primitive. Include findings in task contracts:
+
+```
+## Existing infrastructure (DO NOT recreate)
+- `JobRunnerService` handles background polling — register a new handler, don't build a polling loop
+- `NotificationService.notify_user()` delivers to web + Telegram — don't build custom delivery
+- `jobs` table has status lifecycle — don't create a new *_jobs table
+```
+
+**6. UX Contract Phase (for specs with user-visible ACs)**
+
+Before implementation begins, spawn the UX designer (opus) to produce:
+- **Playwright UI acceptance tests** in `tests/uat/playwright/test_spec_NNN_<feature>.py` — executable ACs that target ARIA attributes, initially RED
+- **UX spec** in `docs/ux/SPEC-NNN-ux.md` — component states, copy, accessibility requirements
+
+These become part of the frontend-dev task contract. Frontend-dev's "done" means the Playwright scripts pass.
+
+After the UX designer commits, run the scripts to confirm they fail (red):
+```bash
+python tests/uat/playwright/test_spec_NNN_feature.py
+```
+
+**7. Validate Breakdown Completeness** — before spawning any agent, verify:
 - Every AC has at least one task covering it
 - Every cross-domain contract specifies inputs/outputs completely
 - No task requires a file, service, or table no other task creates
 - All test fixtures and shared utilities are accounted for
 - Migration prefixes pre-allocated (no collisions): `ls supabase/migrations/ | grep -oP '^\d{14}' | sort | tail -3`
+- **Every task contract includes an "Existing infrastructure" section** listing what to reuse
+- **Downstream spec needs are met:** If the spec's PRD Context lists downstream dependencies, verify the task contracts produce the interfaces those specs expect (table shapes, service methods, job types)
 
 If gaps found: add tasks before proceeding.
 
-**6. Choose Branch Strategy**
+**8. Choose Branch Strategy**
 
 **Single-branch (default):** When FUs are sequential or same-domain:
 ```bash
@@ -125,6 +170,12 @@ WHILE tasks remain incomplete:
 ### Phase 3: UAT and Wrap Up
 
 **UAT (MANDATORY)** — before reporting the PR as ready:
+
+*Playwright UI tests (if UX contract exists):* Run the scripts written by the UX designer. All must pass (green):
+```bash
+python tests/uat/playwright/test_spec_NNN_feature.py
+```
+If any fail, message the frontend-dev with the failure details and screenshots.
 
 *Code-level UAT (no running server):* Import the modified module, call it with representative inputs for each AC, print and verify output covers happy path + edge cases.
 

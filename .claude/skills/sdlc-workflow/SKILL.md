@@ -14,13 +14,14 @@ Required sections: Goal, Acceptance Criteria, Scope, Technical Approach, Testing
 |-------|-------|---------|
 | **database-dev** | `supabase/migrations/`, `chatServer/database/` | Schema, RLS, indexes |
 | **backend-dev** | `chatServer/`, `src/` | Services, routers, API |
+| **ux-designer** | `docs/ux/`, `tests/uat/playwright/` | Interaction design, accessibility, UI acceptance tests |
 | **frontend-dev** | `webApp/src/` | Components, hooks, pages |
 | **deployment-dev** | Dockerfiles, fly.toml, CI/CD | Docker, deploys, env vars |
 | **reviewer** | All (read-only) | Code review (structured VERDICT) |
 | **uat-tester** | `tests/uat/` | Flow tests with AC-ID naming |
 | **spec-writer** | Specs only | Vision → complete spec draft |
 
-Cross-domain flow: `database-dev → backend-dev → frontend-dev`
+Cross-domain flow: `ux-designer (UI contract) → database-dev → backend-dev → frontend-dev`
 
 ## Contract Format
 
@@ -35,6 +36,16 @@ When work flows between domains, the orchestrator writes a contract in the task 
 ### Assumptions [target] can make:
 - [what's already done]
 ```
+
+## UI Contract (Playwright TDD)
+
+For specs with user-visible ACs, the UX designer writes Playwright scripts **before implementation**. These scripts are executable acceptance criteria that target ARIA attributes and visible text — they define the accessibility contract that frontend-dev must satisfy.
+
+**Flow:** Spec approved → UX designer writes scripts (red) → implementation → scripts pass (green)
+
+**Selector rules:** Scripts MUST target `role`, `aria-label`, and visible text. Scripts MUST NOT target CSS classes, component names, or DOM structure. This enforces accessibility by making ARIA attributes the testable contract.
+
+**Location:** `tests/uat/playwright/test_spec_NNN_<feature>.py`
 
 ## Git Coordination
 

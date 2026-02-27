@@ -17,7 +17,7 @@ interface ChatApiResponse {
 }
 
 // This function contains the actual API call logic, similar to the original fetchAiResponse
-async function sendMessageApi(payload: SendMessagePayload): Promise<string> {
+export async function sendMessageApi(payload: SendMessagePayload): Promise<string> {
   const { message, userId, activeChatId } = payload;
   console.log(
     'sendMessageApi: Sending message to backend API (/api/chat):',

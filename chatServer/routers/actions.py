@@ -84,9 +84,24 @@ def _build_pending_actions_service(db: UserScopedClient):
     """Build a PendingActionsService with a user-scoped client."""
     from ..services.audit_service import AuditService
     from ..services.pending_actions import PendingActionsService
+    from ..services.tool_execution import ToolExecutionService
 
     audit_service = AuditService(db)
-    return PendingActionsService(db_client=db, audit_service=audit_service)
+    tool_exec_service = ToolExecutionService(db)
+
+    async def tool_executor(tool_name: str, tool_args: dict, user_id: str, agent_name: str = None):
+        return await tool_exec_service.execute_tool(
+            tool_name=tool_name,
+            tool_args=tool_args,
+            user_id=user_id,
+            agent_name=agent_name,
+        )
+
+    return PendingActionsService(
+        db_client=db,
+        tool_executor=tool_executor,
+        audit_service=audit_service,
+    )
 
 
 def _build_audit_service(db: UserScopedClient):
@@ -94,6 +109,13 @@ def _build_audit_service(db: UserScopedClient):
     from ..services.audit_service import AuditService
 
     return AuditService(db)
+
+
+def _build_notification_service(db: UserScopedClient):
+    """Build a NotificationService with a user-scoped client."""
+    from ..services.notification_service import NotificationService
+
+    return NotificationService(db)
 
 
 # =============================================================================
@@ -152,7 +174,30 @@ async def approve_action(
     """Approve a pending action. Executes and logs to audit trail."""
     try:
         service = _build_pending_actions_service(db)
+        action = await service.get_action(action_id, user_id)
+        tool_name = action.tool_name if action else action_id
         result = await service.approve_action(action_id, user_id)
+
+        notification_service = _build_notification_service(db)
+        action_session_id = action.context.get("session_id") if action else None
+        try:
+            await notification_service.resolve_approval_notification(
+                pending_action_id=str(action_id),
+                user_id=user_id,
+                action_status="approved",
+            )
+            await notification_service.notify_user(
+                user_id=user_id,
+                title=f"Approved: {tool_name}",
+                body="Executed successfully." if result.success else f"Execution failed: {result.error}",
+                category="agent_result",
+                type="silent",
+                metadata={"tool_name": tool_name, "action_id": str(action_id)},
+                pending_action_id=str(action_id),
+                session_id=action_session_id,
+            )
+        except Exception as notif_err:
+            logger.warning(f"Failed to create approval follow-up notification (non-fatal): {notif_err}")
 
         if result.success:
             return ActionResultResponse(
@@ -181,7 +226,33 @@ async def reject_action(
     """Reject a pending action."""
     try:
         service = _build_pending_actions_service(db)
+        action = await service.get_action(action_id, user_id)
+        tool_name = action.tool_name if action else action_id
         success = await service.reject_action(action_id, user_id, reason=request.reason)
+
+        notification_service = _build_notification_service(db)
+        action_session_id = action.context.get("session_id") if action else None
+        try:
+            await notification_service.resolve_approval_notification(
+                pending_action_id=str(action_id),
+                user_id=user_id,
+                action_status="rejected",
+            )
+            body = "Action was rejected."
+            if request.reason:
+                body += f" Reason: {request.reason}"
+            await notification_service.notify_user(
+                user_id=user_id,
+                title=f"Rejected: {tool_name}",
+                body=body,
+                category="agent_result",
+                type="silent",
+                metadata={"tool_name": tool_name, "action_id": str(action_id)},
+                pending_action_id=str(action_id),
+                session_id=action_session_id,
+            )
+        except Exception as notif_err:
+            logger.warning(f"Failed to create rejection follow-up notification (non-fatal): {notif_err}")
 
         if success:
             return ActionResultResponse(success=True, message="Action rejected")

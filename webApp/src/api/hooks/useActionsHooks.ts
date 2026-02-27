@@ -2,25 +2,17 @@
  * React Query hooks for the actions approval system.
  */
 
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAuthStore } from '@/features/auth/useAuthStore';
 import { supabase } from '@/lib/supabaseClient';
 import { toast } from '@/components/ui/toast';
+import { sendMessageApi } from './useChatApiHooks';
 
 const ACTIONS_QUERY_KEY = 'actions';
+const NOTIFICATIONS_QUERY_KEY = 'notifications';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 // Types
-export interface PendingAction {
-  id: string;
-  tool_name: string;
-  tool_args: Record<string, unknown>;
-  status: string;
-  created_at: string;
-  expires_at: string;
-  context: Record<string, unknown>;
-}
-
 export interface ActionResult {
   success: boolean;
   message: string;
@@ -45,10 +37,6 @@ export interface ToolPreference {
   user_preference?: string;
 }
 
-export interface PendingCount {
-  count: number;
-}
-
 // Helper to get auth headers
 async function getAuthHeaders(): Promise<Record<string, string>> {
   const {
@@ -64,23 +52,6 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 }
 
 // API functions
-async function fetchPendingActions(limit = 50): Promise<PendingAction[]> {
-  const headers = await getAuthHeaders();
-  const response = await fetch(`${API_BASE_URL}/api/actions/pending?limit=${limit}`, { headers });
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Failed to fetch pending actions' }));
-    throw new Error(error.detail || 'Failed to fetch pending actions');
-  }
-  return response.json();
-}
-
-async function fetchPendingCount(): Promise<PendingCount> {
-  const headers = await getAuthHeaders();
-  const response = await fetch(`${API_BASE_URL}/api/actions/pending/count`, { headers });
-  if (!response.ok) throw new Error('Failed to fetch pending count');
-  return response.json();
-}
-
 async function approveAction(actionId: string): Promise<ActionResult> {
   const headers = await getAuthHeaders();
   const response = await fetch(`${API_BASE_URL}/api/actions/${actionId}/approve`, {
@@ -129,41 +100,20 @@ async function fetchAuditHistory(
 
 // Hooks
 
-export function usePendingActions(limit = 50) {
-  const user = useAuthStore((state) => state.user);
-
-  return useQuery<PendingAction[], Error>({
-    queryKey: [ACTIONS_QUERY_KEY, 'pending', user?.id, limit],
-    queryFn: () => fetchPendingActions(limit),
-    enabled: !!user,
-    refetchInterval: 30000,
-  });
-}
-
-export function usePendingCount() {
-  const user = useAuthStore((state) => state.user);
-
-  return useQuery<PendingCount, Error>({
-    queryKey: [ACTIONS_QUERY_KEY, 'pending', 'count', user?.id],
-    queryFn: fetchPendingCount,
-    enabled: !!user,
-    refetchInterval: 10000,
-  });
-}
-
 export function useApproveAction() {
   const queryClient = useQueryClient();
-  const user = useAuthStore((state) => state.user);
 
-  return useMutation<ActionResult, Error, string>({
-    mutationFn: approveAction,
-    onSuccess: (result) => {
-      if (result.success) {
-        toast.success('Action approved and executed');
-      } else {
-        toast.error('Action approval failed', result.error);
-      }
-      queryClient.invalidateQueries({ queryKey: [ACTIONS_QUERY_KEY, 'pending', user?.id] });
+  return useMutation<ActionResult, Error, { actionId: string; sessionId: string; toolName: string }>({
+    mutationFn: ({ actionId }) => approveAction(actionId),
+    onSuccess: async (result, variables) => {
+      const execResult = result.result?.execution_result as string | undefined;
+      await sendMessageApi({
+        message: `[Action approved: ${variables.toolName}. Result: ${execResult ?? 'Executed successfully.'}]`,
+        userId: null,
+        activeChatId: variables.sessionId,
+      });
+      queryClient.invalidateQueries({ queryKey: [ACTIONS_QUERY_KEY] });
+      queryClient.invalidateQueries({ queryKey: [NOTIFICATIONS_QUERY_KEY] });
     },
     onError: (error) => {
       toast.error('Failed to approve action', error.message);
@@ -173,13 +123,17 @@ export function useApproveAction() {
 
 export function useRejectAction() {
   const queryClient = useQueryClient();
-  const user = useAuthStore((state) => state.user);
 
-  return useMutation<ActionResult, Error, { actionId: string; reason?: string }>({
+  return useMutation<ActionResult, Error, { actionId: string; reason?: string; sessionId: string; toolName: string }>({
     mutationFn: ({ actionId, reason }) => rejectAction(actionId, reason),
-    onSuccess: () => {
-      toast.success('Action rejected');
-      queryClient.invalidateQueries({ queryKey: [ACTIONS_QUERY_KEY, 'pending', user?.id] });
+    onSuccess: async (_, variables) => {
+      await sendMessageApi({
+        message: `[Action rejected: ${variables.toolName}. Reason: ${variables.reason || 'User declined.'}]`,
+        userId: null,
+        activeChatId: variables.sessionId,
+      });
+      queryClient.invalidateQueries({ queryKey: [ACTIONS_QUERY_KEY] });
+      queryClient.invalidateQueries({ queryKey: [NOTIFICATIONS_QUERY_KEY] });
     },
     onError: (error) => {
       toast.error('Failed to reject action', error.message);
@@ -188,11 +142,23 @@ export function useRejectAction() {
 }
 
 export function useAuditHistory(limit = 50, offset = 0, toolName?: string, approvalStatus?: string) {
-  const user = useAuthStore((state) => state.user);
+  const [hasSession, setHasSession] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setHasSession(!!session);
+    });
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setHasSession(!!session);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   return useQuery<AuditLogEntry[], Error>({
-    queryKey: [ACTIONS_QUERY_KEY, 'history', user?.id, limit, offset, toolName, approvalStatus],
+    queryKey: [ACTIONS_QUERY_KEY, 'history', limit, offset, toolName, approvalStatus],
     queryFn: () => fetchAuditHistory(limit, offset, toolName, approvalStatus),
-    enabled: !!user,
+    enabled: hasSession,
   });
 }

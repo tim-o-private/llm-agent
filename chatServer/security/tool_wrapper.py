@@ -35,6 +35,7 @@ class ApprovalContext:
         db_client=None,
         pending_actions_service=None,
         audit_service=None,
+        notification_service=None,
     ):
         self.user_id = user_id
         self.session_id = session_id
@@ -42,6 +43,7 @@ class ApprovalContext:
         self.db_client = db_client
         self.pending_actions_service = pending_actions_service
         self.audit_service = audit_service
+        self.notification_service = notification_service
 
 
 def with_approval(
@@ -121,10 +123,30 @@ def with_approval(
 
                 logger.info(f"Action {tool_name} queued for approval: {action_id}")
 
+                if context.notification_service:
+                    try:
+                        await context.notification_service.notify_user(
+                            user_id=context.user_id,
+                            title=f"Approval needed: {tool_name}",
+                            body=f"The agent wants to run '{tool_name}'. Review and approve or reject in chat.",
+                            category="approval_needed",
+                            type="notify",
+                            requires_approval=True,
+                            pending_action_id=action_id,
+                            session_id=context.session_id,
+                            metadata={
+                                "tool_name": tool_name,
+                                "tool_args": kwargs,
+                                "action_id": action_id,
+                                "agent_name": context.agent_name,
+                            },
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to create approval notification (non-fatal): {e}")
+
                 return (
-                    f"STOP: Action '{tool_name}' requires user approval and has been queued (ID: {action_id}). "
-                    f"Tell the user their approval is needed and wait. Do NOT retry this tool call. "
-                    f"Do NOT attempt alternative approaches. The user will approve or deny in the UI."
+                    f"I've requested approval for '{tool_name}'. "
+                    f"You'll see it in the chat — approve or reject when you're ready."
                 )
             except Exception as e:
                 logger.error(f"Failed to queue action {tool_name}: {e}")

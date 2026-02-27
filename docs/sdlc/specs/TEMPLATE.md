@@ -63,6 +63,15 @@ Reference skills and patterns:
 - New database tables: test RLS policies with owner/non-owner
 - New frontend hooks: test data fetching with mocked API
 
+### UI Acceptance Tests (required for user-visible ACs)
+
+Playwright scripts written by the UX agent **before implementation** as executable acceptance criteria. Scripts target ARIA attributes and visible text — never CSS classes or component internals.
+
+- Scripts go in `tests/uat/playwright/test_spec_NNN_<feature>.py`
+- Use shared auth helper from `tests/uat/playwright/conftest_pw.py`
+- Each test function maps to an AC: `test_ac_NN_description(page)`
+- Scripts are expected to **fail (red)** until implementation is complete
+
 ### What to Test
 
 - Happy path for each acceptance criterion
@@ -72,12 +81,12 @@ Reference skills and patterns:
 
 ### AC-to-Test Mapping
 
-Every acceptance criterion must have at least one test. UAT test functions use the naming convention `test_ac_NN_description`.
+Every acceptance criterion must have at least one test. UAT test functions use the naming convention `test_ac_NN_description`. User-visible ACs also get a Playwright UI test.
 
-| AC | Test Type | Test Function |
-|----|-----------|--------------|
-| AC-01 | UAT | `test_ac_01_description` |
-| AC-02 | Unit + UAT | `test_ac_02_description` |
+| AC | Flow Test | UI Test (Playwright) |
+|----|-----------|---------------------|
+| AC-01 | `test_ac_01_description` | `test_ac_01_description` (if user-visible) |
+| AC-02 | `test_ac_02_description` | — (backend-only) |
 
 ### Manual Verification (UAT)
 

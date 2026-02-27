@@ -12,7 +12,7 @@ Workflow:
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 from uuid import UUID
 
@@ -72,7 +72,7 @@ class PendingActionsService:
     ) -> str:
         """Queue an action for user approval. Returns action ID."""
         expiry = expiry_hours or self.default_expiry_hours
-        expires_at = datetime.utcnow() + timedelta(hours=expiry)
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=expiry)
 
         entry = {
             "user_id": user_id,
@@ -154,7 +154,7 @@ class PendingActionsService:
         if action.status != "pending":
             return ActionResult(success=False, error=f"Action is not pending (status: {action.status})")
 
-        if datetime.utcnow() > action.expires_at.replace(tzinfo=None):
+        if datetime.now(timezone.utc) > action.expires_at.replace(tzinfo=timezone.utc):
             await self._update_status(action_id, "expired")
             return ActionResult(success=False, error="Action has expired")
 
@@ -169,12 +169,13 @@ class PendingActionsService:
                     tool_name=action.tool_name,
                     tool_args=action.tool_args,
                     user_id=user_id,
+                    agent_name=action.context.get("agent_name"),
                 )
 
                 await self.db.table("pending_actions") \
                     .update({
                         "status": "executed",
-                        "resolved_at": datetime.utcnow().isoformat(),
+                        "resolved_at": datetime.now(timezone.utc).isoformat(),
                         "execution_result": {"result": str(execution_result)[:10000]},
                     }) \
                     .eq("id", action_id) \
@@ -187,7 +188,7 @@ class PendingActionsService:
                 await self.db.table("pending_actions") \
                     .update({
                         "status": "executed",
-                        "resolved_at": datetime.utcnow().isoformat(),
+                        "resolved_at": datetime.now(timezone.utc).isoformat(),
                         "execution_result": {"error": execution_error},
                     }) \
                     .eq("id", action_id) \
@@ -258,10 +259,10 @@ class PendingActionsService:
         """Update action status in database."""
         update = {
             "status": status,
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
         }
         if resolved:
-            update["resolved_at"] = datetime.utcnow().isoformat()
+            update["resolved_at"] = datetime.now(timezone.utc).isoformat()
 
         await self.db.table("pending_actions") \
             .update(update) \

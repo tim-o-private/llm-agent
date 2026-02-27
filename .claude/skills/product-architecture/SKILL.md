@@ -55,19 +55,63 @@ Any feature that invokes an agent MUST:
 
 Before designing new tables or services, check if an existing primitive handles your need. Adding a `job_type` string is always better than adding a `*_jobs` table.
 
+### Decision Tree
+
+Ask yourself what you're actually building:
+
+1. **"I need to do work in the background"** → Enqueue a `jobs` row. Write a handler. Register it in `job_handlers.py`. Done.
+2. **"I need to run something periodically"** → Create an `agent_schedules` row. BackgroundTaskService polls it and enqueues jobs.
+3. **"I need to tell the user something"** → Call `NotificationService.notify_user()`. It routes to web + Telegram.
+4. **"I need to invoke an agent"** → Use `ChatService.process_chat()` (web), `handle_message()` (Telegram), or `ScheduledExecutionService.execute()` (scheduled). Never build a new agent invocation path.
+5. **"I need the user to approve something"** → Use `pending_actions` + the approval tier system. The tool wrapper handles this.
+6. **"I need to store user preferences"** → Use `UpdateInstructionsTool` (standing instructions) or memory tools (learned preferences).
+7. **"I need to connect to an external API"** → Use `external_api_connections` + the OAuth flow in `OAuthService`.
+
+### Primitives Table
+
 | Need | Primitive | Don't Build |
 |------|-----------|-------------|
-| Background work | `jobs` table + register handler in `job_handlers.py` (SPEC-026) | A new `*_jobs` or `*_queue` table |
+| Background work | `jobs` table + handler in `job_handlers.py` | A new `*_jobs` or `*_queue` table |
 | User approval | `pending_actions` + trust tiers | A new approval/confirmation table |
 | Store job results | `jobs.output` JSONB | A new `*_results` table for job output |
 | Scheduled trigger | `agent_schedules` → creates jobs | A new cron/timer table |
 | Notify user | `NotificationService.notify_user()` | Custom channel-specific delivery |
-| Remember something | `agent_long_term_memory` | A new preferences/settings table |
+| Remember something | Memory tools or `update_instructions` | A new preferences/settings table |
 | External API creds | `external_api_connections` + OAuth flow | A new credentials table |
 | Audit trail | `audit_logs` | Per-feature logging tables |
 | Agent execution log | `agent_execution_results` (linked from job) | A new execution tracking table |
+| Invoke an agent | ChatService / ScheduledExecutionService | A new agent invocation pipeline |
+| Normalize agent output | Content block handler in each channel | A new response formatter |
 
-**Anti-pattern:** SPEC-023 created `email_processing_jobs` — a single-purpose table duplicating the job queue pattern. SPEC-026 replaced it with `job_type = 'email_processing'` in the universal `jobs` table.
+### How to Add a New Job Type (Most Common Extension Point)
+
+```python
+# 1. Write handler in chatServer/services/job_handlers.py
+async def handle_my_thing(job: dict) -> dict:
+    input_data = job.get("input", {})
+    # do work
+    return {"success": True}
+
+# 2. Register in BackgroundTaskService startup (main.py)
+job_runner.register_handler("my_thing", handle_my_thing)
+
+# 3. Enqueue from anywhere (service layer, not routers)
+await job_service.create(
+    job_type="my_thing",
+    input={"key": "value"},
+    user_id=user_id,
+)
+```
+
+That's it. The runner polls, claims, dispatches, retries on failure. No new tables, no new polling loops.
+
+### Anti-patterns (Real Examples)
+
+**SPEC-023 created `email_processing_jobs`** — a single-purpose table with its own status machine, polling loop, and error handling. SPEC-026 replaced it with `job_type = 'email_processing'` in the universal `jobs` table and a 10-line handler function.
+
+**SPEC-023 inserted jobs from a router** — direct `INSERT INTO` in `external_api_router.py` instead of calling a service method. Violated A1 and created dead code when the actual OAuth flow bypassed that router.
+
+**SPEC-021 used sync agent loader from async context** — called `load_agent_executor_db()` (sync, uses `asyncio.run()` internally) from `ScheduledExecutionService` (async). The async version `load_agent_executor_db_async()` already existed.
 
 **Rule of thumb:** If your new table has a `status` column with lifecycle transitions (pending/processing/complete/failed), it's a job — use the `jobs` table.
 
