@@ -218,9 +218,9 @@ def run_uat():
                 time.sleep(3)
                 screenshot(page, "06-after-approve-immediate")
 
-                # Verify optimistic state transition
-                approved_text = last_card.locator('text=/Approved/i')
-                check("AC-13: Card shows Approved state after click", approved_text.is_visible())
+                # Verify optimistic state transition — re-query because React re-renders
+                approved_text = page.locator('[role="alert"]:has-text("Approved")')
+                check("AC-13: Card shows Approved state after click", approved_text.count() > 0)
 
                 # Verify buttons are removed
                 approve_btn_after = last_card.locator('button:has-text("Approve")')
@@ -237,7 +237,8 @@ def run_uat():
                 print(f"  After polls:  {alert_after} alert(s), {status_after} status(es)")
 
                 # Did the approval card persist or vanish?
-                approval_cards_after = page.locator('[role="alert"]:has-text("Approval")')
+                # After approval the heading changes to "✓ tool — Approved", so match on Approved or aria-label
+                approval_cards_after = page.locator('[role="alert"][aria-label*="Approval request"]')
                 card_persisted = approval_cards_after.count() > 0
                 print(f"  Approval card persisted: {card_persisted}")
 
