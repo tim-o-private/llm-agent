@@ -26,7 +26,11 @@
       "WebFetch(domain:www.npmjs.com)",
       "WebFetch(domain:claude.com)",
       "WebFetch(domain:boristane.com)",
-      "Skill(commit)"
+      "Skill(commit)",
+      "WebFetch(domain:deepwiki.com)",
+      "mcp__memory__search",
+      "WebFetch(domain:assistant-ui.com)",
+      "WebFetch(domain:www.assistant-ui.com)"
     ]
   },
   "prefersReducedMotion": true
