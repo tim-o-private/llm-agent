@@ -19,6 +19,7 @@ class BootstrapContext:
     tasks_summary: str = "(unavailable)"
     reminders_summary: str = "(unavailable)"
     email_summary: str = "(unavailable)"
+    calendar_summary: str = "(unavailable)"
 
     def render(self) -> str:
         """Format as prompt section text."""
@@ -26,6 +27,7 @@ class BootstrapContext:
         lines.append(f"Tasks: {self.tasks_summary}")
         lines.append(f"Reminders: {self.reminders_summary}")
         lines.append(f"Email: {self.email_summary}")
+        lines.append(f"Calendar: {self.calendar_summary}")
         return "\n".join(lines)
 
 
@@ -42,10 +44,11 @@ class BootstrapContextService:
 
     async def gather(self, user_id: str) -> BootstrapContext:
         """Gather context from all sources. Never raises."""
-        tasks_result, reminders_result, email_result = await asyncio.gather(
+        tasks_result, reminders_result, email_result, calendar_result = await asyncio.gather(
             self._get_tasks_summary(user_id),
             self._get_reminders_summary(user_id),
             self._get_email_summary(user_id),
+            self._get_calendar_summary(user_id),
             return_exceptions=True,
         )
 
@@ -53,6 +56,7 @@ class BootstrapContextService:
             tasks_summary=tasks_result if isinstance(tasks_result, str) else "(unavailable)",
             reminders_summary=reminders_result if isinstance(reminders_result, str) else "(unavailable)",
             email_summary=email_result if isinstance(email_result, str) else "(unavailable)",
+            calendar_summary=calendar_result if isinstance(calendar_result, str) else "(unavailable)",
         )
 
     async def _get_tasks_summary(self, user_id: str) -> str:
@@ -135,4 +139,60 @@ class BootstrapContextService:
             return f"{len(accounts)} account(s) connected: {', '.join(accounts)}"
         except Exception as e:
             logger.warning("Failed to get email summary for %s: %s", user_id, e)
+            return "(unavailable)"
+
+    async def _get_calendar_summary(self, user_id: str) -> str:
+        """Fetch today's calendar events across all connected accounts."""
+        try:
+            from chatServer.services.calendar_service import CalendarService
+            from chatServer.tools.calendar_tools import CalendarToolProvider
+
+            providers = await CalendarToolProvider.get_all_providers(user_id)
+            if not providers:
+                return "No calendar connected."
+
+            all_events = []
+            account_count = 0
+            for provider in providers:
+                try:
+                    creds = await provider.get_credentials()
+                    svc = CalendarService(creds)
+                    events = svc.list_events(max_results=5)
+                    for e in events:
+                        e["account"] = provider.account_email
+                    all_events.extend(events)
+                    account_count += 1
+                except Exception as e:
+                    logger.warning(
+                        "Failed to fetch calendar for %s account %s: %s",
+                        user_id, provider.account_email, e
+                    )
+
+            if not all_events:
+                label = f" ({account_count} account(s))" if account_count > 1 else ""
+                return f"No events today{label}."
+
+            # Sort by start time
+            all_events.sort(key=lambda e: e.get("start", ""))
+
+            summary = f"{len(all_events)} event(s) today"
+            if account_count > 1:
+                summary += f" across {account_count} account(s)"
+            summary += "."
+
+            # Show next 3 events
+            next_events = all_events[:3]
+            for ev in next_events:
+                start = ev.get("start", "")
+                title = ev.get("title", "(No title)")
+                # Extract just the time portion if it's a dateTime
+                if "T" in start:
+                    time_part = start.split("T")[1][:5]  # HH:MM
+                    summary += f" {time_part}: {title}."
+                else:
+                    summary += f" All day: {title}."
+
+            return summary
+        except Exception as e:
+            logger.warning("Failed to get calendar summary for %s: %s", user_id, e)
             return "(unavailable)"
