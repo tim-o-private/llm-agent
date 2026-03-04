@@ -227,6 +227,11 @@ When presenting, call out:
 
 **UAT:**
 
+*Pre-UAT checklist:*
+- If the spec includes a database migration: remind the user to run `supabase migration up --linked` (migrations cannot be run by agents)
+- If new env vars are required: list them with example values so the user can set them before testing
+- Ensure `pnpm dev` starts cleanly (no import errors, no crash on startup)
+
 Code-level UAT (no running server): Spawn uat-tester to import modified modules, call with representative inputs for each AC.
 
 Live UAT (dev server available): Use `chat_with_clarity` MCP tool for chat-based ACs. REST endpoints via `curl` against `localhost:3001`.
