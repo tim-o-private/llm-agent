@@ -3,12 +3,12 @@
 > **Status:** Draft
 > **Author:** Tim + Claude (Product)
 > **Created:** 2026-02-24
-> **Updated:** 2026-02-24
+> **Updated:** 2026-03-04
 > **PRD:** PRD-002 (Expand the World), Workstream 1
 
 ## Goal
 
-Give the agent read-only access to the user's Google Calendar so it can reference today's schedule in conversation, cross-reference calendar events with email contacts, and provide calendar context in session_open bootstrap. This is an Inform-tier capability — the agent sees the calendar and tells the user what it notices. No event creation or modification.
+Give the agent read-only access to the user's Google Calendar(s) so it can reference today's schedule in conversation, cross-reference calendar events with email contacts, and provide calendar context in session_open bootstrap. Supports multiple Google accounts (same pattern as multi-Gmail from SPEC-008). This is an Inform-tier capability — the agent sees the calendar and tells the user what it notices. No event creation or modification.
 
 ## Prior Work
 
@@ -26,30 +26,31 @@ What's missing: calendar tools, calendar service, OAuth scope in the frontend OA
 ### Backend: Calendar Service & Tools
 
 - [ ] **AC-01:** A `CalendarService` class in `chatServer/services/calendar_service.py` provides `list_events(credentials, time_min, time_max, max_results)` and `get_event(credentials, event_id)` methods. Uses the Google Calendar API via `google-api-python-client`. [A1, A6]
-- [ ] **AC-02:** Agent has a `search_calendar` tool that accepts optional date range and query parameters, returns a formatted list of events (title, start/end time, location, attendees). Default range: today. [A6, A10]
-- [ ] **AC-03:** Agent has a `get_calendar_event` tool that accepts an event ID and returns full event details including description, attendees, location, and conferencing info. [A6, A10]
+- [ ] **AC-02:** Agent has a `search_calendar` tool that accepts optional date range, query, and `account` (email) parameters. Returns a formatted list of events (title, start/end time, location, attendees). Default range: today. When `account` is omitted, searches all connected calendars and groups results by account. [A6, A10]
+- [ ] **AC-03:** Agent has a `get_calendar_event` tool that accepts an event ID and optional `account` parameter, returns full event details including description, attendees, location, and conferencing info. [A6, A10]
 - [ ] **AC-04:** Both tools are registered in `agent_tools` with type `SearchCalendarTool` and `GetCalendarEventTool`, linked to the `assistant` agent. [A6]
 - [ ] **AC-05:** Both tools have approval tier `AUTO_APPROVE` (read-only). [A6]
 - [ ] **AC-06:** Tools gracefully handle missing calendar connection: return "Calendar not connected. Connect Google Calendar in Settings > Integrations to enable this." [A6]
 - [ ] **AC-07:** Tools handle expired/invalid credentials by attempting refresh via the existing `VaultToLangChainCredentialAdapter` flow. If refresh fails, return a user-friendly reconnect message. [A6]
+- [ ] **AC-07b:** A `CalendarToolProvider` class (following `GmailToolProvider` pattern) manages per-connection credential fetching. `get_all_providers(user_id)` returns providers for all connected calendar accounts. `get_provider_for_account(user_id, email)` returns a specific account's provider. [A6]
 - [ ] **AC-08:** `google-api-python-client` is listed in both `requirements.txt` files (may already be present via Gmail dependency — verify, don't duplicate). [Cross-domain gotcha #1]
 
 ### Frontend: Calendar OAuth Flow
 
-- [ ] **AC-09:** The Integrations page replaces the "Coming Soon" Calendar placeholder with a functional connect/disconnect flow, reusing the Gmail OAuth pattern. [F1]
-- [ ] **AC-10:** The OAuth consent URL includes `https://www.googleapis.com/auth/calendar.readonly` scope. Calendar is a separate connection from Gmail (separate `external_api_connections` row with `service_name='google_calendar'`). [A3]
-- [ ] **AC-11:** After connecting, the Calendar card shows connected state with the Google account email and a disconnect button. [F1]
+- [ ] **AC-09:** The Integrations page replaces the "Coming Soon" Calendar placeholder with a functional connect/disconnect flow, reusing the multi-Gmail pattern from `GmailConnection.tsx`. [F1]
+- [ ] **AC-10:** The OAuth consent URL includes `https://www.googleapis.com/auth/calendar.readonly` scope. Each calendar connection is a separate `external_api_connections` row with `service_name='google_calendar'` and distinct `service_user_id`. [A3]
+- [ ] **AC-11:** After connecting, the Calendar card shows all connected accounts (email + connected date) with individual disconnect buttons and an "Add Calendar Account" button (same UX as multi-Gmail). Max 5 accounts. [F1]
 
 ### Prompt Integration
 
-- [ ] **AC-12:** `prompt_builder.py` session_open bootstrap context includes today's calendar events (if calendar is connected). Format: event count + next 3 events with times. Fetched during pre-computation alongside task/reminder/email counts. [A14]
+- [ ] **AC-12:** `prompt_builder.py` session_open bootstrap context includes today's calendar events across all connected calendar accounts. Format: event count + next 3 events with times (labeled by account if multiple). Fetched during pre-computation alongside task/reminder/email counts. [A14]
 - [ ] **AC-13:** Calendar tool `prompt_section()` provides behavioral guidance: use calendar context to inform advice, cross-reference attendees with email contacts, mention upcoming events when relevant. [A6]
 
 ### Testing
 
 - [ ] **AC-14:** Unit tests cover: `CalendarService.list_events` happy path, empty calendar, credential error, date range filtering. [A6]
-- [ ] **AC-15:** Unit tests cover: `search_calendar` tool formatted output, no-connection error, `get_calendar_event` tool output. [A6]
-- [ ] **AC-16:** Frontend test: Calendar connect/disconnect flow renders correctly. [F1]
+- [ ] **AC-15:** Unit tests cover: `search_calendar` tool formatted output, no-connection error, multi-account aggregated output, `get_calendar_event` tool output. [A6]
+- [ ] **AC-16:** Frontend test: Calendar multi-account connect/disconnect flow renders correctly (shows account list, add button, per-account disconnect). [F1]
 
 ## Scope
 
@@ -58,7 +59,7 @@ What's missing: calendar tools, calendar service, OAuth scope in the frontend OA
 | File | Purpose |
 |------|---------|
 | `chatServer/services/calendar_service.py` | Service wrapping Google Calendar API |
-| `chatServer/tools/calendar_tools.py` | `SearchCalendarTool` and `GetCalendarEventTool` BaseTool subclasses |
+| `chatServer/tools/calendar_tools.py` | `CalendarToolProvider`, `SearchCalendarTool`, `GetCalendarEventTool` |
 | `tests/chatServer/services/test_calendar_service.py` | Unit tests for CalendarService |
 | `tests/chatServer/tools/test_calendar_tools.py` | Unit tests for calendar tools |
 | `supabase/migrations/2026MMDD000001_register_calendar_tools.sql` | DB registration migration |
@@ -70,13 +71,13 @@ What's missing: calendar tools, calendar service, OAuth scope in the frontend OA
 | `src/core/agent_loader_db.py` | Add `SearchCalendarTool`, `GetCalendarEventTool` to `TOOL_REGISTRY` |
 | `chatServer/security/approval_tiers.py` | Add `search_calendar`, `get_calendar_event` entries |
 | `chatServer/services/prompt_builder.py` | Add calendar context to session_open pre-computation |
-| `webApp/src/pages/Settings/Integrations.tsx` | Replace "Coming Soon" with functional Calendar OAuth flow |
+| `webApp/src/pages/Settings/Integrations.tsx` | Replace "Coming Soon" with multi-account Calendar connect/disconnect flow |
 
 ### Out of Scope
 
 - Creating, modifying, or deleting calendar events (Act-tier, future SPEC)
 - RSVP management
-- Multiple calendar support within one Google account (process primary calendar only for MVP)
+- Multiple calendars within one Google account (processes `primary` calendar only; non-primary calendars like shared/subscribed are out of scope)
 - Non-Google calendar providers (Outlook, iCal)
 - Recurring event pattern analysis (future — briefings SPEC may address)
 - Calendar-based scheduling suggestions
@@ -177,16 +178,42 @@ Note: `googleapiclient` methods are synchronous. Like Gmail tools, we call them 
 
 ### 2. Calendar Tools (`chatServer/tools/calendar_tools.py`)
 
-Two tools following the `gmail_tools.py` pattern for credential fetching.
+Two tools following the `gmail_tools.py` multi-account pattern.
+
+A `CalendarToolProvider` class (analogous to `GmailToolProvider`) manages per-connection credential fetching:
+
+```python
+class CalendarToolProvider:
+    """Per-connection calendar credential manager."""
+
+    @classmethod
+    async def get_all_providers(cls, user_id: str) -> list["CalendarToolProvider"]:
+        """Get providers for ALL connected calendar accounts."""
+        # Fetches all external_api_connections where service_name='google_calendar'
+        # Returns one provider per connection, each with its own connection_id
+
+    @classmethod
+    async def get_provider_for_account(cls, user_id: str, account_email: str) -> "CalendarToolProvider":
+        """Get provider for a specific account by email."""
+```
 
 ```python
 class SearchCalendarTool(BaseTool):
     name: str = "search_calendar"
     description: str = (
         "Search your Google Calendar for events. Returns event titles, times, "
-        "locations, and attendees. Defaults to today's events if no date range specified."
+        "locations, and attendees. Defaults to today's events if no date range specified. "
+        "Optionally specify an account email to search a specific calendar."
     )
-    # ... args_schema with optional date_from, date_to, query, max_results
+    # ... args_schema with optional date_from, date_to, query, max_results, account
+
+    async def _arun(self, ..., account: Optional[str] = None) -> str:
+        if account:
+            provider = await CalendarToolProvider.get_provider_for_account(self.user_id, account)
+            # Search single account
+        else:
+            providers = await CalendarToolProvider.get_all_providers(self.user_id)
+            # Search all accounts, aggregate results grouped by account email
 
     @classmethod
     def prompt_section(cls, channel: str) -> str | None:
@@ -194,7 +221,8 @@ class SearchCalendarTool(BaseTool):
             "Calendar: Use search_calendar to check the user's schedule. "
             "Reference calendar events when giving advice about timing, scheduling, "
             "or priorities. Cross-reference attendees with email contacts when relevant. "
-            "When the user asks 'what's on my calendar' or 'am I free tomorrow', use this tool."
+            "When the user asks 'what's on my calendar' or 'am I free tomorrow', use this tool. "
+            "If the user has multiple calendar accounts, results are grouped by account."
         )
 
 class GetCalendarEventTool(BaseTool):
@@ -203,10 +231,10 @@ class GetCalendarEventTool(BaseTool):
         "Get full details for a specific calendar event by ID. "
         "Returns description, attendees, conferencing info, and location."
     )
-    # ... args_schema with event_id
+    # ... args_schema with event_id, optional account
 ```
 
-Credential fetching uses `VaultToLangChainCredentialAdapter.fetch_or_refresh_calendar_credentials()` — already implemented.
+Credential fetching follows the `GmailToolProvider` pattern: per-connection via `get_oauth_tokens_for_scheduler` RPC with `connection_id`. Falls back to `VaultToLangChainCredentialAdapter.fetch_or_refresh_calendar_credentials()` for single-account legacy path.
 
 ### 3. Frontend OAuth Flow
 
@@ -226,9 +254,18 @@ In `prompt_builder.py`, the `_compute_section_values()` method already pre-fetch
 # In _compute_section_values or the pre-computation step:
 calendar_summary = ""
 try:
-    # Check if user has calendar connected
-    # If yes, fetch today's events (3 max for bootstrap context)
-    calendar_summary = f"Today's calendar: {event_count} events. Next: {next_events_summary}"
+    providers = await CalendarToolProvider.get_all_providers(user_id)
+    all_events = []
+    for provider in providers:
+        creds = await provider.get_credentials()
+        svc = CalendarService(creds)
+        events = svc.list_events(max_results=5)
+        for e in events:
+            e["account"] = provider.account_email
+        all_events.extend(events)
+    all_events.sort(key=lambda e: e["start"])
+    # Format: "Today's calendar (2 accounts): 5 events. Next: ..."
+    calendar_summary = format_calendar_bootstrap(all_events, len(providers))
 except Exception:
     pass  # Calendar not connected or error — skip silently
 ```
@@ -275,7 +312,11 @@ FROM agent_configurations ac WHERE ac.agent_name = 'assistant';
 - Test `search_calendar` `_arun` happy path returns formatted output
 - Test `search_calendar` without calendar connection returns helpful message
 - Test `search_calendar` with expired credentials returns reconnect message
+- Test `search_calendar` multi-account aggregation (two accounts, results grouped)
+- Test `search_calendar` with specific `account` parameter
 - Test `get_calendar_event` `_arun` happy path
+- Test `CalendarToolProvider.get_all_providers` returns multiple providers
+- Test `CalendarToolProvider.get_provider_for_account` finds correct account
 - Test `prompt_section` returns guidance string
 
 ### AC-to-Test Mapping
@@ -295,12 +336,13 @@ FROM agent_configurations ac WHERE ac.agent_name = 'assistant';
 ### Manual Verification (UAT)
 
 - [ ] Connect Google Calendar in Settings > Integrations
-- [ ] Ask agent: "What's on my calendar today?"
-- [ ] Verify agent uses `search_calendar` and returns formatted events
+- [ ] Connect a second Google account's calendar — verify both appear in the account list
+- [ ] Ask agent: "What's on my calendar today?" — verify results grouped by account
+- [ ] Ask agent: "What's on my calendar today?" with `account` param — verify single-account results
 - [ ] Ask agent: "Tell me about my 3pm meeting" — verify it fetches event details
-- [ ] Start new session — verify session_open mentions calendar context
-- [ ] Disconnect Calendar — verify agent handles missing connection gracefully
-- [ ] Ask agent about scheduling — verify it references calendar proactively
+- [ ] Start new session — verify session_open mentions calendar context from all connected accounts
+- [ ] Disconnect one Calendar account — verify other remains, agent handles partial connection
+- [ ] Disconnect all — verify agent returns helpful connect message
 
 ## Edge Cases
 
@@ -309,7 +351,7 @@ FROM agent_configurations ac WHERE ac.agent_name = 'assistant';
 - **All-day events:** `start` field uses `date` key instead of `dateTime`. Normalization handles both.
 - **Expired credentials:** Auth bridge handles refresh automatically. If refresh fails, tool returns reconnect message.
 - **Timezone handling:** Google Calendar API returns events in the calendar's timezone. The tool passes times as-is; the agent interprets them in conversation context. Future: consider user timezone in prompt context.
-- **Multi-calendar accounts:** MVP processes only the `primary` calendar. Users with multiple Google accounts would connect each separately (same pattern as multi-Gmail from SPEC-008).
+- **Multi-calendar accounts:** Users connect multiple Google accounts separately (same pattern as multi-Gmail from SPEC-008). Each account's `primary` calendar is queried. DB constraint `UNIQUE(user_id, service_name, service_user_id)` (from SPEC-008 migration `20260221000000_multi_gmail_constraint.sql`) already supports this. Tools aggregate results across accounts when no specific account is requested.
 - **Rate limiting:** Google Calendar API has generous quota (1M queries/day). Not a concern.
 
 ## Functional Units (for PR Breakdown)
@@ -322,15 +364,15 @@ FROM agent_configurations ac WHERE ac.agent_name = 'assistant';
 
 2. **FU-2: Service + Tools + Tests**
    - Create `chatServer/services/calendar_service.py`
-   - Create `chatServer/tools/calendar_tools.py`
+   - Create `chatServer/tools/calendar_tools.py` (includes `CalendarToolProvider` with multi-account support)
    - Modify `src/core/agent_loader_db.py`: add to `TOOL_REGISTRY`
-   - Create tests for service and tools
-   - Add calendar context to `prompt_builder.py` session_open
+   - Create tests for service, tools, and provider (including multi-account aggregation)
+   - Add calendar context to `prompt_builder.py` session_open (aggregate across all connected accounts)
    - Assigned to: backend-dev
 
 3. **FU-3: Frontend OAuth Flow**
-   - Update `Integrations.tsx`: replace Coming Soon with connect/disconnect
-   - Frontend test for Calendar integration card
+   - Update `Integrations.tsx`: replace Coming Soon with multi-account Calendar connect/disconnect (reuse `GmailConnection.tsx` pattern — account list, add button, per-account disconnect, max 5)
+   - Frontend test for Calendar multi-account integration card
    - Assigned to: frontend-dev
 
 ### Merge Order
@@ -341,7 +383,7 @@ Note: FU-2 and FU-3 can run in parallel since FU-3 is frontend-only. Just both d
 
 ## Completeness Checklist
 
-- [x] Every AC has a stable ID (AC-01 through AC-16)
+- [x] Every AC has a stable ID (AC-01 through AC-16, plus AC-07b)
 - [x] Every AC maps to at least one functional unit
 - [x] Technical decisions reference principles (A1, A3, A6, A10, A14, F1)
 - [x] Merge order is explicit and acyclic
