@@ -57,3 +57,32 @@ jobs:
           --build-arg VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+  smoke-test:
+    name: Post-deploy smoke test
+    needs: [deploy-chatserver, deploy-webapp]
+    if: always() && (needs.deploy-chatserver.result == 'success' || needs.deploy-webapp.result == 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Smoke test chatserver
+        if: needs.deploy-chatserver.result == 'success'
+        run: curl --retry 5 --retry-delay 10 -sf https://clarity-chatserver.fly.dev/health
+
+      - name: Smoke test webapp
+        if: needs.deploy-webapp.result == 'success'
+        run: curl --retry 5 --retry-delay 10 -sf https://clarity-webapp.fly.dev/
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+        if: failure()
+
+      - name: Rollback chatserver on failure
+        if: failure() && needs.deploy-chatserver.result == 'success'
+        run: flyctl releases rollback -a clarity-chatserver
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Rollback webapp on failure
+        if: failure() && needs.deploy-webapp.result == 'success'
+        run: flyctl releases rollback -a clarity-webapp
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

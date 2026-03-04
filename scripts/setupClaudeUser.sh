@@ -105,6 +105,12 @@ sudo iptables -A OUTPUT -m owner --uid-owner "$SANDBOX_UID" -p udp --dport 53 -j
 echo "ACCEPT: DNS (udp/53)"
 sudo iptables -A OUTPUT -m owner --uid-owner "$SANDBOX_UID" -o lo -j ACCEPT
 echo "ACCEPT: loopback"
+sudo iptables -A OUTPUT -m owner --uid-owner "$SANDBOX_UID" -d github.com -j ACCEPT
+echo "ACCEPT: github.com"
+sudo iptables -A OUTPUT -m owner --uid-owner "$SANDBOX_UID" -d api.github.com -j ACCEPT
+echo "ACCEPT: api.github.com"
+sudo iptables -A OUTPUT -m owner --uid-owner "$SANDBOX_UID" -d registry.npmjs.org -j ACCEPT
+echo "ACCEPT: registry.npmjs.org"
 sudo iptables -A OUTPUT -m owner --uid-owner "$SANDBOX_UID" -j DROP
 echo "DROP: everything else"
 
