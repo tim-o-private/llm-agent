@@ -17,6 +17,7 @@ from src.core.agent_loader_db import load_agent_executor_db_async
 from ..database.supabase_client import create_user_scoped_client
 from ..security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
 from ..services.audit_service import AuditService
+from ..services.notification_service import NotificationService
 from ..services.pending_actions import PendingActionsService
 
 logger = logging.getLogger(__name__)
@@ -98,6 +99,7 @@ class ScheduledExecutionService:
                 db_client=supabase_client,
                 audit_service=audit_service,
             )
+            notification_service = NotificationService(supabase_client)
             approval_context = ApprovalContext(
                 user_id=user_id,
                 session_id=session_id,
@@ -105,6 +107,7 @@ class ScheduledExecutionService:
                 db_client=supabase_client,
                 pending_actions_service=pending_actions_service,
                 audit_service=audit_service,
+                notification_service=notification_service,
             )
             if hasattr(agent_executor, "tools") and agent_executor.tools:
                 wrap_tools_with_approval(agent_executor.tools, approval_context)
@@ -381,6 +384,7 @@ class ScheduledExecutionService:
                 body += f"\n\n_{pending_count} action{'s' if pending_count != 1 else ''} pending your approval._"
 
             schedule_type = config.get("schedule_type", "scheduled")
+            notification_type = "agent_only" if schedule_type == "heartbeat" else "notify"
             category = "heartbeat" if schedule_type == "heartbeat" else "agent_result"
 
             await notification_service.notify_user(
@@ -390,15 +394,8 @@ class ScheduledExecutionService:
                 category=category,
                 metadata={"agent_name": agent_name, "pending_actions": pending_count},
                 channels=channels,
+                type=notification_type,
             )
-
-            # Also send a separate approval notification if there are pending actions
-            if pending_count > 0:
-                await notification_service.notify_pending_actions(
-                    user_id=user_id,
-                    pending_count=pending_count,
-                    agent_name=agent_name,
-                )
 
         except Exception as e:
             logger.warning(f"Failed to send notification (non-fatal): {e}")

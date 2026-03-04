@@ -29,8 +29,21 @@ if echo "$COMMAND" | grep -qE 'git\s+reset\s+--hard'; then
   exit 2
 fi
 
-if echo "$COMMAND" | grep -qE 'git\s+(checkout|restore)\s+\.'; then
-  echo "BLOCKED: git checkout . / git restore . discards all uncommitted changes." >&2
+if echo "$COMMAND" | grep -qE 'git\s+checkout\s+\.'; then
+  echo "BLOCKED: git checkout . discards all uncommitted changes." >&2
+  exit 2
+fi
+
+# Block git checkout -- <file> (discard specific file changes)
+# Matches: git checkout -- file, git checkout HEAD -- file, git checkout abc123 -- file
+if echo "$COMMAND" | grep -qE 'git\s+checkout\s+(\S+\s+)?--(\s|$)'; then
+  echo "BLOCKED: git checkout -- <file> discards uncommitted changes. Flag unrelated changes to your engineering lead instead of removing them." >&2
+  exit 2
+fi
+
+# Block git restore (all forms except --staged, which only unstages)
+if echo "$COMMAND" | grep -qE 'git\s+restore\s' && ! echo "$COMMAND" | grep -qP 'git\s+restore\s+--staged\b'; then
+  echo "BLOCKED: git restore <file> discards uncommitted changes. Flag unrelated changes to your engineering lead instead of removing them." >&2
   exit 2
 fi
 

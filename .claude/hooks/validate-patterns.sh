@@ -54,6 +54,12 @@ case "$FILE_PATH" in
       echo "BLOCKED: 'useAuthStore' imported in API hooks. Per A5, auth tokens must come from supabase.auth.getSession(), not Zustand. See architecture-principles skill A5." >&2
       exit 2
     fi
+    # A5: Block !!supabase.auth as enabled guard — supabase.auth is the GoTrueClient object
+    # and is always truthy. Use getSession() + onAuthStateChange instead.
+    if grep -qP '!!\s*supabase\.auth\b' "$FILE_PATH" 2>/dev/null; then
+      echo "BLOCKED: '!!supabase.auth' is a no-op (GoTrueClient is always truthy). Per A5, use getSession() + onAuthStateChange to check for an actual session. See useAuditHistory for the pattern." >&2
+      exit 2
+    fi
     ;;
   */chatServer/services/*.py)
     # A8: Block raw get_supabase_client in services — must use get_user_scoped_client or get_system_client

@@ -1,11 +1,14 @@
 import React, { useEffect, useCallback, useRef, useState, Component, type ErrorInfo, type ReactNode } from 'react';
-import { AssistantRuntimeProvider } from '@assistant-ui/react';
+import { AssistantRuntimeProvider, useMessage } from '@assistant-ui/react';
 import { useExternalStoreRuntime } from '@assistant-ui/react';
 import type { ThreadMessageLike, AppendMessage } from '@assistant-ui/react';
-import { Thread } from '@assistant-ui/react-ui';
+import { Thread, Composer } from '@assistant-ui/react-ui';
 import { useChatStore, useInitializeChatStore, type ChatMessage } from '@/stores/useChatStore';
+import { useChatTimeline } from '@/api/hooks/useChatTimeline';
 import { useTaskViewStore } from '@/stores/useTaskViewStore';
 import { MessageHeader } from '@/components/ui/chat/MessageHeader';
+import { NotificationInlineMessage } from '@/components/ui/chat/NotificationInlineMessage';
+import { ApprovalInlineMessage } from '@/components/ui/chat/ApprovalInlineMessage';
 import { ConversationList } from '@/components/features/Conversations';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -68,17 +71,33 @@ export const ChatPanelV2: React.FC<ChatPanelV2Props> = ({ agentId: agentIdProp }
   } = useChatStore();
   const { setInputFocusState } = useTaskViewStore();
 
+  // Get merged timeline for notification/approval items
+  const timeline = useChatTimeline();
+
   // Track running state for the external store
   const [isRunning, setIsRunning] = useState(false);
 
-  // Convert ChatMessage to ThreadMessageLike
+  // Convert ChatMessage to ThreadMessageLike.
+  // Notification/approval items use role 'system' with metadata.custom carrying the
+  // full ChatMessage payload — picked up by TimelineSystemMessage below.
   const convertMessage = useCallback(
-    (msg: ChatMessage): ThreadMessageLike => ({
-      role: msg.sender === 'user' ? 'user' : 'assistant',
-      content: msg.text,
-      id: msg.id,
-      createdAt: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
-    }),
+    (msg: ChatMessage): ThreadMessageLike => {
+      if (msg.sender === 'notification' || msg.sender === 'approval') {
+        return {
+          role: 'system' as const,
+          content: [{ type: 'text', text: msg.text || '' }],
+          id: msg.id,
+          createdAt: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
+          metadata: { custom: { sender: msg.sender, ...msg } },
+        };
+      }
+      return {
+        role: msg.sender === 'user' ? 'user' : 'assistant',
+        content: msg.text,
+        id: msg.id,
+        createdAt: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
+      };
+    },
     [],
   );
 
@@ -153,9 +172,11 @@ export const ChatPanelV2: React.FC<ChatPanelV2Props> = ({ agentId: agentIdProp }
     [agentId, activeChatId, addMessage, sendHeartbeatAsync],
   );
 
-  // Create runtime using useExternalStoreRuntime
+  // Create runtime using useExternalStoreRuntime.
+  // Feed the full timeline (chat messages + notification/approval items) so that
+  // assistant-ui interleaves them chronologically by timestamp (AC-11).
   const runtime = useExternalStoreRuntime({
-    messages,
+    messages: timeline,
     convertMessage,
     onNew,
     isRunning,
@@ -305,16 +326,36 @@ export const ChatPanelV2: React.FC<ChatPanelV2Props> = ({ agentId: agentIdProp }
       {/* Conversation history list */}
       <ConversationList agentName={agentId} />
 
-      {/* Assistant-UI Thread with comprehensive theming from assistant-ui-theme.css */}
+      {/* Assistant-UI Thread — notification/approval items interleaved via SystemMessage (AC-11) */}
       <div className="flex-1 min-h-0 relative">
         <AssistantRuntimeProvider runtime={runtime}>
           <ThreadErrorBoundary>
             <div className="h-full">
-              <Thread />
+              <Thread.Root>
+                <Thread.Viewport>
+                  <Thread.Messages components={{ SystemMessage: TimelineSystemMessage }} />
+                  <Thread.ViewportFooter>
+                    <Thread.ScrollToBottom />
+                    <Composer />
+                  </Thread.ViewportFooter>
+                </Thread.Viewport>
+              </Thread.Root>
             </div>
           </ThreadErrorBoundary>
         </AssistantRuntimeProvider>
       </div>
     </div>
   );
+};
+
+// Renders notification/approval timeline items that arrive as role:'system' messages.
+// useMessage() is only valid inside a MessageRuntimeProvider, which Thread.Messages
+// wraps each item in automatically.
+const TimelineSystemMessage: React.FC = () => {
+  const message = useMessage((m) => m);
+  const custom = message.metadata?.custom as ChatMessage | undefined;
+  if (!custom) return null;
+  if (custom.sender === 'approval') return <ApprovalInlineMessage message={custom} />;
+  if (custom.sender === 'notification') return <NotificationInlineMessage message={custom} />;
+  return null;
 };

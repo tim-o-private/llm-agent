@@ -283,6 +283,7 @@ Workstream 3 (Web Search)           Phase 2 Complete
 | SPEC-027 | Google Calendar integration — OAuth, read tools, session context | Draft complete | 2a |
 | SPEC-028 | Morning & evening briefings — consolidation service, scheduling | Placeholder (depends on 025 + 026 + 027) | 2b |
 | SPEC-029 | Draft-reply workflow — compose OAuth, draft tool, conversational editing | Placeholder (depends on 023 + 025) | 2c |
+| SPEC-030 | UX baseline & interaction standards — patterns, accessibility, component quality floor | Draft | 2a |
 
 ## Risks
 

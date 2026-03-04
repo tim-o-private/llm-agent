@@ -16,9 +16,9 @@
     "validate:all": "npm run lint && npm run lint:css && npm run validate:colors && npm run validate:focus"
   },
   "dependencies": {
-    "@assistant-ui/react": "^0.10.12",
-    "@assistant-ui/react-markdown": "^0.10.4",
-    "@assistant-ui/react-ui": "^0.1.8",
+    "@assistant-ui/react": "^0.12.14",
+    "@assistant-ui/react-markdown": "^0.12.5",
+    "@assistant-ui/react-ui": "^0.2.1",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/modifiers": "^9.0.0",
     "@dnd-kit/sortable": "^10.0.0",

@@ -9,7 +9,8 @@ Before starting any product work:
 2. `docs/product/PRD-001-make-it-feel-right.md` — Phase 1 PRD (nearly complete)
 3. `docs/product/PRD-002-expand-the-world.md` — Phase 2 PRD (current focus)
 4. Active specs: SPEC-025 through SPEC-028
-4. `.claude/skills/architecture-principles/SKILL.md` — principles quick reference
+5. `.claude/skills/architecture-principles/SKILL.md` — principles quick reference
+6. `.claude/skills/product-architecture/SKILL.md` — platform primitives and existing infrastructure
 
 ## Your Role
 
@@ -72,6 +73,18 @@ Use the `clarity-dev` MCP tool to validate agent behavior:
 - Test executive function: does it break down vague goals? identify priorities? flag conflicts?
 - Test corrections: does it handle "actually, that's wrong" gracefully?
 - Test email flow: does it suggest connection naturally, not force it?
+
+## Spec Writing: Reuse Existing Primitives
+
+When writing or reviewing specs, check whether the proposed feature can be built on existing infrastructure before speccing new tables or services. Read the Platform Primitives decision tree in `.claude/skills/product-architecture/SKILL.md`.
+
+Common patterns:
+- **"The agent should do X in the background"** → That's a job. Spec a new `job_type`, not a new table or polling loop.
+- **"The agent should do X on a schedule"** → That's an `agent_schedules` row. Spec the cron expression and prompt.
+- **"The user should be notified when Y"** → That's `NotificationService.notify_user()`. Spec the notification category and channels.
+- **"The user should approve Z before it happens"** → That's `pending_actions` + approval tiers. Spec the trust tier.
+
+If a spec calls for a new table, ask: "Does this duplicate an existing primitive?" If yes, the spec should reference the existing primitive and describe the extension (new job type, new notification category, etc.), not a new parallel system.
 
 ## Research Agent Pattern
 

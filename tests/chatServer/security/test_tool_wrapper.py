@@ -52,6 +52,7 @@ class TestApprovalContext:
         assert context.db_client is None
         assert context.pending_actions_service is None
         assert context.audit_service is None
+        assert context.notification_service is None
 
 
 class TestWithApproval:
@@ -91,8 +92,9 @@ class TestWithApproval:
         call_kwargs = mock_pending_service.queue_action.call_args[1]
         assert call_kwargs["user_id"] == "test-user"
         assert call_kwargs["tool_name"] == "gmail_send_message"
-        assert "queued" in result.lower()
-        assert "action-123" in result
+        assert "approval" in result.lower()
+        assert "STOP" not in result
+        assert "Do NOT retry" not in result
 
     @pytest.mark.asyncio
     async def test_auto_approve_with_audit_logging(self):

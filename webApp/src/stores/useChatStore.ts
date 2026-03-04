@@ -10,11 +10,20 @@ import { v4 as uuidv4 } from 'uuid'; // For client-side message IDs
 export interface ChatMessage {
   id: string;
   text: string;
-  sender: 'user' | 'ai' | 'tool'; // Added 'tool' sender type if applicable
+  sender: 'user' | 'ai' | 'tool' | 'notification' | 'approval';
   timestamp: Date;
-  tool_name?: string; // Optional: for tool messages
-  tool_input?: Record<string, unknown>; // Optional: for tool messages
-  // Add any other fields that might come from server responses or UI needs
+  tool_name?: string;
+  tool_input?: Record<string, unknown>;
+  // Notification fields (when sender = 'notification' | 'approval')
+  notification_id?: string;
+  notification_category?: string;
+  notification_title?: string;
+  notification_feedback?: 'useful' | 'not_useful' | null;
+  // Approval fields (when sender = 'approval')
+  action_id?: string;
+  action_tool_name?: string;
+  action_tool_args?: Record<string, unknown>;
+  action_status?: string;
 }
 
 interface ChatStore {
@@ -28,7 +37,7 @@ interface ChatStore {
   sendHeartbeatAsync: () => Promise<void>;
   triggerWakeup: () => Promise<void>;
 
-  addMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>, senderType?: 'user' | 'ai' | 'tool') => Promise<void>;
+  addMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>, senderType?: ChatMessage['sender']) => Promise<void>;
   toggleChatPanel: () => void;
   setChatPanelOpen: (isOpen: boolean) => void;
   initializeSessionAsync: (agentName: string) => Promise<void>; // Renamed and made async
@@ -182,7 +191,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         {
           id: uuidv4(),
           ...message,
-          sender: senderType as 'user' | 'ai' | 'tool',
+          sender: senderType as ChatMessage['sender'],
           timestamp: new Date(),
         },
       ],

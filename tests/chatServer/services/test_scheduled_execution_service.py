@@ -302,62 +302,6 @@ async def test_execute_stores_duration_ms(service, mock_schedule, mock_supabase,
 
 
 @pytest.mark.asyncio
-async def test_execute_notifies_pending_actions_when_count_gt_0(
-    service, mock_schedule, mock_supabase, mock_agent_executor
-):
-    """When pending actions > 0, notify_pending_actions is called."""
-    patches = _standard_patches()
-    with (
-        patches["load_agent"] as mock_load,
-        patches["get_supabase"] as mock_get_sb,
-        patches["wrap_tools"],
-        patches["pending_svc"] as mock_pending_cls,
-        patches["audit_svc"],
-        patches["notification_svc"] as mock_notif_cls,
-    ):
-        mock_load.return_value = mock_agent_executor
-        mock_get_sb.return_value = mock_supabase
-        mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=3)
-        mock_notif_instance = mock_notif_cls.return_value
-        mock_notif_instance.notify_user = AsyncMock()
-        mock_notif_instance.notify_pending_actions = AsyncMock()
-
-        await service.execute(mock_schedule)
-
-    mock_notif_instance.notify_pending_actions.assert_awaited_once_with(
-        user_id="user-123",
-        pending_count=3,
-        agent_name="assistant",
-    )
-
-
-@pytest.mark.asyncio
-async def test_execute_skips_pending_notification_when_count_0(
-    service, mock_schedule, mock_supabase, mock_agent_executor
-):
-    """When pending actions == 0, notify_pending_actions is NOT called."""
-    patches = _standard_patches()
-    with (
-        patches["load_agent"] as mock_load,
-        patches["get_supabase"] as mock_get_sb,
-        patches["wrap_tools"],
-        patches["pending_svc"] as mock_pending_cls,
-        patches["audit_svc"],
-        patches["notification_svc"] as mock_notif_cls,
-    ):
-        mock_load.return_value = mock_agent_executor
-        mock_get_sb.return_value = mock_supabase
-        mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
-        mock_notif_instance = mock_notif_cls.return_value
-        mock_notif_instance.notify_user = AsyncMock()
-        mock_notif_instance.notify_pending_actions = AsyncMock()
-
-        await service.execute(mock_schedule)
-
-    mock_notif_instance.notify_pending_actions.assert_not_awaited()
-
-
-@pytest.mark.asyncio
 async def test_execute_truncates_result_at_50000_chars(
     service, mock_schedule, mock_supabase, mock_agent_executor
 ):

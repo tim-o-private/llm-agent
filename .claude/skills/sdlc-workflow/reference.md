@@ -6,6 +6,10 @@
 User writes spec (or agent generates from requirements)
   -> User invokes orchestrator agent
   -> Orchestrator reads spec, creates team, breaks into tasks with domain assignments
+  -> UX contract phase (for specs with user-visible ACs):
+     -> UX designer writes Playwright scripts targeting ARIA attributes (tests are RED)
+     -> UX designer writes UX spec (component states, copy, accessibility)
+     -> Scripts + UX spec become part of frontend-dev's task contract
   -> Creates single feature branch (default) or worktrees (parallel exception)
   -> Per functional unit (sequentially on shared branch):
      -> Orchestrator writes contract in task description
@@ -13,7 +17,8 @@ User writes spec (or agent generates from requirements)
      -> Reviewer (opus) checks diff against spec, patterns, scope
      -> [BLOCKER] -> Domain agent fixes -> Reviewer re-reviews
      -> [Clean] -> Next FU proceeds
-  -> UAT on the complete branch
+  -> Playwright scripts pass (GREEN) — verifies UI ACs
+  -> UAT flow tests on the complete branch
   -> Orchestrator reports PR to user
   -> User reviews + merges
   -> Orchestrator cleans up team
@@ -155,6 +160,75 @@ When work flows from one domain to another, the orchestrator writes a contract i
 - Auth token comes from supabase.auth.getSession()
 ```
 
+## UX Contract Phase (Playwright TDD)
+
+For specs with user-visible acceptance criteria, the UX designer writes Playwright scripts **before implementation begins**. This is test-driven development at the UI level — scripts define the executable acceptance criteria, fail initially (red), and pass once implementation satisfies them (green).
+
+### What the UX Designer Produces
+
+1. **Playwright test script** in `tests/uat/playwright/test_spec_NNN_<feature>.py`
+2. **UX spec** in `docs/ux/SPEC-NNN-ux.md` (component states, copy, accessibility)
+
+Both become part of the frontend-dev task contract.
+
+### Selector Contract
+
+Scripts define the **ARIA contract** that frontend-dev must satisfy:
+
+| Target (MUST use) | Example |
+|-------------------|---------|
+| ARIA roles | `page.locator('[role="alert"]')` |
+| ARIA labels | `page.locator('[aria-label="Approve action"]')` |
+| Visible text | `page.locator('text="Approved"')` |
+| Semantic HTML | `page.locator('button', has_text="Send")` |
+
+| Never target | Why |
+|--------------|-----|
+| CSS classes | Implementation detail — changes break tests |
+| Component names | React internals — not visible to users |
+| DOM nesting/structure | Refactoring breaks tests |
+| `data-testid` | Adds non-functional attributes to production HTML |
+
+This means the Playwright tests simultaneously enforce accessibility. If a test passes, the ARIA attributes exist.
+
+### Script Structure
+
+```python
+"""Playwright UI acceptance tests: SPEC-NNN — Feature Name.
+
+Tests are RED before implementation. Each test maps to a user-visible AC.
+Run: python tests/uat/playwright/test_spec_NNN_feature.py
+Requires: pnpm dev running (chatServer + webApp)
+"""
+
+from tests.uat.playwright.conftest_pw import authenticated_page, screenshot
+
+def test_ac_01_description(authenticated_page):
+    page = authenticated_page
+    page.goto(f"{WEBAPP_URL}/today")
+    page.wait_for_load_state("networkidle")
+
+    # AC-01: Element with correct ARIA role and label exists
+    element = page.locator('[role="alert"][aria-label*="Approval"]')
+    assert element.is_visible(), "AC-01: Expected approval card with role=alert"
+```
+
+### Shared Auth Helper
+
+`tests/uat/playwright/conftest_pw.py` provides:
+- `get_supabase_session()` — authenticates via Supabase email/password
+- `authenticated_page(playwright)` — returns a Page with session injected into localStorage
+- `screenshot(page, name)` — saves screenshot to `/tmp/uat-spec-NNN/`
+
+### When Scripts Run
+
+| Stage | Who | Expected |
+|-------|-----|----------|
+| After spec approval | UX designer writes scripts | All tests FAIL (red) |
+| During implementation | Frontend-dev checks progress | Tests start passing |
+| After implementation | Orchestrator runs all scripts | All tests PASS (green) |
+| After merge | CI regression | All tests PASS |
+
 ## Scope Boundaries
 
 Each domain agent has strict file scope. The reviewer checks these boundaries.
@@ -163,6 +237,7 @@ Each domain agent has strict file scope. The reviewer checks these boundaries.
 |-------|---------|-----------|
 | database-dev | `supabase/migrations/`, `chatServer/database/` | Everything else |
 | backend-dev | `chatServer/` (except database/), `src/`, `tests/` | `webApp/`, `supabase/migrations/` |
+| ux-designer | `docs/ux/`, `tests/uat/playwright/` | Application code (`webApp/src/`, `chatServer/`) |
 | frontend-dev | `webApp/src/` | `chatServer/`, `supabase/` |
 | deployment-dev | Dockerfiles, fly.toml, `.github/`, `requirements.txt`, `package.json` | Application code |
 

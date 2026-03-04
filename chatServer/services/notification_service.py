@@ -35,7 +35,11 @@ class NotificationService:
         category: str = "info",
         metadata: Optional[Dict[str, Any]] = None,
         channels: Optional[List[str]] = None,
-    ) -> str:
+        type: str = "notify",
+        requires_approval: bool = False,
+        pending_action_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+    ) -> Optional[str]:
         """
         Send a notification to the user via requested channels.
 
@@ -46,23 +50,37 @@ class NotificationService:
             category: One of: heartbeat, approval_needed, agent_result, error, info
             metadata: Structured context (schedule_id, agent_name, execution_id, etc.)
             channels: List of channels to use. None = all available.
+            type: Delivery tier — 'agent_only' (no store), 'silent' (DB only), 'notify' (DB + Telegram)
+            requires_approval: Whether this notification represents a pending approval request
+            pending_action_id: FK to pending_actions when this is an approval request
 
         Returns:
-            Notification ID
+            Notification ID, or None for agent_only
         """
         metadata = metadata or {}
 
-        # 1. Always store in notifications table (web channel)
+        # agent_only: no storage, no delivery — just a debug log
+        if type == "agent_only":
+            logger.debug(
+                f"agent_only notification for user {user_id} suppressed: {title}"
+            )
+            return None
+
+        # 1. Store in notifications table (web channel)
         notification_id = await self._store_web_notification(
             user_id=user_id,
             title=title,
             body=body,
             category=category,
             metadata=metadata,
+            type=type,
+            requires_approval=requires_approval,
+            pending_action_id=pending_action_id,
+            session_id=session_id,
         )
 
-        # 2. Send via Telegram if user has it linked and it's requested
-        if channels is None or "telegram" in channels:
+        # 2. Send via Telegram only for 'notify' type
+        if type == "notify" and (channels is None or "telegram" in channels):
             await self._send_telegram_notification(
                 user_id=user_id,
                 title=title,
@@ -110,8 +128,10 @@ class NotificationService:
         unread_only: bool = False,
         limit: int = 50,
         offset: int = 0,
+        exclude_agent_only: bool = False,
+        session_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """Fetch notifications for a user."""
+        """Fetch notifications for a user, optionally filtered by session."""
         try:
             query = (
                 self.db.table("notifications")
@@ -123,6 +143,12 @@ class NotificationService:
 
             if unread_only:
                 query = query.eq("read", False)
+
+            if exclude_agent_only:
+                query = query.neq("type", "agent_only")
+
+            if session_id:
+                query = query.eq("session_id", session_id)
 
             result = await query.execute()
             return result.data or []
@@ -178,6 +204,47 @@ class NotificationService:
         except Exception as e:
             logger.error(f"Failed to mark all notifications as read for user {user_id}: {e}")
             return 0
+
+    async def resolve_approval_notification(
+        self,
+        pending_action_id: str,
+        user_id: str,
+        action_status: str,
+    ) -> bool:
+        """Update the original approval notification after approve/reject.
+
+        Sets action_status in metadata and marks as read so the frontend
+        renders the resolved state and persists it across refreshes.
+        """
+        try:
+            # Find the notification linked to this pending action
+            result = (
+                await self.db.table("notifications")
+                .select("id, metadata")
+                .eq("pending_action_id", pending_action_id)
+                .eq("user_id", user_id)
+                .limit(1)
+                .execute()
+            )
+            if not result.data:
+                logger.warning(f"No notification found for pending_action_id={pending_action_id}")
+                return False
+
+            notif = result.data[0]
+            metadata = notif.get("metadata") or {}
+            metadata["action_status"] = action_status
+
+            await (
+                self.db.table("notifications")
+                .update({"metadata": metadata, "read": True})
+                .eq("id", notif["id"])
+                .eq("user_id", user_id)
+                .execute()
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Failed to resolve approval notification for action {pending_action_id}: {e}")
+            return False
 
     async def submit_feedback(
         self,
@@ -267,20 +334,29 @@ class NotificationService:
         body: str,
         category: str,
         metadata: Dict[str, Any],
+        type: str = "notify",
+        requires_approval: bool = False,
+        pending_action_id: Optional[str] = None,
+        session_id: Optional[str] = None,
     ) -> str:
         """Store notification in the database for web UI polling."""
         try:
+            insert_data: Dict[str, Any] = {
+                "user_id": user_id,
+                "title": title,
+                "body": body[:10000] if body else "",  # Truncate very long bodies
+                "category": category,
+                "metadata": metadata,
+                "type": type,
+                "requires_approval": requires_approval,
+            }
+            if pending_action_id is not None:
+                insert_data["pending_action_id"] = pending_action_id
+            if session_id is not None:
+                insert_data["session_id"] = session_id
             result = (
                 await self.db.table("notifications")
-                .insert(
-                    {
-                        "user_id": user_id,
-                        "title": title,
-                        "body": body[:10000] if body else "",  # Truncate very long bodies
-                        "category": category,
-                        "metadata": metadata,
-                    }
-                )
+                .insert(insert_data)
                 .execute()
             )
 

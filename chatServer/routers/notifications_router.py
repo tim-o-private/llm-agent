@@ -12,7 +12,7 @@ Provides API endpoints for:
 
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -42,6 +42,10 @@ class NotificationResponse(BaseModel):
     created_at: datetime
     feedback: Optional[str] = None
     feedback_at: Optional[datetime] = None
+    type: str = "notify"
+    requires_approval: bool = False
+    pending_action_id: Optional[str] = None
+    session_id: Optional[str] = None
 
 
 class FeedbackRequest(BaseModel):
@@ -75,16 +79,19 @@ async def get_notifications(
     unread_only: bool = False,
     limit: int = 50,
     offset: int = 0,
+    session_id: Optional[str] = None,
     user_id: str = Depends(get_current_user),
     db=Depends(get_user_scoped_client),
 ):
-    """List notifications for the current user."""
+    """List notifications for the current user, optionally filtered by session."""
     service = NotificationService(db)
     notifications = await service.get_notifications(
         user_id=user_id,
         unread_only=unread_only,
         limit=min(limit, 100),  # Cap at 100
         offset=offset,
+        exclude_agent_only=True,
+        session_id=session_id,
     )
     return notifications
 
@@ -177,5 +184,5 @@ if os.getenv("ENVIRONMENT") != "production":
             category=body.category,
             metadata={},
             read=False,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         )

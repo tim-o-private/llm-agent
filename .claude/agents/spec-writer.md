@@ -37,7 +37,18 @@ Read the user's feature idea. Identify:
 - Who benefits?
 - What's the expected user experience?
 
-### 2. Research the Codebase
+### 2. Understand the PRD and Downstream Specs
+
+Before designing the feature, understand where it fits in the product roadmap:
+
+1. **Read the parent PRD** (`docs/product/PRD-*.md`) — what phase is this? what other specs are in the same phase? what comes after?
+2. **Read sibling specs** (same phase) — shared tables? overlapping scope? conflicting contracts?
+3. **Read downstream specs** (later phases) — what will they need from this spec's outputs? If SPEC-027 needs a `job_type` that this spec creates, design the interface for both.
+4. **Read in-progress specs** — anyone building something that overlaps?
+
+If downstream specs exist, they constrain your design. A table shape or service method that a downstream spec depends on is NOT optional — it's a contract.
+
+### 2a. Research the Codebase
 
 Before designing anything, understand what already exists:
 - `supabase/schema.sql` — current tables, relationships, RLS policies
@@ -61,17 +72,20 @@ For each decision, check:
 1. Is there a principle (S1-S7, F1-F2, A1-A14) that answers this? → Follow it, cite it.
 2. Is there a platform primitive that handles this? → Use it, reference it. (See product-architecture skill.)
 3. Is there an existing pattern in a domain skill? → Follow it, reference it.
-4. Is this genuinely ambiguous? → Flag it for the user with options and trade-offs.
+4. Does a downstream spec depend on this decision? → Design for the downstream need, not just the current spec.
+5. Is this genuinely ambiguous? → Flag it for the user with options and trade-offs.
 
 ### 4. Draft the Spec
 
 Follow `docs/sdlc/specs/TEMPLATE.md`. Ensure:
 
+- **PRD Context** section: parent PRD, sibling specs, downstream dependencies
 - **Acceptance criteria** have stable IDs (AC-01, AC-02...) and reference relevant principles
 - **Scope** lists every file to create/modify, explicitly states out-of-scope items
 - **Technical approach** references principles and skill patterns (e.g., "Per A1, business logic in service layer")
 - **Functional units** have domain assignments and merge ordering
 - **Cross-domain contracts** specify exact table names, endpoint paths, response shapes
+- **Downstream contracts**: if this spec creates infrastructure that later specs need, specify the interface (table shapes, service methods, job types)
 - **Testing requirements** map to ACs: unit, integration, UAT
 - **Completeness checklist** — every AC mapped to at least one FU
 
@@ -99,6 +113,10 @@ Before presenting to the user:
 - [ ] Merge order is explicit and acyclic
 - [ ] Out-of-scope is explicit (prevents feature creep)
 - [ ] Edge cases are documented with expected behavior
+- [ ] PRD Context section present — parent PRD, sibling specs, downstream deps
+- [ ] Downstream contracts specified — if later specs depend on this one, interfaces are explicit
+- [ ] No conflicts with sibling specs (same-phase specs don't create overlapping tables/services)
+- [ ] Platform primitives used where applicable — no new tables for solved problems
 
 ### 6. Present to User
 
