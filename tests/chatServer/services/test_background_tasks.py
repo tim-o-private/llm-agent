@@ -39,6 +39,8 @@ class TestBackgroundTaskService(unittest.TestCase):
 
     def test_start_background_tasks(self):
         """Test starting background tasks creates 5 tasks including job_runner_task."""
+        import asyncio
+
         mock_db_manager = MagicMock()
 
         with patch('chatServer.services.background_tasks.get_database_manager', return_value=mock_db_manager):
@@ -53,23 +55,26 @@ class TestBackgroundTaskService(unittest.TestCase):
                             with patch.object(self.service, 'evict_inactive_executors', new_callable=AsyncMock):
                                 with patch.object(self.service, 'run_scheduled_agents', new_callable=AsyncMock):
                                     with patch.object(self.service, 'check_due_reminders', new_callable=AsyncMock):
-                                        mock_task1 = MagicMock()
-                                        mock_task2 = MagicMock()
-                                        mock_task3 = MagicMock()
-                                        mock_task4 = MagicMock()
-                                        mock_task5 = MagicMock()
-                                        mock_create_task.side_effect = [
-                                            mock_task1, mock_task2, mock_task3, mock_task4, mock_task5
-                                        ]
+                                        with patch.object(self.service, '_bootstrap_briefing_jobs', new_callable=AsyncMock):  # noqa: E501
+                                            mock_task1 = MagicMock()
+                                            mock_task2 = MagicMock()
+                                            mock_task3 = MagicMock()
+                                            mock_task4 = MagicMock()
+                                            mock_task5 = MagicMock()
+                                            mock_create_task.side_effect = [
+                                                mock_task1, mock_task2, mock_task3, mock_task4, mock_task5
+                                            ]
 
-                                        self.service.start_background_tasks()
+                                            asyncio.get_event_loop().run_until_complete(
+                                                self.service.start_background_tasks()
+                                            )
 
-                                        self.assertEqual(mock_create_task.call_count, 5)
-                                        self.assertEqual(self.service.deactivate_task, mock_task1)
-                                        self.assertEqual(self.service.evict_task, mock_task2)
-                                        self.assertEqual(self.service.scheduled_agents_task, mock_task3)
-                                        self.assertEqual(self.service.reminder_task, mock_task4)
-                                        self.assertEqual(self.service.job_runner_task, mock_task5)
+                                            self.assertEqual(mock_create_task.call_count, 5)
+                                            self.assertEqual(self.service.deactivate_task, mock_task1)
+                                            self.assertEqual(self.service.evict_task, mock_task2)
+                                            self.assertEqual(self.service.scheduled_agents_task, mock_task3)
+                                            self.assertEqual(self.service.reminder_task, mock_task4)
+                                            self.assertEqual(self.service.job_runner_task, mock_task5)
 
 
 class TestBackgroundTaskServiceGlobal(unittest.TestCase):
@@ -180,23 +185,24 @@ class TestBackgroundTaskServiceAsync:
                             with patch.object(service, 'evict_inactive_executors', new_callable=AsyncMock):
                                 with patch.object(service, 'run_scheduled_agents', new_callable=AsyncMock):
                                     with patch.object(service, 'check_due_reminders', new_callable=AsyncMock):
-                                        mock_task1 = MagicMock()
-                                        mock_task2 = MagicMock()
-                                        mock_task3 = MagicMock()
-                                        mock_task4 = MagicMock()
-                                        mock_task5 = MagicMock()
-                                        mock_create_task.side_effect = [
-                                            mock_task1, mock_task2, mock_task3, mock_task4, mock_task5
-                                        ]
+                                        with patch.object(service, '_bootstrap_briefing_jobs', new_callable=AsyncMock):
+                                            mock_task1 = MagicMock()
+                                            mock_task2 = MagicMock()
+                                            mock_task3 = MagicMock()
+                                            mock_task4 = MagicMock()
+                                            mock_task5 = MagicMock()
+                                            mock_create_task.side_effect = [
+                                                mock_task1, mock_task2, mock_task3, mock_task4, mock_task5
+                                            ]
 
-                                        service.start_background_tasks()
+                                            await service.start_background_tasks()
 
-                                        assert mock_create_task.call_count == 5
-                                        assert service.deactivate_task == mock_task1
-                                        assert service.evict_task == mock_task2
-                                        assert service.scheduled_agents_task == mock_task3
-                                        assert service.reminder_task == mock_task4
-                                        assert service.job_runner_task == mock_task5
+                                            assert mock_create_task.call_count == 5
+                                            assert service.deactivate_task == mock_task1
+                                            assert service.evict_task == mock_task2
+                                            assert service.scheduled_agents_task == mock_task3
+                                            assert service.reminder_task == mock_task4
+                                            assert service.job_runner_task == mock_task5
 
 
 class TestCheckDueReminders:

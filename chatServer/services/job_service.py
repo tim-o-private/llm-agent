@@ -182,6 +182,31 @@ class JobService:
                         (error, job_id),
                     )
 
+    async def fail_by_type(self, user_id: str, job_type: str, error: str) -> int:
+        """Fail all pending jobs for a user+type. Returns count of affected rows.
+
+        Used when user disables briefings — cancels all pending briefing jobs.
+        Sets should_retry=False (status='failed', not requeued).
+        """
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    """
+                    UPDATE jobs
+                    SET status = 'failed',
+                        error = %s,
+                        completed_at = NOW(),
+                        updated_at = NOW()
+                    WHERE user_id = %s
+                      AND job_type = %s
+                      AND status = 'pending'
+                    RETURNING id
+                    """,
+                    (error, user_id, job_type),
+                )
+                rows = await cur.fetchall()
+                return len(rows)
+
     async def expire_stale(self) -> int:
         """Call expire_stale_jobs() DB function, return count."""
         async with self.pool.connection() as conn:

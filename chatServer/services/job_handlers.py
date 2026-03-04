@@ -84,3 +84,80 @@ async def handle_reminder_delivery(job: dict) -> dict:
     await reminder_service.handle_recurrence(reminder)
 
     return {"delivered": True, "reminder_id": reminder_id}
+
+
+async def handle_morning_briefing(job: dict) -> dict:
+    """Generate morning briefing and self-schedule next occurrence.
+
+    Schedule next FIRST, then generate — so generation failure
+    doesn't break the scheduling chain.
+    """
+    from datetime import timedelta
+
+    from ..database.connection import get_database_manager
+    from ..services.briefing_service import BriefingService, compute_next_briefing_time
+    from ..services.job_service import JobService
+
+    user_id = str(job["input"]["user_id"])
+    db_client = await create_system_client()
+    briefing_service = BriefingService(db_client)
+
+    prefs = await briefing_service.get_user_preferences(user_id)
+
+    # 1. Self-schedule next occurrence FIRST
+    if prefs.get("morning_briefing_enabled", True):
+        next_scheduled = compute_next_briefing_time(
+            prefs["timezone"], prefs["morning_briefing_time"], "morning"
+        )
+        db_manager = get_database_manager()
+        job_service = JobService(db_manager.pool)
+        await job_service.create(
+            job_type="morning_briefing",
+            input={"user_id": user_id},
+            user_id=user_id,
+            scheduled_for=next_scheduled,
+            expires_at=next_scheduled + timedelta(hours=4),
+            max_retries=2,
+        )
+
+    # 2. Generate today's briefing
+    result = await briefing_service.generate_morning_briefing(user_id)
+    return result
+
+
+async def handle_evening_briefing(job: dict) -> dict:
+    """Generate evening briefing and self-schedule next occurrence.
+
+    Same pattern as morning: schedule next first, then generate.
+    """
+    from datetime import timedelta
+
+    from ..database.connection import get_database_manager
+    from ..services.briefing_service import BriefingService, compute_next_briefing_time
+    from ..services.job_service import JobService
+
+    user_id = str(job["input"]["user_id"])
+    db_client = await create_system_client()
+    briefing_service = BriefingService(db_client)
+
+    prefs = await briefing_service.get_user_preferences(user_id)
+
+    # 1. Self-schedule next occurrence FIRST
+    if prefs.get("evening_briefing_enabled", False):
+        next_scheduled = compute_next_briefing_time(
+            prefs["timezone"], prefs["evening_briefing_time"], "evening"
+        )
+        db_manager = get_database_manager()
+        job_service = JobService(db_manager.pool)
+        await job_service.create(
+            job_type="evening_briefing",
+            input={"user_id": user_id},
+            user_id=user_id,
+            scheduled_for=next_scheduled,
+            expires_at=next_scheduled + timedelta(hours=4),
+            max_retries=2,
+        )
+
+    # 2. Generate today's briefing
+    result = await briefing_service.generate_evening_briefing(user_id)
+    return result

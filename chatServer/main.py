@@ -147,7 +147,7 @@ async def lifespan(app: FastAPI):
     # Initialize and start background tasks
     background_service = get_background_task_service()
     background_service.set_agent_executor_cache(AGENT_EXECUTOR_CACHE)
-    background_service.start_background_tasks()
+    await background_service.start_background_tasks()
 
     # Initialize Telegram bot (optional — only if TELEGRAM_BOT_TOKEN is set)
     telegram_bot = None
