@@ -302,6 +302,10 @@ async def update_prompt_customization(
         supabase_client=db
     )
 
+@app.get("/health")
+async def health_check():
+    return {"status": "ok", "service": "clarity-chatserver"}
+
 @app.get("/")
 async def root():
     print("Root endpoint accessed.")

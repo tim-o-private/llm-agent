@@ -89,6 +89,12 @@ Flagging for cleanup — not deleting."
 3. Do NOT retry the same action more than twice
 4. Do NOT ask the user directly — go through the lead
 
+## Context Management
+
+- If your conversation exceeds 40 turns or you notice degraded recall, run `/compact` before continuing.
+- Before compacting, commit any in-progress work so context isn't lost.
+- After compacting, re-read your current task contract and the last few messages from teammates.
+
 ## Peer Communication
 
 You can message teammates directly for cross-domain coordination. Use `SendMessage` with `recipient` set to their name.

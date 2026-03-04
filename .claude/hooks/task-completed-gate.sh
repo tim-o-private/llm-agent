@@ -63,7 +63,7 @@ if [ -n "$PYTHON_CHANGED" ]; then
   if [ -n "$PYTEST_CMD" ]; then
     # Determine test directories from changed files
     TEST_DIRS=$(echo "$PYTHON_CHANGED" | grep -oP '^[^/]+' | sort -u | tr '\n' ' ')
-    PYTEST_OUTPUT=$(timeout 120 $PYTEST_CMD -x -q --tb=short --rootdir="$GIT_DIR" 2>&1) || {
+    PYTEST_OUTPUT=$(timeout 120 $PYTEST_CMD -x -q --tb=short --rootdir="$GIT_DIR" $TEST_DIRS 2>&1) || {
       PYTEST_EXIT=$?
       if [ $PYTEST_EXIT -eq 5 ]; then
         # Exit code 5 = no tests collected — OK
@@ -128,14 +128,21 @@ fi
 # Check 6: pnpm lint if frontend files changed
 # ============================================================
 if [ -n "$WEBAPP_CHANGED" ]; then
-  if [ -f "$GIT_DIR/webApp/package.json" ] && command -v pnpm &>/dev/null; then
-    LINT_OUTPUT=$(cd "$GIT_DIR/webApp" && timeout 120 pnpm lint 2>&1) || {
+  # Scope ESLint to changed frontend files only (avoid linting the entire project)
+  CHANGED_TS_FILES=""
+  while IFS= read -r f; do
+    RELATIVE="${f#webApp/}"
+    [ -f "$GIT_DIR/webApp/$RELATIVE" ] && CHANGED_TS_FILES="$CHANGED_TS_FILES $RELATIVE"
+  done <<< "$(echo "$WEBAPP_CHANGED" | grep -E '\.(ts|tsx|js|jsx)$')"
+
+  if [ -n "$CHANGED_TS_FILES" ] && [ -f "$GIT_DIR/webApp/package.json" ]; then
+    LINT_OUTPUT=$(cd "$GIT_DIR/webApp" && timeout 120 npx eslint $CHANGED_TS_FILES 2>&1) || {
       LINT_EXIT=$?
       if [ $LINT_EXIT -eq 124 ]; then
-        ERRORS="${ERRORS}BLOCKED: pnpm lint timed out after 120s.\n"
+        ERRORS="${ERRORS}BLOCKED: eslint timed out after 120s.\n"
       else
         TRUNCATED=$(echo "$LINT_OUTPUT" | tail -20)
-        ERRORS="${ERRORS}BLOCKED: pnpm lint failed. Fix lint errors before completing.\n${TRUNCATED}\n"
+        ERRORS="${ERRORS}BLOCKED: eslint failed. Fix lint errors before completing.\n${TRUNCATED}\n"
       fi
     }
   fi

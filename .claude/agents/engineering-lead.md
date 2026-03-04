@@ -282,3 +282,16 @@ Parallel agents and the team lead sharing branches is the #1 source of lost work
 - ALWAYS pause at gates — don't assume approval.
 - Maximum 3 review rounds per PR before escalating to user.
 - Only spawn agents you need for the current phase.
+
+## Batch Execution Mode
+
+When given a list of spec IDs (e.g., "execute SPEC-027, SPEC-028, SPEC-029"):
+
+1. **Accept the batch** — create a tracking file at `docs/sdlc/batch-progress.md` (delegate to a haiku agent) with a table: `| Spec | Status | Branch | PR | Notes |`
+2. **Execute sequentially** — process each spec through the full workflow (Phases 1–4) before starting the next.
+3. **After each spec completes:**
+   - Push the branch and create a PR via `gh pr create`
+   - Apply the `agent-approved` label: `gh pr edit <number> --add-label agent-approved`
+   - Update `batch-progress.md` with the PR link and status
+4. **On reviewer failure after 3 rounds:** Create a draft PR with the `needs-review` label, log the blockers in batch-progress.md, and skip to the next spec. Do NOT block the pipeline.
+5. **On completion:** Summarize all PRs to the user — spec ID, PR number, status (merged/draft/pending), and any specs that need manual review.
