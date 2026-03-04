@@ -71,8 +71,8 @@ class TestSearchCalendarTool:
         ]
 
         with patch.object(CalendarToolProvider, "get_all_providers", new_callable=AsyncMock, return_value=[provider]):
-            with patch("chatServer.tools.calendar_tools.CalendarService") as MockSvc:
-                MockSvc.return_value.list_events.return_value = events
+            with patch("chatServer.tools.calendar_tools._get_calendar_service") as MockSvc:
+                MockSvc.return_value.return_value.list_events.return_value = events
                 result = await search_tool._arun()
 
         assert "[user@test.com]" in result
@@ -97,8 +97,8 @@ class TestSearchCalendarTool:
         events2 = [_make_event("evt2", "Dentist")]
 
         with patch.object(CalendarToolProvider, "get_all_providers", new_callable=AsyncMock, return_value=[provider1, provider2]):  # noqa: E501
-            with patch("chatServer.tools.calendar_tools.CalendarService") as MockSvc:
-                MockSvc.return_value.list_events.side_effect = [events1, events2]
+            with patch("chatServer.tools.calendar_tools._get_calendar_service") as MockSvc:
+                MockSvc.return_value.return_value.list_events.side_effect = [events1, events2]
                 result = await search_tool._arun()
 
         assert "work@test.com" in result
@@ -113,8 +113,8 @@ class TestSearchCalendarTool:
         events = [_make_event("evt1", "Work Meeting")]
 
         with patch.object(CalendarToolProvider, "get_provider_for_account", new_callable=AsyncMock, return_value=provider):  # noqa: E501
-            with patch("chatServer.tools.calendar_tools.CalendarService") as MockSvc:
-                MockSvc.return_value.list_events.return_value = events
+            with patch("chatServer.tools.calendar_tools._get_calendar_service") as MockSvc:
+                MockSvc.return_value.return_value.list_events.return_value = events
                 result = await search_tool._arun(account="work@test.com")
 
         assert "work@test.com" in result
@@ -126,8 +126,8 @@ class TestSearchCalendarTool:
         provider = _make_provider("user@test.com")
 
         with patch.object(CalendarToolProvider, "get_all_providers", new_callable=AsyncMock, return_value=[provider]):
-            with patch("chatServer.tools.calendar_tools.CalendarService") as MockSvc:
-                MockSvc.return_value.list_events.return_value = []
+            with patch("chatServer.tools.calendar_tools._get_calendar_service") as MockSvc:
+                MockSvc.return_value.return_value.list_events.return_value = []
                 result = await search_tool._arun()
 
         assert "No events found" in result
@@ -171,8 +171,8 @@ class TestGetCalendarEventTool:
         }
 
         with patch.object(CalendarToolProvider, "get_provider_for_account", new_callable=AsyncMock, return_value=provider):  # noqa: E501
-            with patch("chatServer.tools.calendar_tools.CalendarService") as MockSvc:
-                MockSvc.return_value.get_event.return_value = event
+            with patch("chatServer.tools.calendar_tools._get_calendar_service") as MockSvc:
+                MockSvc.return_value.return_value.get_event.return_value = event
                 result = await get_event_tool._arun(event_id="evt1", account="user@test.com")
 
         assert "Team Standup" in result

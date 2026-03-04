@@ -15,9 +15,13 @@ from google.oauth2.credentials import Credentials
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
-from chatServer.services.calendar_service import CalendarService
-
 logger = logging.getLogger(__name__)
+
+
+def _get_calendar_service():
+    """Lazy import to avoid circular dependency via chatServer.services.__init__."""
+    from chatServer.services.calendar_service import CalendarService
+    return CalendarService
 
 
 class CalendarToolProvider:
@@ -417,7 +421,7 @@ class SearchCalendarTool(BaseCalendarTool):
     ) -> list[dict]:
         """Execute search on a single account."""
         credentials = await provider.get_credentials()
-        svc = CalendarService(credentials)
+        svc = _get_calendar_service()(credentials)
         return svc.list_events(
             time_min=time_min,
             time_max=time_max,
@@ -502,7 +506,7 @@ class GetCalendarEventTool(BaseCalendarTool):
                 for provider in providers:
                     try:
                         credentials = await provider.get_credentials()
-                        svc = CalendarService(credentials)
+                        svc = _get_calendar_service()(credentials)
                         event = svc.get_event(event_id)
                         return self._format_event_detail(event, provider.account_email)
                     except Exception:
@@ -510,7 +514,7 @@ class GetCalendarEventTool(BaseCalendarTool):
                 return f"Event {event_id} not found in any connected calendar account."
 
             credentials = await provider.get_credentials()
-            svc = CalendarService(credentials)
+            svc = _get_calendar_service()(credentials)
             event = svc.get_event(event_id)
             return self._format_event_detail(event, account)
 
