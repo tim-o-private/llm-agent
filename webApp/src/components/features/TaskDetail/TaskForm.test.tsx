@@ -76,7 +76,6 @@ describe('TaskForm', () => {
         saveError: null,
         handleSave: mockHandleSave,
         handleCancel: mockHandleCancel,
-        isDirty: false,
       },
     };
 
@@ -179,7 +178,6 @@ describe('TaskForm', () => {
   test('exposes correct canSave state via formState', async () => {
     mockRadixFormReturn.isDirty = true;
     mockRadixFormReturn.formState.canSave = true;
-    mockRadixFormReturn.formState.isDirty = true;
 
     renderTestForm();
 

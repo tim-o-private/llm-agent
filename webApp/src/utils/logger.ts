@@ -158,7 +158,7 @@ export const getLogLevel = () => Logger.getLevel();
 
 // Make logger available globally for debugging
 if (typeof window !== 'undefined') {
-  (window as Record<string, unknown>).__logger = {
+  (window as unknown as Record<string, unknown>).__logger = {
     setLevel: setLogLevel,
     getLevel: getLogLevel,
     instance: logger,

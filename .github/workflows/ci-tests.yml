@@ -36,8 +36,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: TypeScript type check
+        run: pnpm --filter clarity-frontend exec tsc --noEmit
+
       - name: Run Vitest tests
-        run: pnpm test --verbose # Assuming 'pnpm test' executes 'vitest run' or similar CI-friendly command
+        run: pnpm test --verbose
 
       # Optional: If you want to generate and upload coverage reports
       # - name: Generate coverage report
