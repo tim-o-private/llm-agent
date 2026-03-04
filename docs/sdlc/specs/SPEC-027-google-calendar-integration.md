@@ -341,8 +341,10 @@ FROM agent_configurations ac WHERE ac.agent_name = 'assistant';
 - [ ] Ask agent: "What's on my calendar today?" with `account` param — verify single-account results
 - [ ] Ask agent: "Tell me about my 3pm meeting" — verify it fetches event details
 - [ ] Start new session — verify session_open mentions calendar context from all connected accounts
-- [ ] Disconnect one Calendar account — verify other remains, agent handles partial connection
-- [ ] Disconnect all — verify agent returns helpful connect message
+- [ ] Disconnect one Calendar account — verify UI updates (other account remains, badge count decrements)
+- [ ] Disconnect all — verify UI shows "Not Connected" state
+- [ ] After disconnect, start new session — verify session_open no longer includes calendar context
+- [ ] After disconnect, ask agent about calendar — verify tool returns "Calendar not connected" message
 
 ## Edge Cases
 

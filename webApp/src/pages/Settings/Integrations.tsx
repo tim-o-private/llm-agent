@@ -1,5 +1,6 @@
 import React from 'react';
 import { Card } from '../../components/ui/Card';
+import { CalendarConnection } from '../../components/features/CalendarConnection/CalendarConnection';
 import { GmailConnection } from '../../components/features/GmailConnection/GmailConnection';
 import { TelegramLink } from '../../components/features/TelegramLink';
 
@@ -22,17 +23,12 @@ export const IntegrationsPage: React.FC = () => {
         {/* Telegram Integration */}
         <TelegramLink />
 
-        {/* Future integrations can be added here */}
-        <Card className="p-6 opacity-50">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-8 h-8 bg-gray-200 rounded flex items-center justify-center">📅</div>
-            <h3 className="text-lg font-semibold text-gray-500">Google Calendar</h3>
-            <span className="text-sm bg-gray-100 text-gray-600 px-2 py-1 rounded">Coming Soon</span>
-          </div>
-          <p className="text-gray-500 text-sm">
-            Connect your Google Calendar to enable scheduling and event management.
-          </p>
-        </Card>
+        {/* Google Calendar Integration */}
+        <CalendarConnection
+          onConnectionChange={(isConnected) => {
+            console.log('Calendar connection status:', isConnected);
+          }}
+        />
 
         <Card className="p-6 opacity-50">
           <div className="flex items-center gap-3 mb-3">

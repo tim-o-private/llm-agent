@@ -1,4 +1,4 @@
-"""Router for Gmail OAuth flows and token storage."""
+"""Router for OAuth flows (Gmail, Google Calendar) and token storage."""
 
 import logging
 import os
@@ -113,3 +113,53 @@ async def store_gmail_tokens(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e),
         )
+
+
+# --- Google Calendar OAuth endpoints ---
+
+
+@router.get("/calendar/connect")
+async def initiate_calendar_connect(
+    user_id: str = Depends(get_current_user),
+    oauth_service: OAuthService = Depends(_get_oauth_service),
+):
+    """Initiate OAuth flow for connecting a Google Calendar account.
+
+    Returns the Google OAuth consent URL with calendar.readonly scope.
+    """
+    try:
+        auth_url = await oauth_service.create_calendar_auth_url(user_id)
+        return JSONResponse(content={"auth_url": auth_url})
+    except RuntimeError as e:
+        logger.error(f"Failed to initiate Calendar OAuth: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+
+@router.get("/calendar/callback")
+async def calendar_oauth_callback(
+    code: str = Query(...),
+    state: str = Query(...),
+    oauth_service: OAuthService = Depends(_get_oauth_service),
+):
+    """Handle OAuth callback from Google for Calendar connection."""
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
+    result = await oauth_service.handle_calendar_callback(code, state)
+
+    if result.status == "success":
+        redirect_url = (
+            f"{frontend_url}/auth/callback"
+            f"?service=google_calendar&source=standalone&status=success"
+        )
+    else:
+        error_msg = quote(result.error_message or "Unknown error")
+        redirect_url = (
+            f"{frontend_url}/auth/callback"
+            f"?service=google_calendar&source=standalone&status=error"
+            f"&error_message={error_msg}"
+        )
+
+    return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)

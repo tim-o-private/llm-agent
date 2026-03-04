@@ -237,3 +237,57 @@ export function useDisconnectConnection() {
     },
   });
 }
+
+/**
+ * Hook to list all Google Calendar connections for the current user.
+ * Filters list_user_connections to service_name='google_calendar'.
+ */
+export function useCalendarConnections() {
+  return useQuery<ExternalConnection[], Error>({
+    queryKey: [EXTERNAL_CONNECTIONS_QUERY_KEY, 'google_calendar', 'all'],
+    queryFn: async () => {
+      const session = await getSession();
+
+      const { data, error } = await supabase.rpc('list_user_connections', {
+        p_user_id: session.user.id,
+      });
+
+      if (error) throw error;
+
+      const response = data as ListConnectionsResponse;
+      return (response.connections || []).filter(
+        (c) => c.service_name === 'google_calendar' && c.is_active
+      );
+    },
+    staleTime: 30000,
+  });
+}
+
+/**
+ * Hook to disconnect a specific Google Calendar connection by ID.
+ */
+export function useDisconnectCalendarConnection() {
+  const queryClient = useQueryClient();
+
+  return useMutation<unknown, Error, string>({
+    mutationFn: async (connectionId) => {
+      const session = await getSession();
+
+      const { data, error } = await supabase.rpc('revoke_oauth_tokens', {
+        p_user_id: session.user.id,
+        p_service_name: 'google_calendar',
+        p_connection_id: connectionId,
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('Calendar account disconnected');
+      queryClient.invalidateQueries({ queryKey: [EXTERNAL_CONNECTIONS_QUERY_KEY] });
+    },
+    onError: (error) => {
+      toast.error('Failed to disconnect calendar account', error.message);
+    },
+  });
+}

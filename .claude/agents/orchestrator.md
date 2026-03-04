@@ -171,6 +171,11 @@ WHILE tasks remain incomplete:
 
 **UAT (MANDATORY)** — before reporting the PR as ready:
 
+*Pre-UAT checklist:*
+- If the spec includes a database migration: remind the user to run `supabase migration up --linked` (migrations cannot be run by agents)
+- If new env vars are required: list them with example values so the user can set them before testing
+- Ensure `pnpm dev` starts cleanly (no import errors, no crash on startup)
+
 *Playwright UI tests (if UX contract exists):* Run the scripts written by the UX designer. All must pass (green):
 ```bash
 python tests/uat/playwright/test_spec_NNN_feature.py
