@@ -119,6 +119,9 @@ Per A1 (thin routers, fat services):
 7. **PostgREST upsert requires real UNIQUE constraint** — Partial unique indexes don't work with Supabase `ON CONFLICT`. Use select-then-insert if needed.
 8. **Executor cache survives new sessions** — The agent executor is cached per `(user_id, agent_name)`, not per session. After changing tool rows in the DB, a new session ID won't pick up the changes. **Restart chatServer** to clear the executor cache after any tool DB changes.
 9. **Mocking a method entirely hides its internals** — If a test mocks `_digest_single` entirely, the query-building logic inside it is never exercised. When you mock a whole method, ask: "is the logic inside this method tested anywhere?" If not, add a direct test of the internals (e.g., call `_digest_single` with a mock search tool and assert the query string).
+10. **Circular imports via `chatServer/services/__init__.py`** — `__init__.py` re-exports all services. If a tool file imports a service at module level, and that service transitively imports `__init__.py`, you get a circular import that crashes on startup. **Fix:** Use lazy imports inside `_arun()` or a helper function, never at module top level. See `calendar_tools.py` `_get_calendar_service()` for the pattern.
+11. **Tool registration triplet must be atomic** — Adding a new tool requires updating three files together: `TOOL_REGISTRY` in `src/core/agent_loader_db.py`, `TOOL_APPROVAL_DEFAULTS` in `chatServer/security/approval_tiers.py`, and `CANONICAL_TOOL_NAMES` in `tests/chatServer/services/test_tool_registry_validator.py`. Missing any one causes CI failure.
+12. **`agent_tool_type` enum no longer exists** — Removed in SPEC-019. `tools.type` is now `TEXT`. Do NOT use `ALTER TYPE agent_tool_type ADD VALUE` in migrations — it will fail.
 
 ## Detailed Reference
 
