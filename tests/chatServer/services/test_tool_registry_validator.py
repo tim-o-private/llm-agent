@@ -26,6 +26,7 @@ CANONICAL_TOOL_NAMES = {
     "get_entities", "search_entities", "get_context",
     "search_web",
     "search_calendar", "get_calendar_event",
+    "manage_briefing_preferences",
 }
 
 
