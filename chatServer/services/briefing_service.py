@@ -8,7 +8,6 @@ import asyncio
 import logging
 import re
 from datetime import date, datetime, timedelta, timezone
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -252,7 +251,6 @@ class BriefingService:
         from chatServer.services.briefing_prompts import BRIEFING_SECTIONS_DEFAULT
 
         effective = {**BRIEFING_SECTIONS_DEFAULT, **sections}
-        tasks = []
 
         async def _get_calendar():
             if not effective.get("calendar"):
