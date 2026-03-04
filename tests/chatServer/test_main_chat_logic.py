@@ -110,6 +110,7 @@ class TestChatEndpoint(unittest.IsolatedAsyncioTestCase):
 
         # Mock background task service
         mock_bg_service = MagicMock()
+        mock_bg_service.start_background_tasks = AsyncMock()
         mock_bg_service.stop_background_tasks = AsyncMock()
         p5 = patch('chatServer.services.background_tasks.get_background_task_service', return_value=mock_bg_service)
 

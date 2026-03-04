@@ -65,7 +65,7 @@ class TestBackgroundTaskService(unittest.TestCase):
                                                 mock_task1, mock_task2, mock_task3, mock_task4, mock_task5
                                             ]
 
-                                            asyncio.get_event_loop().run_until_complete(
+                                            asyncio.run(
                                                 self.service.start_background_tasks()
                                             )
 

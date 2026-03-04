@@ -182,7 +182,7 @@ def _mock_background_service():
     from unittest.mock import AsyncMock, MagicMock
     service = MagicMock()
     service.stop_background_tasks = AsyncMock()
-    service.start_background_tasks = MagicMock()
+    service.start_background_tasks = AsyncMock()
     service.set_agent_executor_cache = MagicMock()
     return service
 

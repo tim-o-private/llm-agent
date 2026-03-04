@@ -221,7 +221,7 @@ def _mock_background_service():
     """Create a mock BackgroundTaskService."""
     service = MagicMock()
     service.stop_background_tasks = AsyncMock()
-    service.start_background_tasks = MagicMock()
+    service.start_background_tasks = AsyncMock()
     service.set_agent_executor_cache = MagicMock()
     return service
 
