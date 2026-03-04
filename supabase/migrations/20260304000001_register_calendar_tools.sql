@@ -1,11 +1,8 @@
 -- SPEC-027: Register calendar tools
 -- Add SearchCalendarTool and GetCalendarEventTool types, register in tools table, link to assistant agent
 
--- 1. Add enum values
-ALTER TYPE agent_tool_type ADD VALUE IF NOT EXISTS 'SearchCalendarTool';
-ALTER TYPE agent_tool_type ADD VALUE IF NOT EXISTS 'GetCalendarEventTool';
-
--- 2. Register search_calendar in tools table (idempotent)
+-- 1. Register search_calendar in tools table (idempotent)
+-- Note: agent_tool_type enum was removed in SPEC-019 normalization; type is TEXT now.
 INSERT INTO tools (name, type, description, config, is_active)
 VALUES (
     'search_calendar',
