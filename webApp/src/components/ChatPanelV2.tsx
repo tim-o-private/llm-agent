@@ -88,7 +88,7 @@ export const ChatPanelV2: React.FC<ChatPanelV2Props> = ({ agentId: agentIdProp }
           content: [{ type: 'text', text: msg.text || '' }],
           id: msg.id,
           createdAt: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
-          metadata: { custom: { sender: msg.sender, ...msg } },
+          metadata: { custom: { ...msg } },
         };
       }
       return {
@@ -353,7 +353,7 @@ export const ChatPanelV2: React.FC<ChatPanelV2Props> = ({ agentId: agentIdProp }
 // wraps each item in automatically.
 const TimelineSystemMessage: React.FC = () => {
   const message = useMessage((m) => m);
-  const custom = message.metadata?.custom as ChatMessage | undefined;
+  const custom = message.metadata?.custom as unknown as ChatMessage | undefined;
   if (!custom) return null;
   if (custom.sender === 'approval') return <ApprovalInlineMessage message={custom} />;
   if (custom.sender === 'notification') return <NotificationInlineMessage message={custom} />;

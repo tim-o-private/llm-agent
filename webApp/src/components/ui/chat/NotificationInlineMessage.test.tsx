@@ -18,12 +18,12 @@ beforeEach(() => {
   vi.mocked(useMarkNotificationRead).mockReturnValue({
     mutate: mockMarkReadMutate,
     isPending: false,
-  } as ReturnType<typeof useMarkNotificationRead>);
+  } as unknown as ReturnType<typeof useMarkNotificationRead>);
 
   vi.mocked(useSubmitNotificationFeedback).mockReturnValue({
     mutate: mockFeedbackMutate,
     isPending: false,
-  } as ReturnType<typeof useSubmitNotificationFeedback>);
+  } as unknown as ReturnType<typeof useSubmitNotificationFeedback>);
 });
 
 const baseMessage: ChatMessage = {

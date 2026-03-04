@@ -35,7 +35,7 @@ const chatMessages: ChatMessage[] = [
 describe('useChatTimeline', () => {
   it('returns only chat messages when no notifications', () => {
     mockUseChatStore.mockReturnValue(chatMessages as unknown as ReturnType<typeof useChatStore>);
-    mockUseNotifications.mockReturnValue({ data: [] } as ReturnType<typeof useNotifications>);
+    mockUseNotifications.mockReturnValue({ data: [] } as unknown as ReturnType<typeof useNotifications>);
 
     const { result } = renderHook(() => useChatTimeline());
     expect(result.current).toHaveLength(2);
@@ -59,7 +59,7 @@ describe('useChatTimeline', () => {
           requires_approval: false,
         },
       ],
-    } as ReturnType<typeof useNotifications>);
+    } as unknown as ReturnType<typeof useNotifications>);
 
     const { result } = renderHook(() => useChatTimeline());
     expect(result.current).toHaveLength(3);
@@ -85,7 +85,7 @@ describe('useChatTimeline', () => {
           requires_approval: false,
         },
       ],
-    } as ReturnType<typeof useNotifications>);
+    } as unknown as ReturnType<typeof useNotifications>);
 
     const { result } = renderHook(() => useChatTimeline());
     expect(result.current).toHaveLength(2);
@@ -109,7 +109,7 @@ describe('useChatTimeline', () => {
           pending_action_id: 'act-1',
         },
       ],
-    } as ReturnType<typeof useNotifications>);
+    } as unknown as ReturnType<typeof useNotifications>);
 
     const { result } = renderHook(() => useChatTimeline());
     expect(result.current).toHaveLength(1);
@@ -136,7 +136,7 @@ describe('useChatTimeline', () => {
           pending_action_id: 'act-1',
         },
       ],
-    } as ReturnType<typeof useNotifications>);
+    } as unknown as ReturnType<typeof useNotifications>);
 
     const { result } = renderHook(() => useChatTimeline());
     expect(result.current).toHaveLength(1);
@@ -159,7 +159,7 @@ describe('useChatTimeline', () => {
           requires_approval: false,
         },
       ],
-    } as ReturnType<typeof useNotifications>);
+    } as unknown as ReturnType<typeof useNotifications>);
 
     const { result } = renderHook(() => useChatTimeline());
     expect(result.current).toHaveLength(0);
@@ -184,7 +184,7 @@ describe('useChatTimeline', () => {
           requires_approval: false,
         },
       ],
-    } as ReturnType<typeof useNotifications>);
+    } as unknown as ReturnType<typeof useNotifications>);
 
     const { result } = renderHook(() => useChatTimeline());
     expect(result.current[0].id).toBe('msg-early');
