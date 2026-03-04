@@ -201,6 +201,7 @@ When your code is committed and pushed:
 4. Update task: `TaskUpdate` with description prepended with `[REVIEW REQUESTED]`.
 5. Message the reviewer (or lead): "Task [id] ready for review. Branch: [branch]. Commits: [summary]."
 
+
 ## Before Declaring Done
 
 Only after the reviewer sends a PASS verdict:
