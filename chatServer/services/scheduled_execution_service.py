@@ -149,6 +149,53 @@ class ScheduledExecutionService:
                 schedule_type == "heartbeat" and output.strip().startswith("HEARTBEAT_OK")
             )
 
+            # 7b. Defer non-OK heartbeat findings when briefings are enabled
+            if schedule_type == "heartbeat" and not is_heartbeat_ok:
+                try:
+                    from chatServer.services.briefing_service import BriefingService
+
+                    briefing_svc = BriefingService(supabase_client)
+                    prefs = await briefing_svc.get_user_preferences(user_id)
+
+                    if prefs.get("morning_briefing_enabled"):
+                        # Defer to next briefing instead of notifying immediately
+                        await supabase_client.table("deferred_observations").insert({
+                            "user_id": user_id,
+                            "content": output,
+                            "source": "heartbeat",
+                        }).execute()
+                        logger.info(f"Deferred heartbeat finding for {user_id} to next briefing")
+                        # Mark session inactive and return early
+                        await supabase_client.table("chat_sessions").update(
+                            {"is_active": False}
+                        ).eq("session_id", session_id).execute()
+
+                        # Still store the execution result for audit
+                        duration_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)  # noqa: E501
+                        pending_count = await pending_actions_service.get_pending_count(user_id)
+                        await self._store_result(
+                            supabase_client=supabase_client,
+                            user_id=user_id,
+                            schedule_id=schedule_id,
+                            agent_name=agent_name,
+                            prompt=prompt,
+                            result_content=output,
+                            status="deferred",
+                            pending_actions_created=pending_count,
+                            duration_ms=duration_ms,
+                        )
+
+                        return {
+                            "success": True,
+                            "output": output,
+                            "deferred": True,
+                            "pending_actions_created": pending_count,
+                            "duration_ms": duration_ms,
+                        }
+                except Exception as e:
+                    logger.warning(f"Failed to check briefing deferral, delivering immediately: {e}")
+                # Fall through to normal notification if briefings disabled or check failed
+
             # 8. Count pending actions created during this run
             pending_count = await pending_actions_service.get_pending_count(user_id)
 

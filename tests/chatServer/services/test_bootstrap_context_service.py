@@ -60,9 +60,13 @@ class TestBootstrapContextService:
         async def fake_email(user_id):
             return "1 account(s) connected: alice@example.com"
 
+        async def fake_briefing(user_id):
+            return ""
+
         service._get_tasks_summary = fake_tasks
         service._get_reminders_summary = fake_reminders
         service._get_email_summary = fake_email
+        service._check_briefing_setup = fake_briefing
 
         ctx = await service.gather("user-123")
 
@@ -83,9 +87,13 @@ class TestBootstrapContextService:
         async def fake_email(user_id):
             return "No email connected."
 
+        async def fake_briefing(user_id):
+            return ""
+
         service._get_tasks_summary = fail_tasks
         service._get_reminders_summary = fake_reminders
         service._get_email_summary = fake_email
+        service._check_briefing_setup = fake_briefing
 
         ctx = await service.gather("user-123")
 
@@ -100,9 +108,13 @@ class TestBootstrapContextService:
         async def fail(user_id):
             raise Exception("Connection lost")
 
+        async def fake_briefing(user_id):
+            return ""
+
         service._get_tasks_summary = fail
         service._get_reminders_summary = fail
         service._get_email_summary = fail
+        service._check_briefing_setup = fake_briefing
 
         ctx = await service.gather("user-123")
 
@@ -183,3 +195,37 @@ class TestBootstrapContextService:
         assert "2 account(s)" in result
         assert "alice@example.com" in result
         assert "bob@example.com" in result
+
+    async def test_ac_37_briefing_discovery_no_row(self):
+        """AC-37: User without preferences gets briefing setup note."""
+        resp = MagicMock()
+        resp.data = []
+        mock_db = MagicMock()
+        chain = mock_db.table.return_value.select.return_value.eq.return_value
+        chain.limit.return_value.execute = AsyncMock(return_value=resp)
+
+        service = BootstrapContextService(mock_db)
+        result = await service._check_briefing_setup("user-123")
+        assert "briefings" in result.lower()
+        assert "set this up" in result
+
+    async def test_ac_37_briefing_discovery_has_row(self):
+        """AC-37: User with preferences gets no note."""
+        resp = MagicMock()
+        resp.data = [{"id": "pref-1"}]
+        mock_db = MagicMock()
+        chain = mock_db.table.return_value.select.return_value.eq.return_value
+        chain.limit.return_value.execute = AsyncMock(return_value=resp)
+
+        service = BootstrapContextService(mock_db)
+        result = await service._check_briefing_setup("user-123")
+        assert result == ""
+
+    async def test_ac_37_briefing_note_in_render(self):
+        """AC-37: Briefing note appears in rendered output."""
+        ctx = BootstrapContext(
+            briefing_note="User hasn't configured morning briefings yet — you can offer to set this up."
+        )
+        rendered = ctx.render()
+        assert "Briefing:" in rendered
+        assert "briefings" in rendered

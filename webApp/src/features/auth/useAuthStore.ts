@@ -9,12 +9,13 @@ export interface AuthState {
   error: string | null;
   setUser: (user: User | null) => void;
   setSession: (session: Session | null) => void;
+  setLoading: (loading: boolean) => void;
   signInWithProvider: (provider: 'google' | 'apple', includeGmail?: boolean) => Promise<void>;
   signOut: () => Promise<void>;
   getToken: () => string | null;
 }
 
-const redirectTo = window.location.origin;
+const redirectTo = `${window.location.origin}/auth/callback`;
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
@@ -22,6 +23,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   loading: false,
   error: null,
   setUser: (user) => set({ user }),
+  setLoading: (loading) => set({ loading }),
   setSession: (session) => {
     set({ session });
     if (session) {

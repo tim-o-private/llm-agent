@@ -10,7 +10,13 @@ from croniter import croniter
 from ..config.constants import SCHEDULED_TASK_INTERVAL_SECONDS, SESSION_INSTANCE_TTL_SECONDS
 from ..database.connection import get_database_manager
 from ..database.supabase_client import create_system_client
-from .job_handlers import handle_agent_invocation, handle_email_processing, handle_reminder_delivery
+from .job_handlers import (
+    handle_agent_invocation,
+    handle_email_processing,
+    handle_evening_briefing,
+    handle_morning_briefing,
+    handle_reminder_delivery,
+)
 from .job_runner_service import JobRunnerService
 from .job_service import JobService
 
@@ -285,7 +291,7 @@ class BackgroundTaskService:
             except Exception as e:
                 logger.error(f"Error in check_due_reminders: {e}", exc_info=True)
 
-    def start_background_tasks(self) -> None:
+    async def start_background_tasks(self) -> None:
         """Start all background tasks."""
         db_manager = get_database_manager()
         self._job_service = JobService(db_manager.pool)
@@ -293,6 +299,12 @@ class BackgroundTaskService:
         self._job_runner.register_handler('email_processing', handle_email_processing)
         self._job_runner.register_handler('agent_invocation', handle_agent_invocation)
         self._job_runner.register_handler('reminder_delivery', handle_reminder_delivery)
+        self._job_runner.register_handler('morning_briefing', handle_morning_briefing)
+        self._job_runner.register_handler('evening_briefing', handle_evening_briefing)
+
+        # Bootstrap briefing jobs before starting the runner —
+        # ensures all eligible users have pending briefing jobs
+        await self._bootstrap_briefing_jobs()
 
         self.deactivate_task = asyncio.create_task(self.deactivate_stale_chat_session_instances())
         self.evict_task = asyncio.create_task(self.evict_inactive_executors())
@@ -301,8 +313,89 @@ class BackgroundTaskService:
         self.job_runner_task = asyncio.create_task(self._job_runner.run())
         logger.info(
             "Background tasks for session cleanup, cache eviction, scheduled agents, "
-            "reminders, and job runner started."
+            "reminders, briefings, and job runner started."
         )
+
+    async def _bootstrap_briefing_jobs(self) -> None:
+        """Ensure all users with briefings enabled have pending jobs.
+
+        Catches: first-time deployments, users who enabled briefings while
+        the server was down, and failed self-scheduling chains.
+        """
+        try:
+            from .briefing_service import compute_next_briefing_time
+
+            db_client = await create_system_client()
+
+            # Query all users with any briefings enabled
+            result = await db_client.table("user_preferences").select(
+                "user_id, timezone, morning_briefing_enabled, morning_briefing_time, "
+                "evening_briefing_enabled, evening_briefing_time"
+            ).or_(
+                "morning_briefing_enabled.eq.true,evening_briefing_enabled.eq.true"
+            ).execute()
+
+            if not result.data:
+                logger.info("Briefing bootstrap: no users with briefings enabled")
+                return
+
+            bootstrapped = 0
+            for pref in result.data:
+                user_id = pref["user_id"]
+                for briefing_type in ["morning", "evening"]:
+                    enabled_key = f"{briefing_type}_briefing_enabled"
+                    time_key = f"{briefing_type}_briefing_time"
+                    if not pref.get(enabled_key):
+                        continue
+
+                    job_type = f"{briefing_type}_briefing"
+
+                    # Check if a pending/claimed/running job already exists
+                    existing = await self._check_pending_briefing_job(
+                        user_id, job_type
+                    )
+                    if existing:
+                        continue
+
+                    next_time = compute_next_briefing_time(
+                        pref["timezone"], pref[time_key], briefing_type
+                    )
+                    await self._job_service.create(
+                        job_type=job_type,
+                        input={"user_id": user_id},
+                        user_id=user_id,
+                        scheduled_for=next_time,
+                        expires_at=next_time + timedelta(hours=4),
+                        max_retries=2,
+                    )
+                    bootstrapped += 1
+
+            logger.info(f"Briefing bootstrap: created {bootstrapped} job(s)")
+        except Exception as e:
+            logger.error(f"Briefing bootstrap failed (non-fatal): {e}", exc_info=True)
+
+    async def _check_pending_briefing_job(
+        self, user_id: str, job_type: str
+    ) -> bool:
+        """Check if a pending/claimed/running briefing job exists for this user+type."""
+        try:
+            async with self._job_service.pool.connection() as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute(
+                        """
+                        SELECT 1 FROM jobs
+                        WHERE user_id = %s
+                          AND job_type = %s
+                          AND status IN ('pending', 'claimed', 'running')
+                        LIMIT 1
+                        """,
+                        (user_id, job_type),
+                    )
+                    row = await cur.fetchone()
+                    return row is not None
+        except Exception as e:
+            logger.warning(f"Failed to check pending briefing job: {e}")
+            return False
 
     async def stop_background_tasks(self) -> None:
         """Stop all background tasks gracefully."""

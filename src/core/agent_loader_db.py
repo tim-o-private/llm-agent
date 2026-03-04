@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional, Type
 from pydantic import BaseModel, ConfigDict, Field, create_model
 
 from chatServer.database.connection import get_db_connection
+from chatServer.tools.briefing_tools import ManageBriefingPreferencesTool
 from chatServer.tools.calendar_tools import GetCalendarEventTool, SearchCalendarTool
 from chatServer.tools.gmail_tools import GetGmailTool, SearchGmailTool
 from chatServer.tools.memory_tools import (
@@ -76,6 +77,8 @@ TOOL_REGISTRY: Dict[str, Type] = {
     # Calendar
     "SearchCalendarTool": SearchCalendarTool,
     "GetCalendarEventTool": GetCalendarEventTool,
+    # Briefing preferences
+    "ManageBriefingPreferencesTool": ManageBriefingPreferencesTool,
 }
 
 # Gmail tool class registry for GmailTool type (config.tool_class → class)

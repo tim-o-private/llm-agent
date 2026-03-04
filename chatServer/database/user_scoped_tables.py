@@ -21,4 +21,6 @@ USER_SCOPED_TABLES: set[str] = {
     "user_tool_preferences",
     "chat_sessions",
     "agent_execution_results",
+    "user_preferences",
+    "deferred_observations",
 }

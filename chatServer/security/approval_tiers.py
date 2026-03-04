@@ -79,6 +79,9 @@ TOOL_APPROVAL_DEFAULTS: dict[str, tuple[ApprovalTier, ApprovalTier]] = {
 
     # Web search - read-only, no user data
     "search_web": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+
+    # Briefing preferences
+    "update_briefing_preferences": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
 }
 
 # Default tier for unknown tools (fail-safe)

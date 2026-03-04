@@ -20,6 +20,7 @@ class BootstrapContext:
     reminders_summary: str = "(unavailable)"
     email_summary: str = "(unavailable)"
     calendar_summary: str = "(unavailable)"
+    briefing_note: str = ""
 
     def render(self) -> str:
         """Format as prompt section text."""
@@ -28,6 +29,8 @@ class BootstrapContext:
         lines.append(f"Reminders: {self.reminders_summary}")
         lines.append(f"Email: {self.email_summary}")
         lines.append(f"Calendar: {self.calendar_summary}")
+        if self.briefing_note:
+            lines.append(f"Briefing: {self.briefing_note}")
         return "\n".join(lines)
 
 
@@ -44,20 +47,27 @@ class BootstrapContextService:
 
     async def gather(self, user_id: str) -> BootstrapContext:
         """Gather context from all sources. Never raises."""
-        tasks_result, reminders_result, email_result, calendar_result = await asyncio.gather(
+        tasks_result, reminders_result, email_result, calendar_result, briefing_check = await asyncio.gather(  # noqa: E501
             self._get_tasks_summary(user_id),
             self._get_reminders_summary(user_id),
             self._get_email_summary(user_id),
             self._get_calendar_summary(user_id),
+            self._check_briefing_setup(user_id),
             return_exceptions=True,
         )
 
-        return BootstrapContext(
+        ctx = BootstrapContext(
             tasks_summary=tasks_result if isinstance(tasks_result, str) else "(unavailable)",
-            reminders_summary=reminders_result if isinstance(reminders_result, str) else "(unavailable)",
+            reminders_summary=reminders_result if isinstance(reminders_result, str) else "(unavailable)",  # noqa: E501
             email_summary=email_result if isinstance(email_result, str) else "(unavailable)",
             calendar_summary=calendar_result if isinstance(calendar_result, str) else "(unavailable)",
         )
+
+        # Append first-use discovery note
+        if isinstance(briefing_check, str) and briefing_check:
+            ctx.briefing_note = briefing_check
+
+        return ctx
 
     async def _get_tasks_summary(self, user_id: str) -> str:
         """Count active tasks, find overdue items."""
@@ -196,3 +206,15 @@ class BootstrapContextService:
         except Exception as e:
             logger.warning("Failed to get calendar summary for %s: %s", user_id, e)
             return "(unavailable)"
+
+    async def _check_briefing_setup(self, user_id: str) -> str:
+        """Check if user has configured briefings. Returns note if not."""
+        try:
+            resp = await self.db.table("user_preferences").select("id").eq(
+                "user_id", user_id
+            ).limit(1).execute()
+            if not (resp.data or []):
+                return "User hasn't configured morning briefings yet — you can offer to set this up."
+            return ""
+        except Exception:
+            return ""
