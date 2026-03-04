@@ -58,6 +58,10 @@ TOOL_APPROVAL_DEFAULTS: dict[str, tuple[ApprovalTier, ApprovalTier]] = {
     "search_gmail": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
     "get_gmail": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
 
+    # Calendar tools - read-only
+    "search_calendar": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+    "get_calendar_event": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
+
     # Memory tools
     "create_memories": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
     "search_memories": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
