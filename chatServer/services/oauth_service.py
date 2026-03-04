@@ -351,7 +351,8 @@ class OAuthService:
 
             self.supabase.table("oauth_states").delete().eq("nonce", nonce).execute()
 
-            token_data = await self._exchange_code_for_tokens(code)
+            calendar_redirect_uri = os.getenv("GOOGLE_CALENDAR_REDIRECT_URI", os.getenv("GOOGLE_REDIRECT_URI"))
+            token_data = await self._exchange_code_for_tokens(code, redirect_uri=calendar_redirect_uri)
 
             google_user = await self._get_google_userinfo(token_data["access_token"])
             google_sub = google_user.get("sub")
@@ -421,13 +422,14 @@ class OAuthService:
             logger.error(f"Calendar OAuth callback failed: {e}", exc_info=True)
             return OAuthResult(status="error", error_message="Authentication failed. Please try again.")
 
-    async def _exchange_code_for_tokens(self, code: str) -> dict:
+    async def _exchange_code_for_tokens(self, code: str, redirect_uri: str | None = None) -> dict:
         """Exchange authorization code for tokens via Google's token endpoint."""
         import aiohttp
 
         client_id = os.getenv("GOOGLE_CLIENT_ID")
         client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
-        redirect_uri = os.getenv("GOOGLE_REDIRECT_URI")
+        if redirect_uri is None:
+            redirect_uri = os.getenv("GOOGLE_REDIRECT_URI")
 
         async with aiohttp.ClientSession() as session:
             async with session.post(
