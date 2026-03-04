@@ -1,0 +1,224 @@
+import React, { useState, useEffect } from 'react';
+import { Button } from '../../ui/Button';
+import { Card } from '../../ui/Card';
+import { Badge } from '../../ui/Badge';
+import { CheckCircle, Calendar, AlertCircle, Loader2, Plus, Trash2 } from 'lucide-react';
+import { supabase } from '@/lib/supabaseClient';
+import {
+  useConnectionStatus,
+  useCalendarConnections,
+  useDisconnectCalendarConnection,
+} from '@/api/hooks/useExternalConnectionsHooks';
+
+const MAX_CALENDAR_ACCOUNTS = 5;
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+
+interface CalendarConnectionProps {
+  onConnectionChange?: (isConnected: boolean) => void;
+  className?: string;
+}
+
+export const CalendarConnection: React.FC<CalendarConnectionProps> = ({ onConnectionChange, className = '' }) => {
+  const [isConnecting, setIsConnecting] = useState(false);
+
+  const {
+    data: connectionStatus,
+    isLoading: isCheckingStatus,
+    error: statusError,
+    refetch: refetchStatus,
+  } = useConnectionStatus('google_calendar');
+
+  const {
+    data: calendarAccounts,
+    isLoading: isLoadingAccounts,
+    refetch: refetchAccounts,
+  } = useCalendarConnections();
+
+  const disconnectMutation = useDisconnectCalendarConnection();
+
+  const accountCount = connectionStatus?.count ?? calendarAccounts?.length ?? 0;
+  const hasAccounts = accountCount > 0;
+  const canAddMore = accountCount < MAX_CALENDAR_ACCOUNTS;
+
+  useEffect(() => {
+    if (connectionStatus) {
+      onConnectionChange?.(connectionStatus.connected);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connectionStatus?.connected, onConnectionChange]);
+
+  const connectCalendar = async () => {
+    setIsConnecting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        console.error('No active session for Calendar OAuth');
+        setIsConnecting(false);
+        return;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/oauth/calendar/connect`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Failed to start OAuth flow' }));
+        throw new Error(errorData.detail || `HTTP ${response.status}`);
+      }
+
+      const { auth_url } = await response.json();
+      window.location.href = auth_url;
+    } catch (error) {
+      console.error('Failed to initiate Calendar OAuth:', error);
+      setIsConnecting(false);
+    }
+  };
+
+  const disconnectAccount = async (connectionId: string) => {
+    await disconnectMutation.mutateAsync(connectionId);
+    refetchAccounts();
+    refetchStatus();
+  };
+
+  const getStatusBadge = () => {
+    if (isCheckingStatus || disconnectMutation.isPending) {
+      return (
+        <Badge className="flex items-center gap-1 bg-bg-neutral-subtle text-text-secondary">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          {disconnectMutation.isPending ? 'Disconnecting...' : 'Checking...'}
+        </Badge>
+      );
+    }
+
+    if (hasAccounts) {
+      return (
+        <Badge className="flex items-center gap-1 bg-bg-success-subtle text-text-success-strong">
+          <CheckCircle className="h-3 w-3" />
+          {accountCount} of {MAX_CALENDAR_ACCOUNTS} connected
+        </Badge>
+      );
+    }
+
+    return (
+      <Badge className="flex items-center gap-1 bg-bg-warning-subtle text-text-warning-strong">
+        <AlertCircle className="h-3 w-3" />
+        Not Connected
+      </Badge>
+    );
+  };
+
+  const hasError = statusError || disconnectMutation.error;
+  const errorMessage = statusError?.message || disconnectMutation.error?.message;
+
+  return (
+    <Card className={`p-6 ${className}`}>
+      <div className="mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <Calendar className="h-5 w-5 text-text-accent" />
+            <h3 className="text-lg font-semibold text-text-primary">Google Calendar</h3>
+          </div>
+          {getStatusBadge()}
+        </div>
+        <p className="text-text-secondary text-sm">
+          Connect up to {MAX_CALENDAR_ACCOUNTS} Google Calendar accounts for schedule awareness and event search.
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        {hasError && (
+          <div className="p-4 rounded-lg border border-border-destructive bg-bg-destructive-subtle text-text-destructive flex items-start gap-3">
+            <AlertCircle className="h-4 w-4 mt-0.5" />
+            <div className="text-sm">{errorMessage}</div>
+          </div>
+        )}
+
+        {/* Connected accounts list */}
+        {hasAccounts && calendarAccounts && calendarAccounts.length > 0 && (
+          <div className="space-y-2">
+            {calendarAccounts.map((account) => (
+              <div
+                key={account.id}
+                className="flex items-center justify-between p-3 rounded-lg border border-ui-border bg-ui-bg-alt"
+              >
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-text-muted" />
+                  <div>
+                    <div className="text-sm font-medium text-text-primary">{account.service_user_email || 'Unknown email'}</div>
+                    <div className="text-xs text-text-muted">
+                      Connected {new Date(account.created_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  color="red"
+                  size="1"
+                  onClick={() => disconnectAccount(account.id)}
+                  disabled={disconnectMutation.isPending}
+                >
+                  {disconnectMutation.isPending ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3 w-3" />
+                  )}
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Loading state */}
+        {isLoadingAccounts && hasAccounts && (
+          <div className="flex items-center gap-2 text-sm text-text-muted">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading accounts...
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex flex-col gap-2">
+          {!hasAccounts ? (
+            <Button onClick={connectCalendar} disabled={isConnecting || isCheckingStatus} className="w-full">
+              {isConnecting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Connecting...
+                </>
+              ) : (
+                <>
+                  <Calendar className="mr-2 h-4 w-4" />
+                  Connect Google Calendar
+                </>
+              )}
+            </Button>
+          ) : (
+            <div className="flex gap-2">
+              {canAddMore && (
+                <Button
+                  variant="outline"
+                  onClick={connectCalendar}
+                  disabled={isConnecting}
+                  size="1"
+                  className="flex-1"
+                >
+                  <Plus className="mr-1 h-3 w-3" />
+                  Add Calendar Account
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                onClick={() => { refetchStatus(); refetchAccounts(); }}
+                disabled={isCheckingStatus || isLoadingAccounts}
+                size="1"
+              >
+                {isCheckingStatus ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Refresh'}
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+};

@@ -19,6 +19,12 @@ GMAIL_SCOPES = [
     "https://www.googleapis.com/auth/userinfo.email",
 ]
 
+CALENDAR_SCOPES = [
+    "https://www.googleapis.com/auth/calendar.readonly",
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.email",
+]
+
 
 @dataclass
 class OAuthResult:
@@ -268,6 +274,152 @@ class OAuthService:
         self._enqueue_email_onboarding(user_id, str(connection_id))
 
         return result
+
+    async def create_calendar_auth_url(self, user_id: str) -> str:
+        """Generate Google OAuth URL for calendar.readonly scope.
+
+        Same flow as Gmail but with calendar-specific scopes and a
+        service_type hint in the state so the callback knows which
+        service to store tokens for.
+        """
+        client_id = os.getenv("GOOGLE_CLIENT_ID")
+        redirect_uri = os.getenv("GOOGLE_CALENDAR_REDIRECT_URI", os.getenv("GOOGLE_REDIRECT_URI"))
+
+        if not client_id:
+            raise RuntimeError("GOOGLE_CLIENT_ID not configured")
+        if not redirect_uri:
+            raise RuntimeError("GOOGLE_REDIRECT_URI not configured")
+
+        nonce = secrets.token_urlsafe(32)
+
+        self.supabase.table("oauth_states").insert({
+            "nonce": nonce,
+            "user_id": user_id,
+        }).execute()
+
+        # Encode service_type in state so callback can distinguish
+        state_payload = json.dumps({"user_id": user_id, "nonce": nonce, "service": "google_calendar"})
+        state = base64.urlsafe_b64encode(state_payload.encode()).decode()
+
+        from urllib.parse import urlencode
+
+        params = {
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "scope": " ".join(CALENDAR_SCOPES),
+            "access_type": "offline",
+            "prompt": "select_account consent",
+            "state": state,
+            "include_granted_scopes": "false",
+        }
+
+        auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
+        logger.info(f"Generated Calendar OAuth URL for user {user_id}")
+        return auth_url
+
+    async def handle_calendar_callback(self, code: str, state: str) -> OAuthResult:
+        """Handle OAuth callback for Google Calendar connection.
+
+        Same flow as Gmail but stores with service_name='google_calendar'
+        and does not enqueue email onboarding.
+        """
+        try:
+            state_payload = _decode_state(state)
+            nonce = state_payload.get("nonce")
+            user_id = state_payload.get("user_id")
+
+            if not nonce or not user_id:
+                return OAuthResult(status="error", error_message="Invalid state parameter")
+
+            result = self.supabase.table("oauth_states").select("*").eq(
+                "nonce", nonce
+            ).execute()
+
+            if not result.data:
+                return OAuthResult(status="error", error_message="Invalid or expired OAuth state. Please try again.")
+
+            oauth_state = result.data[0]
+
+            expires_at = datetime.fromisoformat(oauth_state["expires_at"].replace("Z", "+00:00"))
+            if datetime.now(timezone.utc) > expires_at:
+                self.supabase.table("oauth_states").delete().eq("nonce", nonce).execute()
+                return OAuthResult(status="error", error_message="Authentication timed out. Please try again.")
+
+            if oauth_state["user_id"] != user_id:
+                return OAuthResult(status="error", error_message="State mismatch")
+
+            self.supabase.table("oauth_states").delete().eq("nonce", nonce).execute()
+
+            token_data = await self._exchange_code_for_tokens(code)
+
+            google_user = await self._get_google_userinfo(token_data["access_token"])
+            google_sub = google_user.get("sub")
+            google_email = google_user.get("email")
+
+            if not google_sub or not google_email:
+                return OAuthResult(status="error", error_message="Failed to get Google account info")
+
+            # Check max-5 limit
+            existing = self.supabase.table("external_api_connections").select("id").eq(
+                "user_id", user_id
+            ).eq("service_name", "google_calendar").eq("is_active", True).execute()
+
+            if len(existing.data) >= 5:
+                return OAuthResult(
+                    status="error",
+                    error_message="Maximum of 5 Calendar accounts reached. Please disconnect one first."
+                )
+
+            # Check for duplicate
+            duplicate = self.supabase.table("external_api_connections").select("id").eq(
+                "user_id", user_id
+            ).eq("service_name", "google_calendar").eq("service_user_id", google_sub).execute()
+
+            if duplicate.data:
+                return OAuthResult(
+                    status="error",
+                    error_message=f"Calendar account {google_email} is already connected."
+                )
+
+            # Store tokens
+            expires_at_str = None
+            if token_data.get("expires_in"):
+                from datetime import timedelta
+                expires_at_dt = datetime.now(timezone.utc) + timedelta(seconds=token_data["expires_in"])
+                expires_at_str = expires_at_dt.isoformat()
+
+            store_result = self.supabase.rpc("store_oauth_tokens", {
+                "p_user_id": user_id,
+                "p_service_name": "google_calendar",
+                "p_access_token": token_data["access_token"],
+                "p_refresh_token": token_data.get("refresh_token"),
+                "p_expires_at": expires_at_str,
+                "p_scopes": CALENDAR_SCOPES,
+                "p_service_user_id": google_sub,
+                "p_service_user_email": google_email,
+            }).execute()
+
+            if not store_result.data or not store_result.data.get("success"):
+                error = store_result.data.get("error", "Unknown error") if store_result.data else "No response"
+                return OAuthResult(status="error", error_message=f"Failed to store tokens: {error}")
+
+            connection_id = store_result.data.get("connection_id")
+
+            logger.info(f"Successfully connected Calendar account {google_email} for user {user_id}")
+
+            return OAuthResult(
+                status="success",
+                connection_id=str(connection_id),
+                email=google_email,
+            )
+
+        except ValueError as e:
+            logger.warning(f"Calendar OAuth callback validation error: {e}")
+            return OAuthResult(status="error", error_message=str(e))
+        except Exception as e:
+            logger.error(f"Calendar OAuth callback failed: {e}", exc_info=True)
+            return OAuthResult(status="error", error_message="Authentication failed. Please try again.")
 
     async def _exchange_code_for_tokens(self, code: str) -> dict:
         """Exchange authorization code for tokens via Google's token endpoint."""
