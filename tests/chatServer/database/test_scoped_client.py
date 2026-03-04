@@ -287,6 +287,7 @@ class TestUserScopedTables:
             "external_api_connections", "jobs", "notifications", "pending_actions",
             "user_agent_prompt_customizations", "user_channels",
             "user_tool_preferences", "chat_sessions", "agent_execution_results",
+            "deferred_observations", "user_preferences",
         }
         assert USER_SCOPED_TABLES == expected
 
