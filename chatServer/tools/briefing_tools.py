@@ -20,7 +20,7 @@ def _get_briefing_service():
 
 
 class ManageBriefingPreferencesInput(BaseModel):
-    """Input schema for manage_briefing_preferences tool."""
+    """Input schema for update_briefing_preferences tool."""
     action: str = Field(..., description="Action: 'get' to view current settings, 'update' to change them")
     preferences: Optional[dict] = Field(
         default=None,
@@ -36,7 +36,7 @@ class ManageBriefingPreferencesInput(BaseModel):
 class ManageBriefingPreferencesTool(BaseTool):
     """View or update briefing preferences (morning/evening briefing time, timezone, enabled/disabled)."""
 
-    name: str = "manage_briefing_preferences"
+    name: str = "update_briefing_preferences"
     description: str = (
         "View or update briefing preferences (morning/evening briefing time, "
         "timezone, enabled/disabled). Use 'get' to view current settings, "
@@ -55,14 +55,14 @@ class ManageBriefingPreferencesTool(BaseTool):
         """Behavioral guidance for the agent prompt."""
         if channel in ("web", "telegram", "scheduled"):
             return (
-                "Briefings: Use manage_briefing_preferences to check or update "
+                "Briefings: Use update_briefing_preferences to check or update "
                 "the user's morning/evening briefing schedule. Ask about timezone "
                 "when setting up for the first time."
             )
         return None
 
     def _run(self, **kwargs) -> str:
-        return "manage_briefing_preferences requires async execution. Use _arun."
+        return "update_briefing_preferences requires async execution. Use _arun."
 
     async def _arun(self, action: str, preferences: Optional[dict] = None) -> str:
         try:
@@ -85,7 +85,7 @@ class ManageBriefingPreferencesTool(BaseTool):
         except ValueError as e:
             return f"Validation error: {e}"
         except Exception as e:
-            logger.error(f"manage_briefing_preferences failed for user {self.user_id}: {e}")
+            logger.error(f"update_briefing_preferences failed for user {self.user_id}: {e}")
             return f"Failed to manage briefing preferences: {e}"
 
     async def _handle_get(self, service) -> str:
