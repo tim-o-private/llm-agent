@@ -288,13 +288,26 @@ Add entries to `TOOL_APPROVAL_DEFAULTS`:
 
 The key is the tool's `name` field (snake_case), not the class name.
 
-## Step 5: Database Migration
+## Step 5: Canonical Tool Names Test — `tests/chatServer/services/test_tool_registry_validator.py`
+
+Add your new tool names to `CANONICAL_TOOL_NAMES` set:
+
+```python
+CANONICAL_TOOL_NAMES = {
+    ...
+    "get_{domain}",
+    "create_{domain}",
+    "delete_{domain}",
+}
+```
+
+**This is the third leg of the tool registration triplet** — `TOOL_REGISTRY` + `TOOL_APPROVAL_DEFAULTS` + `CANONICAL_TOOL_NAMES` must all be updated atomically. CI will fail if any is missing.
+
+## Step 6: Database Migration
 
 ```sql
--- Register tool type enum values
-ALTER TYPE agent_tool_type ADD VALUE IF NOT EXISTS 'Get{Domain}Tool';
-ALTER TYPE agent_tool_type ADD VALUE IF NOT EXISTS 'Create{Domain}Tool';
-ALTER TYPE agent_tool_type ADD VALUE IF NOT EXISTS 'Delete{Domain}Tool';
+-- NOTE: agent_tool_type enum was removed in SPEC-019. tools.type is TEXT now.
+-- Do NOT use ALTER TYPE agent_tool_type ADD VALUE — it will fail.
 
 -- Register tools for the assistant agent
 INSERT INTO tools (name, description, type) VALUES
@@ -320,7 +333,7 @@ DO UPDATE SET is_active = true;
 - `ON CONFLICT DO UPDATE` MUST include `type = EXCLUDED.type` — omitting it leaves stale type values.
 - `ON CONFLICT DO NOTHING` won't reactivate deactivated rows — use `DO UPDATE SET is_active = true`.
 
-## Step 6: Tool Tests — `tests/chatServer/tools/test_{domain}_tools.py`
+## Step 7: Tool Tests — `tests/chatServer/tools/test_{domain}_tools.py`
 
 ```python
 """Unit tests for {domain} tools."""
@@ -434,7 +447,7 @@ def test_prompt_section_web():
 - Assertions use `assert "fragment" in result` — never exact string matching.
 - `_patch_deps` helper shared across all tests in the file.
 
-## Step 7: Service Tests — `tests/chatServer/services/test_{domain}_service.py`
+## Step 8: Service Tests — `tests/chatServer/services/test_{domain}_service.py`
 
 ```python
 """Unit tests for {Domain}Service."""
@@ -525,7 +538,8 @@ Before marking complete:
 - [ ] Tool file: `chatServer/tools/{domain}_tools.py`
 - [ ] TOOL_REGISTRY entries in `src/core/agent_loader_db.py`
 - [ ] Approval tier entries in `chatServer/security/approval_tiers.py`
-- [ ] DB migration: enum values + `tools` rows + `agent_tools` links
+- [ ] CANONICAL_TOOL_NAMES entries in `tests/chatServer/services/test_tool_registry_validator.py`
+- [ ] DB migration: `tools` rows + `agent_tools` links (NO `ALTER TYPE` — enum removed in SPEC-019)
 - [ ] Tool tests: `tests/chatServer/tools/test_{domain}_tools.py`
 - [ ] Service tests: `tests/chatServer/services/test_{domain}_service.py`
 - [ ] `ON CONFLICT` includes `type = EXCLUDED.type` in migration
