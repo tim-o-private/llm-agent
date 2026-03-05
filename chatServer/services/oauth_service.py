@@ -60,11 +60,12 @@ class OAuthService:
         self.supabase = supabase_client
         self.settings = get_settings()
 
-    async def create_gmail_auth_url(self, user_id: str) -> str:
+    async def create_gmail_auth_url(self, user_id: str, login_hint: str | None = None) -> str:
         """Generate Google OAuth URL with state parameter for CSRF protection.
 
         Args:
             user_id: The authenticated user's ID.
+            login_hint: Optional email to pre-select Google account (for scope upgrades).
 
         Returns:
             Google OAuth authorization URL.
@@ -96,10 +97,12 @@ class OAuthService:
             "response_type": "code",
             "scope": " ".join(GMAIL_SCOPES),
             "access_type": "offline",
-            "prompt": "select_account consent",
+            "prompt": "consent" if login_hint else "select_account consent",
             "state": state,
             "include_granted_scopes": "false",
         }
+        if login_hint:
+            params["login_hint"] = login_hint
 
         from urllib.parse import urlencode
 

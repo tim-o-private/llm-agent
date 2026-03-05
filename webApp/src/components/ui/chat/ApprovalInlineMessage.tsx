@@ -59,7 +59,7 @@ export const ApprovalInlineMessage: React.FC<ApprovalInlineMessageProps> = ({ me
   return (
     <div
       className={`mx-3 my-1 px-3 py-2 border-l-2 ${borderColor} bg-ui-bg-alt rounded-r-md`}
-      role="alert"
+      role={isPending ? "alert" : "status"}
       aria-label={`Approval request: ${toolName}`}
     >
       <p className="text-sm font-medium text-text-primary mb-1">
@@ -85,19 +85,19 @@ export const ApprovalInlineMessage: React.FC<ApprovalInlineMessageProps> = ({ me
             <span className="text-xs font-medium text-text-secondary">Email Draft</span>
           </div>
           <div className="px-3 py-2 space-y-1">
-            {(actionContext.original_sender as string) && (
+            {typeof actionContext.original_sender === 'string' && actionContext.original_sender && (
               <p className="text-xs text-text-secondary">
-                <span className="font-medium">To:</span> {actionContext.original_sender as string}
+                <span className="font-medium">To:</span> {actionContext.original_sender}
               </p>
             )}
-            {(actionContext.original_subject as string) && (
+            {typeof actionContext.original_subject === 'string' && actionContext.original_subject && (
               <p className="text-xs text-text-secondary">
-                <span className="font-medium">Subject:</span> {actionContext.original_subject as string}
+                <span className="font-medium">Subject:</span> {actionContext.original_subject}
               </p>
             )}
-            {(toolArgs.body as string) && (
+            {typeof toolArgs.body === 'string' && toolArgs.body && (
               <pre className="mt-1 text-xs text-text-primary font-sans whitespace-pre-wrap leading-relaxed">
-                {toolArgs.body as string}
+                {toolArgs.body}
               </pre>
             )}
           </div>
@@ -108,7 +108,9 @@ export const ApprovalInlineMessage: React.FC<ApprovalInlineMessageProps> = ({ me
       {isEmailReply && !isPending && (
         <div className="mb-2">
           <button
+            type="button"
             onClick={() => setShowArgsWhenResolved(!showArgsWhenResolved)}
+            aria-expanded={showArgsWhenResolved}
             className="inline-flex items-center gap-0.5 text-xs text-text-secondary hover:text-text-primary transition-colors"
           >
             {showArgsWhenResolved ? (
@@ -123,14 +125,21 @@ export const ApprovalInlineMessage: React.FC<ApprovalInlineMessageProps> = ({ me
           </button>
           {showArgsWhenResolved && (
             <div className="mt-1 border border-ui-border rounded-md px-3 py-2">
-              {(actionContext.original_sender as string) && (
+              {typeof actionContext.original_sender === 'string' && actionContext.original_sender && (
                 <p className="text-xs text-text-secondary">
-                  <span className="font-medium">To:</span> {actionContext.original_sender as string}
+                  <span className="font-medium">To:</span> {actionContext.original_sender}
                 </p>
               )}
-              <pre className="text-xs text-text-primary font-sans whitespace-pre-wrap leading-relaxed">
-                {toolArgs.body as string}
-              </pre>
+              {typeof actionContext.original_subject === 'string' && actionContext.original_subject && (
+                <p className="text-xs text-text-secondary">
+                  <span className="font-medium">Subject:</span> {actionContext.original_subject}
+                </p>
+              )}
+              {typeof toolArgs.body === 'string' && toolArgs.body && (
+                <pre className="text-xs text-text-primary font-sans whitespace-pre-wrap leading-relaxed">
+                  {toolArgs.body}
+                </pre>
+              )}
             </div>
           )}
         </div>
@@ -166,7 +175,9 @@ export const ApprovalInlineMessage: React.FC<ApprovalInlineMessageProps> = ({ me
       {!isEmailReply && argEntries.length > 0 && !isPending && (
         <div className="mb-2">
           <button
+            type="button"
             onClick={() => setShowArgsWhenResolved(!showArgsWhenResolved)}
+            aria-expanded={showArgsWhenResolved}
             className="inline-flex items-center gap-0.5 text-xs text-text-secondary hover:text-text-primary transition-colors"
           >
             {showArgsWhenResolved ? (
@@ -187,7 +198,7 @@ export const ApprovalInlineMessage: React.FC<ApprovalInlineMessageProps> = ({ me
         </div>
       )}
 
-      {isPending && actionId && (
+      {isPending && actionId && activeChatId && (
         <div className="flex gap-2 mt-2">
           <button
             onClick={() => {

@@ -63,7 +63,7 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({ onConnectionCh
     }
   };
 
-  const connectAdditionalGmail = async () => {
+  const connectAdditionalGmail = async (loginHint?: string) => {
     setIsConnecting(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -73,7 +73,12 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({ onConnectionCh
         return;
       }
 
-      const response = await fetch(`${API_BASE_URL}/oauth/gmail/connect`, {
+      const url = new URL(`${API_BASE_URL}/oauth/gmail/connect`, window.location.origin);
+      if (loginHint) {
+        url.searchParams.set('login_hint', loginHint);
+      }
+
+      const response = await fetch(url.toString(), {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
 
@@ -177,7 +182,7 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({ onConnectionCh
                       <Button
                         variant="outline"
                         size="1"
-                        onClick={connectAdditionalGmail}
+                        onClick={() => connectAdditionalGmail(account.service_user_email || undefined)}
                         disabled={isConnecting}
                         className="text-xs"
                       >
@@ -190,6 +195,7 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({ onConnectionCh
                       size="1"
                       onClick={() => disconnectAccount(account.id)}
                       disabled={disconnectMutation.isPending}
+                      aria-label={`Disconnect ${account.service_user_email || 'account'}`}
                     >
                       {disconnectMutation.isPending ? (
                         <Loader2 className="h-3 w-3 animate-spin" />
@@ -233,7 +239,7 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({ onConnectionCh
               {canAddMore && (
                 <Button
                   variant="outline"
-                  onClick={connectAdditionalGmail}
+                  onClick={() => connectAdditionalGmail()}
                   disabled={isConnecting}
                   size="1"
                   className="flex-1"
