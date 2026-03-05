@@ -14,7 +14,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ text, sender, time
   const isUser = sender === 'user';
   const isSystem = sender === 'system';
 
-  const bubbleClasses = clsx('p-3 rounded-lg max-w-xs md:max-w-md lg:max-w-lg break-words shadow', {
+  const bubbleClasses = clsx('p-2 md:p-3 rounded-lg max-w-xs md:max-w-md lg:max-w-lg break-words shadow', {
     'bg-brand-primary text-brand-primary-text': isUser,
     'bg-ui-element-bg text-text-primary': !isUser && !isSystem,
     'bg-transparent text-text-muted text-center text-xs w-full italic': isSystem,
@@ -63,7 +63,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ text, sender, time
       <div className={clsx('flex flex-col', isUser ? 'items-end' : 'items-start')}>
         {senderName && !isUser && <span className="text-xs text-text-muted mb-0.5 ml-1">{senderName}</span>}
         <div className={bubbleClasses}>
-          <p className="text-sm">{text}</p>
+          <p className="text-xs md:text-sm">{text}</p>
         </div>
         {timestamp && (
           <span className={clsx('text-xs text-text-muted mt-1', isUser ? 'mr-1' : 'ml-1')}>{timestamp}</span>
