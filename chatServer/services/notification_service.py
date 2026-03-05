@@ -379,6 +379,7 @@ class NotificationService:
         """Send notification via Telegram if user has it linked."""
         chat_id = await self._get_telegram_chat_id(user_id)
         if not chat_id:
+            logger.debug(f"No Telegram chat_id for user {user_id}, skipping Telegram delivery")
             return
 
         try:
@@ -388,6 +389,7 @@ class NotificationService:
 
             bot_service = get_telegram_bot_service()
             if not bot_service:
+                logger.debug("Telegram bot service not available, skipping delivery")
                 return
 
             text = f"*{title}*\n\n{body}"
@@ -421,5 +423,6 @@ class NotificationService:
                 .execute()
             )
             return result.data.get("channel_id") if result.data else None
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Telegram chat_id lookup failed for user {user_id}: {e}")
             return None
