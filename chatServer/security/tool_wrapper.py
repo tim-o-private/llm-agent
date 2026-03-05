@@ -151,6 +151,7 @@ def with_approval(
                                 "tool_args": kwargs,
                                 "action_id": action_id,
                                 "agent_name": context.agent_name,
+                                "context": action_context,
                             },
                         )
                     except Exception as e:

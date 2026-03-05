@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { CheckCircle, XCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { CheckCircle, XCircle, ChevronDown, ChevronUp, Mail } from 'lucide-react';
 import { useApproveAction, useRejectAction } from '@/api/hooks/useActionsHooks';
 import { useMarkNotificationRead } from '@/api/hooks/useNotificationHooks';
 import { useChatStore } from '@/stores/useChatStore';
@@ -33,7 +33,9 @@ export const ApprovalInlineMessage: React.FC<ApprovalInlineMessageProps> = ({ me
   const actionId = message.action_id;
   const toolName = message.action_tool_name ?? 'Unknown tool';
   const toolArgs = message.action_tool_args ?? {};
+  const actionContext = message.action_context ?? {};
   const status = optimisticStatus ?? message.action_status ?? 'pending';
+  const isEmailReply = toolName === 'send_email_reply';
 
   const isPending = status === 'pending';
   const isApproved = status === 'approved';
@@ -75,8 +77,67 @@ export const ApprovalInlineMessage: React.FC<ApprovalInlineMessageProps> = ({ me
         )}
       </p>
 
-      {/* Args always visible when pending; toggled when resolved */}
-      {argEntries.length > 0 && isPending && (
+      {/* Email reply preview card (AC-19) */}
+      {isEmailReply && isPending && (
+        <div className="mb-2 border border-ui-border rounded-md overflow-hidden">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-ui-element-bg border-b border-ui-border">
+            <Mail className="h-3 w-3 text-text-muted" />
+            <span className="text-xs font-medium text-text-secondary">Email Draft</span>
+          </div>
+          <div className="px-3 py-2 space-y-1">
+            {(actionContext.original_sender as string) && (
+              <p className="text-xs text-text-secondary">
+                <span className="font-medium">To:</span> {actionContext.original_sender as string}
+              </p>
+            )}
+            {(actionContext.original_subject as string) && (
+              <p className="text-xs text-text-secondary">
+                <span className="font-medium">Subject:</span> {actionContext.original_subject as string}
+              </p>
+            )}
+            {(toolArgs.body as string) && (
+              <pre className="mt-1 text-xs text-text-primary font-sans whitespace-pre-wrap leading-relaxed">
+                {toolArgs.body as string}
+              </pre>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Email reply summary when resolved */}
+      {isEmailReply && !isPending && (
+        <div className="mb-2">
+          <button
+            onClick={() => setShowArgsWhenResolved(!showArgsWhenResolved)}
+            className="inline-flex items-center gap-0.5 text-xs text-text-secondary hover:text-text-primary transition-colors"
+          >
+            {showArgsWhenResolved ? (
+              <>
+                <ChevronUp className="h-3 w-3" /> Hide draft
+              </>
+            ) : (
+              <>
+                <ChevronDown className="h-3 w-3" /> Show draft
+              </>
+            )}
+          </button>
+          {showArgsWhenResolved && (
+            <div className="mt-1 border border-ui-border rounded-md px-3 py-2">
+              {(actionContext.original_sender as string) && (
+                <p className="text-xs text-text-secondary">
+                  <span className="font-medium">To:</span> {actionContext.original_sender as string}
+                </p>
+              )}
+              <pre className="text-xs text-text-primary font-sans whitespace-pre-wrap leading-relaxed">
+                {toolArgs.body as string}
+              </pre>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Default args display for non-email tools */}
+      {!isEmailReply && argEntries.length > 0 && isPending && (
         <div className="mb-2">
           <pre className="text-xs text-text-secondary font-mono whitespace-pre-wrap bg-ui-element-bg px-2 py-1 rounded">
             {(showAll ? argEntries : previewArgs)
@@ -102,7 +163,7 @@ export const ApprovalInlineMessage: React.FC<ApprovalInlineMessageProps> = ({ me
         </div>
       )}
 
-      {argEntries.length > 0 && !isPending && (
+      {!isEmailReply && argEntries.length > 0 && !isPending && (
         <div className="mb-2">
           <button
             onClick={() => setShowArgsWhenResolved(!showArgsWhenResolved)}
