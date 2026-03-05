@@ -111,14 +111,26 @@ def with_approval(
                 return f"Error: Action '{tool_name}' requires approval but queue is unavailable."
 
             try:
+                # Build context with session info
+                action_context = {
+                    "session_id": context.session_id,
+                    "agent_name": context.agent_name,
+                }
+
+                # Let the tool enrich context (e.g., original_subject for email preview)
+                if hasattr(tool, "get_approval_context") and callable(tool.get_approval_context):
+                    try:
+                        extra_ctx = await tool.get_approval_context(**kwargs)
+                        if extra_ctx:
+                            action_context.update(extra_ctx)
+                    except Exception as e:
+                        logger.warning(f"get_approval_context failed for {tool_name} (non-fatal): {e}")
+
                 action_id = await context.pending_actions_service.queue_action(
                     user_id=context.user_id,
                     tool_name=tool_name,
                     tool_args=kwargs,
-                    context={
-                        "session_id": context.session_id,
-                        "agent_name": context.agent_name,
-                    }
+                    context=action_context,
                 )
 
                 logger.info(f"Action {tool_name} queued for approval: {action_id}")
@@ -139,6 +151,7 @@ def with_approval(
                                 "tool_args": kwargs,
                                 "action_id": action_id,
                                 "agent_name": context.agent_name,
+                                "context": action_context,
                             },
                         )
                     except Exception as e:

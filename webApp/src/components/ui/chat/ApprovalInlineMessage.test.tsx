@@ -189,21 +189,21 @@ describe('ApprovalInlineMessage', () => {
   it('shows success border when approved', () => {
     const msg = { ...baseMessage, action_status: 'approved' };
     render(<ApprovalInlineMessage message={msg} />);
-    const alertDiv = screen.getByRole('alert');
-    expect(alertDiv.className).toContain('border-l-success-indicator');
+    const statusDiv = screen.getByRole('status');
+    expect(statusDiv.className).toContain('border-l-success-indicator');
   });
 
   it('shows neutral border when rejected', () => {
     const msg = { ...baseMessage, action_status: 'rejected' };
     render(<ApprovalInlineMessage message={msg} />);
-    const alertDiv = screen.getByRole('alert');
-    expect(alertDiv.className).toContain('border-l-ui-border');
+    const statusDiv = screen.getByRole('status');
+    expect(statusDiv.className).toContain('border-l-ui-border');
   });
 
   it('shows warning border when pending', () => {
     render(<ApprovalInlineMessage message={baseMessage} />);
-    const alertDiv = screen.getByRole('alert');
-    expect(alertDiv.className).toContain('border-l-warning-strong');
+    const regionDiv = screen.getByRole('region');
+    expect(regionDiv.className).toContain('border-l-warning-strong');
   });
 
   // Args toggle when resolved
