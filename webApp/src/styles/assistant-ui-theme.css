@@ -276,7 +276,6 @@
   .radix-themes .aui-user-message-content,
   .radix-themes .aui-assistant-message-content {
     max-width: 90% !important;
-    padding: 0.5rem 0.75rem !important;
   }
 
   .radix-themes [data-aui-composer] {
