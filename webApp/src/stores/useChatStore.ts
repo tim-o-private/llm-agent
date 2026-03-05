@@ -24,6 +24,7 @@ export interface ChatMessage {
   action_tool_name?: string;
   action_tool_args?: Record<string, unknown>;
   action_status?: string;
+  action_context?: Record<string, unknown>;
 }
 
 interface ChatStore {
