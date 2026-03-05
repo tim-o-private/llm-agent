@@ -269,16 +269,19 @@
   .radix-themes [data-aui-message] {
     max-width: 95% !important;
     padding: 0.5rem 0.75rem !important;
-    font-size: 0.875rem !important;
+    font-size: 0.8125rem !important;
+    line-height: 1.4 !important;
   }
 
   .radix-themes .aui-user-message-content,
   .radix-themes .aui-assistant-message-content {
     max-width: 90% !important;
+    padding: 0.5rem 0.75rem !important;
   }
 
   .radix-themes [data-aui-composer] {
     padding: 0.5rem 0.75rem !important;
+    font-size: 0.8125rem !important;
   }
 
   .radix-themes [data-aui-thread] {
