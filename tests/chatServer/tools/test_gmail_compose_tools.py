@@ -5,13 +5,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from chatServer.security.approval_tiers import ApprovalTier, TOOL_APPROVAL_DEFAULTS
+from chatServer.security.approval_tiers import TOOL_APPROVAL_DEFAULTS, ApprovalTier
 from chatServer.tools.gmail_compose_tools import (
     COMPOSE_SCOPE,
     DraftEmailReplyTool,
     SendEmailReplyTool,
 )
-
 
 # --- Fixtures ---
 
