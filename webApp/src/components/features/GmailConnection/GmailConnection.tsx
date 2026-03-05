@@ -73,12 +73,12 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({ onConnectionCh
         return;
       }
 
-      const url = new URL(`${API_BASE_URL}/oauth/gmail/connect`, window.location.origin);
+      let connectUrl = `${API_BASE_URL}/oauth/gmail/connect`;
       if (loginHint) {
-        url.searchParams.set('login_hint', loginHint);
+        connectUrl += `?login_hint=${encodeURIComponent(loginHint)}`;
       }
 
-      const response = await fetch(url.toString(), {
+      const response = await fetch(connectUrl, {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
 
