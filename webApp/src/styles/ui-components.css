@@ -97,4 +97,17 @@
   /* .ui-card {
     @apply bg-ui-background p-gutter rounded-ui-default shadow-md border border-ui-border;
   } */
-} 
+}
+
+/* ===== MOBILE LAYOUT ===== */
+
+/* Main content margin for desktop chat toggle button */
+@media (min-width: 768px) {
+  .main-content-area {
+    margin-right: 4rem;
+    transition: margin-right 700ms ease-in-out;
+  }
+  .main-content-area.chat-open {
+    margin-right: calc(50% + 4rem);
+  }
+}

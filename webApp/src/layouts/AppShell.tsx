@@ -40,32 +40,37 @@ const AppShell: React.FC<AppShellProps> = ({ children }) => {
             <div className="flex flex-1 relative overflow-hidden">
               {/* Main Content Area - shrinks when chat opens */}
               <main
-                className={`relative overflow-y-auto focus:outline-none p-6 transition-all duration-700 ease-in-out ${
-                  isChatPanelOpen ? 'flex-1' : 'flex-1'
+                className={`relative overflow-y-auto focus:outline-none p-4 md:p-6 transition-all duration-700 ease-in-out flex-1 main-content-area ${
+                  isChatPanelOpen ? 'hidden md:block chat-open' : ''
                 }`}
-                style={{
-                  marginRight: isChatPanelOpen ? 'calc(50% + 4rem)' : '4rem', // 50% for chat + 4rem for button
-                }}
                 tabIndex={-1}
               >
                 {children}
               </main>
 
-              {/* Chat Panel - slides in from right, part of layout flow */}
+              {/* Chat Panel - full-width overlay on mobile, side panel on desktop */}
               <div
-                className={`absolute top-0 right-16 bottom-0 bg-ui-element-bg/95 backdrop-blur-glass border-l border-ui-border-electric shadow-neon transition-all duration-700 ease-in-out ${
+                className={`absolute top-0 right-0 md:right-16 bottom-0 bg-ui-element-bg/95 backdrop-blur-glass border-l border-ui-border-electric shadow-neon transition-all duration-700 ease-in-out ${
                   isChatPanelOpen
-                    ? 'w-1/2 translate-x-0 opacity-100'
-                    : 'w-1/2 translate-x-full opacity-0 pointer-events-none'
+                    ? 'w-full md:w-1/2 translate-x-0 opacity-100'
+                    : 'w-full md:w-1/2 translate-x-full opacity-0 pointer-events-none'
                 }`}
               >
+                {/* Mobile close button */}
+                <button
+                  onClick={toggleChatPanel}
+                  className="md:hidden absolute top-3 right-3 z-10 p-2 rounded-md text-text-muted hover:text-text-primary hover:bg-ui-interactive-bg-hover transition-colors"
+                  aria-label="Close chat panel"
+                >
+                  <DoubleArrowRightIcon className="h-5 w-5" />
+                </button>
                 <aside className="h-full relative overflow-y-auto" tabIndex={-1}>
                   <ChatPanel agentId={import.meta.env.VITE_DEFAULT_CHAT_AGENT_ID || 'assistant'} />
                 </aside>
               </div>
 
-              {/* Chat Toggle Button - always visible */}
-              <div className="absolute top-0 right-0 bottom-0 w-16 flex">
+              {/* Chat Toggle Button - hidden on mobile, visible on desktop */}
+              <div className="hidden md:flex absolute top-0 right-0 bottom-0 w-16">
                 <button
                   onClick={toggleChatPanel}
                   className={`w-16 h-full flex flex-col items-center justify-center py-4 text-text-muted hover:bg-ui-interactive-bg-glow hover:text-text-electric focus:outline-none bg-ui-element-bg/90 backdrop-blur-glass border-l border-ui-border-glow shadow-glow hover:shadow-electric transition-all duration-300 ease-out hover:scale-105 ${
