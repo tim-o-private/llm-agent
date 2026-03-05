@@ -27,6 +27,7 @@ CANONICAL_TOOL_NAMES = {
     "search_web",
     "search_calendar", "get_calendar_event",
     "update_briefing_preferences",
+    "draft_email_reply", "send_email_reply",
 }
 
 
