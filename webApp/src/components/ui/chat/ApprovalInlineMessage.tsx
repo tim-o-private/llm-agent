@@ -59,8 +59,8 @@ export const ApprovalInlineMessage: React.FC<ApprovalInlineMessageProps> = ({ me
   return (
     <div
       className={`mx-3 my-1 px-3 py-2 border-l-2 ${borderColor} bg-ui-bg-alt rounded-r-md`}
-      role={isPending ? "alert" : "status"}
-      aria-label={`Approval request: ${toolName}`}
+      role={isPending ? "region" : "status"}
+      aria-label={isPending ? `Action approval required: ${toolName}` : `Action ${status}: ${toolName}`}
     >
       <p className="text-sm font-medium text-text-primary mb-1">
         {isPending ? (
@@ -96,7 +96,7 @@ export const ApprovalInlineMessage: React.FC<ApprovalInlineMessageProps> = ({ me
               </p>
             )}
             {typeof toolArgs.body === 'string' && toolArgs.body && (
-              <pre className="mt-1 text-xs text-text-primary font-sans whitespace-pre-wrap leading-relaxed">
+              <pre className="mt-1 text-xs text-text-primary font-sans whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">
                 {toolArgs.body}
               </pre>
             )}
@@ -244,7 +244,7 @@ export const ApprovalInlineMessage: React.FC<ApprovalInlineMessageProps> = ({ me
       )}
 
       {isApproved && approveAction.isPending && (
-        <p className="text-xs text-text-secondary mt-1">Running...</p>
+        <p className="text-xs text-text-secondary mt-1">{isEmailReply ? 'Sending email...' : 'Running...'}</p>
       )}
       {isApproved && executionResult && (
         <p className="text-xs text-success-strong mt-1">{executionResult}</p>

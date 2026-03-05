@@ -202,8 +202,8 @@ describe('ApprovalInlineMessage', () => {
 
   it('shows warning border when pending', () => {
     render(<ApprovalInlineMessage message={baseMessage} />);
-    const alertDiv = screen.getByRole('alert');
-    expect(alertDiv.className).toContain('border-l-warning-strong');
+    const regionDiv = screen.getByRole('region');
+    expect(regionDiv.className).toContain('border-l-warning-strong');
   });
 
   // Args toggle when resolved
