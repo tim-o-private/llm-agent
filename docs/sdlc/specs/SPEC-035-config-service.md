@@ -25,7 +25,7 @@ Replace the scattered DB-column config model (agent personality in `agent_config
 
 ### Storage Setup
 
-- [ ] **AC-01:** A Supabase Storage bucket `config` is created via migration. The bucket is private (no public access). [A3, A8]
+- [ ] **AC-01:** A Supabase Storage bucket `config` is created via the Supabase Storage API (`supabase.storage.create_bucket()`), not via raw SQL INSERT into `storage.buckets`. The bucket is private (no public access). A data migration script (or application startup hook) calls the Storage API to ensure the bucket exists. RLS policies on `storage.objects` are still applied via SQL migration. [A3, A8]
 - [ ] **AC-02:** System-default config files are seeded into `/system/agents/clarity/soul.md` and `/system/agents/clarity/identity.json` via a migration script. Content is extracted from the current `agent_configurations` row for the `assistant` agent (renamed to `clarity` in the config layer). [A3]
 - [ ] **AC-03:** RLS policies on the `storage.objects` table enforce: (a) service_role can read/write all paths, (b) authenticated users can read `/system/*` paths, (c) authenticated users can read/write only their own `/users/{auth.uid()}/*` paths, (d) no cross-user access to `/users/` paths. [A8]
 
@@ -34,7 +34,7 @@ Replace the scattered DB-column config model (agent personality in `agent_config
 - [ ] **AC-04:** A `ConfigService` class in `chatServer/services/config_service.py` provides `async read(path: str, user_id: str) -> str | None`. It checks `/users/{user_id}/{path}` first; if not found (404), falls back to `/system/{path}`. Returns file content as string, or `None` if neither exists. [A1]
 - [ ] **AC-05:** `ConfigService` provides `async read_with_source(path: str, user_id: str) -> tuple[str | None, str]` that returns `(content, source)` where source is `"user"`, `"system"`, or `"none"`. Used for debugging and future file browser metadata. [A1]
 - [ ] **AC-06:** `ConfigService` provides `async list_paths(prefix: str, user_id: str) -> list[str]` that returns the merged set of paths under the prefix — user paths shadow system paths with the same relative name. [A1]
-- [ ] **AC-07:** `ConfigService` uses the Supabase Storage Python client (`supabase.storage.from_("config")`) with service_role credentials for reads (bypassing RLS for server-side operations). User-facing API endpoints use the user's JWT for RLS enforcement. [A3, A8]
+- [ ] **AC-07:** `ConfigService` uses the Supabase Storage Python client (`supabase.storage.from_("config")`) with service_role credentials for reads (bypassing RLS for server-side operations). Since `UserScopedClient` does NOT wrap Supabase Storage operations, `ConfigService` must enforce path scoping in code — all user-path operations prefix `users/{user_id}/` and the service rejects any path traversal attempts (e.g., `../`). RLS policies on `storage.objects` serve as defense-in-depth for direct client access (frontend, future use). [A3, A8]
 
 ### Caching Layer
 
@@ -73,6 +73,7 @@ Replace the scattered DB-column config model (agent personality in `agent_config
 - [ ] **AC-25:** Integration test: two users; user A writes to their config path; user B cannot read user A's config via the API (RLS enforcement). Service-role can read both. [S1, A8]
 - [ ] **AC-26:** Migration test: after running the data migration, `ConfigService.read("agents/clarity/soul.md", user_id)` returns the same content as the current `agent_configurations.soul` for the assistant agent. Same for `agent/instructions.md` matching `user_agent_prompt_customizations.instructions`. [S1]
 - [ ] **AC-27:** Regression test: an end-to-end prompt assembly test that loads an agent via `load_agent_executor_db_async()` and asserts the system prompt contains the soul text and user instructions from config files (not from DB columns). [S1]
+- [ ] **AC-28:** `ConfigService._download()` must not silently swallow all exceptions. It catches `StorageApiError` (from `storage3`) and treats 404/not-found as `None` (file doesn't exist). All other exceptions (network errors, auth failures, permission errors) are logged at WARNING level and re-raised. No bare `except Exception: return None`. [A1, S1]
 
 ## Scope
 
@@ -151,19 +152,20 @@ Every file that currently reads `soul`, `identity`, or `user_instructions` from 
 
 ### 1. Supabase Storage Bucket Setup
 
-Supabase Storage uses the `storage` schema with `storage.buckets` and `storage.objects` tables. A migration creates the bucket and applies RLS policies.
+Supabase Storage uses the `storage` schema with `storage.buckets` and `storage.objects` tables. **Bucket creation uses the Supabase Storage API** (not raw SQL INSERT into `storage.buckets`), since direct SQL may bypass Supabase's internal initialization hooks. A data migration script or application startup hook creates the bucket:
+
+```python
+# In migration script or startup hook
+supabase_client.storage.create_bucket(
+    "config",
+    options={"public": False, "file_size_limit": 1048576,
+             "allowed_mime_types": ["text/plain", "text/markdown", "application/json"]}
+)
+```
+
+RLS policies on `storage.objects` are applied via SQL migration:
 
 ```sql
--- Create the config bucket (private, no public access)
-INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-VALUES (
-    'config',
-    'config',
-    false,
-    1048576,  -- 1MB max per file (config files are small)
-    ARRAY['text/plain', 'text/markdown', 'application/json']
-);
-
 -- RLS: service_role has full access (implicit — bypasses RLS)
 
 -- RLS: authenticated users can read system config
@@ -259,8 +261,14 @@ class ConfigService:
         try:
             response = self._storage.download(full_path)
             return response.decode("utf-8")
-        except Exception:
-            return None
+        except StorageApiError as e:
+            if e.status_code == 404 or "not found" in str(e).lower():
+                return None
+            logger.warning("Storage error downloading %s: %s", full_path, e)
+            raise
+        except Exception as e:
+            logger.warning("Unexpected error downloading %s: %s", full_path, e)
+            raise
 ```
 
 ### 4. UpdateInstructionsTool Migration
@@ -324,12 +332,12 @@ This eliminates the need for a manual migration deploy step. Data migrates eithe
 **ACs:** AC-01, AC-02, AC-03
 **Domain:** database-dev
 
-Create the config bucket, seed system defaults, apply RLS policies. Write the data migration script for existing config data.
+Create the config bucket via Supabase Storage API (not SQL INSERT), seed system defaults, apply RLS policies via SQL migration. Write the data migration script for existing config data.
 
 Migration prefix: assigned by orchestrator.
 
 ### FU-2: Config Service + Cache (Backend)
-**ACs:** AC-04, AC-05, AC-06, AC-07, AC-08, AC-09, AC-10, AC-23, AC-24
+**ACs:** AC-04, AC-05, AC-06, AC-07, AC-08, AC-09, AC-10, AC-23, AC-24, AC-28
 **Domain:** backend-dev
 **Depends on:** FU-1
 
