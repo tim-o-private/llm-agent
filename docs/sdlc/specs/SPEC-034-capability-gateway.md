@@ -551,7 +551,7 @@ These tests ensure the migration is behaviorally transparent.
 
 ## Edge Cases
 
-- **User has no allowlist config yet:** Fall back to system defaults. All tools available at their `default_granted_tier`. First-time users get a working agent without configuration.
+- **User has no allowlist config yet:** Fall back to system defaults. All 29 current tools available at their `default_granted_tier` (preserving existing behavior). First-time users get a working agent without configuration. New tools added post-migration are disabled by default until the user or system enables them.
 - **Tool definition missing from config service:** Log warning, return denial. The gateway never crashes on missing definitions — it degrades to "tool not available."
 - **OAuth token expired during execution:** CredentialProvider handles refresh transparently (same pattern as current `_refresh_access_token` in gmail_tools.py). If refresh fails, executor returns an error message, not a crash.
 - **MCP client not provided:** Memory tool executors return "Memory service unavailable" (same as current ToolExecutionService's memory tool rejection, but as a runtime check rather than a hardcoded blocklist).
@@ -607,13 +607,13 @@ Single branch `feat/SPEC-034-capability-gateway`, single PR. Sequential executio
 
 **Note:** FU-4 can only execute after SPEC-033 (ConversationHandler) is wired to use the gateway. If SPEC-033 is not yet complete when FU-1–3 finish, FU-4 waits. The old and new systems can coexist temporarily — the gateway is additive until the old system is removed.
 
-## Decisions Requiring Your Input
+## Decisions (Resolved)
 
-1. **Allowlist default: all tools enabled vs opt-in.** The spec assumes all tools are enabled by default (using `default_granted_tier` from each tool definition). Alternative: new users start with only Inform-tier tools enabled, must opt in to Recommend/Act. Tradeoff: opt-in is safer but creates onboarding friction.
+1. **Allowlist default:** All 29 current tools enabled at their existing tier for existing users. Migration preserves current behavior exactly. New tools added post-migration start disabled by default — must be explicitly enabled.
 
-2. **Tool definition format: JSON vs YAML vs Markdown+frontmatter.** The spec says JSON for machine readability. The architecture proposal suggests Markdown with YAML frontmatter (consistent with HQ). JSON is simpler for this spec but may diverge from Phase 3 conventions. Recommend: JSON now, revisit when bwrap lands.
+2. **Tool definition format:** Markdown with YAML frontmatter. Consistent with HQ conventions, agent definitions, and SPEC-032 config files. Power users will read these in the Phase 4 file browser.
 
-3. **Executor location: `chatServer/capabilities/executors/` vs `chatServer/executors/`.** The spec nests under `capabilities/`. Alternative: top-level `executors/` package. Nesting signals that executors are gateway-internal. Flat is more discoverable. Recommend nesting — executors should not be imported directly by anything other than the gateway.
+3. **Executor location:** `chatServer/capabilities/executors/` — self-contained package under the gateway. Executors are gateway-internal and should not be imported directly by other modules.
 
 ## Completeness Checklist
 
