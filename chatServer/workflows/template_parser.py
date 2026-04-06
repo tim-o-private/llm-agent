@@ -128,6 +128,7 @@ def _parse_steps(content: str, source_name: str) -> list[StepDef]:
             tools=_parse_list_field(fields.get("tools", "[]")),
             gate=fields.get("gate") if fields.get("gate", "none") != "none" else None,
             gate_policy=fields.get("gate_policy", fields.get("gate", "none")),
+            node_type=fields.get("node_type", "engine"),
             model=fields.get("model"),
             max_tokens=int(fields["max_tokens"]) if "max_tokens" in fields else None,
             temperature=float(fields["temperature"]) if "temperature" in fields else None,

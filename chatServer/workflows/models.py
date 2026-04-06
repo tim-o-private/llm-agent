@@ -34,6 +34,7 @@ class StepDef:
     tools: list[str] = field(default_factory=list)
     gate: Optional[str] = None
     gate_policy: str = "none"
+    node_type: str = "engine"  # "engine" (LLM), "service" (Python fn), "gate" (human approval)
     input_schema: Optional[dict] = None
     output_schema: Optional[dict] = None
     model: Optional[str] = None

@@ -5,7 +5,7 @@ Steps with gate_policy: "human-required" get interrupt_before set.
 """
 
 import logging
-from typing import Any, Optional, TypedDict
+from typing import Any, Callable, Optional, TypedDict
 
 from langgraph.constants import END, START
 from langgraph.graph import StateGraph
@@ -38,8 +38,18 @@ def _default_state() -> WorkflowState:
     )
 
 
+ServiceFn = Callable[[WorkflowState], Any]
+
+
 class GraphBuilder:
     """Build a LangGraph StateGraph from a GraphTemplate."""
+
+    def __init__(self, service_registry: Optional[dict[str, ServiceFn]] = None):
+        self._service_registry: dict[str, ServiceFn] = service_registry or {}
+
+    def register_service(self, step_name: str, fn: ServiceFn) -> None:
+        """Register a service function for a service-type step."""
+        self._service_registry[step_name] = fn
 
     def build(
         self,
@@ -62,7 +72,10 @@ class GraphBuilder:
 
         # Add nodes for each step
         for step in template.steps:
-            node_fn = self._make_step_node(step, engine, template)
+            if step.node_type == "service":
+                node_fn = self._make_service_node(step)
+            else:
+                node_fn = self._make_step_node(step, engine, template)
             graph.add_node(step.name, node_fn)
 
             if step.gate_policy == "human-required":
@@ -150,6 +163,25 @@ class GraphBuilder:
 
         step_node.__name__ = f"step_{step.name}"
         return step_node
+
+    def _make_service_node(self, step: StepDef):
+        """Create a node that calls a registered service function, not the LLM."""
+        service_fn = self._service_registry.get(step.name)
+        if not service_fn:
+            raise ValueError(f"No service registered for step '{step.name}'")
+
+        async def service_node(state: WorkflowState) -> dict:
+            result = await service_fn(state)
+            step_outputs = dict(state.get("step_outputs", {}))
+            step_outputs[step.name] = str(result)
+            return {
+                "step_outputs": step_outputs,
+                "current_step": step.name,
+                "status": "running",
+            }
+
+        service_node.__name__ = f"service_{step.name}"
+        return service_node
 
     def _make_gate_node(self, step: StepDef):
         """Create a gate node that signals approval is needed."""

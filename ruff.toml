@@ -12,5 +12,9 @@ exclude = [
 [lint]
 select = ["E", "F", "W", "I"]  # pycodestyle errors/warnings, pyflakes, isort
 
+[lint.per-file-ignores]
+# Template files contain long lines inside multi-line strings (workflow markdown)
+"chatServer/workflows/templates/*.py" = ["E501"]
+
 [lint.isort]
 known-first-party = ["chatServer", "src"]
