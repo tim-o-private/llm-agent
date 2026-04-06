@@ -68,13 +68,19 @@ DISPATCH_WORKFLOW_TOOL: dict[str, Any] = {
     "name": "dispatch_workflow",
     "description": (
         "Start a multi-step workflow (email triage, draft reply, etc.). "
-        "Not yet available — will be implemented in SPEC-035."
+        "Returns a run_id for tracking progress."
     ),
     "input_schema": {
         "type": "object",
         "properties": {
-            "workflow_name": {"type": "string"},
-            "parameters": {"type": "object"},
+            "workflow_name": {
+                "type": "string",
+                "description": "Name of the workflow template",
+            },
+            "parameters": {
+                "type": "object",
+                "description": "Input parameters for the workflow",
+            },
         },
         "required": ["workflow_name"],
     },
