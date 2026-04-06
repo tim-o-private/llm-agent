@@ -199,9 +199,17 @@ class WorkflowRunManager:
         return cancelled
 
     async def resume_run(
-        self, run_id: str, approval_data: Optional[dict] = None
+        self,
+        run_id: str,
+        action: str = "approve",
+        data: Optional[dict] = None,
     ) -> bool:
-        """Resume a workflow run after human gate approval.
+        """Resume a workflow run after human gate interaction.
+
+        Args:
+            run_id: The workflow run to resume.
+            action: One of "approve", "reject", or "revise".
+            data: Optional data — for "revise", should contain {"instructions": str}.
 
         Returns True if resumed, False if not found or not waiting.
         """
@@ -209,14 +217,67 @@ class WorkflowRunManager:
         if not record or record.status != WorkflowRunStatus.waiting_for_approval:
             return False
 
-        # Update state and re-invoke the graph
-        # (Detailed resume logic will be in FU-5 with human gate integration)
+        if action == "reject":
+            await self._cancel_run(run_id, reason="User rejected")
+            return True
+
+        if action == "revise":
+            return await self._handle_revise(run_id, record, data or {})
+
+        # Default: approve — mark running and re-invoke
         await self._db.table("workflow_runs").update({
             "status": WorkflowRunStatus.running.value,
         }).eq("id", run_id).execute()
 
-        logger.info("Resumed workflow run %s", run_id)
+        logger.info("Resumed workflow run %s (action=%s)", run_id, action)
         return True
+
+    async def _handle_revise(
+        self, run_id: str, record: WorkflowRunRecord, data: dict
+    ) -> bool:
+        """Handle a 'revise' action — loop back to compose step with new instructions."""
+        from .templates.draft_reply import MAX_REVISIONS
+
+        revision_count = record.parameters.get("_revision_count", 0)
+        if revision_count >= MAX_REVISIONS:
+            logger.info("Max revisions (%d) reached for run %s", MAX_REVISIONS, run_id)
+            await self._cancel_run(
+                run_id,
+                reason=f"Max revisions ({MAX_REVISIONS}) reached — please write it yourself",
+            )
+            return True
+
+        # Append revision instructions to parameters
+        revision_instructions = data.get("instructions", "")
+        existing_instructions = record.parameters.get("instructions", "")
+        updated_instructions = f"{existing_instructions}\n\nRevision: {revision_instructions}".strip()
+
+        updated_params = {
+            **record.parameters,
+            "instructions": updated_instructions,
+            "_revision_count": revision_count + 1,
+        }
+
+        await self._db.table("workflow_runs").update({
+            "status": WorkflowRunStatus.running.value,
+            "parameters": updated_params,
+        }).eq("id", run_id).execute()
+
+        logger.info(
+            "Revision %d/%d for workflow run %s",
+            revision_count + 1, MAX_REVISIONS, run_id,
+        )
+        return True
+
+    async def _cancel_run(self, run_id: str, reason: str = "") -> None:
+        """Cancel a workflow run with a reason."""
+        now = datetime.now(timezone.utc).isoformat()
+        await self._db.table("workflow_runs").update({
+            "status": WorkflowRunStatus.cancelled.value,
+            "error": reason,
+            "completed_at": now,
+        }).eq("id", run_id).execute()
+        logger.info("Cancelled workflow run %s: %s", run_id, reason)
 
     async def _execute_run(
         self,
@@ -237,6 +298,7 @@ class WorkflowRunManager:
                 "current_step": "",
                 "status": "running",
                 "approval": None,
+                "revision_count": 0,
             }
 
             result = await compiled.ainvoke(initial_state, config)

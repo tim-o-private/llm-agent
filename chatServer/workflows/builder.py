@@ -24,6 +24,7 @@ class WorkflowState(TypedDict, total=False):
     current_step: str
     status: str
     approval: Optional[dict]
+    revision_count: int
 
 
 def _default_state() -> WorkflowState:
@@ -35,6 +36,7 @@ def _default_state() -> WorkflowState:
         current_step="",
         status="running",
         approval=None,
+        revision_count=0,
     )
 
 
