@@ -557,11 +557,11 @@ the background and streams progress updates to the chat.
 ## Edge Cases
 
 - **Template not found in ConfigService:** `TemplateNotFoundError` with available template list. The `dispatch_workflow` tool surfaces this to the agent conversationally.
-- **Anthropic API rate limit during workflow step:** Step fails, error recorded in step output. Workflow marks step as failed. No automatic retry at the engine level (the job handler's retry handles this at the run level).
+- **Anthropic API rate limit during workflow step:** Step fails, error recorded in step output. Workflow marks step as failed. The job handler's retry mechanism resumes from the failed step's checkpoint (not from the beginning), preserving completed step outputs.
 - **Checkpointer connection pool exhausted:** `start_run` fails with connection error. Tool returns "Workflow engine is busy, please try again in a moment."
 - **Workflow runs while user is offline:** Events accumulate in `workflow_events` table. When the user reconnects, all pending events are delivered in order via the SSE stream.
 - **Multiple concurrent workflow runs:** Each run has its own `thread_id` in the checkpointer. Runs are independent. Events are tagged by `run_id` for disambiguation.
-- **Server restart during workflow:** Checkpointed state survives. On restart, the `WorkflowRunManager` queries `workflow_runs` for status=running rows and re-launches them from their last checkpoint.
+- **Server restart during workflow:** Checkpointed state survives. On restart, the `WorkflowRunManager` queries `workflow_runs` for status=running rows and resumes from the last completed step's checkpoint — not from the beginning. Completed steps are not re-executed. Only the failed/interrupted step is retried.
 - **Step exceeds token budget:** `AnthropicEngine` has a per-step token limit (via `max_tokens`). If the LLM response is truncated, the step completes with partial output. No special handling — the next step works with whatever output was produced.
 - **Human gate approval timeout:** Pending actions have 24h default expiry. If not approved in time, the pending action expires and the workflow run is marked as `failed` with reason "Approval timed out".
 
@@ -612,13 +612,13 @@ FU-1 → FU-2 → FU-3 → FU-4 → FU-5
 
 FU-5 and FU-6 can run in parallel after FU-3.
 
-## Decisions Requiring Your Input
+## Resolved Decisions
 
-1. **Progress polling vs LISTEN/NOTIFY:** This spec uses Postgres polling (2s interval) for simplicity. LISTEN/NOTIFY would be lower latency but adds connection management complexity. At single-user scale, polling is fine. **Do you want lower latency for workflow events, or is 2s acceptable?**
+1. **Progress polling at 2s interval — accepted.** Postgres polling is sufficient for MVP. Workflow steps are multi-minute operations; 2s latency on progress events is invisible to the user.
 
-2. **Workflow restart on server restart:** The spec proposes auto-resuming running workflows from checkpoints on server restart (edge case section). This is correct for production but adds complexity. **Should we defer auto-resume to a follow-up, and just mark interrupted runs as "failed" on restart for MVP?**
+2. **Retry failed step, not entire workflow.** On server restart or step failure, the checkpointer preserves state up to the last completed step. The `WorkflowRunManager` resumes from the failed step's checkpoint, not from the beginning. This is the primary value of checkpointing — don't discard completed work.
 
-3. **Per-step model selection:** AC-08 supports per-step model override in templates. SPEC-037 could use this to route classification steps to Haiku (cheaper) and generation steps to Sonnet. **Do you want model routing in the initial templates, or should all steps use the same model initially?**
+3. **Per-step model override — confirmed.** Default Sonnet for generation/composition steps, Haiku for classification/categorization steps. SPEC-037 uses this: email triage `categorize` step runs on Haiku, all other steps on Sonnet.
 
 ## Completeness Checklist
 
