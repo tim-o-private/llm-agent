@@ -6,21 +6,18 @@ AC-24 (tool errors), AC-25 (max_turns), AC-28–30 (dispatch_workflow stub).
 """
 
 import asyncio
-import pytest
 from dataclasses import dataclass
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from chatServer.services.conversation_handler import (
-    ConversationHandler,
-    ConversationResult,
     DISPATCH_WORKFLOW_RESPONSE,
     DISPATCH_WORKFLOW_TOOL,
-    StreamEvent,
-    TokenUsage,
+    ConversationHandler,
     _content_to_dicts,
     _extract_text,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers — mock Anthropic API responses

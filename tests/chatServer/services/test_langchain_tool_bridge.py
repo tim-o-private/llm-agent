@@ -1,12 +1,11 @@
 """Tests for LangChainToolBridge — BaseTool → Anthropic format conversion."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, PropertyMock
+from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from pydantic import BaseModel, Field
 
 from chatServer.services.langchain_tool_bridge import LangChainToolBridge
-
 
 # ---------------------------------------------------------------------------
 # Fixtures — fake BaseTool-like objects

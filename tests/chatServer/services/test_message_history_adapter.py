@@ -5,8 +5,9 @@ Covers AC-06 (load), AC-07 modified (save in Anthropic format), and AC-34
 """
 
 import json
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from chatServer.services.message_history_adapter import (
     MessageHistoryAdapter,
@@ -14,7 +15,6 @@ from chatServer.services.message_history_adapter import (
     _merge_tool_results,
     _normalize_content,
 )
-
 
 # ---------------------------------------------------------------------------
 # Realistic LangChain message fixtures  (AC-34)
