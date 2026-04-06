@@ -26,7 +26,7 @@ Replace the scattered DB-column config model (agent personality in `agent_config
 ### Storage Setup
 
 - [ ] **AC-01:** A Supabase Storage bucket `config` is created via migration. The bucket is private (no public access). [A3, A8]
-- [ ] **AC-02:** System-default config files are seeded into `/system/agent/identity.md` and `/system/agent/soul.md` via a migration script. Content is extracted from the current `agent_configurations` row for the `assistant` agent. [A3]
+- [ ] **AC-02:** System-default config files are seeded into `/system/agents/clarity/soul.md` and `/system/agents/clarity/identity.json` via a migration script. Content is extracted from the current `agent_configurations` row for the `assistant` agent (renamed to `clarity` in the config layer). [A3]
 - [ ] **AC-03:** RLS policies on the `storage.objects` table enforce: (a) service_role can read/write all paths, (b) authenticated users can read `/system/*` paths, (c) authenticated users can read/write only their own `/users/{auth.uid()}/*` paths, (d) no cross-user access to `/users/` paths. [A8]
 
 ### Overlay Resolution Service
@@ -51,14 +51,14 @@ Replace the scattered DB-column config model (agent personality in `agent_config
 
 ### Migration: Agent Identity to Config Files
 
-- [ ] **AC-15:** The `soul` text from the `assistant` row in `agent_configurations` is written to `/system/agent/soul.md` in Supabase Storage. The `identity` JSONB is written to `/system/agent/identity.json`. These become the source of truth for agent personality. [A3]
-- [ ] **AC-16:** A data migration script reads existing `agent_configurations` rows and writes corresponding files to `/system/agent/`. If multiple agent configs exist, each gets a subdirectory: `/system/agents/{agent_name}/soul.md`, `/system/agents/{agent_name}/identity.json`. The `assistant` agent is also aliased at `/system/agent/` (the default). [A3]
-- [ ] **AC-17:** After migration, `agent_config_cache_service.py` and `_fetch_agent_config_from_db_async()` in `agent_loader_db.py` read `soul` and `identity` from the config service instead of from the `agent_configurations` table. The DB columns are retained but no longer the source of truth (deprecation, not removal). [A1]
+- [ ] **AC-15:** The `soul` text from the `assistant` row in `agent_configurations` is written to `/system/agents/clarity/soul.md` in Supabase Storage. The `identity` JSONB is written to `/system/agents/clarity/identity.json`. These become the source of truth for agent personality. [A3]
+- [ ] **AC-16:** All `agent_configurations` rows are migrated to `/system/agents/{agent_name}/soul.md` and `/system/agents/{agent_name}/identity.json`. The `assistant` agent is mapped to the `clarity` namespace. The default agent name for config resolution is `clarity`. [A3]
+- [ ] **AC-17:** `ConfigService.read()` and the agent loader use lazy fallback: read from config service first; if the config file doesn't exist yet (pre-migration), fall back to reading from the `agent_configurations` DB table. This eliminates the need for a manual migration step — data migrates lazily on first read, or eagerly via the migration script. DB columns are retained but no longer the source of truth once the config file exists. [A1]
 
 ### Migration: User Instructions to Config Files
 
-- [ ] **AC-18:** A data migration script reads all rows from `user_agent_prompt_customizations` and writes each user's instructions to `/users/{user_id}/agent/instructions.md` in Supabase Storage. [A3]
-- [ ] **AC-19:** After migration, `user_instructions_cache_service.py` reads from the config service overlay (`agent/instructions.md`) instead of from `user_agent_prompt_customizations`. The DB table is retained but no longer the source of truth. [A1]
+- [ ] **AC-18:** A data migration script reads all rows from `user_agent_prompt_customizations` and writes each user's instructions to `/users/{user_id}/agent/instructions.md` in Supabase Storage. One file per user (not per agent_name). [A3]
+- [ ] **AC-19:** `user_instructions_cache_service.py` reads from the config service overlay (`agent/instructions.md`) with lazy DB fallback: if the config file doesn't exist, fall back to `user_agent_prompt_customizations`. The DB table is retained but no longer the source of truth once the config file exists. [A1]
 - [ ] **AC-20:** The `UpdateInstructionsTool` writes to the config service (`PUT /users/{user_id}/agent/instructions.md` via `ConfigService.write()`) instead of upserting into `user_agent_prompt_customizations`. Cache is invalidated on write. [A6]
 
 ### Prompt Builder Integration
@@ -207,17 +207,19 @@ USING (
 ```
 config/                          # Supabase Storage bucket
 ├── system/                      # Read-only defaults (deployed as code)
-│   └── agent/                   # Default agent config
-│       ├── soul.md              # Behavioral philosophy (from agent_configurations.soul)
-│       ├── identity.json        # Structured identity (from agent_configurations.identity)
-│       └── operating_model.md   # Future: extracted from prompt_builder constants
+│   └── agents/
+│       └── clarity/             # Default agent (mapped from DB "assistant")
+│           ├── soul.md          # Behavioral philosophy (from agent_configurations.soul)
+│           └── identity.json    # Structured identity (from agent_configurations.identity)
 │
 └── users/{user_id}/             # Per-user mutable layer
-    └── agent/                   # User-specific agent config
+    └── agent/                   # User-specific agent config (one file per user, not per agent)
         ├── instructions.md      # Standing instructions (from user_agent_prompt_customizations)
         ├── soul.md              # User override of soul (future — not seeded)
         └── identity.json        # User override of identity (future — not seeded)
 ```
+
+**Path resolution for agent config:** The agent loader resolves `agents/clarity/soul.md` — checking `/users/{user_id}/agents/clarity/soul.md` first, then `/system/agents/clarity/soul.md`. User instructions resolve at `agent/instructions.md` (not namespaced by agent — one file per user for MVP).
 
 ### 3. ConfigService Implementation
 
@@ -277,23 +279,32 @@ config_cache = get_config_cache_service()
 await config_cache.invalidate(path="agent/instructions.md", user_id=self.user_id)
 ```
 
-### 5. Agent Loader Integration
+### 5. Agent Loader Integration (Lazy Fallback)
 
 In `load_agent_executor_db_async()`, after fetching `agent_db_config` from cache/DB:
 
 ```python
-# Before:
-soul = agent_db_config.get("soul") or ""
-identity = agent_db_config.get("identity")
-
-# After:
+# Lazy fallback: config service → DB columns
 config_svc = get_config_cache_service()
-soul = await config_svc.read("agent/soul.md", user_id) or ""
-identity_json = await config_svc.read("agent/identity.json", user_id)
-identity = json.loads(identity_json) if identity_json else None
+
+soul = await config_svc.read("agents/clarity/soul.md", user_id)
+if soul is None:
+    # Config file doesn't exist yet — fall back to DB (pre-migration)
+    soul = agent_db_config.get("soul") or ""
+
+identity_json = await config_svc.read("agents/clarity/identity.json", user_id)
+if identity_json is not None:
+    identity = json.loads(identity_json)
+else:
+    identity = agent_db_config.get("identity")
+
+# User instructions: config service → DB fallback
+user_instructions = await config_svc.read("agent/instructions.md", user_id)
+if user_instructions is None:
+    user_instructions = await get_cached_user_instructions(user_id, agent_name)
 ```
 
-The user instructions fetch similarly switches from `get_cached_user_instructions(user_id, agent_name)` to `config_svc.read("agent/instructions.md", user_id)`.
+This eliminates the need for a manual migration deploy step. Data migrates either lazily (first read triggers fallback) or eagerly via the migration script. Once a config file exists, it is the source of truth.
 
 ### 6. Data Migration Script
 

@@ -19,7 +19,7 @@ The gateway becomes the single execution path for all tool calls. The agent (via
 - [ ] **AC-04:** OAuth credentials (Gmail, Calendar) are injected server-side by the gateway. The executor receives credentials as a parameter; the LLM context never contains raw tokens. [A12]
 - [ ] **AC-05:** Every gateway invocation is audit-logged with: tool name, user ID, trust tier, execution status, timestamp, and session context. [A12]
 - [ ] **AC-06:** Results from external sources (email, calendar, web search) are wrapped in `TaggedContent` with `trust_level="untrusted"` and `source` metadata. [A12]
-- [ ] **AC-07:** Tool definitions are loaded from JSON schema files (via SPEC-032 ConfigService) describing name, description, parameters, required_tier, and executor binding. [A2, A13]
+- [ ] **AC-07:** Tool definitions are loaded from Markdown files with YAML frontmatter (via SPEC-032 ConfigService) describing name, description, parameters, required_tier, and executor binding. [A2, A13]
 - [ ] **AC-08:** Capability executors exist for all 28 canonical tools, each producing equivalent output to the current BaseTool._arun. Regression tests prove equivalence. [S1]
 - [ ] **AC-09:** After migration, the following are deleted: `chatServer/tools/` (all BaseTool subclasses), `chatServer/security/tool_wrapper.py`, `chatServer/services/tool_execution.py`, `TOOL_REGISTRY` from `agent_loader_db.py`, `TOOL_APPROVAL_DEFAULTS` from `approval_tiers.py`. [A14]
 - [ ] **AC-10:** The gateway exposes a `get_tool_schemas(user_id)` method that returns Anthropic-native tool definitions (name, description, input_schema) for only the tools in the user's allowlist. This is what SPEC-033's ConversationHandler passes to the Anthropic Messages API. [A12]
@@ -125,13 +125,59 @@ Each tool has a `required_tier` (minimum tier needed to call it). Each user has 
 
 ### 2. Tool Definition Schema (replaces BaseTool class registration)
 
-Tool definitions are JSON files stored in config (via SPEC-032's ConfigService). Each definition describes what the LLM sees and how the gateway executes it.
+Tool definitions are Markdown files with YAML frontmatter stored in config (via SPEC-032's ConfigService). This format is consistent with HQ conventions, agent definitions, and the file browser UX. Each definition describes what the LLM sees and how the gateway executes it.
+
+**Example tool definition file** (`system/tools/search_gmail.md`):
+
+```markdown
+---
+name: search_gmail
+description: >
+  Search Gmail for emails matching a query. Returns message metadata
+  (subject, sender, date, snippet) without full email bodies.
+required_tier: inform
+min_grantable_tier: inform
+default_granted_tier: act
+executor: gmail.search_gmail
+credential_type: oauth_gmail
+data_source: email
+parameters:
+  type: object
+  properties:
+    query:
+      type: string
+      description: Gmail search query (supports Gmail search operators)
+    max_results:
+      type: integer
+      description: Maximum number of results (1-20)
+      default: 10
+  required: [query]
+prompt_section:
+  web: >
+    Gmail: Use search_gmail to find emails. Supports Gmail search operators
+    like from:, subject:, newer_than:. Use get_gmail to read full email content.
+  telegram: >
+    Gmail: Use search_gmail to find emails. Use get_gmail to read full content.
+  heartbeat: >
+    Gmail: Check search_gmail for important unread emails that need attention.
+---
+
+Search the user's Gmail accounts for messages matching a query.
+Returns metadata only — use get_gmail with a message ID for full content.
+
+## Multi-account behavior
+
+Searches across all connected Gmail accounts. Results are prefixed with
+the account email address for disambiguation.
+```
+
+**Parsed into Python model:**
 
 ```python
 class ToolDefinition(BaseModel):
-    """Schema for a tool definition loaded from config."""
+    """Schema for a tool definition loaded from Markdown+YAML frontmatter."""
     name: str                        # e.g., "search_gmail"
-    description: str                 # LLM-facing description
+    description: str                 # LLM-facing description (from frontmatter)
     parameters: dict                 # JSON Schema for input parameters
     required_tier: TrustTier         # Minimum tier to call this tool
     min_grantable_tier: TrustTier    # Floor — user can't grant below this
@@ -140,11 +186,12 @@ class ToolDefinition(BaseModel):
     credential_type: str | None      # "oauth_gmail", "oauth_calendar", "mcp_memory", None
     data_source: str | None          # "email", "calendar", "web_search", None (for tagging)
     prompt_section: dict[str, str | None] | None  # Channel → guidance text (optional)
+    body: str | None                 # Markdown body (extended docs, not sent to LLM)
 ```
 
-**Why JSON files, not Python class registration?** Per A2 (DB config, code behavior): tool definitions are data — name, description, parameters, tier. Tool behavior is code — the executor functions. Separating these means tools can be reconfigured (descriptions, tiers, allowlists) without code changes. When bwrap lands (Phase 3), the agent can edit tool definitions directly as files.
+**Why Markdown with YAML frontmatter, not JSON?** Consistent with HQ conventions — agent definitions, skills, and config files all use this format. Power users will read these in the Phase 4 file browser; Markdown is more readable than JSON. The YAML frontmatter carries structured data for the gateway; the Markdown body carries extended documentation for humans and the agent's own reference. Per A2 (DB config, code behavior): tool definitions are data — name, description, parameters, tier. Tool behavior is code — the executor functions. Separating these means tools can be reconfigured without code changes. When bwrap lands (Phase 3), the agent can edit tool definitions directly as files.
 
-**Migration from TOOL_REGISTRY + TOOL_APPROVAL_DEFAULTS:** A migration script generates JSON definitions from the current BaseTool classes (extracting `args_schema`, `description`, `name`) and approval_tiers.py entries. These become the initial system-level tool definition files.
+**Migration from TOOL_REGISTRY + TOOL_APPROVAL_DEFAULTS:** A migration script generates Markdown tool definition files from the current BaseTool classes (extracting `args_schema`, `description`, `name`) and approval_tiers.py entries. These become the initial system-level tool definition files in `system/tools/`.
 
 ### 3. Capability Gateway (replaces ToolExecutionService + wrap_tools_with_approval)
 
@@ -296,23 +343,28 @@ class AllowlistResolver:
 **Resolution logic:**
 
 1. Load system-level tool definitions (all tools that exist)
-2. Load user-level allowlist from config (SPEC-032: `tools/allowlist.json`)
-3. If user has no allowlist → use default granted tiers from tool definitions
+2. Load user-level allowlist from config (SPEC-032: `tools/allowlist.yaml`)
+3. If user has no allowlist → use default granted tiers from tool definitions (all current 29 tools enabled at their existing behavior)
 4. If user has an allowlist → merge: user overrides take precedence, but `granted_tier` can never drop below `min_grantable_tier`
 
-**Allowlist file format** (stored in user config via SPEC-032):
+**Allowlist file format** (stored in user config via SPEC-032, Markdown+YAML frontmatter):
 
-```json
-{
-  "tools": {
-    "search_gmail": { "granted_tier": "act" },
-    "send_email_reply": { "granted_tier": "recommend" },
-    "delete_tasks": { "granted_tier": "act" }
-  }
-}
+```markdown
+---
+# User tool allowlist — overrides system defaults
+tools:
+  search_gmail:
+    granted_tier: act
+  send_email_reply:
+    granted_tier: recommend
+  delete_tasks:
+    granted_tier: act
+---
 ```
 
 Tools not listed in the user's file use the `default_granted_tier` from the system tool definition.
+
+**Migration behavior:** All 29 current tools are enabled for existing users at their existing tier (preserving current AUTO_APPROVE/USER_CONFIGURABLE/REQUIRES_APPROVAL behavior via the tier mapping table above). New tools added post-migration start disabled by default — they must be explicitly added to the user's allowlist or have `default_granted_tier` set in their system definition.
 
 ### 6. Data Tagging (new)
 
