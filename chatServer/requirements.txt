@@ -45,3 +45,8 @@ anthropic>=0.49.0
 
 # Testing (dev only, but included for CI)
 pytest>=8.0.0
+
+# Workflow engine (LangGraph)
+langgraph>=1.1.6
+langgraph-checkpoint-postgres
+psycopg-pool
