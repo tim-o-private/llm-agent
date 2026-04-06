@@ -137,18 +137,22 @@ class CapabilityGateway:
         return tag_untrusted(result, source=tool_name)
 ```
 
-**Why not CLI tools directly (like HQ's `gog`)?** HQ runs locally where the CLI can read env vars and config files. Clarity runs server-side where the agent process shouldn't have access to raw tokens. The Capability Gateway is the bridge — it gives the agent the *effect* of a CLI tool without exposing credentials to the LLM context.
+**Why not CLI tools directly (like HQ's `gog`)?** In the MVP phase (Supabase Storage), the agent doesn't have a filesystem to run CLI tools against. The Capability Gateway bridges this — it gives the agent the *effect* of a CLI tool without exposing credentials to the LLM context. In the bwrap phase (see Q3), CLI tools run natively inside the sandbox and the gateway thins out to just auth injection via mounted credential files + trust tier enforcement.
 
 **Why not keep the current BaseTool pattern?** Current tools embed too much: auth logic, business logic, database calls, error handling. The new pattern separates these concerns:
 - **Tool definition** (what the LLM sees): name, description, parameters — stored in user config
-- **Capability implementation** (what runs): thin executor that calls the actual service
+- **Capability implementation** (what runs): thin executor that calls the actual service (MVP) or CLI tool in sandbox (bwrap phase)
 - **Auth + enforcement** (gateway): allowlist check, tier check, credential injection, audit logging
 
-**Migration path:** Current tools like `search_emails`, `draft_email_reply` become capability executors. The `CapabilityGateway` replaces `wrap_tools_with_approval()` and `ToolExecutionService`. The LLM sees the same tool names; the plumbing changes underneath.
+**Migration path:** Current tools like `search_emails`, `draft_email_reply` become capability executors. The `CapabilityGateway` replaces `wrap_tools_with_approval()` and `ToolExecutionService`. The LLM sees the same tool names; the plumbing changes underneath. When bwrap lands, many executors become just "run this CLI command in the sandbox."
 
 ### Q3: How Is the User-Scoped Filesystem Provisioned and Isolated?
 
-**Recommendation: Supabase Storage + RLS, with application-level overlay resolution.**
+**Recommendation: Two-phase approach — Supabase Storage for MVP config reads, bubblewrap (bwrap) sandbox when the agent needs to write.**
+
+#### Phase A: Supabase Storage (Phases 0-2)
+
+In the early phases, config is **read-only from the agent's perspective**. The server reads config from Supabase Storage at session init and injects it into the system prompt — same pattern as today's `build_agent_prompt()` reading from DB tables. The agent doesn't need file tools; it gets its config via the prompt.
 
 ```
 Supabase Storage
@@ -158,7 +162,7 @@ Supabase Storage
 │   ├── tools/                  # Default tool descriptions
 │   └── preferences/            # Sensible defaults
 │
-└── /users/{user_id}/           # Per-user mutable layer
+└── /users/{user_id}/           # Per-user mutable layer (user writes via API/UI)
     ├── agent/                  # User's personality overrides
     ├── workflows/              # Custom or modified workflows
     ├── tools/                  # Tool allowlist, custom descriptions
@@ -166,40 +170,52 @@ Supabase Storage
     └── memory/                 # Agent's observations about the user
 ```
 
-**Overlay resolution:** When the agent or file browser reads a path like `agent/identity.md`:
+**Overlay resolution:** When the server reads a path like `agent/identity.md`:
 1. Check `/users/{user_id}/agent/identity.md` — if exists, return it
 2. Fall back to `/system/agent/identity.md`
 
-Writes always go to the user layer. The system layer is immutable (deployed by us, versioned).
+**Who modifies config in this phase:**
+- **Us** — system defaults, deployed as code
+- **User** — via file browser API or existing mechanisms (standing instructions, settings UI)
+- **Agent** — does not. Self-modification requires a filesystem (Phase B).
 
-**Provisioning on signup:** Copy nothing. The system layer provides all defaults. User layer starts empty — files appear there only when the agent or user makes a modification. First customization creates the path lazily.
+**Isolation:** Supabase Storage RLS policy — `owner = auth.uid()` for user files.
 
-**Isolation:** Supabase Storage RLS policy — each row in `storage.objects` has an `owner` column. Policy: `owner = auth.uid()` for user files. System files are public-read via a separate bucket or policy.
+**Provisioning on signup:** Copy nothing. System layer provides all defaults. User layer starts empty — files appear only when the user makes a modification.
 
-**Version tracking (changelog):** An append-only `file_versions` table in Postgres:
-```sql
-CREATE TABLE file_versions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES auth.users(id),
-    path TEXT NOT NULL,
-    content TEXT,
-    change_type TEXT NOT NULL,    -- 'create', 'update', 'delete'
-    changed_by TEXT NOT NULL,     -- 'agent', 'user', 'system'
-    trigger TEXT,                 -- what caused the change
-    created_at TIMESTAMPTZ DEFAULT now()
-);
+#### Phase B: bubblewrap Sandbox (Phase 3+, when agent needs to write)
+
+When the agent needs to edit its own config (self-improvement, Phase 3), it gets a real POSIX filesystem via [bubblewrap](https://github.com/containers/bubblewrap) (`bwrap`). This is a lightweight Linux namespace sandbox — no Docker, no containers. Used by Flatpak, well-maintained.
+
+```
+bwrap namespace (per-user, long-lived)
+├── /system/     [ro bind mount — shared defaults]
+├── /user/       [rw — user's config tree, git-versioned]
+├── /tools/      [ro — CLI tool binaries (gog, etc.)]
+└── /tmp/        [rw — scratch space]
+
+NOT mounted: secrets, tokens, credentials, open network
 ```
 
-This gives us the "changelog view" from the behavior spec without requiring actual git. The file browser shows diff history, "what have you changed recently?" queries this table.
+**What bwrap enables:**
+- Agent uses standard file tools (`cat`, `grep`, `sed`) — no throwaway `write_config` API wrappers
+- CLI tools (`gog`, search tools) run natively inside the sandbox with full bash composability
+- Real `git` for version tracking — the entire user config tree is a git repo. Changelog = `git log`. Rollback = `git revert`. Diff = `git diff`.
+- The HQ operating model ports directly — config as files, agent edits files, git tracks changes.
 
-**Why not actual git repos per user?** Git is powerful but operationally heavy at scale. Each user gets a repo, which means: repo provisioning, garbage collection, disk management, SSH key management (or HTTP auth), merge conflicts if the agent and user edit simultaneously. Supabase Storage + a versions table gives us 90% of the value (history, diff, rollback) at 10% of the complexity.
+**Auth injection:** OAuth tokens are NOT in the filesystem. The Capability Gateway injects credentials at execution time via environment variables scoped to the subprocess, or via a short-lived credential file in a separate mount that the agent process can read but the LLM context never sees.
 
-**Why not the filesystem directly?** Server-side processes can't safely share a POSIX filesystem across users at scale. Object storage is the right abstraction for a web service.
+**Persistence:** The user's config tree lives on a durable disk (Fly volume or Hetzner block storage). Git serves as the durable store — if the disk is lost, re-clone from the remote. Supabase Storage remains the backup/sync layer and the source for the file browser API.
 
-**Tradeoffs:**
-- We lose `git diff` and `git log` natively. The versions table compensates.
-- No branching (agent can't "try a change on a branch"). Acceptable for MVP — the rollback mechanism covers the same use case.
-- Power users who want "real" git can export their config. Future: add Gitea integration as an advanced option.
+**Lifecycle:** The namespace lives as long as the agent connection. For an autonomous agent that works when the user isn't present, this could be a long-lived process.
+
+**Infrastructure requirements:** bwrap needs unprivileged user namespaces. Supported on Fly Machines and Hetzner bare metal/VPS.
+
+**Why this two-phase approach?**
+- Phases 0-2 don't need agent-writable config. Building `write_config` API tools over Supabase Storage just to throw them away when bwrap arrives is waste.
+- Supabase Storage is quick to set up and proves the overlay/config model.
+- bwrap lands exactly when it's needed — when the agent starts editing files.
+- Storage stays as the persistence layer behind bwrap regardless.
 
 ### Q4: What Executes Graph Workflows?
 
@@ -444,13 +460,13 @@ class ExecutionEngine(Protocol):
 
 ### Phase 0: Foundation (2-3 SPECs)
 
-**Goal:** Infrastructure that everything else builds on.
+**Goal:** Infrastructure that everything else builds on. Config is read-only from the agent's perspective — the server reads it, the user modifies it via API.
 
 1. **Supabase Storage setup + Config Service**
    - Create storage buckets (system, user)
    - Implement overlay resolution logic
    - RLS policies for user isolation
-   - File browser API (list, read, write, history)
+   - Config read API (server uses this to build agent prompts)
    - Migrate agent personality from DB to `/system/agent/identity.md`
 
 2. **Anthropic Messages API conversation handler**
@@ -460,8 +476,8 @@ class ExecutionEngine(Protocol):
    - Migrate one tool (e.g., `search_emails`) to new Capability Gateway pattern
 
 3. **Audit log expansion**
-   - `file_versions` table for config change tracking
    - Audit entries for all capability invocations
+   - Config change tracking (who changed what, when)
 
 ### Phase 1: Capability Gateway + Trust Tiers (2-3 SPECs)
 
@@ -474,7 +490,7 @@ class ExecutionEngine(Protocol):
    - Remove ToolExecutionService, wrap_tools_with_approval
 
 5. **Trust tier system**
-   - Per-user, per-tool tier config (stored in user FS)
+   - Per-user, per-tool tier config (stored in user config)
    - Tier enforcement in gateway
    - UI for trust management (or conversational — agent proposes graduation)
 
@@ -503,41 +519,50 @@ class ExecutionEngine(Protocol):
    - User approval in chat resumes graph
    - Connect to existing pending_actions/notification infrastructure
 
-### Phase 3: Self-Improvement (2-3 SPECs)
+### Phase 3: bwrap Sandbox + Self-Improvement (2-3 SPECs)
 
-**Goal:** Agent can edit its own config within boundaries.
+**Goal:** Agent gets a real filesystem and can edit its own config within boundaries. This is where bwrap lands — the agent needs to write files, so it gets a proper sandbox instead of throwaway API wrappers.
 
-10. **Immutable security boundary**
-    - System files marked immutable in storage metadata
-    - Allowlist and tier config in immutable layer
-    - Agent's write path restricted to mutable config files
+10. **bubblewrap sandbox provisioning**
+    - Per-user namespace with durable disk (Fly volume / Hetzner block storage)
+    - System defaults as read-only bind mount, user tree as read-write git repo
+    - CLI tool binaries mounted read-only (`gog`, search tools, etc.)
+    - Credential injection via scoped env vars (not filesystem)
+    - Hydrate user tree from Supabase Storage on first provision
 
-11. **Config modification tools**
-    - `edit_config` tool: agent can modify mutable files
-    - Diff-based approval: changes produce notification with before/after
+11. **Immutable security boundary**
+    - System mount is read-only — agent cannot modify allowlists or tier config
+    - Allowlist and tier config editable only through the approval flow (outside sandbox)
+    - Agent's write path restricted to mutable config files within `/user/`
+
+12. **Self-improvement via native file operations**
+    - Agent edits config files directly (standard file tools, bash, etc.)
+    - Git tracks all changes — changelog = `git log`, rollback = `git revert`
+    - Diff-based approval: changes produce notification with `git diff` output
     - Auto-rollback: revert if behavior metrics degrade
+    - Sync changes back to Supabase Storage (backup + file browser source)
 
-12. **Introspection loop**
+13. **Introspection loop**
     - Scheduled workflow that reviews agent performance
     - Proposes prompt adjustments, new workflows, capability requests
-    - Changelog view in file browser
+    - Changelog view via git history
 
 ### Phase 4: File Browser + Power Users (1-2 SPECs)
 
-13. **File browser frontend component**
-    - Tree view of user config
+14. **File browser frontend component**
+    - Tree view of user config (reads from Supabase Storage, synced from bwrap)
     - Read/edit with syntax highlighting
-    - Version history (from `file_versions` table)
+    - Version history (from git log via API)
     - Immutable file indicators (lock icon, "requires unlock to edit")
 
-14. **The Red Button**
+15. **The Red Button**
     - Settings toggle that unlocks the immutable layer
     - Clear warning UX
     - Agent can self-modify without approval gates when enabled
 
 ### Phase 5: Daemon Integration (PRD-003)
 
-15. **Daemon protocol + ClaudePEngine**
+16. **Daemon protocol + ClaudePEngine**
     - WebSocket protocol for daemon ↔ server
     - Share graph templates with server-side engine
     - Progress reporting, session management
@@ -551,12 +576,12 @@ class ExecutionEngine(Protocol):
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| **Supabase Storage performance for config reads** | Every agent invocation reads config files. Latency matters. | Cache aggressively (in-memory per user, TTL 60s). Config changes are rare; reads are frequent. |
+| **Supabase Storage performance for config reads** | Every agent invocation reads config files. Latency matters. | Cache aggressively (in-memory per user, TTL 60s). Config changes are rare; reads are frequent. Disappears when bwrap lands (local filesystem reads). |
 | **LangGraph version coupling** | LangGraph is at 1.1.6 with frequent releases. Breaking changes possible. | Pin version. Use only stable APIs (StateGraph, interrupt, AsyncPostgresSaver). Avoid LangGraph Platform/Cloud. |
 | **Anthropic API as execution engine** | Server-side LLM calls cost per token. Multi-step workflows could be expensive. | Token budgets per workflow. Shorter, focused prompts per step (not the full agent prompt). Model routing (Haiku for simple steps). |
-| **Overlay resolution complexity** | Edge cases: user deletes a file that exists in system defaults, partial overrides of structured files, etc. | Keep it simple for MVP: file-level override only (no field-level merge). Delete = restore to system default. |
-| **Migration disruption** | Users on the current system during migration. | Feature flags per user. Gradual rollout. Both systems run in parallel until migration is complete. |
-| **Self-modification testing** | Hard to test that the agent can't escape its sandbox. | Red-team exercises against the config modification system. Prompt injection test suite (per behavior spec 8.4). |
+| **bwrap on deployment targets** | Needs unprivileged user namespaces. Must work on Fly Machines and Hetzner. | Verify support on both platforms before committing to Phase 3. Fallback: run as root with `--cap-add SYS_ADMIN` on Fly if unprivileged namespaces unavailable. |
+| **Disk durability for bwrap user trees** | User config on local disk — disk loss = data loss. | Git as durable store: push to remote (Supabase Storage or hosted git). Sync on every commit. Re-clone to rehydrate. |
+| **Self-modification testing** | Hard to test that the agent can't escape its sandbox. | bwrap read-only mounts are kernel-enforced (not application-level). Red-team exercises. Prompt injection test suite (per behavior spec 8.4). |
 
 ### Open Questions (Need Prototyping)
 
@@ -566,9 +591,17 @@ class ExecutionEngine(Protocol):
 
 3. **Config file format.** YAML? Markdown with frontmatter (like HQ)? JSON? Markdown is most readable for power users in the file browser. YAML is most structured for programmatic access. Recommendation: Markdown with YAML frontmatter (consistent with HQ), but this needs UX validation.
 
-4. **Concurrent config modification.** What if the agent and the user edit the same config file simultaneously via file browser? Supabase Storage doesn't have built-in conflict resolution. Options: last-write-wins (simple, potentially surprising), optimistic locking via ETags, or advisory locks. Recommend last-write-wins for MVP with a notification to the other party.
+4. **bwrap on Fly Machines.** Need to verify that unprivileged user namespaces work on Fly's infrastructure before committing to Phase 3. Spike: deploy a test Machine that runs `bwrap --ro-bind / / --dev /dev --proc /proc ls` and confirm it works.
 
 5. **Daemon auth model.** The daemon needs to authenticate with Clarity's server. Options: long-lived API key, OAuth device flow, magic link. This is a PRD-003 concern, not immediate.
+
+### Decisions Made (from Tim's review)
+
+- **Horizontal scaling is not a concern.** Single user for now. Architecture decisions should optimize for speed-to-POC, not multi-tenant scale.
+- **Supabase Storage for MVP, bwrap for self-improvement phase.** Don't build throwaway `write_config` API tools. The agent doesn't write config until it has a real filesystem.
+- **bwrap over containers.** Lightweight namespace sandbox, not Docker. Must work on Fly and Hetzner.
+- **Git as durable store for user config trees.** Provided disks are durable and we have backups to rehydrate from, git serves as both version history and backup mechanism.
+- **Agent connection may be long-lived.** If the agent is autonomous (working when the user isn't present), the bwrap namespace lives as long as the connection — not per-request.
 
 ---
 
@@ -584,22 +617,26 @@ class ExecutionEngine(Protocol):
 | **Pydantic** | v2 (current) | Request/response validation, tool schemas | Already in use. |
 | **httpx** | Latest | Async HTTP for capability executors | Replace requests where needed. Already a dependency. |
 
+| **bubblewrap** (`bwrap`) | Latest packaged | Sandboxed per-user filesystem (Phase 3+) | Lightweight Linux namespace sandbox. Used by Flatpak. No Docker overhead. |
+
 **What we're NOT adding:**
 - LangChain (removing it)
 - LangServe / LangGraph Platform (unnecessary for self-hosted)
-- Claude Agent SDK (API keys only, alpha, wrong fit for multi-tenant server)
+- Claude Agent SDK (API keys only, alpha, wrong fit for server-side)
 - Redis / Celery (Postgres + jobs table is sufficient for our scale)
-- Docker per-user (operational complexity we don't need)
+- Docker per-user (bwrap achieves isolation without container overhead)
 
 ---
 
 ## Appendix A: Component Dependency Graph
 
 ```
-Phase 0 ──→ Phase 1 ──→ Phase 2 ──→ Phase 3 ──→ Phase 4
-  │              │            │            │            │
-  │              │            │            │            └─ File Browser + Red Button
-  │              │            │            └─ Self-improvement (needs phases 0-2)
+Phase 0 ──→ Phase 1 ──→ Phase 2 ──→ Phase 3 ──────→ Phase 4
+  │              │            │            │                │
+  │              │            │            │                └─ File Browser + Red Button
+  │              │            │            └─ bwrap sandbox + Self-improvement
+  │              │            │                (agent gets real FS, edits config natively,
+  │              │            │                 git tracks changes)
   │              │            └─ Workflow Engine (needs gateway + config service)
   │              └─ Capability Gateway + Trust Tiers (needs config service)
   └─ Storage + Config Service + Conversation Handler (independent foundation)
