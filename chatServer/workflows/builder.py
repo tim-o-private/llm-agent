@@ -41,13 +41,19 @@ def _default_state() -> WorkflowState:
 
 
 ServiceFn = Callable[[WorkflowState], Any]
+PromptLoaderFn = Callable[[str, str], Any]  # (template_name, step_name) -> Optional[str]
 
 
 class GraphBuilder:
     """Build a LangGraph StateGraph from a GraphTemplate."""
 
-    def __init__(self, service_registry: Optional[dict[str, ServiceFn]] = None):
+    def __init__(
+        self,
+        service_registry: Optional[dict[str, ServiceFn]] = None,
+        prompt_loader: Optional[PromptLoaderFn] = None,
+    ):
         self._service_registry: dict[str, ServiceFn] = service_registry or {}
+        self._prompt_loader = prompt_loader
 
     def register_service(self, step_name: str, fn: ServiceFn) -> None:
         """Register a service function for a service-type step."""
@@ -120,9 +126,25 @@ class GraphBuilder:
         self, step: StepDef, engine: AnthropicEngine, template: GraphTemplate
     ):
         """Create a closure for a step node."""
+        prompt_loader = self._prompt_loader
 
         async def step_node(state: WorkflowState) -> dict:
-            # Assemble prompt from step description + prior outputs
+            # Load system prompt from config if available
+            system_prompt = None
+            if prompt_loader:
+                try:
+                    system_prompt = await prompt_loader(template.name, step.name)
+                except Exception:
+                    logger.warning(
+                        "Failed to load prompt for %s/%s, using description",
+                        template.name, step.name,
+                    )
+
+            # Fall back to step description as system prompt
+            if not system_prompt:
+                system_prompt = step.description
+
+            # Assemble user prompt from prior outputs + parameters
             prompt_parts = [step.description]
 
             # Include prior step outputs
@@ -144,10 +166,11 @@ class GraphBuilder:
 
             prompt = "\n".join(prompt_parts)
 
-            # Run engine with step-specific config
+            # Run engine with step-specific config and system prompt
             result = await engine.run(
                 prompt=prompt,
                 tools=step.tools,
+                system_prompt=system_prompt,
                 model=step.model or "claude-sonnet-4-5-20250514",
                 max_tokens=step.max_tokens or 4096,
                 temperature=step.temperature if step.temperature is not None else 0.5,
