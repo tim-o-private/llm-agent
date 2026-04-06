@@ -44,6 +44,7 @@ export function useChatTimeline(): ChatMessage[] {
         action_tool_name: n.metadata?.tool_name as string | undefined,
         action_tool_args: n.metadata?.tool_args as Record<string, unknown> | undefined,
         action_status: n.metadata?.action_status as string | undefined,
+        action_context: n.metadata?.context as Record<string, unknown> | undefined,
       }));
   }, [notifications]);
 
