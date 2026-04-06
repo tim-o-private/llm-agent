@@ -1,6 +1,5 @@
 """Tests for SandboxProvisioner — lifecycle management."""
 
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest

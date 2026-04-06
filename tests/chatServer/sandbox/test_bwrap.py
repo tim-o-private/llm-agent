@@ -1,13 +1,11 @@
 """Tests for BwrapSandbox — bwrap invocation and command execution."""
 
 import asyncio
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from chatServer.sandbox.bwrap import BwrapSandbox, _truncate
-
 
 # -- truncation helper ----------------------------------------------------
 
@@ -133,7 +131,7 @@ class TestBwrapExecute:
         mock_proc.communicate = AsyncMock(return_value=(b"hello\n", b""))
         mock_proc.returncode = 0
 
-        with patch("chatServer.sandbox.bwrap.asyncio.create_subprocess_exec", return_value=mock_proc) as mock_exec:
+        with patch("chatServer.sandbox.bwrap.asyncio.create_subprocess_exec", return_value=mock_proc):
             result = await sandbox.execute("echo hello")
 
         assert result.stdout == "hello\n"
@@ -214,7 +212,7 @@ class TestBwrapExecute:
         mock_proc.returncode = 0
 
         with patch("chatServer.sandbox.bwrap.asyncio.create_subprocess_exec", return_value=mock_proc):
-            with patch("chatServer.sandbox.bwrap.asyncio.wait_for", wraps=asyncio.wait_for) as mock_wait:
+            with patch("chatServer.sandbox.bwrap.asyncio.wait_for", wraps=asyncio.wait_for):
                 # Can't easily check internal timeout value with wraps, but verify it doesn't error
                 result = await sandbox.execute("echo hi", timeout=9999)
 

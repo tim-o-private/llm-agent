@@ -1,11 +1,10 @@
 """Tests for ConfigHydrator — downloads config from Storage to local disk."""
 
-from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from chatServer.sandbox.hydrator import ConfigHydrator, _USER_TREE_DIRS
+from chatServer.sandbox.hydrator import _USER_TREE_DIRS, ConfigHydrator
 
 
 @pytest.fixture
