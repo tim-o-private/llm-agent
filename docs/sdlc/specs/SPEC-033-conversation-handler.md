@@ -535,22 +535,13 @@ All FUs are on a single branch: `feat/SPEC-033-conversation-handler`. Sequential
 
 **Merge order:** FU-1 → FU-5 → FU-2 → FU-3 → FU-4 → FU-6 (FU-5 can merge after FU-1 since it only modifies `conversation_handler.py`)
 
-## Decisions Requiring Your Input
+## Decisions (Resolved)
 
-1. **SSE format: simple JSON vs assistant-stream protocol.** This spec defines a simple JSON-per-line SSE format (`{"type": "text_delta", ...}`). SPEC-032 specifies `assistant-stream`'s `AssistantTransportEncoder` format (different field names: `part-start`, `text-delta`, etc.). Options:
-   - **(A)** Use simple JSON now, adapt to assistant-stream format in SPEC-032 implementation → two format changes
-   - **(B)** Use assistant-stream format from the start in this spec → adds `assistant-stream` Python dependency, couples this spec to SPEC-032
-   - **Recommendation:** (A) — keep this spec self-contained. The SSE adapter is ~30 LOC and easily swapped. But if SPEC-032 is shipping concurrently, (B) avoids rework.
+1. **SSE format: simple JSON-per-line.** No `assistant-stream` protocol dependency. The SSE adapter is ~30 LOC and can be swapped to `assistant-stream` format later if SPEC-032 requires it.
 
-2. **History storage format during migration.** This spec saves messages in LangChain format (for backward compat with old path). After LangChain removal, we'd want a simpler format (raw Anthropic JSON). Options:
-   - **(A)** Save in LangChain format now, migrate later → two schema changes
-   - **(B)** Save in a new format now, add a read adapter for old format → more work upfront, cleaner long-term
-   - **Recommendation:** (A) — migration is cheaper than dual-format reads during the flag period.
+2. **History storage: LangChain format during migration.** No dual-write, no new format. Messages saved in existing LangChain format for backward compat. Format migration happens after LangChain removal (separate cleanup spec).
 
-3. **SPEC-032 FU-1 overlap.** SPEC-032 AC-01/AC-02 spec backend streaming using LangChain internals. This spec supersedes that approach. Options:
-   - **(A)** Update SPEC-032 to remove FU-1, move streaming entirely to SPEC-033 → SPEC-032 becomes frontend-only
-   - **(B)** Keep both specs, SPEC-032 FU-1 becomes "wire frontend to SPEC-033's SSE endpoint" rather than "build SSE streaming" → reword, don't remove
-   - **Recommendation:** (B) — SPEC-032 FU-1 keeps its scope but references SPEC-033's endpoint instead of building its own.
+3. **SPEC-032 FU-1 overlap: coordinated by team lead.** SPEC-032 FU-1 will reference this spec's SSE endpoint rather than building its own LangChain-based streaming.
 
 ## Completeness Checklist
 
