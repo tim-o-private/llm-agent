@@ -71,7 +71,7 @@ Replace the scattered DB-column config model (agent personality in `agent_config
 - [ ] **AC-23:** Unit tests for `ConfigService`: overlay resolution (user wins over system), system fallback when no user file, `None` when neither exists, `list_paths` merges both layers with user shadowing system. [S1]
 - [ ] **AC-24:** Unit tests for `ConfigCacheService`: cache hit returns cached value, cache miss calls through to `ConfigService`, cache invalidation on write, separate TTLs for system vs user paths. [S1]
 - [ ] **AC-25:** Integration test: two users; user A writes to their config path; user B cannot read user A's config via the API (RLS enforcement). Service-role can read both. [S1, A8]
-- [ ] **AC-26:** Migration test: after running the data migration, `ConfigService.read("agent/soul.md", user_id)` returns the same content as the current `agent_configurations.soul` for that user's agent. Same for `agent/instructions.md` matching `user_agent_prompt_customizations.instructions`. [S1]
+- [ ] **AC-26:** Migration test: after running the data migration, `ConfigService.read("agents/clarity/soul.md", user_id)` returns the same content as the current `agent_configurations.soul` for the assistant agent. Same for `agent/instructions.md` matching `user_agent_prompt_customizations.instructions`. [S1]
 - [ ] **AC-27:** Regression test: an end-to-end prompt assembly test that loads an agent via `load_agent_executor_db_async()` and asserts the system prompt contains the soul text and user instructions from config files (not from DB columns). [S1]
 
 ## Scope
@@ -88,7 +88,7 @@ Replace the scattered DB-column config model (agent personality in `agent_config
 | `tests/chatServer/services/test_config_cache_service.py` | Unit tests for caching layer |
 | `tests/chatServer/routers/test_config_router.py` | API endpoint tests |
 | `supabase/migrations/2026MMDD000001_create_config_bucket.sql` | Bucket creation + RLS policies |
-| `scripts/migrate_config_to_storage.py` | One-time data migration script |
+| `scripts/migrate_config_to_storage.py` | Optional eager data migration script (lazy fallback works without it) |
 
 ### Files to Modify
 
@@ -109,8 +109,8 @@ Replace the scattered DB-column config model (agent personality in `agent_config
 - **Trust tiers and allowlists** — tool permission config files (SPEC-034).
 - **Workflow templates in storage** — graph definitions as config files (SPEC-035/036).
 - **Prompt template migration** — `prompt_template` stays in `agent_configurations` for now.
-- **Removing deprecated DB columns** — `soul`, `identity`, `instructions` columns remain for rollback safety. A future cleanup spec removes them after config service proves stable.
-- **Multi-agent config** — this spec handles the `assistant` agent. Additional agents follow the same pattern with no spec changes needed.
+- **Removing deprecated DB columns** — `soul`, `identity`, `instructions` columns remain for rollback safety and lazy fallback. A future cleanup spec removes them after config service proves stable.
+- **Operating model / channel guidance migration** — `OPERATING_MODEL`, `CHANNEL_GUIDANCE`, etc. stay as code constants in `prompt_builder.py`. Deferred to a follow-up spec.
 
 ## Blast Radius
 
@@ -308,14 +308,15 @@ This eliminates the need for a manual migration deploy step. Data migrates eithe
 
 ### 6. Data Migration Script
 
-`scripts/migrate_config_to_storage.py` — run once after deploying the migration:
+`scripts/migrate_config_to_storage.py` — optional eager migration (the lazy fallback in the agent loader means this is not required for correctness, but recommended for consistency):
 
 1. Connect to Supabase with service_role key
-2. Read all `agent_configurations` rows → write soul/identity to `/system/agents/{name}/`
-3. Alias the `assistant` agent at `/system/agent/`
-4. Read all `user_agent_prompt_customizations` rows → write instructions to `/users/{user_id}/agent/instructions.md`
-5. Log counts and any failures
-6. Idempotent — re-running overwrites with latest values
+2. Read all `agent_configurations` rows → write soul/identity to `/system/agents/{name}/` (mapping `assistant` → `clarity`)
+3. Read all `user_agent_prompt_customizations` rows → write instructions to `/users/{user_id}/agent/instructions.md`
+4. Log counts and any failures
+5. Idempotent — re-running overwrites with latest values
+
+**Migration timing:** The lazy fallback pattern means the code works before, during, and after migration. The migration script can be run at any time after the bucket exists. No deploy coordination required.
 
 ## Functional Units
 
@@ -358,12 +359,12 @@ DB columns (`soul`, `identity` in `agent_configurations`; `instructions` in `use
 
 A future cleanup spec removes the deprecated columns after the config service has been stable in production for at least 2 weeks.
 
-## Decisions Requiring Your Input
+## Resolved Decisions
 
-1. **Config path convention for multi-agent:** The architecture proposal uses `/system/agent/` (singular). If we want to support multiple agent configs (e.g., `assistant`, `email_digest_agent`), should the path be `/system/agents/{agent_name}/soul.md` with `/system/agent/` as an alias for the default? Or should we keep it simple with `/system/agent/` only since there's currently one user-facing agent?
+1. **Config path convention:** `/system/agents/{name}/` (plural, namespaced). Default agent is `clarity` (mapped from DB `assistant`). Supports multiple agents naturally.
 
-2. **User instructions keyed by agent_name:** Currently `user_agent_prompt_customizations` is keyed by `(user_id, agent_name)`. In the config file model, should we keep per-agent instructions (`/users/{uid}/agents/{agent_name}/instructions.md`) or simplify to one instructions file (`/users/{uid}/agent/instructions.md`) since there's effectively one agent per user?
+2. **User instructions:** One file per user for MVP: `/users/{id}/agent/instructions.md`. No per-agent-name keying — simplifies the model since there's effectively one agent per user.
 
-3. **Data migration timing:** The migration script (`scripts/migrate_config_to_storage.py`) needs to run after the SQL migration creates the bucket but before the code switches to reading from storage. Should this be: (a) a manual step in the deploy checklist, (b) automated in `main.py` startup (check if migration needed, run once), or (c) a SQL migration that uses `pg_net` or storage API directly?
+3. **Data migration:** Lazy fallback — `ConfigService` reads from storage first, falls back to DB if the config file doesn't exist yet. No manual deploy step required. An optional eager migration script (`scripts/migrate_config_to_storage.py`) can be run at any time for consistency.
 
-4. **Operating model text:** The `OPERATING_MODEL`, `CHANNEL_GUIDANCE`, `INTERACTION_LEARNING_GUIDANCE` etc. constants in `prompt_builder.py` are effectively system config too. Should this spec also migrate them to `/system/agent/operating_model.md` etc., or leave that for a follow-up? Moving them now makes the config service more complete; leaving them avoids scope creep.
+4. **Operating model constants:** Deferred. Only `identity` (soul/personality) and `instructions` (user customizations) migrate in this spec. `OPERATING_MODEL`, `CHANNEL_GUIDANCE`, etc. stay as code constants in `prompt_builder.py` for a follow-up spec.
