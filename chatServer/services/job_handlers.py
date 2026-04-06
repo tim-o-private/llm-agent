@@ -86,6 +86,44 @@ async def handle_reminder_delivery(job: dict) -> dict:
     return {"delivered": True, "reminder_id": reminder_id}
 
 
+async def handle_workflow(job: dict) -> dict:
+    """Execute a workflow via the workflow engine.
+
+    job["input"] contains: {user_id, template_name, parameters}.
+    Returns {"run_id": str, "status": "started"}.
+    """
+    from ..database.supabase_client import create_system_client
+    from ..workflows.dispatch import dispatch_workflow
+
+    job_input = job.get("input", {})
+    user_id = str(job_input["user_id"])
+    template_name = str(job_input["template_name"])
+    parameters = job_input.get("parameters", {})
+
+    db_client = await create_system_client()
+
+    # Use dispatch_workflow which handles all the setup
+    result_msg = await dispatch_workflow(
+        args={"workflow_name": template_name, "parameters": parameters},
+        user_id=user_id,
+        db_client=db_client,
+        anthropic_client=_get_anthropic_client_for_workflow(),
+        tool_schemas=[],
+        tool_executors={},
+    )
+
+    if "Failed" in result_msg or "Error" in result_msg or "Unknown" in result_msg:
+        raise RuntimeError(result_msg)
+
+    return {"status": "started", "message": result_msg}
+
+
+def _get_anthropic_client_for_workflow():
+    """Get or create an Anthropic client for workflow execution."""
+    import anthropic
+    return anthropic.AsyncAnthropic()
+
+
 async def handle_morning_briefing(job: dict) -> dict:
     """Generate morning briefing and self-schedule next occurrence.
 

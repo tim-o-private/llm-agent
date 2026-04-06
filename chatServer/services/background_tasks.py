@@ -16,6 +16,7 @@ from .job_handlers import (
     handle_evening_briefing,
     handle_morning_briefing,
     handle_reminder_delivery,
+    handle_workflow,
 )
 from .job_runner_service import JobRunnerService
 from .job_service import JobService
@@ -301,6 +302,7 @@ class BackgroundTaskService:
         self._job_runner.register_handler('reminder_delivery', handle_reminder_delivery)
         self._job_runner.register_handler('morning_briefing', handle_morning_briefing)
         self._job_runner.register_handler('evening_briefing', handle_evening_briefing)
+        self._job_runner.register_handler('workflow', handle_workflow)
 
         # Bootstrap briefing jobs before starting the runner —
         # ensures all eligible users have pending briefing jobs
