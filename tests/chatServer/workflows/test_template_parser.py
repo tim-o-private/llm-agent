@@ -5,7 +5,6 @@ import pytest
 from chatServer.workflows.models import TemplateParseError
 from chatServer.workflows.template_parser import parse_template
 
-
 VALID_TEMPLATE = """\
 ---
 name: email-triage

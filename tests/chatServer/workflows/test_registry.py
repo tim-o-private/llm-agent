@@ -1,13 +1,12 @@
 """Tests for workflow template registry."""
 
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
 from chatServer.workflows.models import TemplateNotFoundError
 from chatServer.workflows.registry import TemplateRegistry
-
 
 SAMPLE_TEMPLATE_MD = """\
 ---
