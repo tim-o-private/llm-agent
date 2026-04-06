@@ -33,9 +33,9 @@ The raw API loop is three steps:
 
 LangChain wraps this in `AgentExecutor`, `RunnableSequence`, callback managers, and content block normalization — adding complexity without value. The content block normalization issues (list-of-dicts vs strings, `chatServer/services/chat.py:306-310`) are LangChain-specific. The raw API is predictable.
 
-### Relationship to SPEC-032 (Assistant-UI Alignment)
+### Relationship to SPEC-035 (Assistant-UI Alignment)
 
-SPEC-032 FU-1 specs backend SSE streaming using "LangChain's `astream_events()` or callback handler." This spec supersedes that approach — streaming comes natively from the Anthropic SDK's `messages.stream()`, which is simpler and eliminates the callback layer. SPEC-032 FU-1 should be updated to reference the ConversationHandler's stream output rather than LangChain internals. The SSE event format (using `assistant-stream` encoder) remains the same.
+SPEC-035 FU-1 specs backend SSE streaming using "LangChain's `astream_events()` or callback handler." This spec supersedes that approach — streaming comes natively from the Anthropic SDK's `messages.stream()`, which is simpler and eliminates the callback layer. SPEC-035 FU-1 should be updated to reference the ConversationHandler's stream output rather than LangChain internals. The SSE event format (using `assistant-stream` encoder) remains the same.
 
 ### Relationship to SPEC-034 (Capability Gateway)
 
@@ -50,7 +50,7 @@ SPEC-034 replaces `BaseTool` subclasses with a Capability Gateway. Until SPEC-03
 | Existing `chat_message_history` table | Message persistence | Complete |
 | Existing `BaseTool` subclasses | Tool implementations (bridged) | Complete |
 | Existing `approval_tiers.py` + `tool_wrapper.py` | Approval checking (adapted) | Complete |
-| SPEC-032 | SSE format consumed by frontend (`assistant-stream`) | In progress (can develop in parallel) |
+| SPEC-035 | SSE format consumed by frontend (`assistant-stream`) | In progress (can develop in parallel) |
 
 ## Acceptance Criteria
 
@@ -147,9 +147,9 @@ SPEC-034 replaces `BaseTool` subclasses with a Capability Gateway. Until SPEC-03
 - **Tool migration to Capability Gateway.** SPEC-034 replaces `BaseTool` subclasses. This spec bridges them.
 - **Workflow engine.** SPEC-035 implements `dispatch_workflow`. This spec only stubs it.
 - **Config service / Supabase Storage.** Agent config continues to load from the database via existing mechanisms.
-- **Frontend streaming consumer.** SPEC-032 FU-2+ handles `useLocalRuntime` and streaming decode. This spec provides the SSE endpoint they consume.
+- **Frontend streaming consumer.** SPEC-035 FU-2+ handles `useLocalRuntime` and streaming decode. This spec provides the SSE endpoint they consume.
 - **Removing the old ChatService.** Happens in a follow-up after validation.
-- **assistant-stream format encoding.** SPEC-032 FU-1 defines the `AssistantTransportEncoder` format. This spec uses a simpler JSON-per-line SSE format that can be adapted to match the assistant-stream protocol in SPEC-032's implementation.
+- **assistant-stream format encoding.** SPEC-035 FU-1 defines the `AssistantTransportEncoder` format. This spec uses a simpler JSON-per-line SSE format that can be adapted to match the assistant-stream protocol in SPEC-035's implementation.
 
 ## Technical Approach
 
@@ -362,7 +362,7 @@ Every file that touches `ChatService`, `AgentExecutor`, `agent_executor`, LangCh
 
 | File | Impact | Risk |
 |------|--------|------|
-| `webApp/src/lib/assistantui/CustomRuntime.ts` | Consumer of `/api/chat` — needs SSE support (SPEC-032 scope) | Medium — JSON mode must work identically |
+| `webApp/src/lib/assistantui/CustomRuntime.ts` | Consumer of `/api/chat` — needs SSE support (SPEC-035 scope) | Medium — JSON mode must work identically |
 | `webApp/src/api/hooks/useChatApiHooks.ts` | Consumer of `/api/chat` | Medium — JSON response format unchanged |
 | `webApp/src/lib/chatAPI.ts` | Consumer of `/api/chat` | Low — health check unaffected |
 | `webApp/src/stores/useChatStore.ts` | NOT modified | Low |
@@ -537,11 +537,11 @@ All FUs are on a single branch: `feat/SPEC-033-conversation-handler`. Sequential
 
 ## Decisions (Resolved)
 
-1. **SSE format: simple JSON-per-line.** No `assistant-stream` protocol dependency. The SSE adapter is ~30 LOC and can be swapped to `assistant-stream` format later if SPEC-032 requires it.
+1. **SSE format: simple JSON-per-line.** No `assistant-stream` protocol dependency. The SSE adapter is ~30 LOC and can be swapped to `assistant-stream` format later if SPEC-035 requires it.
 
 2. **History storage: LangChain format during migration.** No dual-write, no new format. Messages saved in existing LangChain format for backward compat. Format migration happens after LangChain removal (separate cleanup spec).
 
-3. **SPEC-032 FU-1 overlap: coordinated by team lead.** SPEC-032 FU-1 will reference this spec's SSE endpoint rather than building its own LangChain-based streaming.
+3. **SPEC-035 FU-1 overlap: coordinated by team lead.** SPEC-035 FU-1 will reference this spec's SSE endpoint rather than building its own LangChain-based streaming.
 
 ## Completeness Checklist
 

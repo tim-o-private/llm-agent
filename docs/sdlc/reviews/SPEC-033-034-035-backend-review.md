@@ -1,4 +1,4 @@
-# Backend Feasibility Review: SPEC-032, SPEC-033, SPEC-034
+# Backend Feasibility Review: SPEC-035, SPEC-033, SPEC-034
 
 **Reviewer:** Backend Engineer Agent
 **Date:** 2026-04-06
@@ -6,7 +6,7 @@
 
 ---
 
-## SPEC-032: Config Service — Supabase Storage + Overlay Resolution
+## SPEC-035: Config Service — Supabase Storage + Overlay Resolution
 
 ### Verdict: CONCERNS (fixable issues)
 
@@ -40,7 +40,7 @@ The spec's blast radius analysis is **accurate and thorough**. All readers of `s
 
 4. **CONCERN: `_download()` silently catches all exceptions.** The spec's `_download()` method uses a bare `except Exception` to return `None` on 404. This will also swallow network errors, auth failures, and corrupt data. **Recommendation:** Catch the specific `StorageApiError` (from `storage3.utils`) and only treat 404-class errors as "not found". Log all other exceptions at WARNING level.
 
-5. **MINOR: SPEC-032 numbering conflict.** The spec is numbered SPEC-032, but SPEC-033 refers to "SPEC-032 FU-1" in the context of Assistant-UI alignment / frontend streaming — that's a different SPEC-032 (the frontend/streaming spec). This creates confusion. SPEC-033 line 38 says "SPEC-032 FU-1 specs backend SSE streaming" — is that this SPEC-032 (Config Service) or another one?
+5. **MINOR: SPEC-035 numbering conflict.** The spec is numbered SPEC-035, but SPEC-033 refers to "SPEC-035 FU-1" in the context of Assistant-UI alignment / frontend streaming — that's a different SPEC-035 (the frontend/streaming spec). This creates confusion. SPEC-033 line 38 says "SPEC-035 FU-1 specs backend SSE streaming" — is that this SPEC-035 (Config Service) or another one?
 
 6. **MINOR: No `write()` method exposed via ConfigService for system paths.** AC-02 seeds system defaults, but `ConfigService.write()` only writes to user paths (`users/{user_id}/...`). The migration script will need direct storage client access to write to `system/` paths. This is fine (migration script uses service_role directly) but should be documented.
 
@@ -51,7 +51,7 @@ The spec's blast radius analysis is **accurate and thorough**. All readers of `s
 | 1 | Bucket creation via SQL fails on hosted Supabase | Medium | Test on staging first; fallback to API-based creation |
 | 2 | UserScopedClient doesn't wrap storage ops | Medium | Document that router endpoints use ConfigService with user_id param, not direct storage RLS |
 | 3 | Silent exception swallowing in `_download()` | Low | Catch specific StorageApiError |
-| 4 | SPEC-032 numbering confusion with frontend streaming spec | Low | Renumber or clarify cross-references |
+| 4 | SPEC-035 numbering confusion with frontend streaming spec | Low | Renumber or clarify cross-references |
 
 ---
 
@@ -96,7 +96,7 @@ The blast radius analysis is **thorough and largely accurate** (37 files analyze
 
 6. **CONCERN: The `CONVERSATION_HANDLER_V2` feature flag check per-request is good, but the handler construction cost matters.** `build_conversation_handler()` (spec's code example in main.py) must load tools, create BaseTool instances, wrap with approval, convert to Anthropic schemas, load history, build system prompt — all per request. The current path caches the `AgentExecutor` per `(user_id, agent_name)`. Without similar caching, the v2 path will be significantly slower on first request. **Recommendation:** Cache the ConversationHandler or at least the tool schemas + Anthropic client across requests for the same user.
 
-7. **MINOR: SSE format divergence.** The spec acknowledges the SSE format differs from `assistant-stream` protocol (Decision #1). This will require the frontend team to handle two formats or do a format swap during SPEC-032 frontend work. Not a blocker but coordination risk.
+7. **MINOR: SSE format divergence.** The spec acknowledges the SSE format differs from `assistant-stream` protocol (Decision #1). This will require the frontend team to handle two formats or do a format swap during SPEC-035 frontend work. Not a blocker but coordination risk.
 
 8. **MINOR: `dispatch_workflow` stub (AC-28-30) is handler-internal but uses a tool schema.** If it's not in the DB tool registry and not in `CANONICAL_TOOL_NAMES`, the `test_tool_registry_validator.py` won't catch it — which is correct. But the stub schema must exactly match the future SPEC-035 schema to avoid a breaking change. **Recommendation:** Mark the schema as provisional in comments.
 
@@ -132,7 +132,7 @@ The tool migration map (29 tools) is **accurate**. Verified against `TOOL_REGIST
 
 ### Issues Found
 
-1. **BLOCKER: SPEC-034 depends on SPEC-032 ConfigService for tool definitions, but SPEC-032 might not be ready.** AC-07 says "Tool definitions are loaded from Markdown files with YAML frontmatter (via SPEC-032 ConfigService)." But SPEC-032 is building file-based config for agent identity/soul/instructions — it doesn't specifically implement tool definition storage. The gateway needs `config_service.get_tool_definition(tool_name)` — a method that doesn't exist in SPEC-032's API (`read()`, `write()`, `list_paths()` are generic file ops). The tool definition loading, parsing, and caching would need to be built in SPEC-034 on top of SPEC-032's primitives. This is fine architecturally but the dependency should be explicit: SPEC-034 FU-1 needs SPEC-032 FU-2 (ConfigService) to be complete before it can load tool definitions from storage.
+1. **BLOCKER: SPEC-034 depends on SPEC-035 ConfigService for tool definitions, but SPEC-035 might not be ready.** AC-07 says "Tool definitions are loaded from Markdown files with YAML frontmatter (via SPEC-035 ConfigService)." But SPEC-035 is building file-based config for agent identity/soul/instructions — it doesn't specifically implement tool definition storage. The gateway needs `config_service.get_tool_definition(tool_name)` — a method that doesn't exist in SPEC-035's API (`read()`, `write()`, `list_paths()` are generic file ops). The tool definition loading, parsing, and caching would need to be built in SPEC-034 on top of SPEC-035's primitives. This is fine architecturally but the dependency should be explicit: SPEC-034 FU-1 needs SPEC-035 FU-2 (ConfigService) to be complete before it can load tool definitions from storage.
 
    **Alternative:** For FU-1-3, hard-code tool definitions in Python (a `TOOL_DEFINITIONS` dict, similar to current `TOOL_REGISTRY`). Migrate to config files in FU-4 or a follow-up. This decouples the two specs and reduces risk. The gateway's `ToolDefinition` model stays the same; only the loading source changes.
 
@@ -176,7 +176,7 @@ The tool migration map (29 tools) is **accurate**. Verified against `TOOL_REGIST
 | 1 | Cross-spec dependency: SPEC-033 bridge must be replaced before SPEC-034 FU-4 | High | Document explicit handoff point; add SPEC-033 FU-7 for gateway integration |
 | 2 | Gmail tool complexity vastly exceeds "thin executor" model | High | Budget 3-4x effort for Gmail executors; consider keeping GmailToolProvider as an internal service |
 | 3 | `prompt_builder.py` must be modified (missed from spec) | Medium | Add to FU-4 modifications list |
-| 4 | Hard dependency on SPEC-032 ConfigService for tool definitions | Medium | Use hardcoded definitions for FU-1-3; migrate to config files later |
+| 4 | Hard dependency on SPEC-035 ConfigService for tool definitions | Medium | Use hardcoded definitions for FU-1-3; migrate to config files later |
 | 5 | MCP client lifecycle unclear (per-session vs shared) | Medium | Clarify in spec; align with current agent_loader_db.py behavior |
 | 6 | `get_approval_context()` enrichment not addressed | Medium | Add context_enricher pattern to gateway pipeline |
 | 7 | Gmail tools use sync Supabase client internally | Low | Migrate to async as part of executor rewrite (net improvement) |
@@ -185,8 +185,8 @@ The tool migration map (29 tools) is **accurate**. Verified against `TOOL_REGIST
 
 ## Cross-Spec Coordination Issues
 
-### 1. SPEC-032 ↔ SPEC-033 Numbering Conflict
-SPEC-033 references "SPEC-032 FU-1" for backend SSE streaming, but the actual SPEC-032 in this review is Config Service, not streaming. Either there's a different SPEC-032 for the frontend/streaming work, or the cross-references are wrong. **Must be clarified before implementation.**
+### 1. SPEC-035 ↔ SPEC-033 Numbering Conflict
+SPEC-033 references "SPEC-035 FU-1" for backend SSE streaming, but the actual SPEC-035 in this review is Config Service, not streaming. Either there's a different SPEC-035 for the frontend/streaming work, or the cross-references are wrong. **Must be clarified before implementation.**
 
 ### 2. SPEC-033 ↔ SPEC-034 Bridge Lifecycle
 The `LangChainToolBridge` in SPEC-033 is explicitly temporary — "removed when SPEC-034 ships." But SPEC-034 FU-4 (delete old tools) can't run until the bridge is replaced. This creates a circular dependency:
@@ -197,25 +197,25 @@ The `LangChainToolBridge` in SPEC-033 is explicitly temporary — "removed when 
 
 **Recommendation:** Add an explicit FU to one of the specs for the bridge→gateway swap. Suggested: SPEC-034 FU-3.5 "Wire ConversationHandler to CapabilityGateway" before FU-4 cleanup.
 
-### 3. SPEC-032 ↔ SPEC-034 Tool Definition Storage
-SPEC-034 says tool definitions are loaded "via SPEC-032 ConfigService." But SPEC-032's scope is agent identity/soul/instructions — tool definitions aren't mentioned in SPEC-032's ACs. Either SPEC-032's scope should expand to cover tool definition storage, or SPEC-034 should start with hardcoded definitions and migrate later.
+### 3. SPEC-035 ↔ SPEC-034 Tool Definition Storage
+SPEC-034 says tool definitions are loaded "via SPEC-035 ConfigService." But SPEC-035's scope is agent identity/soul/instructions — tool definitions aren't mentioned in SPEC-035's ACs. Either SPEC-035's scope should expand to cover tool definition storage, or SPEC-034 should start with hardcoded definitions and migrate later.
 
 ### 4. Shared Prompt Builder Modification
-Both SPEC-032 and SPEC-034 affect `prompt_builder.py` differently:
-- SPEC-032: Upstream change (soul/identity source changes, but `build_agent_prompt()` signature stays the same) — transparent ✅
+Both SPEC-035 and SPEC-034 affect `prompt_builder.py` differently:
+- SPEC-035: Upstream change (soul/identity source changes, but `build_agent_prompt()` signature stays the same) — transparent ✅
 - SPEC-034: `_format_tool_guidance()` must switch from iterating BaseTool classes to using gateway — NOT transparent ❌
 
 These changes should not conflict (they touch different functions), but the SPEC-034 prompt_builder modification must be added to its scope.
 
 ### 5. Implementation Order
 The specs don't specify inter-spec ordering clearly. Recommended:
-1. **SPEC-032 (Config Service)** — no dependencies on the others
+1. **SPEC-035 (Config Service)** — no dependencies on the others
 2. **SPEC-033 (Conversation Handler)** — depends on nothing if bridge approach is used
-3. **SPEC-034 FU-1-3 (Gateway + Executors)** — can depend on SPEC-032 for tool def storage, or use hardcoded defs
+3. **SPEC-034 FU-1-3 (Gateway + Executors)** — can depend on SPEC-035 for tool def storage, or use hardcoded defs
 4. **SPEC-034 bridge swap** — depends on both SPEC-033 and SPEC-034 FU-1-3
 5. **SPEC-034 FU-4 (Cleanup)** — depends on bridge swap
 
-SPEC-032 and SPEC-033 can run in parallel. SPEC-034 should start after SPEC-032 FU-2 (if using config files) or can start immediately (if using hardcoded defs).
+SPEC-035 and SPEC-033 can run in parallel. SPEC-034 should start after SPEC-035 FU-2 (if using config files) or can start immediately (if using hardcoded defs).
 
 ---
 
@@ -223,7 +223,7 @@ SPEC-032 and SPEC-033 can run in parallel. SPEC-034 should start after SPEC-032 
 
 | Spec | Verdict | Blockers | Key Action |
 |------|---------|----------|------------|
-| SPEC-032 | CONCERNS | 0 | Verify bucket creation via SQL; clarify user-scoped storage access |
+| SPEC-035 | CONCERNS | 0 | Verify bucket creation via SQL; clarify user-scoped storage access |
 | SPEC-033 | CONCERNS | 0 | Add caching strategy; document per-channel memory behavior; add message format test fixtures |
 | SPEC-034 | CONCERNS | 1 (cross-spec) | Document bridge→gateway swap FU; budget extra time for Gmail; add prompt_builder.py to modifications |
 
