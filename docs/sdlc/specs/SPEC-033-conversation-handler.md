@@ -65,6 +65,7 @@ SPEC-034 replaces `BaseTool` subclasses with a Capability Gateway. Until SPEC-03
 - [ ] **AC-07:** After each complete turn (user message → assistant response), the handler persists both messages to `chat_message_history` in the existing format so that LangChain-based channels (during migration) can still read the history. [A7]
 - [ ] **AC-08:** Per-message token usage (`input_tokens`, `output_tokens`) is extracted from the API response's `usage` field and logged at INFO level. Cumulative session token counts are tracked on the handler instance and available via a `token_usage` property. [A14]
 - [ ] **AC-09:** The handler respects `max_tokens` from the agent configuration (default 4096). The model name comes from agent config's `llm.model` field. Temperature comes from agent config's `llm.temperature` field (default 0.7). [A2]
+- [ ] **AC-31:** `ConversationHandler` instances are cached per `(user_id, agent_name)`, matching the current `AgentExecutor` caching behavior in `ChatService._agent_executor_cache`. The Anthropic client, tool schemas, and tool executors are reused across requests for the same user. Only message history is loaded fresh per request. Cache eviction follows the same pattern as existing executor cache (no active sessions → eligible for eviction). [A1]
 
 ### FU-2: SSE Streaming Endpoint
 
@@ -87,6 +88,9 @@ SPEC-034 replaces `BaseTool` subclasses with a Capability Gateway. Until SPEC-03
 - [ ] **AC-20:** The scheduled execution service (`chatServer/services/scheduled_execution_service.py`) uses the ConversationHandler in non-streaming mode when the feature flag is enabled. Model override, approval wrapping, and result storage work identically. [A7]
 - [ ] **AC-21:** The session-open service (`chatServer/services/session_open_service.py`) uses the ConversationHandler in non-streaming mode when the feature flag is enabled. Bootstrap context injection and session creation work identically. [A7]
 - [ ] **AC-22:** All three channel adapters continue to work with the old `ChatService` when the feature flag is disabled. The flag is read once per invocation, not cached. [A14]
+- [ ] **AC-32:** Memory behavior differs by channel and must be explicit: **web** and **telegram** channels load the last 50 messages from `chat_message_history` (matching current `AsyncConversationBufferWindowMemory` with `k=50`). **scheduled** and **session_open** channels pass empty message history (`[]`) — they are stateless invocations with no conversation context. [A7]
+- [ ] **AC-33:** The Telegram push logic (`_push_to_telegram_if_linked()` from `ChatService`, `chat.py:169-206`) is extracted into a standalone utility function that receives `db_client` and `response_text` as parameters. Both the old `ChatService` path and the new `ConversationHandler` web path call this shared utility. Missing this would break cross-channel sync. [A7]
+- [ ] **AC-34:** `message_history_adapter` tests include comprehensive fixtures covering all LangChain message format variants stored in `chat_message_history`: `HumanMessage` (string content), `AIMessage` (string content), `AIMessage` with `tool_calls` array, `AIMessageChunk` with `additional_kwargs.tool_calls`, `ToolMessage` with `tool_call_id`, and the content-block-list format (`list[dict]` content from newer langchain-anthropic). Fixtures should be based on real DB row dumps. [S1]
 
 ### FU-5: Error Handling + Resilience
 
@@ -408,6 +412,7 @@ Every file that touches `ChatService`, `AgentExecutor`, `agent_executor`, LangCh
 | `test_langchain_tool_bridge.py` | Tool dispatch: _arun called with correct args | AC-05 |
 | `test_message_history_adapter.py` | History loading: LangChain format → Anthropic format, window of 50 | AC-06 |
 | `test_message_history_adapter.py` | History saving: Anthropic format → LangChain format | AC-07 |
+| `test_message_history_adapter.py` | **Format variants**: HumanMessage, AIMessage, ToolMessage, AIMessageChunk with tool_calls, content as `list[dict]` (content blocks) vs plain string, `additional_kwargs.tool_calls` format. Test fixtures dumped from real `chat_message_history` rows. | AC-06, AC-34 |
 | `test_sse_stream.py` | Event formatting: each event type produces correct SSE lines | AC-11, AC-12 |
 
 ### Integration Tests (required)
@@ -470,6 +475,10 @@ Every file that touches `ChatService`, `AgentExecutor`, `agent_executor`, LangCh
 | AC-28 | `test_dispatch_workflow_schema` | — | — |
 | AC-29 | `test_dispatch_workflow_stub_response` | — | — |
 | AC-30 | `test_dispatch_workflow_only_in_v2` | — | — |
+| AC-31 | `test_handler_cached_per_user` | `test_handler_reuse_across_requests` | — |
+| AC-32 | — | `test_web_loads_50_messages`, `test_scheduled_empty_history` | — |
+| AC-33 | — | `test_telegram_push_from_v2_path` | — |
+| AC-34 | `test_history_format_variants_*` (HumanMessage, AIMessage, ToolMessage, AIMessageChunk, content blocks) | — | — |
 
 ### Manual Verification (UAT)
 
@@ -496,9 +505,11 @@ Every file that touches `ChatService`, `AgentExecutor`, `agent_executor`, LangCh
 
 All FUs are on a single branch: `feat/SPEC-033-conversation-handler`. Sequential execution — each FU commits before the next starts.
 
-1. **FU-1: ConversationHandler Core + Bridge** (AC-01 through AC-09, AC-28-30)
+1. **FU-1: ConversationHandler Core + Bridge** (AC-01 through AC-09, AC-28-30, AC-31, AC-34)
    - `conversation_handler.py`, `langchain_tool_bridge.py`, `message_history_adapter.py`
    - `dispatch_workflow` stub
+   - Handler caching per `(user_id, agent_name)` (AC-31)
+   - Comprehensive message format test fixtures (AC-34)
    - Unit tests for all three modules
    - **Agent:** backend-dev
 
@@ -514,8 +525,10 @@ All FUs are on a single branch: `feat/SPEC-033-conversation-handler`. Sequential
    - **Agent:** backend-dev
    - **Depends on:** FU-2
 
-4. **FU-4: Channel Adapters** (AC-19 through AC-22)
+4. **FU-4: Channel Adapters** (AC-19 through AC-22, AC-32, AC-33)
    - `telegram_bot.py`, `scheduled_execution_service.py`, `session_open_service.py` updates
+   - Per-channel memory behavior: web/telegram load 50 msgs, scheduled/session_open empty (AC-32)
+   - Extract `_push_to_telegram_if_linked()` into shared utility (AC-33)
    - Integration tests for each channel with both flag states
    - **Agent:** backend-dev
    - **Depends on:** FU-3
@@ -545,7 +558,7 @@ All FUs are on a single branch: `feat/SPEC-033-conversation-handler`. Sequential
 
 ## Completeness Checklist
 
-- [x] Every AC has a stable ID (AC-01 through AC-30)
+- [x] Every AC has a stable ID (AC-01 through AC-34)
 - [x] Every AC maps to at least one functional unit
 - [x] Every cross-domain boundary has a contract (handler → bridge → BaseTool; handler → SSE → frontend)
 - [x] Technical decisions reference principles from architecture-principles skill
