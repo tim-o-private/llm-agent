@@ -4,20 +4,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
-@pytest.fixture(autouse=True)
-def _reset_config_service_global():
-    """Reset the config_service module-level global to avoid test pollution.
-
-    The lifespan in test_main_chat_logic.py can set _config_service to a
-    mock, which then leaks into scheduling tests that import job_handlers.
-    """
-    import chatServer.services.config_service as cs
-    original = cs._config_service
-    yield
-    cs._config_service = original
-
-
 from chatServer.services.job_handlers import (
     handle_email_triage,
     handle_evening_briefing,
