@@ -1,10 +1,9 @@
 """Unit tests for briefing job handlers — self-scheduling, failure recovery."""
 
-from datetime import timedelta, timezone
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 
 # --- AC-13: Morning handler self-schedules with expires ---
 
