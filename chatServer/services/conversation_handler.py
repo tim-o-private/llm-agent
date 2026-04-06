@@ -41,6 +41,7 @@ class ToolCallRecord:
 class ConversationResult:
     """Result of a non-streaming conversation run."""
     response_text: str
+    new_messages: list[dict] = field(default_factory=list)
     tool_calls: list[ToolCallRecord] = field(default_factory=list)
     token_usage: TokenUsage = field(default_factory=TokenUsage)
     turn_count: int = 0
@@ -136,10 +137,12 @@ class ConversationHandler:
         """Execute the tool-loop without streaming.
 
         Returns a *ConversationResult* once the model stops or max_turns
-        is reached.
+        is reached.  ``result.new_messages`` contains every message added
+        during the run (assistant responses, tool results) for persistence.
         """
         start_time = time.monotonic()
         tool_calls: list[ToolCallRecord] = []
+        new_messages: list[dict] = []
         turn_count = 0
         usage = TokenUsage()
         working_messages = list(messages)
@@ -148,7 +151,9 @@ class ConversationHandler:
         while turn_count < self.max_turns:
             elapsed = time.monotonic() - start_time
             if elapsed > self.timeout_seconds:
-                return self._timeout_result(tool_calls, usage, turn_count)
+                return self._timeout_result(
+                    tool_calls, usage, turn_count, new_messages
+                )
 
             turn_count += 1
             remaining = max(self.timeout_seconds - elapsed, 1)
@@ -166,7 +171,9 @@ class ConversationHandler:
                     timeout=remaining,
                 )
             except asyncio.TimeoutError:
-                return self._timeout_result(tool_calls, usage, turn_count)
+                return self._timeout_result(
+                    tool_calls, usage, turn_count, new_messages
+                )
 
             self._accum_usage(usage, response.usage)
 
@@ -179,8 +186,14 @@ class ConversationHandler:
             )
 
             if response.stop_reason == "end_turn":
+                final_msg = {
+                    "role": "assistant",
+                    "content": _extract_text(response.content),
+                }
+                new_messages.append(final_msg)
                 return ConversationResult(
-                    response_text=_extract_text(response.content),
+                    response_text=final_msg["content"],
+                    new_messages=new_messages,
                     tool_calls=tool_calls,
                     token_usage=usage,
                     turn_count=turn_count,
@@ -188,10 +201,12 @@ class ConversationHandler:
                 )
 
             if response.stop_reason == "tool_use":
-                working_messages.append({
+                assistant_msg = {
                     "role": "assistant",
                     "content": _content_to_dicts(response.content),
-                })
+                }
+                working_messages.append(assistant_msg)
+                new_messages.append(assistant_msg)
 
                 tool_use_blocks = [
                     b for b in response.content if b.type == "tool_use"
@@ -221,15 +236,23 @@ class ConversationHandler:
                         entry["is_error"] = True
                     tool_result_content.append(entry)
 
-                working_messages.append({
+                tool_result_msg = {
                     "role": "user",
                     "content": tool_result_content,
-                })
+                }
+                working_messages.append(tool_result_msg)
+                new_messages.append(tool_result_msg)
                 continue
 
             # Unexpected stop_reason — return what we have
+            final_msg = {
+                "role": "assistant",
+                "content": _extract_text(response.content),
+            }
+            new_messages.append(final_msg)
             return ConversationResult(
-                response_text=_extract_text(response.content),
+                response_text=final_msg["content"],
+                new_messages=new_messages,
                 tool_calls=tool_calls,
                 token_usage=usage,
                 turn_count=turn_count,
@@ -242,8 +265,10 @@ class ConversationHandler:
             text += " [Max tool iterations reached]"
         else:
             text = "[Max tool iterations reached]"
+        new_messages.append({"role": "assistant", "content": text})
         return ConversationResult(
             response_text=text,
+            new_messages=new_messages,
             tool_calls=tool_calls,
             token_usage=usage,
             turn_count=turn_count,
@@ -387,9 +412,14 @@ class ConversationHandler:
         tool_calls: list[ToolCallRecord],
         usage: TokenUsage,
         turn_count: int,
+        new_messages: list[dict] | None = None,
     ) -> ConversationResult:
+        timeout_msg = {"role": "assistant", "content": "[Request timed out]"}
+        msgs = list(new_messages or [])
+        msgs.append(timeout_msg)
         return ConversationResult(
             response_text="[Request timed out]",
+            new_messages=msgs,
             tool_calls=tool_calls,
             token_usage=usage,
             turn_count=turn_count,

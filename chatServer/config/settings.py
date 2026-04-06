@@ -29,6 +29,11 @@ class Settings:
         self.telegram_bot_token: Optional[str] = os.getenv("TELEGRAM_BOT_TOKEN")
         self.telegram_webhook_url: Optional[str] = os.getenv("TELEGRAM_WEBHOOK_URL")
 
+        # Feature flags
+        self.conversation_handler_v2: bool = (
+            os.getenv("CONVERSATION_HANDLER_V2", "false").lower() == "true"
+        )
+
         # CORS origins
         self.cors_origins = [
             "https://clarity-webapp.fly.dev",
@@ -48,7 +53,7 @@ class Settings:
                 missing.append("SUPABASE_DB_HOST")
             raise RuntimeError(f"Database connection cannot be initialized. Missing env vars: {missing}")
 
-        return f"postgresql://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}?connect_timeout=10&sslmode=require"
+        return f"postgresql://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}?connect_timeout=10&sslmode=require"  # noqa: E501
 
     def reload_from_env(self) -> None:
         """Re-read all settings from environment variables.
@@ -68,6 +73,9 @@ class Settings:
         self.llm_agent_src_path = os.getenv("LLM_AGENT_SRC_PATH", "src")
         self.telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
         self.telegram_webhook_url = os.getenv("TELEGRAM_WEBHOOK_URL")
+        self.conversation_handler_v2 = (
+            os.getenv("CONVERSATION_HANDLER_V2", "false").lower() == "true"
+        )
 
     def validate_required_settings(self) -> None:
         """Validate that all required settings are present."""

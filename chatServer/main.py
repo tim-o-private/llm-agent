@@ -22,7 +22,7 @@ from utils.logging_utils import get_logger
 from .config.constants import PROMPT_CUSTOMIZATIONS_TAG
 from .config.settings import get_settings
 from .database.connection import get_db_connection
-from .database.supabase_client import get_user_scoped_client
+from .database.supabase_client import create_user_scoped_client, get_user_scoped_client
 from .dependencies.agent_loader import get_agent_loader
 from .dependencies.auth import get_current_user
 from .models.chat import ChatRequest, ChatResponse
@@ -225,23 +225,151 @@ app.include_router(telegram_router)
 # --- Logger setup ---
 logger = get_logger(__name__)
 
-@app.post("/api/chat", response_model=ChatResponse)
+@app.post("/api/chat")
 async def chat_endpoint(
     chat_input: ChatRequest,
     request: Request,
     user_id: str = Depends(get_current_user),
     pg_connection: psycopg.AsyncConnection = Depends(get_db_connection),
-    agent_loader_module = Depends(get_agent_loader),
+    agent_loader_module=Depends(get_agent_loader),
 ):
-    """Chat endpoint that processes user messages through agents."""
+    """Chat endpoint that processes user messages through agents.
+
+    Routes to ConversationHandler (v2) or ChatService based on the
+    CONVERSATION_HANDLER_V2 feature flag.  V2 supports SSE streaming
+    when ``Accept: text/event-stream`` is sent.
+    """
+    settings = get_settings()
+
+    if settings.conversation_handler_v2:
+        wants_stream = "text/event-stream" in request.headers.get(
+            "accept", ""
+        )
+        if wants_stream:
+            return await _handle_chat_v2_stream(
+                chat_input, user_id, pg_connection
+            )
+        return await _handle_chat_v2(
+            chat_input, user_id, pg_connection, request
+        )
+
     chat_service = get_chat_service(AGENT_EXECUTOR_CACHE)
     return await chat_service.process_chat(
         chat_input=chat_input,
         user_id=user_id,
         pg_connection=pg_connection,
         agent_loader_module=agent_loader_module,
-        request=request
+        request=request,
     )
+
+
+async def _handle_chat_v2(
+    chat_input: ChatRequest,
+    user_id: str,
+    pg_connection: psycopg.AsyncConnection,
+    request: Request,
+) -> ChatResponse:
+    """ConversationHandler v2 path — direct Anthropic Messages API."""
+    from .services.conversation_handler_builder import (
+        build_conversation_handler,
+    )
+    from .services.message_history_adapter import MessageHistoryAdapter
+
+    if not chat_input.session_id:
+        raise HTTPException(status_code=400, detail="session_id is required")
+
+    handler = await build_conversation_handler(
+        user_id=user_id,
+        agent_name=chat_input.agent_name,
+        session_id=chat_input.session_id,
+    )
+
+    # Load history and append current user message
+    messages = await MessageHistoryAdapter.load_history(
+        session_id=chat_input.session_id,
+        pg_connection=pg_connection,
+        limit=100,
+    )
+    user_msg = {"role": "user", "content": chat_input.message}
+    messages.append(user_msg)
+
+    # Run the handler
+    result = await handler.run(messages)
+
+    # Persist: user message + all messages generated during the run
+    await MessageHistoryAdapter.save_messages(
+        session_id=chat_input.session_id,
+        messages=[user_msg] + result.new_messages,
+        pg_connection=pg_connection,
+    )
+
+    # Telegram cross-channel push (best-effort)
+    try:
+        db_client = await create_user_scoped_client(user_id)
+        tg_text = (
+            f"*You (web):* {chat_input.message}\n\n{result.response_text}"
+        )
+        chat_svc = get_chat_service(AGENT_EXECUTOR_CACHE)
+        await chat_svc._push_to_telegram_if_linked(
+            user_id, chat_input.session_id, tg_text, db_client
+        )
+    except Exception as e:
+        logger.debug("Telegram push skipped: %s", e)
+
+    return ChatResponse(
+        session_id=chat_input.session_id,
+        response=result.response_text,
+        error=None,
+    )
+
+
+async def _handle_chat_v2_stream(
+    chat_input: ChatRequest,
+    user_id: str,
+    pg_connection: psycopg.AsyncConnection,
+):
+    """ConversationHandler v2 SSE streaming path (AC-10 – AC-14)."""
+    from fastapi.responses import StreamingResponse
+
+    from .services.conversation_handler_builder import (
+        build_conversation_handler,
+    )
+    from .services.message_history_adapter import MessageHistoryAdapter
+    from .services.sse_stream import sse_stream
+
+    if not chat_input.session_id:
+        raise HTTPException(status_code=400, detail="session_id is required")
+
+    handler = await build_conversation_handler(
+        user_id=user_id,
+        agent_name=chat_input.agent_name,
+        session_id=chat_input.session_id,
+    )
+
+    messages = await MessageHistoryAdapter.load_history(
+        session_id=chat_input.session_id,
+        pg_connection=pg_connection,
+        limit=100,
+    )
+    user_msg = {"role": "user", "content": chat_input.message}
+    messages.append(user_msg)
+
+    # Save user message before streaming begins
+    await MessageHistoryAdapter.save_messages(
+        session_id=chat_input.session_id,
+        messages=[user_msg],
+        pg_connection=pg_connection,
+    )
+
+    return StreamingResponse(
+        sse_stream(handler, messages),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    )
+
 
 # V2 Agent Memory: API endpoint for batch archival of messages -- REMOVED (or to be re-evaluated)
 # This was for client-side batching. With server-side per-turn history saving via PostgresChatMessageHistory,
