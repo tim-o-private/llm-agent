@@ -327,17 +327,10 @@ async def handle_message(message: types.Message) -> None:
         )
 
         if not result.data:
-            await message.answer("Your account isn't linked yet. Go to Settings in the web app to connect Telegram.")
+            await message.answer("Your account isn't linked yet. Go to Settings in the web app to connect Telegram.")  # noqa: E501
             return
 
         user_id = result.data["user_id"]
-
-        # Route to assistant agent
-        from src.core.agent_loader_db import load_agent_executor_db
-
-        from ..security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
-        from ..services.audit_service import AuditService
-        from ..services.pending_actions import PendingActionsService
 
         # Cross-channel session sharing: reuse most recent web session if one exists
         web_session_result = (
@@ -376,76 +369,20 @@ async def handle_message(message: types.Message) -> None:
                 }
             ).execute()
 
-        import asyncio
-        loop = asyncio.get_event_loop()
-        agent_executor = await loop.run_in_executor(
-            None,
-            lambda: load_agent_executor_db(
-                agent_name="assistant",
-                user_id=user_id,
-                session_id=session_id,
-                channel="telegram",
-            ),
-        )
+        # Send typing indicator
+        await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
-        # Wrap tools with approval
-        audit_service = AuditService(bot_service._db_client)
-        pending_service = PendingActionsService(
-            db_client=bot_service._db_client,
-            audit_service=audit_service,
-        )
-        notification_service = NotificationService(bot_service._db_client)
-        approval_context = ApprovalContext(
-            user_id=user_id,
-            session_id=session_id,
-            agent_name="assistant",
-            db_client=bot_service._db_client,
-            pending_actions_service=pending_service,
-            audit_service=audit_service,
-            notification_service=notification_service,
-        )
-        if hasattr(agent_executor, "tools") and agent_executor.tools:
-            wrap_tools_with_approval(agent_executor.tools, approval_context)
+        # Feature flag: ConversationHandler v2 or legacy AgentExecutor
+        from ..config.settings import get_settings
+        settings = get_settings()
 
-        # Set up persistent memory and invoke agent within a DB connection scope
-        from ..config.constants import CHAT_MESSAGE_HISTORY_TABLE_NAME
-        from ..database.connection import get_database_manager
-
-        db_manager = get_database_manager()
-        await db_manager.ensure_initialized()
-
-        async with db_manager.pool.connection() as pg_conn:
-            # Wire up memory so this turn is saved to the shared message store
-            from langchain_postgres import PostgresChatMessageHistory
-
-            from ..services.chat import AsyncConversationBufferWindowMemory
-
-            pg_history = PostgresChatMessageHistory(
-                CHAT_MESSAGE_HISTORY_TABLE_NAME,
-                session_id,
-                async_connection=pg_conn,
+        if settings.conversation_handler_v2:
+            output = await _handle_telegram_v2(
+                user_id, session_id, message.text
             )
-            agent_executor.memory = AsyncConversationBufferWindowMemory(
-                chat_memory=pg_history,
-                k=50,
-                return_messages=True,
-                memory_key="chat_history",
-                input_key="input",
-            )
-
-            # Send typing indicator
-            await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
-
-            # Invoke agent (memory auto-saves the turn to message_store)
-            response = await agent_executor.ainvoke({"input": message.text})
-
-        output = response.get("output", "")
-        if isinstance(output, list):
-            output = (
-                "".join(
-                    block.get("text", "") for block in output if isinstance(block, dict) and block.get("type") == "text"
-                )
-                or "No response."
+        else:
+            output = await _handle_telegram_v1(
+                user_id, session_id, message.text, bot_service
             )
 
         # Send response (split if too long for Telegram's 4096 limit)
@@ -458,6 +395,129 @@ async def handle_message(message: types.Message) -> None:
     except Exception as e:
         logger.error(f"Error handling Telegram message from {chat_id}: {e}", exc_info=True)
         await message.answer("Sorry, something went wrong. Please try again.")
+
+
+async def _handle_telegram_v2(
+    user_id: str, session_id: str, text: str
+) -> str:
+    """ConversationHandler v2 path for Telegram (AC-19)."""
+    from ..database.connection import get_database_manager
+    from ..services.conversation_handler_builder import (
+        build_conversation_handler,
+    )
+    from ..services.message_history_adapter import MessageHistoryAdapter
+
+    handler = await build_conversation_handler(
+        user_id=user_id,
+        agent_name="assistant",
+        session_id=session_id,
+        channel="telegram",
+    )
+
+    db_manager = get_database_manager()
+    await db_manager.ensure_initialized()
+
+    async with db_manager.pool.connection() as pg_conn:
+        messages = await MessageHistoryAdapter.load_history(
+            session_id=session_id,
+            pg_connection=pg_conn,
+            limit=100,
+        )
+        user_msg = {"role": "user", "content": text}
+        messages.append(user_msg)
+
+        result = await handler.run(messages)
+
+        await MessageHistoryAdapter.save_messages(
+            session_id=session_id,
+            messages=[user_msg] + result.new_messages,
+            pg_connection=pg_conn,
+        )
+
+    return result.response_text
+
+
+async def _handle_telegram_v1(
+    user_id: str,
+    session_id: str,
+    text: str,
+    bot_service: "TelegramBotService",
+) -> str:
+    """Legacy AgentExecutor path for Telegram."""
+    import asyncio
+
+    from src.core.agent_loader_db import load_agent_executor_db
+
+    from ..security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
+    from ..services.audit_service import AuditService
+    from ..services.pending_actions import PendingActionsService
+
+    loop = asyncio.get_event_loop()
+    agent_executor = await loop.run_in_executor(
+        None,
+        lambda: load_agent_executor_db(
+            agent_name="assistant",
+            user_id=user_id,
+            session_id=session_id,
+            channel="telegram",
+        ),
+    )
+
+    audit_service = AuditService(bot_service._db_client)
+    pending_service = PendingActionsService(
+        db_client=bot_service._db_client,
+        audit_service=audit_service,
+    )
+    notification_service = NotificationService(bot_service._db_client)
+    approval_context = ApprovalContext(
+        user_id=user_id,
+        session_id=session_id,
+        agent_name="assistant",
+        db_client=bot_service._db_client,
+        pending_actions_service=pending_service,
+        audit_service=audit_service,
+        notification_service=notification_service,
+    )
+    if hasattr(agent_executor, "tools") and agent_executor.tools:
+        wrap_tools_with_approval(agent_executor.tools, approval_context)
+
+    from ..config.constants import CHAT_MESSAGE_HISTORY_TABLE_NAME
+    from ..database.connection import get_database_manager
+
+    db_manager = get_database_manager()
+    await db_manager.ensure_initialized()
+
+    async with db_manager.pool.connection() as pg_conn:
+        from langchain_postgres import PostgresChatMessageHistory
+
+        from ..services.chat import AsyncConversationBufferWindowMemory
+
+        pg_history = PostgresChatMessageHistory(
+            CHAT_MESSAGE_HISTORY_TABLE_NAME,
+            session_id,
+            async_connection=pg_conn,
+        )
+        agent_executor.memory = AsyncConversationBufferWindowMemory(
+            chat_memory=pg_history,
+            k=50,
+            return_messages=True,
+            memory_key="chat_history",
+            input_key="input",
+        )
+
+        response = await agent_executor.ainvoke({"input": text})
+
+    output = response.get("output", "")
+    if isinstance(output, list):
+        output = (
+            "".join(
+                block.get("text", "") for block in output
+                if isinstance(block, dict) and block.get("type") == "text"
+            )
+            or "No response."
+        )
+
+    return output
 
 
 # =============================================================================

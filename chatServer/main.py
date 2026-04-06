@@ -303,14 +303,15 @@ async def _handle_chat_v2(
         pg_connection=pg_connection,
     )
 
-    # Telegram cross-channel push (best-effort)
+    # Telegram cross-channel push (best-effort, AC-33)
     try:
+        from .services.telegram_push import push_to_telegram_if_linked
+
         db_client = await create_user_scoped_client(user_id)
         tg_text = (
             f"*You (web):* {chat_input.message}\n\n{result.response_text}"
         )
-        chat_svc = get_chat_service(AGENT_EXECUTOR_CACHE)
-        await chat_svc._push_to_telegram_if_linked(
+        await push_to_telegram_if_linked(
             user_id, chat_input.session_id, tg_text, db_client
         )
     except Exception as e:
