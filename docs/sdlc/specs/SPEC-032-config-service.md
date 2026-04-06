@@ -1,0 +1,358 @@
+# SPEC-032: Config Service — Supabase Storage + Overlay Resolution
+
+> **Status:** Draft
+> **Author:** Claude (Spec Writer)
+> **Created:** 2026-04-06
+> **Updated:** 2026-04-06
+> **PRD:** PRD-003 (Orchestration Layer), Phase 0 — Foundation
+> **Architecture:** `docs/product/ARCHITECTURE-PROPOSAL-next-gen.md`, Section Q3
+
+## Goal
+
+Replace the scattered DB-column config model (agent personality in `agent_configurations.soul`/`identity`, user instructions in `user_agent_prompt_customizations.instructions`) with a file-based config system backed by Supabase Storage. Introduce overlay resolution: system defaults at `/system/`, per-user overrides at `/users/{user_id}/`, with user paths winning. Config is **read-only from the agent's perspective** — the server reads config at session init and injects it into the prompt, same as today. This is the foundation for Phase 3's bwrap sandbox where the agent edits config files directly.
+
+**Why now:** Every future spec in the next-gen architecture (Capability Gateway, Conversation Handler, Trust Tiers, Workflows) depends on config living in a file-addressable store rather than scattered DB columns. This decouples "what the agent is" from the database schema and makes config inspectable, diffable, and eventually editable by the agent itself.
+
+## Dependencies
+
+| Dependency | What It Provides | Status |
+|-----------|-----------------|--------|
+| Supabase Storage | Object storage with RLS, bucket policies | Available (not yet used) |
+| SPEC-019 (Tool Registry) | `agent_configurations` table structure, prompt_template rendering | Complete |
+| SPEC-022 (Agent Personality) | Current soul/identity content in `agent_configurations` | Complete |
+
+## Acceptance Criteria
+
+### Storage Setup
+
+- [ ] **AC-01:** A Supabase Storage bucket `config` is created via migration. The bucket is private (no public access). [A3, A8]
+- [ ] **AC-02:** System-default config files are seeded into `/system/agent/identity.md` and `/system/agent/soul.md` via a migration script. Content is extracted from the current `agent_configurations` row for the `assistant` agent. [A3]
+- [ ] **AC-03:** RLS policies on the `storage.objects` table enforce: (a) service_role can read/write all paths, (b) authenticated users can read `/system/*` paths, (c) authenticated users can read/write only their own `/users/{auth.uid()}/*` paths, (d) no cross-user access to `/users/` paths. [A8]
+
+### Overlay Resolution Service
+
+- [ ] **AC-04:** A `ConfigService` class in `chatServer/services/config_service.py` provides `async read(path: str, user_id: str) -> str | None`. It checks `/users/{user_id}/{path}` first; if not found (404), falls back to `/system/{path}`. Returns file content as string, or `None` if neither exists. [A1]
+- [ ] **AC-05:** `ConfigService` provides `async read_with_source(path: str, user_id: str) -> tuple[str | None, str]` that returns `(content, source)` where source is `"user"`, `"system"`, or `"none"`. Used for debugging and future file browser metadata. [A1]
+- [ ] **AC-06:** `ConfigService` provides `async list_paths(prefix: str, user_id: str) -> list[str]` that returns the merged set of paths under the prefix — user paths shadow system paths with the same relative name. [A1]
+- [ ] **AC-07:** `ConfigService` uses the Supabase Storage Python client (`supabase.storage.from_("config")`) with service_role credentials for reads (bypassing RLS for server-side operations). User-facing API endpoints use the user's JWT for RLS enforcement. [A3, A8]
+
+### Caching Layer
+
+- [ ] **AC-08:** A `ConfigCacheService` wraps `ConfigService` with in-memory TTL caching. Cache key is `(path, user_id)`. Default TTL is 300 seconds (config changes are rare). Cache is invalidated on write operations. [A1]
+- [ ] **AC-09:** `ConfigCacheService` follows the existing `TTLCacheService` pattern (see `agent_config_cache_service.py`). It registers as `"Config"` via `register_ttl_cache_service`. Initialized/shutdown in `main.py` lifespan alongside existing cache services. [A1]
+- [ ] **AC-10:** The system-path layer (`/system/*`) uses a separate cache with longer TTL (3600s) since system config only changes on deployment. User-path cache uses 300s TTL. [A1]
+
+### Config Read API
+
+- [ ] **AC-11:** A `GET /api/config/{path:path}` endpoint in `chatServer/routers/config_router.py` returns the resolved config file content for the authenticated user. Uses overlay resolution (user → system fallback). Returns 404 if neither layer has the file. Response is `text/plain` or `application/json` based on file extension. [A1, A5]
+- [ ] **AC-12:** A `GET /api/config/_list?prefix={prefix}` endpoint returns the merged file listing for the authenticated user under the given prefix. Response is JSON array of `{path, source, updated_at}` objects. [A1, A5]
+- [ ] **AC-13:** A `PUT /api/config/user/{path:path}` endpoint writes a file to the user's config layer (`/users/{user_id}/{path}`). Request body is the file content. Invalidates the config cache for this user+path. This replaces the `update_instructions` tool's DB write path. [A1, A5]
+- [ ] **AC-14:** All config API endpoints use `Depends(get_current_user)` for auth and scope operations to the authenticated user. No user can read or write another user's config. [A5, A8]
+
+### Migration: Agent Identity to Config Files
+
+- [ ] **AC-15:** The `soul` text from the `assistant` row in `agent_configurations` is written to `/system/agent/soul.md` in Supabase Storage. The `identity` JSONB is written to `/system/agent/identity.json`. These become the source of truth for agent personality. [A3]
+- [ ] **AC-16:** A data migration script reads existing `agent_configurations` rows and writes corresponding files to `/system/agent/`. If multiple agent configs exist, each gets a subdirectory: `/system/agents/{agent_name}/soul.md`, `/system/agents/{agent_name}/identity.json`. The `assistant` agent is also aliased at `/system/agent/` (the default). [A3]
+- [ ] **AC-17:** After migration, `agent_config_cache_service.py` and `_fetch_agent_config_from_db_async()` in `agent_loader_db.py` read `soul` and `identity` from the config service instead of from the `agent_configurations` table. The DB columns are retained but no longer the source of truth (deprecation, not removal). [A1]
+
+### Migration: User Instructions to Config Files
+
+- [ ] **AC-18:** A data migration script reads all rows from `user_agent_prompt_customizations` and writes each user's instructions to `/users/{user_id}/agent/instructions.md` in Supabase Storage. [A3]
+- [ ] **AC-19:** After migration, `user_instructions_cache_service.py` reads from the config service overlay (`agent/instructions.md`) instead of from `user_agent_prompt_customizations`. The DB table is retained but no longer the source of truth. [A1]
+- [ ] **AC-20:** The `UpdateInstructionsTool` writes to the config service (`PUT /users/{user_id}/agent/instructions.md` via `ConfigService.write()`) instead of upserting into `user_agent_prompt_customizations`. Cache is invalidated on write. [A6]
+
+### Prompt Builder Integration
+
+- [ ] **AC-21:** `build_agent_prompt()` signature is unchanged — callers still pass `soul`, `identity`, `user_instructions` as before. The change is upstream: `load_agent_executor_db_async()` and `load_agent_executor_db()` now source these values from the config service instead of from DB columns. [A1]
+- [ ] **AC-22:** `prompt_template` continues to be read from `agent_configurations.prompt_template` (it's a rendering concern, not an identity concern). It will move to config files in a future spec. [A14]
+
+### Testing
+
+- [ ] **AC-23:** Unit tests for `ConfigService`: overlay resolution (user wins over system), system fallback when no user file, `None` when neither exists, `list_paths` merges both layers with user shadowing system. [S1]
+- [ ] **AC-24:** Unit tests for `ConfigCacheService`: cache hit returns cached value, cache miss calls through to `ConfigService`, cache invalidation on write, separate TTLs for system vs user paths. [S1]
+- [ ] **AC-25:** Integration test: two users; user A writes to their config path; user B cannot read user A's config via the API (RLS enforcement). Service-role can read both. [S1, A8]
+- [ ] **AC-26:** Migration test: after running the data migration, `ConfigService.read("agent/soul.md", user_id)` returns the same content as the current `agent_configurations.soul` for that user's agent. Same for `agent/instructions.md` matching `user_agent_prompt_customizations.instructions`. [S1]
+- [ ] **AC-27:** Regression test: an end-to-end prompt assembly test that loads an agent via `load_agent_executor_db_async()` and asserts the system prompt contains the soul text and user instructions from config files (not from DB columns). [S1]
+
+## Scope
+
+### Files to Create
+
+| File | Purpose |
+|------|---------|
+| `chatServer/services/config_service.py` | Overlay resolution service — `read()`, `write()`, `list_paths()` |
+| `chatServer/services/config_cache_service.py` | TTL cache wrapper around ConfigService |
+| `chatServer/routers/config_router.py` | REST API for config read/write/list |
+| `chatServer/models/config.py` | Pydantic response models (`ConfigFileResponse`, `ConfigListItem`) |
+| `tests/chatServer/services/test_config_service.py` | Unit tests for overlay resolution |
+| `tests/chatServer/services/test_config_cache_service.py` | Unit tests for caching layer |
+| `tests/chatServer/routers/test_config_router.py` | API endpoint tests |
+| `supabase/migrations/2026MMDD000001_create_config_bucket.sql` | Bucket creation + RLS policies |
+| `scripts/migrate_config_to_storage.py` | One-time data migration script |
+
+### Files to Modify
+
+| File | Change |
+|------|--------|
+| `chatServer/main.py` | Register config_router, initialize/shutdown config cache in lifespan |
+| `src/core/agent_loader_db.py` | Read soul/identity from ConfigService instead of agent_configurations columns |
+| `chatServer/services/agent_config_cache_service.py` | Remove soul/identity from SELECT (still cache llm_config, prompt_template) |
+| `chatServer/services/user_instructions_cache_service.py` | Read from ConfigService overlay instead of DB table |
+| `chatServer/tools/update_instructions_tool.py` | Write to ConfigService instead of DB upsert |
+| `chatServer/services/prompt_builder.py` | No changes (receives soul/identity as params — upstream change is transparent) |
+| `chatServer/services/prompt_customization.py` | Read/write instructions via ConfigService instead of direct DB queries |
+
+### Out of Scope
+
+- **Agent writing config** — agent-initiated config edits via bwrap sandbox (SPEC-037/038).
+- **File browser frontend** — React UI for browsing/editing config files (SPEC-039).
+- **Trust tiers and allowlists** — tool permission config files (SPEC-034).
+- **Workflow templates in storage** — graph definitions as config files (SPEC-035/036).
+- **Prompt template migration** — `prompt_template` stays in `agent_configurations` for now.
+- **Removing deprecated DB columns** — `soul`, `identity`, `instructions` columns remain for rollback safety. A future cleanup spec removes them after config service proves stable.
+- **Multi-agent config** — this spec handles the `assistant` agent. Additional agents follow the same pattern with no spec changes needed.
+
+## Blast Radius
+
+Every file that currently reads `soul`, `identity`, or `user_instructions` from the database is affected. Exhaustive list:
+
+### Direct reads from `agent_configurations` (soul/identity)
+
+| File | Current behavior | Change needed |
+|------|-----------------|---------------|
+| `src/core/agent_loader_db.py` (`_fetch_agent_config_from_db_async`, lines 926-948) | `SELECT soul, identity FROM agent_configurations` | Read from ConfigService instead |
+| `src/core/agent_loader_db.py` (`load_agent_executor_db`, sync path, ~line 700) | Same SELECT via Supabase REST | Read from ConfigService instead |
+| `chatServer/services/agent_config_cache_service.py` (`_fetch_all_agent_configs`, line 71) | `SELECT soul, identity ...` in cache refresh | Remove soul/identity from SELECT; service still caches llm_config, prompt_template |
+| `chatServer/services/agent_config_cache_service.py` (`_fetch_agent_config`, line 98) | Same for single-agent fetch | Same change |
+| `chatServer/services/schedule_service.py` (line 51) | `table("agent_configurations").select("id")` — only reads `id` for validation | No change needed (doesn't read soul/identity) |
+| `chatServer/agents/email_digest_agent.py` | Deprecated — delegates to `load_agent_executor_db()` | No direct change; inherits fix via agent_loader_db |
+
+### Direct reads from `user_agent_prompt_customizations` (instructions)
+
+| File | Current behavior | Change needed |
+|------|-----------------|---------------|
+| `chatServer/services/user_instructions_cache_service.py` (`_fetch_user_instructions`, line 64) | `SELECT instructions FROM user_agent_prompt_customizations` | Read from ConfigService overlay |
+| `chatServer/services/prompt_customization.py` (`get_user_instructions`, line 102) | Supabase REST query | Read from ConfigService |
+| `chatServer/services/prompt_customization.py` (`create/update_prompt_customization`) | Supabase REST insert/update | Write via ConfigService |
+| `chatServer/tools/update_instructions_tool.py` (`_arun`, line 84) | Supabase REST upsert | Write via ConfigService, invalidate cache |
+
+### Downstream consumers (no changes needed — transparent)
+
+| File | Why no change |
+|------|---------------|
+| `chatServer/services/prompt_builder.py` | Receives `soul`, `identity`, `user_instructions` as function params — doesn't know the source |
+| `chatServer/main.py` | Only initializes/shuts down cache services — will add config cache alongside |
+| `tests/chatServer/services/test_prompt_builder.py` | Tests prompt assembly with explicit param values — source-agnostic |
+| `tests/chatServer/services/test_prompt_customization.py` | Will need updates to mock ConfigService instead of DB |
+| `tests/core/test_agent_loader_db.py` | Will need updates to mock ConfigService |
+| `tests/core/test_agent_loader_db_async.py` | Will need updates to mock ConfigService |
+
+## Technical Approach
+
+### 1. Supabase Storage Bucket Setup
+
+Supabase Storage uses the `storage` schema with `storage.buckets` and `storage.objects` tables. A migration creates the bucket and applies RLS policies.
+
+```sql
+-- Create the config bucket (private, no public access)
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+    'config',
+    'config',
+    false,
+    1048576,  -- 1MB max per file (config files are small)
+    ARRAY['text/plain', 'text/markdown', 'application/json']
+);
+
+-- RLS: service_role has full access (implicit — bypasses RLS)
+
+-- RLS: authenticated users can read system config
+CREATE POLICY "Users can read system config"
+ON storage.objects FOR SELECT
+TO authenticated
+USING (
+    bucket_id = 'config'
+    AND name LIKE 'system/%'
+);
+
+-- RLS: authenticated users can read their own user config
+CREATE POLICY "Users can read own config"
+ON storage.objects FOR SELECT
+TO authenticated
+USING (
+    bucket_id = 'config'
+    AND name LIKE 'users/' || auth.uid()::text || '/%'
+);
+
+-- RLS: authenticated users can write their own user config
+CREATE POLICY "Users can write own config"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (
+    bucket_id = 'config'
+    AND name LIKE 'users/' || auth.uid()::text || '/%'
+);
+
+CREATE POLICY "Users can update own config"
+ON storage.objects FOR UPDATE
+TO authenticated
+USING (
+    bucket_id = 'config'
+    AND name LIKE 'users/' || auth.uid()::text || '/%'
+);
+```
+
+### 2. Config File Layout
+
+```
+config/                          # Supabase Storage bucket
+├── system/                      # Read-only defaults (deployed as code)
+│   └── agent/                   # Default agent config
+│       ├── soul.md              # Behavioral philosophy (from agent_configurations.soul)
+│       ├── identity.json        # Structured identity (from agent_configurations.identity)
+│       └── operating_model.md   # Future: extracted from prompt_builder constants
+│
+└── users/{user_id}/             # Per-user mutable layer
+    └── agent/                   # User-specific agent config
+        ├── instructions.md      # Standing instructions (from user_agent_prompt_customizations)
+        ├── soul.md              # User override of soul (future — not seeded)
+        └── identity.json        # User override of identity (future — not seeded)
+```
+
+### 3. ConfigService Implementation
+
+```python
+class ConfigService:
+    """Reads config files from Supabase Storage with overlay resolution."""
+
+    def __init__(self, supabase_client):
+        self._storage = supabase_client.storage.from_("config")
+
+    async def read(self, path: str, user_id: str) -> str | None:
+        """Read with overlay: user path → system fallback."""
+        content, _ = await self.read_with_source(path, user_id)
+        return content
+
+    async def read_with_source(self, path: str, user_id: str) -> tuple[str | None, str]:
+        # Try user path first
+        user_path = f"users/{user_id}/{path}"
+        content = await self._download(user_path)
+        if content is not None:
+            return content, "user"
+
+        # Fall back to system path
+        system_path = f"system/{path}"
+        content = await self._download(system_path)
+        if content is not None:
+            return content, "system"
+
+        return None, "none"
+
+    async def write(self, path: str, user_id: str, content: str) -> None:
+        """Write to user config layer."""
+        user_path = f"users/{user_id}/{path}"
+        self._storage.upload(user_path, content.encode(), {"content-type": "text/plain", "upsert": "true"})
+
+    async def _download(self, full_path: str) -> str | None:
+        try:
+            response = self._storage.download(full_path)
+            return response.decode("utf-8")
+        except Exception:
+            return None
+```
+
+### 4. UpdateInstructionsTool Migration
+
+The tool switches from DB upsert to config service write:
+
+```python
+# Before (current):
+client.table("user_agent_prompt_customizations").upsert({...}).execute()
+
+# After:
+config_service = get_config_service()
+await config_service.write("agent/instructions.md", self.user_id, instructions)
+# Invalidate cache
+config_cache = get_config_cache_service()
+await config_cache.invalidate(path="agent/instructions.md", user_id=self.user_id)
+```
+
+### 5. Agent Loader Integration
+
+In `load_agent_executor_db_async()`, after fetching `agent_db_config` from cache/DB:
+
+```python
+# Before:
+soul = agent_db_config.get("soul") or ""
+identity = agent_db_config.get("identity")
+
+# After:
+config_svc = get_config_cache_service()
+soul = await config_svc.read("agent/soul.md", user_id) or ""
+identity_json = await config_svc.read("agent/identity.json", user_id)
+identity = json.loads(identity_json) if identity_json else None
+```
+
+The user instructions fetch similarly switches from `get_cached_user_instructions(user_id, agent_name)` to `config_svc.read("agent/instructions.md", user_id)`.
+
+### 6. Data Migration Script
+
+`scripts/migrate_config_to_storage.py` — run once after deploying the migration:
+
+1. Connect to Supabase with service_role key
+2. Read all `agent_configurations` rows → write soul/identity to `/system/agents/{name}/`
+3. Alias the `assistant` agent at `/system/agent/`
+4. Read all `user_agent_prompt_customizations` rows → write instructions to `/users/{user_id}/agent/instructions.md`
+5. Log counts and any failures
+6. Idempotent — re-running overwrites with latest values
+
+## Functional Units
+
+### FU-1: Storage Infrastructure (Database)
+**ACs:** AC-01, AC-02, AC-03
+**Domain:** database-dev
+
+Create the config bucket, seed system defaults, apply RLS policies. Write the data migration script for existing config data.
+
+Migration prefix: assigned by orchestrator.
+
+### FU-2: Config Service + Cache (Backend)
+**ACs:** AC-04, AC-05, AC-06, AC-07, AC-08, AC-09, AC-10, AC-23, AC-24
+**Domain:** backend-dev
+**Depends on:** FU-1
+
+Implement `ConfigService`, `ConfigCacheService`, integrate into `main.py` lifespan. Unit tests for overlay resolution and caching.
+
+### FU-3: Config API Endpoints (Backend)
+**ACs:** AC-11, AC-12, AC-13, AC-14, AC-25
+**Domain:** backend-dev
+**Depends on:** FU-2
+
+REST API for config read/write/list. Integration test for RLS isolation.
+
+### FU-4: Config Source Migration (Backend)
+**ACs:** AC-15, AC-16, AC-17, AC-18, AC-19, AC-20, AC-21, AC-22, AC-26, AC-27
+**Domain:** backend-dev
+**Depends on:** FU-2
+
+Switch all config readers from DB to ConfigService. Update `agent_loader_db.py`, `agent_config_cache_service.py`, `user_instructions_cache_service.py`, `update_instructions_tool.py`, `prompt_customization.py`. Migration verification tests.
+
+## Rollback Strategy
+
+DB columns (`soul`, `identity` in `agent_configurations`; `instructions` in `user_agent_prompt_customizations`) are **not removed** in this spec. If the config service fails:
+
+1. Revert the code changes (FU-2/3/4) — readers fall back to DB columns
+2. The storage bucket and seeded files remain harmless
+3. No data loss — DB still has all values
+
+A future cleanup spec removes the deprecated columns after the config service has been stable in production for at least 2 weeks.
+
+## Decisions Requiring Your Input
+
+1. **Config path convention for multi-agent:** The architecture proposal uses `/system/agent/` (singular). If we want to support multiple agent configs (e.g., `assistant`, `email_digest_agent`), should the path be `/system/agents/{agent_name}/soul.md` with `/system/agent/` as an alias for the default? Or should we keep it simple with `/system/agent/` only since there's currently one user-facing agent?
+
+2. **User instructions keyed by agent_name:** Currently `user_agent_prompt_customizations` is keyed by `(user_id, agent_name)`. In the config file model, should we keep per-agent instructions (`/users/{uid}/agents/{agent_name}/instructions.md`) or simplify to one instructions file (`/users/{uid}/agent/instructions.md`) since there's effectively one agent per user?
+
+3. **Data migration timing:** The migration script (`scripts/migrate_config_to_storage.py`) needs to run after the SQL migration creates the bucket but before the code switches to reading from storage. Should this be: (a) a manual step in the deploy checklist, (b) automated in `main.py` startup (check if migration needed, run once), or (c) a SQL migration that uses `pg_net` or storage API directly?
+
+4. **Operating model text:** The `OPERATING_MODEL`, `CHANNEL_GUIDANCE`, `INTERACTION_LEARNING_GUIDANCE` etc. constants in `prompt_builder.py` are effectively system config too. Should this spec also migrate them to `/system/agent/operating_model.md` etc., or leave that for a follow-up? Moving them now makes the config service more complete; leaving them avoids scope creep.
