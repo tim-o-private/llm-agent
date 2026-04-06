@@ -726,8 +726,32 @@ def load_agent_executor_db(
     soul = agent_db_config.get("soul") or ""
     identity = agent_db_config.get("identity")
 
+    # Config service overlay (sync path — best-effort)
+    try:
+        from chatServer.services.config_service import get_config_service
+        config_svc = get_config_service()
+        config_agent = "clarity" if agent_name == "assistant" else agent_name
+        config_soul = _asyncio.run(config_svc.read(f"agents/{config_agent}/soul.md", user_id))
+        if config_soul is not None:
+            soul = config_soul
+        config_identity_json = _asyncio.run(config_svc.read(f"agents/{config_agent}/identity.json", user_id))
+        if config_identity_json is not None:
+            identity = json.loads(config_identity_json)
+    except (RuntimeError, Exception) as e:
+        logger.debug("ConfigService not available in sync path: %s", e)
+
     # Fetch user instructions from user_agent_prompt_customizations
     user_instructions = _fetch_user_instructions(db, user_id, agent_name)
+
+    # Config service overlay for user instructions (sync path)
+    try:
+        from chatServer.services.config_service import get_config_service
+        config_svc = get_config_service()
+        config_instructions = _asyncio.run(config_svc.read("agent/instructions.md", user_id))
+        if config_instructions is not None:
+            user_instructions = config_instructions
+    except (RuntimeError, Exception) as e:
+        logger.debug("ConfigService instructions not available in sync path: %s", e)
 
     # Fetch memory notes from min-memory for prompt
     memory_notes = _asyncio.run(_prefetch_memory_notes(memory_client))
@@ -867,13 +891,39 @@ async def load_agent_executor_db_async(
         memory_client=memory_client,
     )
 
-    # Step 4: Build prompt
+    # Step 4: Build prompt — resolve soul/identity/instructions via ConfigService with DB fallback
     llm_config_from_db = agent_db_config.get("llm_config")
     if not llm_config_from_db:
         logger.warning(f"Agent '{agent_name}' is missing 'llm_config' in its DB configuration.")
 
+    # Config service overlay: config file -> DB column fallback
     soul = agent_db_config.get("soul") or ""
     identity = agent_db_config.get("identity")
+    try:
+        from chatServer.services.config_service import get_config_service
+        config_svc = get_config_service()
+
+        # Map DB agent_name to config namespace ("assistant" -> "clarity")
+        config_agent = "clarity" if agent_name == "assistant" else agent_name
+
+        config_soul = await config_svc.read(f"agents/{config_agent}/soul.md", user_id)
+        if config_soul is not None:
+            soul = config_soul
+
+        config_identity_json = await config_svc.read(f"agents/{config_agent}/identity.json", user_id)
+        if config_identity_json is not None:
+            import json as _json
+            identity = _json.loads(config_identity_json)
+
+        # User instructions from config service (overrides cache if present)
+        config_instructions = await config_svc.read("agent/instructions.md", user_id)
+        if config_instructions is not None:
+            user_instructions = config_instructions
+    except RuntimeError:
+        # ConfigService not initialized — use DB values (pre-migration path)
+        logger.debug("ConfigService not available, using DB values for soul/identity")
+    except Exception as e:
+        logger.warning("ConfigService read failed, falling back to DB: %s", e)
 
     from chatServer.services.prompt_builder import build_agent_prompt
 

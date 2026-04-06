@@ -105,6 +105,7 @@ async def lifespan(app: FastAPI):
     from .database.supabase_client import get_supabase_manager
     from .services.agent_config_cache_service import initialize_agent_config_cache, shutdown_agent_config_cache
     from .services.background_tasks import get_background_task_service
+    from .services.config_service import initialize_config_service, shutdown_config_service
     from .services.tool_cache_service import initialize_tool_cache, shutdown_tool_cache
     from .services.user_instructions_cache_service import (
         initialize_user_instructions_cache,
@@ -124,6 +125,13 @@ async def lifespan(app: FastAPI):
     # Initialize Supabase manager
     supabase_manager = get_supabase_manager()
     await supabase_manager.initialize()
+
+    # Initialize config service (depends on Supabase)
+    try:
+        await initialize_config_service()
+        logger.info("Config service initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize config service: {e}", exc_info=True)
 
     # Initialize cache services
     try:
@@ -177,6 +185,13 @@ async def lifespan(app: FastAPI):
 
     # Stop background tasks
     await background_service.stop_background_tasks()
+
+    # Stop config service
+    try:
+        await shutdown_config_service()
+        logger.info("Config service stopped successfully")
+    except Exception as e:
+        logger.error(f"Failed to stop config service: {e}", exc_info=True)
 
     # Stop cache services
     try:
