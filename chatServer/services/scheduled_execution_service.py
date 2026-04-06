@@ -66,20 +66,9 @@ class ScheduledExecutionService:
                 f"(schedule {schedule_id}, channel={channel})"
             )
 
-            # 1. Load agent from DB — always fresh, never rely on cache
-            agent_executor = await load_agent_executor_db_async(
-                agent_name=agent_name,
-                user_id=user_id,
-                session_id=session_id,
-                channel=channel,
-            )
-
-            # 1b. Apply model override if specified in schedule config (AC-14, AC-16)
-            model_used = self._get_model_name(agent_executor)
-            if model_override:
-                self._apply_model_override(agent_executor, model_override)
-                model_used = model_override
-                logger.info(f"Applied model override '{model_override}' for scheduled run")
+            # Feature flag: ConversationHandler v2 or legacy AgentExecutor
+            from ..config.settings import get_settings
+            settings = get_settings()
 
             # 2. Create chat_sessions row for this scheduled run
             supabase_client = await create_user_scoped_client(user_id)
@@ -93,55 +82,32 @@ class ScheduledExecutionService:
                 }
             ).execute()
 
-            # 3. Wrap tools with approval system (mirrors chat.py:225-245)
-            audit_service = AuditService(supabase_client)
-            pending_actions_service = PendingActionsService(
-                db_client=supabase_client,
-                audit_service=audit_service,
-            )
-            notification_service = NotificationService(supabase_client)
-            approval_context = ApprovalContext(
-                user_id=user_id,
-                session_id=session_id,
-                agent_name=agent_name,
-                db_client=supabase_client,
-                pending_actions_service=pending_actions_service,
-                audit_service=audit_service,
-                notification_service=notification_service,
-            )
-            if hasattr(agent_executor, "tools") and agent_executor.tools:
-                wrap_tools_with_approval(agent_executor.tools, approval_context)
-                logger.info(
-                    f"Wrapped {len(agent_executor.tools)} tools with approval "
-                    f"for scheduled run of '{agent_name}'"
+            if settings.conversation_handler_v2:
+                output, model_used = await self._execute_v2(
+                    user_id=user_id,
+                    agent_name=agent_name,
+                    session_id=session_id,
+                    channel=channel,
+                    prompt=prompt,
+                    config=config,
+                    model_override=model_override,
+                    schedule_type=schedule_type,
                 )
-
-            # 4. Build effective prompt (heartbeat gets checklist formatting)
-            if schedule_type == "heartbeat":
-                effective_prompt = self._build_heartbeat_prompt(
-                    prompt, config.get("heartbeat_checklist", [])
+                pending_actions_service = PendingActionsService(
+                    db_client=supabase_client,
+                    audit_service=AuditService(supabase_client),
                 )
             else:
-                effective_prompt = prompt
-
-            # 5. Invoke the agent
-            response = await agent_executor.ainvoke(
-                {
-                    "input": effective_prompt,
-                    "chat_history": [],  # Fresh context for scheduled runs
-                }
-            )
-
-            # 6. Normalize output (handle content block lists from newer langchain-anthropic)
-            output = response.get("output", "")
-            if isinstance(output, list):
-                output = (
-                    "".join(
-                        block.get("text", "")
-                        for block in output
-                        if isinstance(block, dict) and block.get("type") == "text"
-                    )
-                    or "No text content in response."
+                output, model_used, pending_actions_service = await self._execute_v1(
+                    user_id=user_id,
+                    agent_name=agent_name,
+                    session_id=session_id,
+                    channel=channel,
+                    prompt=prompt,
+                    config=config,
+                    model_override=model_override,
+                    schedule_type=schedule_type,
+                    supabase_client=supabase_client,
                 )
 
             # 7. Detect HEARTBEAT_OK suppression
@@ -201,10 +167,7 @@ class ScheduledExecutionService:
 
             # 9. Build execution metadata with token usage (AC-15)
             duration_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
-            execution_metadata = self._build_execution_metadata(
-                agent_executor=agent_executor,
-                model_used=model_used,
-            )
+            execution_metadata: Dict[str, Any] = {"model": model_used}
 
             # 10. Store result (always, for audit trail)
             result_status = "heartbeat_ok" if is_heartbeat_ok else "success"
@@ -287,6 +250,128 @@ class ScheduledExecutionService:
                 "error": str(e),
                 "duration_ms": duration_ms,
             }
+
+    async def _execute_v2(
+        self,
+        user_id: str,
+        agent_name: str,
+        session_id: str,
+        channel: str,
+        prompt: str,
+        config: Dict[str, Any],
+        model_override: Optional[str],
+        schedule_type: str,
+    ) -> tuple:
+        """ConversationHandler v2 path for scheduled runs (AC-20, AC-32)."""
+        from ..services.conversation_handler_builder import build_conversation_handler
+
+        handler = await build_conversation_handler(
+            user_id=user_id,
+            agent_name=agent_name,
+            session_id=session_id,
+            channel=channel,
+        )
+
+        model_used = handler.model
+        if model_override:
+            handler.model = model_override
+            model_used = model_override
+            logger.info(f"Applied model override '{model_override}' for scheduled v2 run")
+
+        # Build effective prompt
+        if schedule_type == "heartbeat":
+            effective_prompt = self._build_heartbeat_prompt(
+                prompt, config.get("heartbeat_checklist", [])
+            )
+        else:
+            effective_prompt = prompt
+
+        # AC-32: empty history for scheduled runs
+        messages = [{"role": "user", "content": effective_prompt}]
+        result = await handler.run(messages)
+
+        return result.response_text, model_used
+
+    async def _execute_v1(
+        self,
+        user_id: str,
+        agent_name: str,
+        session_id: str,
+        channel: str,
+        prompt: str,
+        config: Dict[str, Any],
+        model_override: Optional[str],
+        schedule_type: str,
+        supabase_client,
+    ) -> tuple:
+        """Legacy AgentExecutor path for scheduled runs."""
+        # 1. Load agent from DB — always fresh, never rely on cache
+        agent_executor = await load_agent_executor_db_async(
+            agent_name=agent_name,
+            user_id=user_id,
+            session_id=session_id,
+            channel=channel,
+        )
+
+        # 1b. Apply model override if specified in schedule config (AC-14, AC-16)
+        model_used = self._get_model_name(agent_executor)
+        if model_override:
+            self._apply_model_override(agent_executor, model_override)
+            model_used = model_override
+            logger.info(f"Applied model override '{model_override}' for scheduled run")
+
+        # 3. Wrap tools with approval system (mirrors chat.py:225-245)
+        audit_service = AuditService(supabase_client)
+        pending_actions_service = PendingActionsService(
+            db_client=supabase_client,
+            audit_service=audit_service,
+        )
+        notification_service = NotificationService(supabase_client)
+        approval_context = ApprovalContext(
+            user_id=user_id,
+            session_id=session_id,
+            agent_name=agent_name,
+            db_client=supabase_client,
+            pending_actions_service=pending_actions_service,
+            audit_service=audit_service,
+            notification_service=notification_service,
+        )
+        if hasattr(agent_executor, "tools") and agent_executor.tools:
+            wrap_tools_with_approval(agent_executor.tools, approval_context)
+            logger.info(
+                f"Wrapped {len(agent_executor.tools)} tools with approval "
+                f"for scheduled run of '{agent_name}'"
+            )
+
+        # 4. Build effective prompt (heartbeat gets checklist formatting)
+        if schedule_type == "heartbeat":
+            effective_prompt = self._build_heartbeat_prompt(
+                prompt, config.get("heartbeat_checklist", [])
+            )
+        else:
+            effective_prompt = prompt
+
+        # 5. Invoke the agent
+        response = await agent_executor.ainvoke(
+            {
+                "input": effective_prompt,
+                "chat_history": [],  # Fresh context for scheduled runs
+            }
+        )
+
+        # 6. Normalize output (handle content block lists from newer langchain-anthropic)
+        output = response.get("output", "")
+        if isinstance(output, list):
+            output = (
+                "".join(
+                    block.get("text", "")
+                    for block in output
+                    if isinstance(block, dict) and block.get("type") == "text"
+                )
+                or "No text content in response."
+            )
+
+        return output, model_used, pending_actions_service
 
     def _get_model_name(self, agent_executor) -> str:
         """Extract the model name from the agent executor's LLM chain."""

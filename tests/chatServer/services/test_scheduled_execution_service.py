@@ -206,10 +206,10 @@ async def test_execute_error(service, mock_schedule, mock_supabase):
     assert result["success"] is False
     assert "Agent not found" in result["error"]
 
-    # Error result stored in DB
+    # Error result stored in DB (second insert; first is chat_sessions row)
     insert_call = mock_supabase.table.return_value.insert
-    insert_call.assert_called_once()
-    stored_data = insert_call.call_args[0][0]
+    assert insert_call.call_count == 2
+    stored_data = insert_call.call_args_list[1][0][0]
     assert stored_data["status"] == "error"
     assert "Agent not found" in stored_data["result_content"]
 

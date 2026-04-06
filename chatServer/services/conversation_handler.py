@@ -109,6 +109,8 @@ class ConversationHandler:
         max_tokens: int = 4096,
         temperature: float = 0.7,
         timeout_seconds: float = 120,
+        session_id: str = "",
+        user_id: str = "",
     ):
         self.client = client
         self.model = model
@@ -122,6 +124,8 @@ class ConversationHandler:
         self.max_tokens = max_tokens
         self.temperature = temperature
         self.timeout_seconds = timeout_seconds
+        self.session_id = session_id
+        self.user_id = user_id
         self._cumulative_usage = TokenUsage()
 
     @property
@@ -174,15 +178,21 @@ class ConversationHandler:
                 return self._timeout_result(
                     tool_calls, usage, turn_count, new_messages
                 )
+            except anthropic.APIStatusError as e:
+                return self._api_error_result(
+                    e, tool_calls, usage, turn_count, new_messages
+                )
 
             self._accum_usage(usage, response.usage)
 
             logger.info(
-                "Turn %d: %d in / %d out, stop_reason=%s",
+                "Turn %d: %d in / %d out, stop_reason=%s, session=%s, user=%s",
                 turn_count,
                 response.usage.input_tokens,
                 response.usage.output_tokens,
                 response.stop_reason,
+                self.session_id,
+                self.user_id,
             )
 
             if response.stop_reason == "end_turn":
@@ -300,33 +310,37 @@ class ConversationHandler:
 
             turn_count += 1
 
-            async with self.client.messages.stream(
-                model=self.model,
-                max_tokens=self.max_tokens,
-                temperature=self.temperature,
-                system=self.system_prompt,
-                tools=self.tools or anthropic.NOT_GIVEN,
-                messages=working_messages,
-            ) as stream:
-                async for event in stream:
-                    if not hasattr(event, "type"):
-                        continue
-                    if event.type == "content_block_start":
-                        block = event.content_block
-                        if block.type == "tool_use":
-                            yield StreamEvent(
-                                type="tool_start",
-                                tool_name=block.name,
-                                tool_call_id=block.id,
-                            )
-                    elif event.type == "content_block_delta":
-                        delta = event.delta
-                        if hasattr(delta, "text"):
-                            yield StreamEvent(
-                                type="text_delta", text=delta.text
-                            )
+            try:
+                async with self.client.messages.stream(
+                    model=self.model,
+                    max_tokens=self.max_tokens,
+                    temperature=self.temperature,
+                    system=self.system_prompt,
+                    tools=self.tools or anthropic.NOT_GIVEN,
+                    messages=working_messages,
+                ) as stream:
+                    async for event in stream:
+                        if not hasattr(event, "type"):
+                            continue
+                        if event.type == "content_block_start":
+                            block = event.content_block
+                            if block.type == "tool_use":
+                                yield StreamEvent(
+                                    type="tool_start",
+                                    tool_name=block.name,
+                                    tool_call_id=block.id,
+                                )
+                        elif event.type == "content_block_delta":
+                            delta = event.delta
+                            if hasattr(delta, "text"):
+                                yield StreamEvent(
+                                    type="text_delta", text=delta.text
+                                )
 
-                final_message = await stream.get_final_message()
+                    final_message = await stream.get_final_message()
+            except anthropic.APIStatusError as e:
+                yield StreamEvent(type="error", message=self._format_api_error(e))
+                return
 
             self._accum_usage(usage, final_message.usage)
 
@@ -388,7 +402,7 @@ class ConversationHandler:
         """Execute a single tool call.  Returns ``(result, is_error)``."""
         executor = self.tool_executors.get(block.name)
         if not executor:
-            logger.error("No executor found for tool '%s'", block.name)
+            logger.error("No executor for tool '%s', session=%s, user=%s", block.name, self.session_id, self.user_id)
             return f"Error: Unknown tool '{block.name}'", True
         try:
             result = await executor(block.input)
@@ -397,7 +411,7 @@ class ConversationHandler:
             return str(result), False
         except Exception as e:
             logger.error(
-                "Tool '%s' execution error: %s", block.name, e, exc_info=True
+                "Tool '%s' error: %s, session=%s, user=%s", block.name, e, self.session_id, self.user_id, exc_info=True
             )
             return f"Error executing tool: {e}", True
 
@@ -425,6 +439,57 @@ class ConversationHandler:
             turn_count=turn_count,
             stop_reason="timeout",
         )
+
+    def _api_error_result(
+        self,
+        error: anthropic.APIStatusError,
+        tool_calls: list[ToolCallRecord],
+        usage: TokenUsage,
+        turn_count: int,
+        new_messages: list[dict],
+    ) -> ConversationResult:
+        """Build a ConversationResult from an Anthropic API error (AC-23)."""
+        status = error.status_code
+        if status == 429:
+            retry_after = getattr(error.response, "headers", {}).get("retry-after", "unknown")
+            msg = f"[Rate limited — retry after {retry_after}s]"
+            logger.warning("Anthropic 429 rate limit, retry_after=%s, session=%s, user=%s", retry_after, self.session_id, self.user_id)  # noqa: E501
+        elif status == 529:
+            msg = "[The AI service is temporarily overloaded. Please try again in a moment.]"
+            logger.warning("Anthropic 529 overloaded, session=%s, user=%s", self.session_id, self.user_id)
+        elif status in (401, 403):
+            msg = "[Authentication error — please contact support]"
+            logger.error("Anthropic auth error (%d), session=%s, user=%s", status, self.session_id, self.user_id)
+        else:
+            msg = f"[API error: {status}]"
+            logger.error("Anthropic API error (%d): %s, session=%s, user=%s", status, error, self.session_id, self.user_id)  # noqa: E501
+
+        new_messages.append({"role": "assistant", "content": msg})
+        return ConversationResult(
+            response_text=msg,
+            new_messages=new_messages,
+            tool_calls=tool_calls,
+            token_usage=usage,
+            turn_count=turn_count,
+            stop_reason=f"api_error_{status}",
+        )
+
+    def _format_api_error(self, error: anthropic.APIStatusError) -> str:
+        """Format an API error for streaming events and log it."""
+        status = error.status_code
+        if status == 429:
+            retry_after = getattr(error.response, "headers", {}).get("retry-after", "unknown")
+            logger.warning("Anthropic 429 rate limit, retry_after=%s, session=%s, user=%s", retry_after, self.session_id, self.user_id)  # noqa: E501
+            return f"[Rate limited — retry after {retry_after}s]"
+        elif status == 529:
+            logger.warning("Anthropic 529 overloaded, session=%s, user=%s", self.session_id, self.user_id)
+            return "[The AI service is temporarily overloaded. Please try again in a moment.]"
+        elif status in (401, 403):
+            logger.error("Anthropic auth error (%d), session=%s, user=%s", status, self.session_id, self.user_id)
+            return "[Authentication error — please contact support]"
+        else:
+            logger.error("Anthropic API error (%d): %s, session=%s, user=%s", status, error, self.session_id, self.user_id)  # noqa: E501
+            return f"[API error: {status}]"
 
 
 # ---------------------------------------------------------------------------
