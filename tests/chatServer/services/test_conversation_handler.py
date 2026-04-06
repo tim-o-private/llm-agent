@@ -9,6 +9,7 @@ import asyncio
 from dataclasses import dataclass
 from unittest.mock import AsyncMock, MagicMock
 
+import anthropic
 import pytest
 
 from chatServer.services.conversation_handler import (
@@ -421,6 +422,140 @@ class TestTimeout:
 
         assert result.stop_reason == "timeout"
         assert "[Request timed out]" in result.response_text
+
+
+# ---------------------------------------------------------------------------
+# API error tests  (AC-23)
+# ---------------------------------------------------------------------------
+
+def _make_api_status_error(status_code, headers=None):
+    """Create a mock anthropic.APIStatusError."""
+    import httpx
+
+    mock_response = httpx.Response(
+        status_code=status_code,
+        headers=headers or {},
+        request=httpx.Request("POST", "https://api.anthropic.com/v1/messages"),
+    )
+    return anthropic.APIStatusError(
+        message=f"Error {status_code}",
+        response=mock_response,
+        body={"error": {"message": f"Error {status_code}"}},
+    )
+
+
+class TestAPIErrors:
+    @pytest.mark.asyncio
+    async def test_rate_limit_429(self):
+        """AC-23: 429 returns rate limit message with retry_after."""
+        mock_client = MagicMock()
+        mock_client.messages.create = AsyncMock(
+            side_effect=_make_api_status_error(429, {"retry-after": "30"})
+        )
+        handler = _make_handler(mock_client=mock_client)
+        handler.session_id = "test-session"
+        handler.user_id = "test-user"
+
+        result = await handler.run([{"role": "user", "content": "test"}])
+
+        assert result.stop_reason == "api_error_429"
+        assert "retry after 30s" in result.response_text
+
+    @pytest.mark.asyncio
+    async def test_overloaded_529(self):
+        """AC-23: 529 returns user-friendly overloaded message."""
+        mock_client = MagicMock()
+        mock_client.messages.create = AsyncMock(
+            side_effect=_make_api_status_error(529)
+        )
+        handler = _make_handler(mock_client=mock_client)
+
+        result = await handler.run([{"role": "user", "content": "test"}])
+
+        assert result.stop_reason == "api_error_529"
+        assert "overloaded" in result.response_text
+
+    @pytest.mark.asyncio
+    async def test_auth_error_401(self):
+        """AC-23: 401 returns auth error message."""
+        mock_client = MagicMock()
+        mock_client.messages.create = AsyncMock(
+            side_effect=_make_api_status_error(401)
+        )
+        handler = _make_handler(mock_client=mock_client)
+
+        result = await handler.run([{"role": "user", "content": "test"}])
+
+        assert result.stop_reason == "api_error_401"
+        assert "Authentication error" in result.response_text
+
+    @pytest.mark.asyncio
+    async def test_generic_api_error(self):
+        """AC-23: Other status codes return generic API error."""
+        mock_client = MagicMock()
+        mock_client.messages.create = AsyncMock(
+            side_effect=_make_api_status_error(500)
+        )
+        handler = _make_handler(mock_client=mock_client)
+
+        result = await handler.run([{"role": "user", "content": "test"}])
+
+        assert result.stop_reason == "api_error_500"
+        assert "API error: 500" in result.response_text
+
+    @pytest.mark.asyncio
+    async def test_api_error_preserves_prior_tool_calls(self):
+        """API error after a tool turn preserves earlier tool call records."""
+        mock_client = MagicMock()
+        tool_resp = MockResponse(
+            content=[MockToolUseBlock()],
+            stop_reason="tool_use",
+        )
+        mock_client.messages.create = AsyncMock(
+            side_effect=[tool_resp, _make_api_status_error(529)]
+        )
+
+        handler = _make_handler(
+            mock_client=mock_client,
+            tool_executors={"search_gmail": AsyncMock(return_value="ok")},
+        )
+
+        result = await handler.run([{"role": "user", "content": "test"}])
+
+        assert result.stop_reason == "api_error_529"
+        assert len(result.tool_calls) == 1
+        assert result.turn_count == 2
+
+
+# ---------------------------------------------------------------------------
+# Context logging tests  (AC-27)
+# ---------------------------------------------------------------------------
+
+class TestContextLogging:
+    def test_session_id_and_user_id_stored(self):
+        """AC-27: session_id and user_id are stored on the handler."""
+        handler = _make_handler()
+        handler.session_id = "sess-123"
+        handler.user_id = "user-456"
+        assert handler.session_id == "sess-123"
+        assert handler.user_id == "user-456"
+
+    def test_constructor_accepts_context(self):
+        """AC-27: Constructor accepts session_id and user_id."""
+        mock_client = MagicMock()
+        mock_client.messages = MagicMock()
+        mock_client.messages.create = AsyncMock(return_value=MockResponse())
+        handler = ConversationHandler(
+            client=mock_client,
+            model="test",
+            system_prompt="test",
+            tools=[],
+            tool_executors={},
+            session_id="s1",
+            user_id="u1",
+        )
+        assert handler.session_id == "s1"
+        assert handler.user_id == "u1"
 
 
 # ---------------------------------------------------------------------------
