@@ -24,9 +24,6 @@ async def test_ac_13_morning_handler_self_schedules_with_expires():
 
     mock_briefing_service = MagicMock()
     mock_briefing_service.get_user_preferences = AsyncMock(return_value=mock_prefs)
-    mock_briefing_service.generate_morning_briefing = AsyncMock(
-        return_value={"success": True, "briefing": "test", "notification_id": "n-1"}
-    )
 
     mock_db_manager = MagicMock()
     mock_db_manager.pool = MagicMock()
@@ -38,11 +35,13 @@ async def test_ac_13_morning_handler_self_schedules_with_expires():
         patch("chatServer.services.briefing_service.BriefingService", return_value=mock_briefing_service),
         patch("chatServer.services.job_service.JobService", return_value=mock_job_service),
         patch("chatServer.database.connection.get_database_manager", return_value=mock_db_manager),
+        patch("chatServer.workflows.dispatch.dispatch_workflow", new_callable=AsyncMock, return_value="Started workflow 'morning-briefing' (run_id: r1)."),  # noqa: E501
+        patch("chatServer.services.job_handlers._get_anthropic_client_for_workflow", return_value=MagicMock()),
     ):
         from chatServer.services.job_handlers import handle_morning_briefing
         result = await handle_morning_briefing(job)
 
-    assert result["success"] is True
+    assert result["status"] == "workflow_dispatched"
     mock_job_service.create.assert_awaited_once()
     create_kwargs = mock_job_service.create.call_args[1]
     assert create_kwargs["job_type"] == "morning_briefing"
@@ -70,9 +69,6 @@ async def test_ac_14_evening_handler_self_schedules():
 
     mock_briefing_service = MagicMock()
     mock_briefing_service.get_user_preferences = AsyncMock(return_value=mock_prefs)
-    mock_briefing_service.generate_evening_briefing = AsyncMock(
-        return_value={"success": True, "briefing": "test", "notification_id": "n-2"}
-    )
 
     mock_db_manager = MagicMock()
     mock_db_manager.pool = MagicMock()
@@ -84,11 +80,13 @@ async def test_ac_14_evening_handler_self_schedules():
         patch("chatServer.services.briefing_service.BriefingService", return_value=mock_briefing_service),
         patch("chatServer.services.job_service.JobService", return_value=mock_job_service),
         patch("chatServer.database.connection.get_database_manager", return_value=mock_db_manager),
+        patch("chatServer.workflows.dispatch.dispatch_workflow", new_callable=AsyncMock, return_value="Started workflow 'evening-briefing' (run_id: r2)."),  # noqa: E501
+        patch("chatServer.services.job_handlers._get_anthropic_client_for_workflow", return_value=MagicMock()),
     ):
         from chatServer.services.job_handlers import handle_evening_briefing
         result = await handle_evening_briefing(job)
 
-    assert result["success"] is True
+    assert result["status"] == "workflow_dispatched"
     mock_job_service.create.assert_awaited_once()
     create_kwargs = mock_job_service.create.call_args[1]
     assert create_kwargs["job_type"] == "evening_briefing"
@@ -112,9 +110,6 @@ async def test_ac_16_failed_briefing_schedules_next_day():
 
     mock_briefing_service = MagicMock()
     mock_briefing_service.get_user_preferences = AsyncMock(return_value=mock_prefs)
-    mock_briefing_service.generate_morning_briefing = AsyncMock(
-        side_effect=RuntimeError("LLM API error")
-    )
 
     mock_db_manager = MagicMock()
     mock_db_manager.pool = MagicMock()
@@ -126,10 +121,12 @@ async def test_ac_16_failed_briefing_schedules_next_day():
         patch("chatServer.services.briefing_service.BriefingService", return_value=mock_briefing_service),
         patch("chatServer.services.job_service.JobService", return_value=mock_job_service),
         patch("chatServer.database.connection.get_database_manager", return_value=mock_db_manager),
+        patch("chatServer.workflows.dispatch.dispatch_workflow", new_callable=AsyncMock, return_value="Failed to start workflow: LLM API error"),  # noqa: E501
+        patch("chatServer.services.job_handlers._get_anthropic_client_for_workflow", return_value=MagicMock()),
     ):
         from chatServer.services.job_handlers import handle_morning_briefing
 
-        with pytest.raises(RuntimeError, match="LLM API error"):
+        with pytest.raises(RuntimeError, match="Failed"):
             await handle_morning_briefing(job)
 
     mock_job_service.create.assert_awaited_once()
