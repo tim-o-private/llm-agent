@@ -1,4 +1,4 @@
-# SPEC-032: Config Service — Supabase Storage + Overlay Resolution
+# SPEC-035: Config Service — Supabase Storage + Overlay Resolution
 
 > **Status:** Draft
 > **Author:** Claude (Spec Writer)

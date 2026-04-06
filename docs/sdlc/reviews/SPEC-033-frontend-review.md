@@ -6,7 +6,7 @@
 
 ## Verdict: PASS with CONCERNS
 
-SPEC-033 does not break the frontend. The JSON fallback path (AC-10) preserves the existing `ChatResponse` format exactly. However, the SSE streaming format defined in SPEC-033 diverges from what SPEC-032 (Assistant-UI Alignment) expects, which will create rework.
+SPEC-033 does not break the frontend. The JSON fallback path (AC-10) preserves the existing `ChatResponse` format exactly. However, the SSE streaming format defined in SPEC-033 diverges from what SPEC-035 (Assistant-UI Alignment) expects, which will create rework.
 
 ---
 
@@ -59,7 +59,7 @@ data: {"type": "text_delta", "text": "I found 3 emails..."}
 data: {"type": "message_complete", "token_usage": {"input_tokens": 1200, "output_tokens": 350}}
 ```
 
-### SPEC-032 expected format (AC-01, AC-02)
+### SPEC-035 expected format (AC-01, AC-02)
 
 ```
 data: {"type": "part-start", ...}    (assistant-stream AssistantTransportEncoder)
@@ -75,13 +75,13 @@ data: {"type": "message-finish", ...}
 Nothing breaks today. But **the two specs define incompatible SSE formats**:
 
 - SPEC-033 AC-11 defines: `text_delta`, `tool_start`, `tool_result`, `message_complete`, `error` (custom JSON-per-line)
-- SPEC-032 AC-01/AC-02 expects: `assistant-stream` `AssistantTransportEncoder` format (`part-start`, `text-delta`, `tool-call-begin`, etc.)
+- SPEC-035 AC-01/AC-02 expects: `assistant-stream` `AssistantTransportEncoder` format (`part-start`, `text-delta`, `tool-call-begin`, etc.)
 
-SPEC-033 Decision #1 explicitly rejects `assistant-stream`: "No assistant-stream protocol dependency." SPEC-032 FU-2 explicitly requires it: "Reads the SSE response via `AssistantStream.fromResponse(response, new AssistantTransportDecoder())`."
+SPEC-033 Decision #1 explicitly rejects `assistant-stream`: "No assistant-stream protocol dependency." SPEC-035 FU-2 explicitly requires it: "Reads the SSE response via `AssistantStream.fromResponse(response, new AssistantTransportDecoder())`."
 
 This means one of:
-1. SPEC-033's SSE format gets replaced by `assistant-stream` before SPEC-032 FU-2 starts (rework)
-2. SPEC-032 FU-2 builds a translation layer from SPEC-033 format to `assistant-stream` (complexity)
+1. SPEC-033's SSE format gets replaced by `assistant-stream` before SPEC-035 FU-2 starts (rework)
+2. SPEC-035 FU-2 builds a translation layer from SPEC-033 format to `assistant-stream` (complexity)
 3. SPEC-033 adopts `assistant-stream` format from the start (simplest)
 
 ---
@@ -92,7 +92,7 @@ This means one of:
 
 1. Backend flag `CONVERSATION_HANDLER_V2` controls which handler processes the request
 2. Frontend doesn't send `Accept: text/event-stream` → always gets JSON → same behavior regardless of flag
-3. When SPEC-032 adds streaming (frontend sends `Accept: text/event-stream`), the backend already has the SSE path ready
+3. When SPEC-035 adds streaming (frontend sends `Accept: text/event-stream`), the backend already has the SSE path ready
 4. Flag is completely transparent to the frontend
 
 This is a good design. No frontend coordination needed during rollout.
@@ -101,14 +101,14 @@ This is a good design. No frontend coordination needed during rollout.
 
 ## Recommended Changes to the Spec
 
-### CONCERN 1: SSE format must align with SPEC-032 (Medium Priority)
+### CONCERN 1: SSE format must align with SPEC-035 (Medium Priority)
 
-SPEC-033 defines a custom JSON-per-line SSE format (AC-11). SPEC-032 expects `assistant-stream` `AssistantTransportEncoder` format. These are different event types, different field names, different serialization.
+SPEC-033 defines a custom JSON-per-line SSE format (AC-11). SPEC-035 expects `assistant-stream` `AssistantTransportEncoder` format. These are different event types, different field names, different serialization.
 
 **Recommendation:** Either:
 - **(a)** Update SPEC-033 AC-11 to use `assistant-stream` format from the start (add `assistant-stream` to `requirements.txt`), or
-- **(b)** Add an explicit AC to SPEC-033 stating: "The SSE format defined here is a temporary implementation. Before SPEC-032 FU-2, the SSE events will be migrated to `assistant-stream` `AssistantTransportEncoder` format." Make this a known tech debt item.
-- **(c)** Update SPEC-032 to consume SPEC-033's simpler format instead of `assistant-stream` (simplest if `assistant-stream` Python package doesn't exist or is poorly maintained — SPEC-032 Risk #2 acknowledges this).
+- **(b)** Add an explicit AC to SPEC-033 stating: "The SSE format defined here is a temporary implementation. Before SPEC-035 FU-2, the SSE events will be migrated to `assistant-stream` `AssistantTransportEncoder` format." Make this a known tech debt item.
+- **(c)** Update SPEC-035 to consume SPEC-033's simpler format instead of `assistant-stream` (simplest if `assistant-stream` Python package doesn't exist or is poorly maintained — SPEC-035 Risk #2 acknowledges this).
 
 Option (a) is cleanest if the Python `assistant-stream` package works. Option (c) is the pragmatic fallback.
 
@@ -122,7 +122,7 @@ Option (a) is cleanest if the Python `assistant-stream` package works. Option (c
 
 The current JSON response includes only the *last* tool name/input (`tool_name`, `tool_input` fields). When the ConversationHandler executes multiple tools in a multi-turn loop, only the final one is visible in the JSON response. This is the same limitation as today (LangChain path also returns only the final response text), so it's not a regression.
 
-The SSE format (AC-11) solves this by streaming `tool_start`/`tool_result` per tool. SPEC-032 FU-3 adds the UI components. This is correctly sequenced across specs.
+The SSE format (AC-11) solves this by streaming `tool_start`/`tool_result` per tool. SPEC-035 FU-3 adds the UI components. This is correctly sequenced across specs.
 
 ### CONCERN 4: `loadHistoricalMessages` parses LangChain format (Informational)
 
@@ -134,9 +134,9 @@ The SSE format (AC-11) solves this by streaming `tool_start`/`tool_result` per t
 
 **For SPEC-033 itself: Zero frontend changes required.**
 
-The spec correctly scopes frontend streaming to SPEC-032. The JSON fallback path preserves full backward compatibility.
+The spec correctly scopes frontend streaming to SPEC-035. The JSON fallback path preserves full backward compatibility.
 
-**For SPEC-032 (which depends on SPEC-033's SSE endpoint):**
+**For SPEC-035 (which depends on SPEC-033's SSE endpoint):**
 
 | Scope | Files | Complexity |
 |-------|-------|------------|
@@ -148,4 +148,4 @@ The spec correctly scopes frontend streaming to SPEC-032. The JSON fallback path
 | Delete `CustomRuntime.ts` | 1 file | Low — deletion |
 | Simplify `useChatTimeline.ts` | 1 file | Low |
 
-Total: ~8-10 files touched, but that's all SPEC-032 scope, not SPEC-033.
+Total: ~8-10 files touched, but that's all SPEC-035 scope, not SPEC-033.
