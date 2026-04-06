@@ -712,3 +712,167 @@ async def test_heartbeat_builds_effective_prompt_with_checklist(
     assert "Daily check" in call_args["input"]
     assert "- Check emails" in call_args["input"]
     assert "- Check approvals" in call_args["input"]
+
+
+# --- ConversationHandler v2 path tests ---
+
+
+def _v2_patches():
+    """Patches for v2 path tests."""
+    return {
+        "build_handler": patch(
+            "chatServer.services.conversation_handler_builder.build_conversation_handler",
+            new_callable=AsyncMock,
+        ),
+        "get_supabase": patch(
+            "chatServer.services.scheduled_execution_service.create_user_scoped_client",
+            new_callable=AsyncMock,
+        ),
+        "get_settings": patch(
+            "chatServer.config.settings.get_settings",
+        ),
+        "pending_svc": patch(
+            "chatServer.services.scheduled_execution_service.PendingActionsService"
+        ),
+        "audit_svc": patch(
+            "chatServer.services.scheduled_execution_service.AuditService"
+        ),
+        "notification_svc": patch(
+            "chatServer.services.notification_service.NotificationService"
+        ),
+    }
+
+
+@pytest.mark.asyncio
+async def test_v2_execute_uses_conversation_handler(service, mock_supabase):
+    """v2 path calls build_conversation_handler and handler.run (AC-20, AC-32)."""
+    mock_handler = MagicMock()
+    mock_result = MagicMock()
+    mock_result.response_text = "V2 response"
+    mock_handler.run = AsyncMock(return_value=mock_result)
+    mock_handler.model = "claude-sonnet-4-20250514"
+
+    schedule = {
+        "id": "schedule-v2",
+        "user_id": "user-123",
+        "agent_name": "assistant",
+        "prompt": "Check stuff",
+        "config": {"schedule_type": "scheduled"},
+    }
+
+    patches = _v2_patches()
+    with (
+        patches["build_handler"] as mock_build,
+        patches["get_supabase"] as mock_get_sb,
+        patches["get_settings"] as mock_settings,
+        patches["pending_svc"] as mock_pending_cls,
+        patches["audit_svc"],
+        patches["notification_svc"] as mock_notif_cls,
+    ):
+        mock_settings.return_value = MagicMock(conversation_handler_v2=True)
+        mock_build.return_value = mock_handler
+        mock_get_sb.return_value = mock_supabase
+        mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
+        mock_notif_cls.return_value.notify_user = AsyncMock()
+        mock_notif_cls.return_value.notify_pending_actions = AsyncMock()
+
+        result = await service.execute(schedule)
+
+    assert result["success"] is True
+    assert result["output"] == "V2 response"
+    mock_build.assert_awaited_once_with(
+        user_id="user-123",
+        agent_name="assistant",
+        session_id=mock_build.call_args.kwargs["session_id"],
+        channel="scheduled",
+    )
+    # AC-32: messages should be [user message with prompt], empty history
+    messages_arg = mock_handler.run.call_args[0][0]
+    assert len(messages_arg) == 1
+    assert messages_arg[0]["role"] == "user"
+    assert messages_arg[0]["content"] == "Check stuff"
+
+
+@pytest.mark.asyncio
+async def test_v2_heartbeat_builds_effective_prompt(service, mock_supabase):
+    """v2 heartbeat path uses checklist-formatted prompt."""
+    mock_handler = MagicMock()
+    mock_result = MagicMock()
+    mock_result.response_text = "HEARTBEAT_OK"
+    mock_handler.run = AsyncMock(return_value=mock_result)
+    mock_handler.model = "claude-sonnet-4-20250514"
+
+    schedule = {
+        "id": "schedule-hb-v2",
+        "user_id": "user-123",
+        "agent_name": "assistant",
+        "prompt": "Daily check",
+        "config": {
+            "schedule_type": "heartbeat",
+            "heartbeat_checklist": ["Check emails"],
+        },
+    }
+
+    patches = _v2_patches()
+    with (
+        patches["build_handler"] as mock_build,
+        patches["get_supabase"] as mock_get_sb,
+        patches["get_settings"] as mock_settings,
+        patches["pending_svc"] as mock_pending_cls,
+        patches["audit_svc"],
+        patches["notification_svc"] as mock_notif_cls,
+    ):
+        mock_settings.return_value = MagicMock(conversation_handler_v2=True)
+        mock_build.return_value = mock_handler
+        mock_get_sb.return_value = mock_supabase
+        mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
+        mock_notif_cls.return_value.notify_user = AsyncMock()
+        mock_notif_cls.return_value.notify_pending_actions = AsyncMock()
+
+        result = await service.execute(schedule)
+
+    assert result["success"] is True
+    messages_arg = mock_handler.run.call_args[0][0]
+    assert "- Check emails" in messages_arg[0]["content"]
+    assert "HEARTBEAT_OK" in messages_arg[0]["content"]
+
+
+@pytest.mark.asyncio
+async def test_v2_applies_model_override(service, mock_supabase):
+    """v2 path applies model override to the handler."""
+    mock_handler = MagicMock()
+    mock_result = MagicMock()
+    mock_result.response_text = "Response"
+    mock_handler.run = AsyncMock(return_value=mock_result)
+    mock_handler.model = "claude-sonnet-4-20250514"
+
+    schedule = {
+        "id": "schedule-v2-override",
+        "user_id": "user-123",
+        "agent_name": "assistant",
+        "prompt": "Test",
+        "config": {
+            "schedule_type": "scheduled",
+            "model_override": "claude-haiku-4-5-20251001",
+        },
+    }
+
+    patches = _v2_patches()
+    with (
+        patches["build_handler"] as mock_build,
+        patches["get_supabase"] as mock_get_sb,
+        patches["get_settings"] as mock_settings,
+        patches["pending_svc"] as mock_pending_cls,
+        patches["audit_svc"],
+        patches["notification_svc"] as mock_notif_cls,
+    ):
+        mock_settings.return_value = MagicMock(conversation_handler_v2=True)
+        mock_build.return_value = mock_handler
+        mock_get_sb.return_value = mock_supabase
+        mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
+        mock_notif_cls.return_value.notify_user = AsyncMock()
+        mock_notif_cls.return_value.notify_pending_actions = AsyncMock()
+
+        await service.execute(schedule)
+
+    assert mock_handler.model == "claude-haiku-4-5-20251001"
