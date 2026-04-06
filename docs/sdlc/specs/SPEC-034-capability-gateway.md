@@ -19,12 +19,13 @@ The gateway becomes the single execution path for all tool calls. The agent (via
 - [ ] **AC-04:** OAuth credentials (Gmail, Calendar) are injected server-side by the gateway. The executor receives credentials as a parameter; the LLM context never contains raw tokens. [A12]
 - [ ] **AC-05:** Every gateway invocation is audit-logged with: tool name, user ID, trust tier, execution status, timestamp, and session context. [A12]
 - [ ] **AC-06:** Results from external sources (email, calendar, web search) are wrapped in `TaggedContent` with `trust_level="untrusted"` and `source` metadata. [A12]
-- [ ] **AC-07:** Tool definitions are loaded from Markdown files with YAML frontmatter (via SPEC-032 ConfigService) describing name, description, parameters, required_tier, and executor binding. [A2, A13]
+- [ ] **AC-07:** Tool definitions are loaded from a hardcoded `TOOL_DEFINITIONS` dict in `chatServer/capabilities/definitions.py` for FU-1 through FU-5. Each entry describes name, description, parameters, required_tier, and executor binding — same schema as the future Markdown+YAML frontmatter format. Migration to SPEC-035 ConfigService-backed Markdown files is a follow-up (FU-6 or separate spec). [A2, A13]
 - [ ] **AC-08:** Capability executors exist for all 28 canonical tools, each producing equivalent output to the current BaseTool._arun. Regression tests prove equivalence. [S1]
 - [ ] **AC-09:** After migration, the following are deleted: `chatServer/tools/` (all BaseTool subclasses), `chatServer/security/tool_wrapper.py`, `chatServer/services/tool_execution.py`, `TOOL_REGISTRY` from `agent_loader_db.py`, `TOOL_APPROVAL_DEFAULTS` from `approval_tiers.py`. [A14]
 - [ ] **AC-10:** The gateway exposes a `get_tool_schemas(user_id)` method that returns Anthropic-native tool definitions (name, description, input_schema) for only the tools in the user's allowlist. This is what SPEC-033's ConversationHandler passes to the Anthropic Messages API. [A12]
 - [ ] **AC-11:** Unknown tool names produce a clear error, not a crash. The gateway's default for unrecognized tools is denial. [A12]
 - [ ] **AC-12:** Memory tools receive the MCP client handle via the gateway's dependency injection, not via constructor args on a BaseTool subclass. [A1]
+- [ ] **AC-13:** `chatServer/services/prompt_builder.py` is updated: `_format_tool_guidance()` calls `gateway.get_prompt_sections(user_id, channel)` instead of iterating `BaseTool` class methods via `type(tool).prompt_section(channel)`. This must happen before FU-5 deletes BaseTool subclasses. [A1]
 
 ## Scope
 
@@ -34,6 +35,7 @@ The gateway becomes the single execution path for all tool calls. The agent (via
 |------|---------|
 | `chatServer/capabilities/__init__.py` | Package init |
 | `chatServer/capabilities/gateway.py` | `CapabilityGateway` class — the single execution entry point |
+| `chatServer/capabilities/definitions.py` | Hardcoded `TOOL_DEFINITIONS` dict (interim; migrates to ConfigService-backed Markdown files later) |
 | `chatServer/capabilities/schemas.py` | `TrustTier` enum, `ToolDefinition` model, `TaggedContent` dataclass, `CapabilityResult` |
 | `chatServer/capabilities/allowlist.py` | `AllowlistResolver` — reads per-user allowlist from ConfigService, resolves granted tiers |
 | `chatServer/capabilities/executors/__init__.py` | Executor registry |
@@ -60,6 +62,7 @@ The gateway becomes the single execution path for all tool calls. The agent (via
 | `chatServer/services/audit_service.py` | Add `trust_tier` and `data_source` fields to audit log entries |
 | `supabase/migrations/NNNN_audit_trust_tier.sql` | Add `trust_tier` TEXT column to `audit_logs` |
 | `src/core/agent_loader_db.py` | Remove `TOOL_REGISTRY` dict and `load_tools_from_db` after executor migration |
+| `chatServer/services/prompt_builder.py` | Update `_format_tool_guidance()` to call `gateway.get_prompt_sections()` instead of iterating BaseTool class methods |
 | `chatServer/services/pending_actions.py` | Wire approval flow to gateway's Recommend tier (tools at Recommend queue for approval) |
 
 ### Files to Delete (after all executors pass regression tests)
@@ -87,7 +90,7 @@ The gateway becomes the single execution path for all tool calls. The agent (via
 
 ### Out of Scope
 
-- **Config storage layer** — SPEC-032 provides `ConfigService` for reading tool definitions and allowlists
+- **Config-backed tool definitions** — initial implementation uses hardcoded definitions; migration to SPEC-035 ConfigService-backed Markdown files is a follow-up
 - **Conversation handler** — SPEC-033 provides the Anthropic API tool-loop that calls the gateway
 - **Self-modification approval flow** — SPEC-038 adds the flow for agent-initiated config changes
 - **Workflow dispatch tool** — Phase 2 adds `dispatch_workflow`; this spec covers only direct tool execution
@@ -125,7 +128,7 @@ Each tool has a `required_tier` (minimum tier needed to call it). Each user has 
 
 ### 2. Tool Definition Schema (replaces BaseTool class registration)
 
-Tool definitions are Markdown files with YAML frontmatter stored in config (via SPEC-032's ConfigService). This format is consistent with HQ conventions, agent definitions, and the file browser UX. Each definition describes what the LLM sees and how the gateway executes it.
+Tool definitions are Markdown files with YAML frontmatter stored in config (via SPEC-035's ConfigService). This format is consistent with HQ conventions, agent definitions, and the file browser UX. Each definition describes what the LLM sees and how the gateway executes it.
 
 **Example tool definition file** (`system/tools/search_gmail.md`):
 
@@ -201,7 +204,7 @@ class CapabilityGateway:
 
     def __init__(
         self,
-        config_service,       # SPEC-032: reads tool definitions + allowlists
+        config_service,       # SPEC-035: reads tool definitions + allowlists
         allowlist_resolver,   # Resolves per-user granted tiers
         credential_provider,  # Reads OAuth tokens from external_api_connections
         audit_service,        # Logs invocations
@@ -317,7 +320,7 @@ async def search_gmail(params: dict, ctx: ExecutionContext) -> str:
 | OAuth (Calendar) | search_calendar, get_calendar_event | `oauth_calendar` | CalendarService |
 | MCP | create_memories, search_memories, get_memories, update_memories, delete_memories, set_project, link_memories, get_entities, search_entities, get_context | `mcp_memory` | min-memory MCP client |
 | External API | search_web | None (API key from settings) | WebSearchService |
-| Config | update_instructions | None (uses ctx.db_client) | PromptCustomizationService (or SPEC-032 ConfigService) |
+| Config | update_instructions | None (uses ctx.db_client) | PromptCustomizationService (or SPEC-035 ConfigService) |
 
 **Migration strategy for each executor:** Extract the body of `_arun()` from the current BaseTool subclass. Remove constructor boilerplate, Pydantic field declarations, and LangChain imports. The business logic (service calls, result formatting) is preserved verbatim. Regression tests compare old and new output for the same inputs.
 
@@ -343,11 +346,11 @@ class AllowlistResolver:
 **Resolution logic:**
 
 1. Load system-level tool definitions (all tools that exist)
-2. Load user-level allowlist from config (SPEC-032: `tools/allowlist.yaml`)
+2. Load user-level allowlist from config (SPEC-035: `tools/allowlist.yaml`)
 3. If user has no allowlist → use default granted tiers from tool definitions (all current 29 tools enabled at their existing behavior)
 4. If user has an allowlist → merge: user overrides take precedence, but `granted_tier` can never drop below `min_grantable_tier`
 
-**Allowlist file format** (stored in user config via SPEC-032, Markdown+YAML frontmatter):
+**Allowlist file format** (stored in user config via SPEC-035, Markdown+YAML frontmatter):
 
 ```markdown
 ---
@@ -406,7 +409,7 @@ This extracts the credential-fetching logic currently embedded in `GmailToolProv
 
 ### Dependencies
 
-- **SPEC-032 (Config Service):** Provides `ConfigService` for reading tool definitions and user allowlists from Supabase Storage. The gateway calls `config_service.get_tool_definition(name)` and `config_service.get_user_config(user_id, "tools/allowlist.json")`.
+- **SPEC-035 (Config Service):** **Decoupled for initial implementation.** FU-1 through FU-5 use hardcoded `TOOL_DEFINITIONS` in `definitions.py`. Migration to ConfigService-backed Markdown tool definition files is a follow-up (FU-7 or separate spec). User allowlists initially use `default_granted_tier` from definitions; ConfigService-backed per-user allowlists are also a follow-up.
 - **SPEC-033 (Conversation Handler):** The ConversationHandler calls `gateway.execute()` for each tool call and `gateway.get_tool_schemas()` to build the Anthropic API tool definitions. SPEC-033 and SPEC-034 must agree on the `CapabilityResult` interface.
 - **Existing services:** TaskService, ReminderService, ScheduleService, GmailComposeService, CalendarService, WebSearchService, BriefingService, AuditService, PendingActionsService, NotificationService — all remain unchanged. Executors call them.
 
@@ -563,8 +566,9 @@ These tests ensure the migration is behaviorally transparent.
 
 Single branch `feat/SPEC-034-capability-gateway`, single PR. Sequential execution:
 
-1. **FU-1: Gateway core + schemas + allowlist** (database-dev + backend-dev)
+1. **FU-1: Gateway core + schemas + allowlist + hardcoded definitions** (database-dev + backend-dev)
    - Migration: add `trust_tier` column to `audit_logs`
+   - `chatServer/capabilities/definitions.py` — hardcoded `TOOL_DEFINITIONS` dict (interim, decoupled from SPEC-035)
    - `chatServer/capabilities/schemas.py` — TrustTier, ToolDefinition, TaggedContent, CapabilityResult, ExecutionContext
    - `chatServer/capabilities/allowlist.py` — AllowlistResolver
    - `chatServer/capabilities/gateway.py` — CapabilityGateway class (full pipeline)
@@ -582,18 +586,35 @@ Single branch `feat/SPEC-034-capability-gateway`, single PR. Sequential executio
    - Regression tests for all 12 service-backed tools
    - **ACs covered:** AC-08 (partial)
 
-3. **FU-3: Capability executors — OAuth + MCP + external** (backend-dev)
-   - `chatServer/capabilities/executors/gmail.py` — 2 executors + credential handling
-   - `chatServer/capabilities/executors/gmail_compose.py` — 2 executors
+3. **FU-3: Capability executors — MCP + calendar + web search** (backend-dev)
    - `chatServer/capabilities/executors/calendar.py` — 2 executors
    - `chatServer/capabilities/executors/memory.py` — 10 executors (MCP delegation)
    - `chatServer/capabilities/executors/web_search.py` — 1 executor
    - `chatServer/capabilities/gateway.py` — CredentialProvider class
-   - Regression tests for all 17 OAuth/MCP/external tools
+   - Regression tests for all 13 non-Gmail OAuth/MCP/external tools
    - Security tests for credential isolation
-   - **ACs covered:** AC-04, AC-08 (complete), AC-12
+   - **ACs covered:** AC-04 (partial), AC-08 (partial), AC-12
 
-4. **FU-4: Cleanup — delete old system** (backend-dev)
+4. **FU-4: Capability executors — Gmail tools** (backend-dev)
+   - `chatServer/capabilities/executors/gmail.py` — 2 executors (search_gmail, get_gmail)
+   - `chatServer/capabilities/executors/gmail_compose.py` — 2 executors (draft_email_reply, send_email_reply)
+   - OAuth refresh handling, multi-account discovery, sync→async client migration
+   - `GmailRateLimiter` extraction (keep as separate utility, inject into executors)
+   - `get_approval_context()` enrichment logic for send_email_reply (approval preview)
+   - Regression tests for all 4 Gmail tools
+   - **ACs covered:** AC-04 (complete), AC-08 (complete)
+   - **Note:** Gmail is 3-4x migration effort vs simple tools due to OAuth refresh, multi-account, sync Supabase client, MetadataGmailSearch, and GmailToolProvider reimplementation. Budgeted as its own FU.
+
+5. **FU-5: Bridge→Gateway swap + prompt_builder** (backend-dev)
+   - Wire SPEC-033's `ConversationHandler` to call `gateway.execute()` instead of `LangChainToolBridge.execute()` for tool dispatch
+   - Wire `ConversationHandler` to call `gateway.get_tool_schemas()` instead of `LangChainToolBridge.to_anthropic_schema()`
+   - Update `prompt_builder.py`: `_format_tool_guidance()` calls `gateway.get_prompt_sections()` instead of iterating BaseTool class methods
+   - Remove `LangChainToolBridge` from SPEC-033's code (it was temporary)
+   - Integration tests verifying ConversationHandler → Gateway → Executor → Service flow
+   - **ACs covered:** AC-13
+   - **Depends on:** SPEC-033 ConversationHandler must be implemented and the feature flag operational
+
+6. **FU-6: Cleanup — delete old system** (backend-dev)
    - Delete `chatServer/tools/*.py` (11 files)
    - Delete `chatServer/security/tool_wrapper.py`
    - Delete `chatServer/security/approval_tiers.py`
@@ -602,27 +623,31 @@ Single branch `feat/SPEC-034-capability-gateway`, single PR. Sequential executio
    - Delete old test files, replace with new registry completeness tests
    - Update any imports in chat.py, session_open_service.py, etc. that reference deleted modules
    - **ACs covered:** AC-09
+   - **Depends on:** FU-5 (bridge→gateway swap must be complete before old tools are deleted)
 
-**Merge order:** FU-1 → FU-2 → FU-3 → FU-4 (strictly sequential, same branch)
+**Merge order:** FU-1 → FU-2 → FU-3 → FU-4 → FU-5 → FU-6 (strictly sequential, same branch)
 
-**Note:** FU-4 can only execute after SPEC-033 (ConversationHandler) is wired to use the gateway. If SPEC-033 is not yet complete when FU-1–3 finish, FU-4 waits. The old and new systems can coexist temporarily — the gateway is additive until the old system is removed.
+**Cross-spec dependency chain:** SPEC-033 ships with `LangChainToolBridge` → SPEC-034 FU-1–4 builds gateway + all executors → FU-5 swaps the bridge for gateway-native dispatch in ConversationHandler → FU-6 deletes old tool system. FU-5 is the critical handoff point that was previously undocumented.
 
 ## Decisions (Resolved)
 
 1. **Allowlist default:** All 29 current tools enabled at their existing tier for existing users. Migration preserves current behavior exactly. New tools added post-migration start disabled by default — must be explicitly enabled.
 
-2. **Tool definition format:** Markdown with YAML frontmatter. Consistent with HQ conventions, agent definitions, and SPEC-032 config files. Power users will read these in the Phase 4 file browser.
+2. **Tool definition format:** Markdown with YAML frontmatter. Consistent with HQ conventions, agent definitions, and SPEC-035 config files. Power users will read these in the Phase 4 file browser.
 
 3. **Executor location:** `chatServer/capabilities/executors/` — self-contained package under the gateway. Executors are gateway-internal and should not be imported directly by other modules.
 
 ## Completeness Checklist
 
-- [x] Every AC has a stable ID (AC-01 through AC-12)
+- [x] Every AC has a stable ID (AC-01 through AC-13)
 - [x] Every AC maps to at least one functional unit
-- [x] Every cross-domain boundary has a contract (gateway ↔ SPEC-033, gateway ↔ SPEC-032)
+- [x] Every cross-domain boundary has a contract (gateway ↔ SPEC-033, gateway ↔ SPEC-035)
 - [x] Technical decisions reference principles (A1, A2, A12, A13, A14, S1)
-- [x] Merge order is explicit and acyclic (FU-1 → FU-2 → FU-3 → FU-4)
+- [x] Merge order is explicit and acyclic (FU-1 → FU-2 → FU-3 → FU-4 → FU-5 → FU-6)
+- [x] Cross-spec bridge→gateway handoff documented (FU-5)
+- [x] Gmail tools isolated in own FU due to 3-4x migration complexity
+- [x] Decoupled from SPEC-035 for initial implementation (hardcoded definitions)
 - [x] Out-of-scope is explicit
 - [x] Edge cases documented with expected behavior
 - [x] Testing requirements map to ACs
-- [x] Blast radius mapped (29 tools, 18 files deleted, 3 components modified)
+- [x] Blast radius mapped (29 tools, 18 files deleted, 4 components modified incl. prompt_builder.py)
