@@ -203,6 +203,8 @@ async def _build_handler(
         tool_executors=tool_executors,
         max_tokens=llm_config.get("max_tokens", 4096),
         temperature=llm_config.get("temperature", 0.7),
+        session_id=session_id,
+        user_id=user_id,
     )
 
     logger.info(
