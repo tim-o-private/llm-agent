@@ -15,6 +15,7 @@ import {
 const MAX_GMAIL_ACCOUNTS = 5;
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+const COMPOSE_SCOPE = 'https://www.googleapis.com/auth/gmail.compose';
 
 interface GmailConnectionProps {
   onConnectionChange?: (isConnected: boolean) => void;
@@ -62,7 +63,7 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({ onConnectionCh
     }
   };
 
-  const connectAdditionalGmail = async () => {
+  const connectAdditionalGmail = async (loginHint?: string) => {
     setIsConnecting(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -72,7 +73,12 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({ onConnectionCh
         return;
       }
 
-      const response = await fetch(`${API_BASE_URL}/oauth/gmail/connect`, {
+      let connectUrl = `${API_BASE_URL}/oauth/gmail/connect`;
+      if (loginHint) {
+        connectUrl += `?login_hint=${encodeURIComponent(loginHint)}`;
+      }
+
+      const response = await fetch(connectUrl, {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
 
@@ -152,35 +158,55 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({ onConnectionCh
         {/* Connected accounts list */}
         {hasAccounts && gmailAccounts && gmailAccounts.length > 0 && (
           <div className="space-y-2">
-            {gmailAccounts.map((account) => (
-              <div
-                key={account.id}
-                className="flex items-center justify-between p-3 rounded-lg border border-ui-border bg-ui-bg-alt"
-              >
-                <div className="flex items-center gap-2">
-                  <Mail className="h-4 w-4 text-text-muted" />
-                  <div>
-                    <div className="text-sm font-medium text-text-primary">{account.service_user_email || 'Unknown email'}</div>
-                    <div className="text-xs text-text-muted">
-                      Connected {new Date(account.created_at).toLocaleDateString()}
+            {gmailAccounts.map((account) => {
+              const hasCompose = account.scopes?.includes(COMPOSE_SCOPE);
+              return (
+                <div
+                  key={account.id}
+                  className="flex items-center justify-between p-3 rounded-lg border border-ui-border bg-ui-bg-alt"
+                >
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-text-muted" />
+                    <div>
+                      <div className="text-sm font-medium text-text-primary">{account.service_user_email || 'Unknown email'}</div>
+                      <div className="text-xs text-text-muted flex items-center gap-2">
+                        <span>Connected {new Date(account.created_at).toLocaleDateString()}</span>
+                        <Badge className={`text-[10px] px-1.5 py-0 ${hasCompose ? 'bg-bg-success-subtle text-text-success-strong' : 'bg-bg-warning-subtle text-text-warning-strong'}`}>
+                          {hasCompose ? 'Read & Send' : 'Read Only'}
+                        </Badge>
+                      </div>
                     </div>
                   </div>
+                  <div className="flex items-center gap-1">
+                    {!hasCompose && (
+                      <Button
+                        variant="outline"
+                        size="1"
+                        onClick={() => connectAdditionalGmail(account.service_user_email || undefined)}
+                        disabled={isConnecting}
+                        className="text-xs"
+                      >
+                        Re-authorize for Send
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      color="red"
+                      size="1"
+                      onClick={() => disconnectAccount(account.id)}
+                      disabled={disconnectMutation.isPending}
+                      aria-label={`Disconnect ${account.service_user_email || 'account'}`}
+                    >
+                      {disconnectMutation.isPending ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3 w-3" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  color="red"
-                  size="1"
-                  onClick={() => disconnectAccount(account.id)}
-                  disabled={disconnectMutation.isPending}
-                >
-                  {disconnectMutation.isPending ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-3 w-3" />
-                  )}
-                </Button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -213,7 +239,7 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({ onConnectionCh
               {canAddMore && (
                 <Button
                   variant="outline"
-                  onClick={connectAdditionalGmail}
+                  onClick={() => connectAdditionalGmail()}
                   disabled={isConnecting}
                   size="1"
                   className="flex-1"

@@ -37,14 +37,16 @@ def _get_oauth_service() -> OAuthService:
 async def initiate_gmail_connect(
     user_id: str = Depends(get_current_user),
     oauth_service: OAuthService = Depends(_get_oauth_service),
+    login_hint: str | None = Query(None, description="Pre-select Google account by email"),
 ):
     """Initiate OAuth flow for connecting an additional Gmail account.
 
     Returns the Google OAuth consent URL as JSON. The frontend fetches this
     with an Authorization header, then navigates the browser to the URL.
+    Pass login_hint to pre-select a specific Google account (e.g. for scope upgrades).
     """
     try:
-        auth_url = await oauth_service.create_gmail_auth_url(user_id)
+        auth_url = await oauth_service.create_gmail_auth_url(user_id, login_hint=login_hint)
         return JSONResponse(content={"auth_url": auth_url})
     except RuntimeError as e:
         logger.error(f"Failed to initiate Gmail OAuth: {e}")

@@ -46,7 +46,7 @@ def test_initiate_connect_returns_auth_url(client, mock_oauth_service):
     data = response.json()
     assert "auth_url" in data
     assert "accounts.google.com" in data["auth_url"]
-    mock_oauth_service.create_gmail_auth_url.assert_called_once_with("test-user-id")
+    mock_oauth_service.create_gmail_auth_url.assert_called_once_with("test-user-id", login_hint=None)
 
 
 def test_initiate_connect_requires_auth(mock_oauth_service):
