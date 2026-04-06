@@ -34,6 +34,12 @@ class Settings:
             os.getenv("CONVERSATION_HANDLER_V2", "false").lower() == "true"
         )
 
+        # Sandbox settings
+        self.sandbox_enabled: bool = os.getenv("BWRAP_ENABLED", "false").lower() == "true"
+        self.sandbox_base_path: str = os.getenv("SANDBOX_BASE_PATH", "/data/sandboxes")
+        self.sandbox_system_path: str = os.getenv("SANDBOX_SYSTEM_PATH", "/data/sandbox-system")
+        self.bwrap_binary: str = os.getenv("BWRAP_PATH", "bwrap")
+
         # CORS origins
         self.cors_origins = [
             "https://clarity-webapp.fly.dev",
@@ -76,6 +82,10 @@ class Settings:
         self.conversation_handler_v2 = (
             os.getenv("CONVERSATION_HANDLER_V2", "false").lower() == "true"
         )
+        self.sandbox_enabled = os.getenv("BWRAP_ENABLED", "false").lower() == "true"
+        self.sandbox_base_path = os.getenv("SANDBOX_BASE_PATH", "/data/sandboxes")
+        self.sandbox_system_path = os.getenv("SANDBOX_SYSTEM_PATH", "/data/sandbox-system")
+        self.bwrap_binary = os.getenv("BWRAP_PATH", "bwrap")
 
     def validate_required_settings(self) -> None:
         """Validate that all required settings are present."""
