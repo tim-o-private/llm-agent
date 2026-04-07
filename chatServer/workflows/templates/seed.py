@@ -14,6 +14,7 @@ _TEMPLATES = {
     "morning-briefing": "workflows/morning-briefing.md",
     "evening-briefing": "workflows/evening-briefing.md",
     "draft-reply": "workflows/draft-reply.md",
+    "introspection-loop": "workflows/introspection-loop.md",
 }
 
 # Step prompt path → content module attr
@@ -23,12 +24,16 @@ _PROMPTS = {
     "workflows/prompts/morning-briefing/compose-briefing.md": None,
     "workflows/prompts/evening-briefing/compose-briefing.md": None,
     "workflows/prompts/draft-reply/compose-draft.md": None,
+    "workflows/prompts/introspection-loop/gather-signals.md": None,
+    "workflows/prompts/introspection-loop/analyze-patterns.md": None,
+    "workflows/prompts/introspection-loop/propose-changes.md": None,
+    "workflows/prompts/introspection-loop/apply-changes.md": None,
 }
 
 
 def _load_all_content() -> dict[str, str]:
     """Load all template and prompt content. Returns {config_path: content}."""
-    from . import draft_reply, email_triage, evening_briefing, morning_briefing
+    from . import draft_reply, email_triage, evening_briefing, introspection, morning_briefing
 
     return {
         # Templates
@@ -36,12 +41,17 @@ def _load_all_content() -> dict[str, str]:
         "workflows/morning-briefing.md": morning_briefing.TEMPLATE,
         "workflows/evening-briefing.md": evening_briefing.TEMPLATE,
         "workflows/draft-reply.md": draft_reply.TEMPLATE,
+        "workflows/introspection-loop.md": introspection.TEMPLATE,
         # Step prompts
         "workflows/prompts/email-triage/categorize.md": email_triage.PROMPT_CATEGORIZE,
         "workflows/prompts/email-triage/summarize.md": email_triage.PROMPT_SUMMARIZE,
         "workflows/prompts/morning-briefing/compose-briefing.md": morning_briefing.PROMPT_COMPOSE_BRIEFING,
         "workflows/prompts/evening-briefing/compose-briefing.md": evening_briefing.PROMPT_COMPOSE_BRIEFING,
         "workflows/prompts/draft-reply/compose-draft.md": draft_reply.PROMPT_COMPOSE_DRAFT,
+        "workflows/prompts/introspection-loop/gather-signals.md": introspection.PROMPT_GATHER_SIGNALS,
+        "workflows/prompts/introspection-loop/analyze-patterns.md": introspection.PROMPT_ANALYZE_PATTERNS,
+        "workflows/prompts/introspection-loop/propose-changes.md": introspection.PROMPT_PROPOSE_CHANGES,
+        "workflows/prompts/introspection-loop/apply-changes.md": introspection.PROMPT_APPLY_CHANGES,
     }
 
 
