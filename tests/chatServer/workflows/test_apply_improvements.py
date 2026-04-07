@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # All tests operate with sandbox unavailable (BWRAP_ENABLED=false default)
 # to avoid needing a real bwrap binary. Sandbox-execution path is tested
 # separately in TestApplyImprovementsSandbox.
