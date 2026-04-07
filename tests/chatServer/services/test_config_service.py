@@ -181,6 +181,56 @@ async def test_write_rejects_path_traversal(config_service):
         await config_service.write("../secret", "user-1", "evil")
 
 
+# -- Delete --
+
+@pytest.mark.asyncio
+async def test_delete_calls_remove_on_user_path(config_service, mock_supabase):
+    _, bucket = mock_supabase
+
+    await config_service.delete("agent/instructions.md", "user-1")
+
+    bucket.remove.assert_called_once_with(["users/user-1/agent/instructions.md"])
+
+
+@pytest.mark.asyncio
+async def test_delete_busts_cache(config_service, mock_supabase):
+    _, bucket = mock_supabase
+    _cache["users/user-1/agent/instructions.md"] = "old content"
+
+    await config_service.delete("agent/instructions.md", "user-1")
+
+    assert "users/user-1/agent/instructions.md" not in _cache
+
+
+@pytest.mark.asyncio
+async def test_delete_silent_on_404(config_service, mock_supabase):
+    """Deleting a file that doesn't exist is a no-op, not an error."""
+    from storage3.exceptions import StorageApiError
+
+    _, bucket = mock_supabase
+    bucket.remove.side_effect = StorageApiError("Object not found", "not_found", 404)
+
+    # Should not raise
+    await config_service.delete("nonexistent.md", "user-1")
+
+
+@pytest.mark.asyncio
+async def test_delete_raises_on_non_404_error(config_service, mock_supabase):
+    from storage3.exceptions import StorageApiError
+
+    _, bucket = mock_supabase
+    bucket.remove.side_effect = StorageApiError("Permission denied", "forbidden", 403)
+
+    with pytest.raises(StorageApiError):
+        await config_service.delete("agent/instructions.md", "user-1")
+
+
+@pytest.mark.asyncio
+async def test_delete_rejects_path_traversal(config_service):
+    with pytest.raises(ValueError, match="traversal"):
+        await config_service.delete("../secret", "user-1")
+
+
 # -- Write system --
 
 @pytest.mark.asyncio

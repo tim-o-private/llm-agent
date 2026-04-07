@@ -133,6 +133,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to initialize config service: {e}", exc_info=True)
 
+    # Initialize sandbox provisioner (depends on config service)
+    try:
+        from .sandbox.provisioner import initialize_provisioner
+        from .services.config_service import get_config_service
+        initialize_provisioner(config_service=get_config_service())
+        logger.info("Sandbox provisioner initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize sandbox provisioner: {e}", exc_info=True)
+
     # Initialize cache services
     try:
         await initialize_tool_cache()
@@ -185,6 +194,14 @@ async def lifespan(app: FastAPI):
 
     # Stop background tasks
     await background_service.stop_background_tasks()
+
+    # Shut down sandbox provisioner
+    try:
+        from .sandbox.provisioner import shutdown_provisioner
+        await shutdown_provisioner()
+        logger.info("Sandbox provisioner stopped successfully")
+    except Exception as e:
+        logger.error(f"Failed to stop sandbox provisioner: {e}", exc_info=True)
 
     # Stop config service
     try:

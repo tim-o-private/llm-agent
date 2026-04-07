@@ -187,6 +187,91 @@ class TestRejectChange:
         assert result is None
 
 
+class TestGetProposalDBFallback:
+    @pytest.mark.asyncio
+    async def test_returns_none_without_db(self, service):
+        result = await service._get_proposal("nonexistent-id")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_returns_proposal_from_db_when_not_in_memory(self):
+        from unittest.mock import AsyncMock, MagicMock
+
+        # db.table().select().eq() is a synchronous builder chain; only .execute() is async
+        db = MagicMock()
+        db.table.return_value.select.return_value.eq.return_value.execute = AsyncMock(
+            return_value=MagicMock(data=[{
+                "id": "proposal-abc",
+                "user_id": "user-1",
+                "file_path": "/user/preferences/tone.yaml",
+                "change_description": "Adjusted tone",
+                "git_commit_hash": "sha123",
+                "status": "pending",
+            }])
+        )
+
+        svc = SelfImprovementService(
+            security_boundary=SecurityBoundary(),
+            disclosure_model=DisclosureModel(),
+            db_client=db,
+        )
+
+        result = await svc._get_proposal("proposal-abc")
+        assert result is not None
+        assert result.id == "proposal-abc"
+        assert result.file_path == "/user/preferences/tone.yaml"
+
+    @pytest.mark.asyncio
+    async def test_db_miss_returns_none(self):
+        from unittest.mock import AsyncMock, MagicMock
+
+        db = MagicMock()
+        db.table.return_value.select.return_value.eq.return_value.execute = AsyncMock(
+            return_value=MagicMock(data=[])
+        )
+
+        svc = SelfImprovementService(
+            security_boundary=SecurityBoundary(),
+            disclosure_model=DisclosureModel(),
+            db_client=db,
+        )
+
+        result = await svc._get_proposal("nonexistent")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_db_result_cached_in_memory(self):
+        from unittest.mock import AsyncMock, MagicMock
+
+        db = MagicMock()
+        execute_mock = AsyncMock(
+            return_value=MagicMock(data=[{
+                "id": "proposal-xyz",
+                "user_id": "user-1",
+                "file_path": "/user/agent/style.md",
+                "change_description": "Style tweak",
+                "git_commit_hash": "sha456",
+                "status": "pending",
+            }])
+        )
+        db.table.return_value.select.return_value.eq.return_value.execute = execute_mock
+
+        svc = SelfImprovementService(
+            security_boundary=SecurityBoundary(),
+            disclosure_model=DisclosureModel(),
+            db_client=db,
+        )
+
+        # First call goes to DB
+        result1 = await svc._get_proposal("proposal-xyz")
+        # Second call hits in-memory cache
+        result2 = await svc._get_proposal("proposal-xyz")
+
+        assert result1 is result2
+        # DB should only be queried once
+        assert execute_mock.call_count == 1
+
+
 class TestAutoRollbackCheck:
     @pytest.mark.asyncio
     async def test_no_rollback_when_no_proposals(self, service, mock_tracker):

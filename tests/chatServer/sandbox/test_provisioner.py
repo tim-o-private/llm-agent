@@ -4,9 +4,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+import chatServer.sandbox.provisioner as provisioner_module
 from chatServer.sandbox.bwrap import BwrapSandbox
 from chatServer.sandbox.models import SandboxConfig
-from chatServer.sandbox.provisioner import SandboxNotAvailableError, SandboxProvisioner
+from chatServer.sandbox.provisioner import (
+    SandboxNotAvailableError,
+    SandboxProvisioner,
+    get_provisioner,
+    initialize_provisioner,
+    shutdown_provisioner,
+)
 
 
 @pytest.fixture
@@ -187,6 +194,67 @@ class TestDestroy:
         assert len(prov.active_sandboxes) == 2
         await prov.destroy_all()
         assert len(prov.active_sandboxes) == 0
+
+
+# -- get_user_dir ----------------------------------------------------------
+
+class TestGetUserDir:
+    def test_returns_correct_path(self, sandbox_config):
+        prov = SandboxProvisioner(sandbox_config)
+        result = prov.get_user_dir("user-abc")
+        assert result == sandbox_config.users_path / "user-abc"
+
+
+# -- global instance management --------------------------------------------
+
+class TestGlobalInstance:
+    def setup_method(self):
+        # Reset global before each test
+        provisioner_module._provisioner = None
+
+    def teardown_method(self):
+        provisioner_module._provisioner = None
+
+    def test_get_provisioner_raises_before_init(self):
+        with pytest.raises(RuntimeError, match="not initialized"):
+            get_provisioner()
+
+    def test_initialize_sets_global(self, tmp_path, monkeypatch):
+        from chatServer.config.settings import get_settings
+        settings = get_settings()
+        monkeypatch.setattr(settings, "sandbox_enabled", False)
+        monkeypatch.setattr(settings, "sandbox_base_path", str(tmp_path / "sandboxes"))
+        monkeypatch.setattr(settings, "sandbox_system_path", str(tmp_path / "system"))
+        monkeypatch.setattr(settings, "bwrap_binary", "bwrap")
+
+        initialize_provisioner()
+
+        prov = get_provisioner()
+        assert prov is not None
+        assert isinstance(prov, SandboxProvisioner)
+
+    @pytest.mark.asyncio
+    async def test_shutdown_calls_destroy_all(self, tmp_path, monkeypatch):
+        from chatServer.config.settings import get_settings
+        settings = get_settings()
+        monkeypatch.setattr(settings, "sandbox_enabled", False)
+        monkeypatch.setattr(settings, "sandbox_base_path", str(tmp_path / "sandboxes"))
+        monkeypatch.setattr(settings, "sandbox_system_path", str(tmp_path / "system"))
+        monkeypatch.setattr(settings, "bwrap_binary", "bwrap")
+
+        initialize_provisioner()
+        prov = get_provisioner()
+        prov.destroy_all = AsyncMock()
+
+        await shutdown_provisioner()
+
+        prov.destroy_all.assert_called_once()
+        assert provisioner_module._provisioner is None
+
+    @pytest.mark.asyncio
+    async def test_shutdown_noop_when_not_initialized(self):
+        # Should not raise
+        await shutdown_provisioner()
 
 
 # -- verify_user_repos ----------------------------------------------------

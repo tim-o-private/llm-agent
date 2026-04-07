@@ -228,7 +228,36 @@ class SelfImprovementService:
     # -- internal helpers -----------------------------------------------------
 
     async def _get_proposal(self, proposal_id: str) -> ChangeProposal | None:
-        return self._proposals.get(proposal_id)
+        # Check in-memory cache first
+        if proposal_id in self._proposals:
+            return self._proposals[proposal_id]
+
+        # Fall back to DB (handles restart — proposals persist across restarts)
+        if not self._db:
+            return None
+
+        try:
+            result = await self._db.table("config_change_proposals").select("*").eq(
+                "id", proposal_id,
+            ).execute()
+            rows = result.data
+            if not rows:
+                return None
+            row = rows[0]
+            proposal = ChangeProposal(
+                id=row["id"],
+                user_id=row["user_id"],
+                file_path=row["file_path"],
+                description=row["change_description"],
+                git_commit_hash=row["git_commit_hash"],
+                diff_text=row.get("diff_text", ""),  # not stored in DB — empty on reload
+                status=ProposalStatus(row["status"]),
+            )
+            self._proposals[proposal_id] = proposal
+            return proposal
+        except Exception:
+            logger.warning("Failed to load proposal %s from DB", proposal_id, exc_info=True)
+            return None
 
     async def _persist_proposal(self, proposal: ChangeProposal) -> None:
         """Write proposal to config_change_proposals table."""

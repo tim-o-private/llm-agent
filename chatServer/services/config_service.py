@@ -102,6 +102,27 @@ class ConfigService:
         _cache.pop(system_full, None)
         logger.info("System config written: %s", system_full)
 
+    async def delete(self, path: str, user_id: str) -> None:
+        """Delete a file from the user config layer. Invalidates cache.
+
+        Silently returns if the file does not exist (404). Raises on all
+        other StorageApiError conditions.
+        """
+        _validate_path(path)
+        user_full = f"users/{user_id}/{path}"
+
+        try:
+            bucket = self._bucket()
+            await asyncio.to_thread(bucket.remove, [user_full])
+            logger.info("Config deleted: %s", user_full)
+        except StorageApiError as e:
+            if "not found" in str(e).lower() or (hasattr(e, "status") and e.status == 404):
+                logger.debug("Config delete: file already absent: %s", user_full)
+                return
+            raise
+        finally:
+            _cache.pop(user_full, None)
+
     async def list_paths(self, prefix: str, user_id: str) -> List[str]:
         """Merged listing — user paths shadow system paths with same relative name."""
         _validate_path(prefix)

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
+from typing import Optional
 
 from .bwrap import BwrapSandbox
 from .hydrator import ConfigHydrator
@@ -134,6 +135,10 @@ class SandboxProvisioner:
 
     # -- internals ---------------------------------------------------------
 
+    def get_user_dir(self, user_id: str) -> Path:
+        """Return the local directory for a user's sandbox tree."""
+        return self._config.users_path / user_id
+
     @staticmethod
     async def _bare_git_init(user_dir: Path) -> None:
         gitignore = user_dir / ".gitignore"
@@ -152,3 +157,48 @@ class SandboxProvisioner:
                 stderr=asyncio.subprocess.PIPE,
             )
             await proc.communicate()
+
+
+# -- Global instance management --
+
+_provisioner: Optional[SandboxProvisioner] = None
+
+
+def get_provisioner() -> SandboxProvisioner:
+    """Get the global SandboxProvisioner instance."""
+    global _provisioner
+    if _provisioner is None:
+        raise RuntimeError(
+            "SandboxProvisioner not initialized. Call initialize_provisioner() first."
+        )
+    return _provisioner
+
+
+def initialize_provisioner(
+    config_service=None,  # noqa: ANN001 — ConfigService, avoids circular import
+) -> None:
+    """Initialize the global SandboxProvisioner from settings."""
+    global _provisioner
+    from pathlib import Path as _Path  # noqa: PLC0415 — lazy import to avoid circular
+
+    from ..config.settings import get_settings
+    from .models import SandboxConfig
+
+    settings = get_settings()
+    config = SandboxConfig(
+        enabled=settings.sandbox_enabled,
+        base_path=_Path(settings.sandbox_base_path),
+        system_path=_Path(settings.sandbox_system_path),
+        bwrap_binary=settings.bwrap_binary,
+    )
+    _provisioner = SandboxProvisioner(config, config_service=config_service)
+    logger.info("SandboxProvisioner initialized (enabled=%s)", config.enabled)
+
+
+async def shutdown_provisioner() -> None:
+    """Shut down the global SandboxProvisioner, destroying all active sandboxes."""
+    global _provisioner
+    if _provisioner:
+        await _provisioner.destroy_all()
+        _provisioner = None
+        logger.info("SandboxProvisioner shut down")
