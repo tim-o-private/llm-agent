@@ -273,7 +273,7 @@ class SelfImprovementService:
             # Act tier — silent, no notification
             return
 
-        notification_type = "silent" if trust_tier == "recommend" else "silent"
+        notification_type = "notify" if trust_tier == "inform" else "silent"
         await self._notification_service.notify_user(
             user_id=proposal.user_id,
             title="Configuration change",

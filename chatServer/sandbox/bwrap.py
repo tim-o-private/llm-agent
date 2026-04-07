@@ -134,7 +134,6 @@ class BwrapSandbox:
         return [
             self._bwrap_path,
             "--unshare-all",
-            "--share-net",
             "--die-with-parent",
             "--ro-bind", str(self._system_dir), "/system",
             "--bind", str(self._user_dir), "/user",

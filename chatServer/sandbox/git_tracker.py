@@ -144,7 +144,7 @@ class GitTracker:
                 "GIT_COMMITTER_NAME": "Clarity Agent",
                 "GIT_COMMITTER_EMAIL": "agent@clarity.app",
                 "HOME": str(self._user_dir),
-                "PATH": "/usr/bin:/bin",
+                "PATH": "/usr/local/bin:/usr/bin:/bin",
             },
         )
         stdout_bytes, stderr_bytes = await proc.communicate()

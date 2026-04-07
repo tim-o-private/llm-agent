@@ -195,8 +195,9 @@ async def _build_handler(
 
     # 7. Create handler
     model = llm_config.get("model", "claude-sonnet-4-20250514")
+    client = _get_anthropic_client()
     handler = ConversationHandler(
-        client=_get_anthropic_client(),
+        client=client,
         model=model,
         system_prompt=system_prompt,
         tools=tool_schemas,
@@ -206,6 +207,23 @@ async def _build_handler(
         session_id=session_id,
         user_id=user_id,
     )
+
+    # 8. Wire real dispatch_workflow executor (replaces stub)
+    from chatServer.workflows.dispatch import (
+        dispatch_workflow as _real_dispatch_workflow,
+    )
+
+    async def _dispatch_executor(args: dict) -> str:
+        return await _real_dispatch_workflow(
+            args=args,
+            user_id=user_id,
+            db_client=supabase_client,
+            anthropic_client=client,
+            tool_schemas=tool_schemas,
+            tool_executors=tool_executors,
+        )
+
+    handler.tool_executors["dispatch_workflow"] = _dispatch_executor
 
     logger.info(
         "Built ConversationHandler for '%s' (model=%s, %d tools)",

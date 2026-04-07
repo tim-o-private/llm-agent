@@ -84,7 +84,7 @@ class TestBwrapArgs:
         args = sandbox._build_bwrap_args("/user")
         assert args[0] == "/usr/bin/bwrap"
         assert "--unshare-all" in args
-        assert "--share-net" in args
+        assert "--share-net" not in args  # network isolation required
         assert "--die-with-parent" in args
         assert "--chdir" in args
         idx = args.index("--chdir")
