@@ -275,6 +275,12 @@ async def chat_endpoint(
     """
     settings = get_settings()
 
+    if settings.deep_agent_enabled:
+        wants_stream = "text/event-stream" in request.headers.get("accept", "")
+        if wants_stream:
+            return await _handle_chat_deep_agent_stream(chat_input, user_id, pg_connection)
+        return await _handle_chat_deep_agent(chat_input, user_id, pg_connection)
+
     if settings.conversation_handler_v2:
         wants_stream = "text/event-stream" in request.headers.get(
             "accept", ""
@@ -294,6 +300,96 @@ async def chat_endpoint(
         pg_connection=pg_connection,
         agent_loader_module=agent_loader_module,
         request=request,
+    )
+
+
+async def _handle_chat_deep_agent(
+    chat_input: ChatRequest,
+    user_id: str,
+    pg_connection: psycopg.AsyncConnection,
+) -> ChatResponse:
+    """Deep agent path — DeepAgentWrapper over ConversationHandler (non-streaming)."""
+    from .services.deep_agent_builder import build_deep_agent
+    from .services.message_history_adapter import MessageHistoryAdapter
+
+    if not chat_input.session_id:
+        raise HTTPException(status_code=400, detail="session_id is required")
+
+    agent = await build_deep_agent(
+        user_id=user_id,
+        agent_name=chat_input.agent_name,
+        session_id=chat_input.session_id,
+        channel="web",
+    )
+
+    messages = await MessageHistoryAdapter.load_history(
+        session_id=chat_input.session_id,
+        pg_connection=pg_connection,
+        limit=100,
+    )
+    user_msg = {"role": "user", "content": chat_input.message}
+    messages.append(user_msg)
+
+    result = await agent.ainvoke({"messages": messages})
+    response_text = result["messages"][-1]["content"] if result["messages"] else ""
+
+    await MessageHistoryAdapter.save_messages(
+        session_id=chat_input.session_id,
+        messages=[user_msg, {"role": "assistant", "content": response_text}],
+        pg_connection=pg_connection,
+    )
+
+    return ChatResponse(
+        session_id=chat_input.session_id,
+        response=response_text,
+        error=None,
+    )
+
+
+async def _handle_chat_deep_agent_stream(
+    chat_input: ChatRequest,
+    user_id: str,
+    pg_connection: psycopg.AsyncConnection,
+):
+    """Deep agent SSE streaming path."""
+    from fastapi.responses import StreamingResponse
+
+    from .services.deep_agent_builder import build_deep_agent
+    from .services.deep_agent_stream import deep_agent_stream_to_sse
+    from .services.message_history_adapter import MessageHistoryAdapter
+
+    if not chat_input.session_id:
+        raise HTTPException(status_code=400, detail="session_id is required")
+
+    agent = await build_deep_agent(
+        user_id=user_id,
+        agent_name=chat_input.agent_name,
+        session_id=chat_input.session_id,
+        channel="web",
+    )
+
+    messages = await MessageHistoryAdapter.load_history(
+        session_id=chat_input.session_id,
+        pg_connection=pg_connection,
+        limit=100,
+    )
+    user_msg = {"role": "user", "content": chat_input.message}
+    messages.append(user_msg)
+
+    # Save user message before streaming begins
+    await MessageHistoryAdapter.save_messages(
+        session_id=chat_input.session_id,
+        messages=[user_msg],
+        pg_connection=pg_connection,
+    )
+
+    return StreamingResponse(
+        deep_agent_stream_to_sse(agent, {"messages": messages}),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
     )
 
 

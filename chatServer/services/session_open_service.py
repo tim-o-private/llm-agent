@@ -127,7 +127,11 @@ class SessionOpenService:
         settings = get_settings()
 
         try:
-            if settings.conversation_handler_v2:
+            if settings.deep_agent_enabled:
+                output = await self._invoke_deep_agent(
+                    user_id, agent_name, session_id, trigger_prompt
+                )
+            elif settings.conversation_handler_v2:
                 output = await self._invoke_v2(
                     user_id, agent_name, session_id, trigger_prompt
                 )
@@ -167,7 +171,7 @@ class SessionOpenService:
 
         # 9. Persist AI message if not silent
         if not silent:
-            if settings.conversation_handler_v2:
+            if settings.deep_agent_enabled or settings.conversation_handler_v2:
                 await self._persist_ai_message_v2(session_id, output)
             else:
                 await self._persist_ai_message(session_id, output)
@@ -178,6 +182,28 @@ class SessionOpenService:
             "silent": silent,
             "session_id": session_id,
         }
+
+    async def _invoke_deep_agent(
+        self,
+        user_id: str,
+        agent_name: str,
+        session_id: str,
+        trigger_prompt: str,
+    ) -> str:
+        """Deep agent path for session_open."""
+        from ..services.deep_agent_builder import build_deep_agent
+
+        agent = await build_deep_agent(
+            user_id=user_id,
+            agent_name=agent_name,
+            session_id=session_id,
+            channel="session_open",
+        )
+
+        # AC-32: empty history for session_open
+        messages = [{"role": "user", "content": trigger_prompt}]
+        result = await agent.ainvoke({"messages": messages})
+        return result["messages"][-1]["content"] if result["messages"] else ""
 
     async def _invoke_v2(
         self,

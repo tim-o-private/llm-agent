@@ -489,7 +489,7 @@ async def test_v2_path_uses_conversation_handler():
         patch(f"{_SVC}.SessionOpenService._has_memory", new_callable=AsyncMock, return_value=True),
         patch.object(service, "_persist_ai_message_v2", new_callable=AsyncMock) as mock_persist_v2,
     ):
-        mock_settings.return_value = MagicMock(conversation_handler_v2=True)
+        mock_settings.return_value = MagicMock(conversation_handler_v2=True, deep_agent_enabled=False)
         result = await service.run(user_id="u1", agent_name="assistant", session_id="s1")
 
     assert result["response"] == "Good morning!"
@@ -541,7 +541,7 @@ async def test_v2_silent_on_wakeup_silent():
         patch(f"{_SVC}.SessionOpenService._has_memory", new_callable=AsyncMock, return_value=True),
         patch.object(service, "_persist_ai_message_v2", new_callable=AsyncMock) as mock_persist_v2,
     ):
-        mock_settings.return_value = MagicMock(conversation_handler_v2=True)
+        mock_settings.return_value = MagicMock(conversation_handler_v2=True, deep_agent_enabled=False)
         result = await service.run(user_id="u1", agent_name="assistant", session_id="s1")
 
     assert result["silent"] is True
@@ -561,7 +561,7 @@ async def test_v2_error_returns_silent():
         patch(f"{_SVC}.SessionOpenService._has_memory", new_callable=AsyncMock, return_value=True),
         patch.object(service, "_persist_ai_message_v2", new_callable=AsyncMock) as mock_persist_v2,
     ):
-        mock_settings.return_value = MagicMock(conversation_handler_v2=True)
+        mock_settings.return_value = MagicMock(conversation_handler_v2=True, deep_agent_enabled=False)
         result = await service.run(user_id="u1", agent_name="assistant", session_id="s1")
 
     assert result["silent"] is True

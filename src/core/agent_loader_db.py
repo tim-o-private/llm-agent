@@ -4,6 +4,7 @@
 import json
 import logging
 import os
+import warnings
 from typing import Any, Dict, List, Optional, Type
 
 from pydantic import BaseModel, ConfigDict, Field, create_model
@@ -549,6 +550,13 @@ def load_agent_executor_db(
         ValueError: If Supabase URL/key are missing or agent not found in DB.
         Various exceptions from tool instantiation or executor creation if errors occur.
     """
+    warnings.warn(
+        "load_agent_executor_db is deprecated — use build_conversation_handler "
+        "(CONVERSATION_HANDLER_V2) or build_deep_agent (DEEP_AGENT_ENABLED) instead. "
+        "This function will be removed when SPEC-034 (Capability Gateway) ships.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     logger.setLevel(log_level)
 
     effective_supabase_url = supabase_url or os.getenv("SUPABASE_URL")
@@ -819,6 +827,13 @@ async def load_agent_executor_db_async(
     Uses cached agent config and user instructions, parallelizes
     tools + user_instructions fetch via asyncio.gather().
     """
+    warnings.warn(
+        "load_agent_executor_db_async is deprecated — use build_conversation_handler "
+        "(CONVERSATION_HANDLER_V2) or build_deep_agent (DEEP_AGENT_ENABLED) instead. "
+        "This function will be removed when SPEC-034 (Capability Gateway) ships.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     import asyncio
 
     from chatServer.services.agent_config_cache_service import get_cached_agent_config

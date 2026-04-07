@@ -769,7 +769,7 @@ async def test_v2_execute_uses_conversation_handler(service, mock_supabase):
         patches["audit_svc"],
         patches["notification_svc"] as mock_notif_cls,
     ):
-        mock_settings.return_value = MagicMock(conversation_handler_v2=True)
+        mock_settings.return_value = MagicMock(conversation_handler_v2=True, deep_agent_enabled=False)
         mock_build.return_value = mock_handler
         mock_get_sb.return_value = mock_supabase
         mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
@@ -822,7 +822,7 @@ async def test_v2_heartbeat_builds_effective_prompt(service, mock_supabase):
         patches["audit_svc"],
         patches["notification_svc"] as mock_notif_cls,
     ):
-        mock_settings.return_value = MagicMock(conversation_handler_v2=True)
+        mock_settings.return_value = MagicMock(conversation_handler_v2=True, deep_agent_enabled=False)
         mock_build.return_value = mock_handler
         mock_get_sb.return_value = mock_supabase
         mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
@@ -866,7 +866,7 @@ async def test_v2_applies_model_override(service, mock_supabase):
         patches["audit_svc"],
         patches["notification_svc"] as mock_notif_cls,
     ):
-        mock_settings.return_value = MagicMock(conversation_handler_v2=True)
+        mock_settings.return_value = MagicMock(conversation_handler_v2=True, deep_agent_enabled=False)
         mock_build.return_value = mock_handler
         mock_get_sb.return_value = mock_supabase
         mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)

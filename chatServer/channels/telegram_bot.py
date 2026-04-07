@@ -506,7 +506,11 @@ async def handle_message(message: types.Message) -> None:
         from ..config.settings import get_settings
         settings = get_settings()
 
-        if settings.conversation_handler_v2:
+        if settings.deep_agent_enabled:
+            output = await _handle_telegram_deep_agent(
+                user_id, session_id, message.text
+            )
+        elif settings.conversation_handler_v2:
             output = await _handle_telegram_v2(
                 user_id, session_id, message.text
             )
@@ -525,6 +529,45 @@ async def handle_message(message: types.Message) -> None:
     except Exception as e:
         logger.error(f"Error handling Telegram message from {chat_id}: {e}", exc_info=True)
         await message.answer("Sorry, something went wrong. Please try again.")
+
+
+async def _handle_telegram_deep_agent(
+    user_id: str, session_id: str, text: str
+) -> str:
+    """Deep agent path for Telegram."""
+    from ..database.connection import get_database_manager
+    from ..services.deep_agent_builder import build_deep_agent
+    from ..services.message_history_adapter import MessageHistoryAdapter
+
+    agent = await build_deep_agent(
+        user_id=user_id,
+        agent_name="assistant",
+        session_id=session_id,
+        channel="telegram",
+    )
+
+    db_manager = get_database_manager()
+    await db_manager.ensure_initialized()
+
+    async with db_manager.pool.connection() as pg_conn:
+        messages = await MessageHistoryAdapter.load_history(
+            session_id=session_id,
+            pg_connection=pg_conn,
+            limit=100,
+        )
+        user_msg = {"role": "user", "content": text}
+        messages.append(user_msg)
+
+        result = await agent.ainvoke({"messages": messages})
+        response_text = result["messages"][-1]["content"] if result["messages"] else ""
+
+        await MessageHistoryAdapter.save_messages(
+            session_id=session_id,
+            messages=[user_msg, {"role": "assistant", "content": response_text}],
+            pg_connection=pg_conn,
+        )
+
+    return response_text
 
 
 async def _handle_telegram_v2(
