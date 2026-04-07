@@ -24,4 +24,5 @@ USER_SCOPED_TABLES: set[str] = {
     "user_preferences",
     "deferred_observations",
     "workflow_runs",
+    "config_change_proposals",
 }

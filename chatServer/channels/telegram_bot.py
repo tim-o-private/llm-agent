@@ -234,6 +234,136 @@ async def handle_approval_callback(callback: types.CallbackQuery) -> None:
         await callback.answer("Error processing action.")
 
 
+@router.callback_query(lambda c: c.data and c.data.startswith("proposal:"))
+async def handle_proposal_callback(callback: types.CallbackQuery) -> None:
+    """Handle inline keyboard approve/revert for config change proposals."""
+    if not callback.data:
+        return
+
+    # Format: proposal:{proposal_id}:approve or proposal:{proposal_id}:revert
+    parts = callback.data.split(":", 2)
+    if len(parts) != 3:
+        await callback.answer("Invalid callback data")
+        return
+
+    _, proposal_id, action = parts
+    if action not in ("approve", "revert"):
+        await callback.answer("Invalid action")
+        return
+
+    chat_id = str(callback.message.chat.id) if callback.message else None
+    if not chat_id:
+        return
+
+    bot_service = get_telegram_bot_service()
+    if not bot_service or not bot_service._db_client:
+        await callback.answer("Bot not ready. Try again.")
+        return
+
+    try:
+        # Look up user_id from chat_id
+        result = (
+            await bot_service._db_client.table("user_channels")
+            .select("user_id")
+            .eq("channel_type", "telegram")
+            .eq("channel_id", chat_id)
+            .eq("is_active", True)
+            .single()
+            .execute()
+        )
+
+        if not result.data:
+            await callback.answer("Account not linked.")
+            return
+
+        user_id = result.data["user_id"]
+
+        from ..sandbox.disclosure import DisclosureModel
+        from ..sandbox.security_boundary import SecurityBoundary
+        from ..sandbox.self_improvement import SelfImprovementService
+        from ..sandbox.sync import SyncService
+        from ..services.config_service import get_config_service
+        from ..services.notification_service import NotificationService
+
+        security_boundary = SecurityBoundary()
+        self_improvement = SelfImprovementService(
+            security_boundary=security_boundary,
+            disclosure_model=DisclosureModel(),
+            db_client=bot_service._db_client,
+        )
+
+        if action == "approve":
+            proposal = await self_improvement.approve_change(proposal_id)
+            if not proposal:
+                await callback.answer("Proposal not found.")
+                return
+
+            # Sync to Supabase Storage
+            synced = 0
+            try:
+                from ..sandbox.git_tracker import GitTracker
+                from ..sandbox.provisioner import get_provisioner
+
+                provisioner = get_provisioner()
+                await provisioner.get_or_create(user_id)
+                user_dir = provisioner.get_user_dir(user_id)
+                git_tracker = GitTracker(user_dir)
+                config_service = get_config_service()
+                sync_service = SyncService(security_boundary=security_boundary, config_service=config_service)
+                synced_files = await sync_service.sync_to_storage(
+                    user_id=user_id,
+                    git_tracker=git_tracker,
+                    user_dir=user_dir,
+                    commit_hash=proposal.git_commit_hash,
+                )
+                synced = len(synced_files)
+            except RuntimeError:
+                pass  # Sandbox unavailable — approval still recorded
+
+            await callback.answer(f"Approved! {synced} file(s) synced.")
+            if callback.message:
+                await callback.message.edit_text(
+                    callback.message.text + f"\n\n_Approved ({synced} file synced)_",
+                    parse_mode="Markdown",
+                )
+
+        elif action == "revert":
+            try:
+                from ..sandbox.git_tracker import GitTracker
+                from ..sandbox.provisioner import get_provisioner
+
+                provisioner = get_provisioner()
+                await provisioner.get_or_create(user_id)
+                user_dir = provisioner.get_user_dir(user_id)
+                git_tracker = GitTracker(user_dir)
+            except RuntimeError:
+                await callback.answer("Sandbox unavailable — cannot revert.")
+                return
+
+            proposal = await self_improvement.reject_change(proposal_id, git_tracker)
+            if not proposal:
+                await callback.answer("Proposal not found.")
+                return
+
+            await callback.answer("Reverted.")
+            if callback.message:
+                await callback.message.edit_text(
+                    callback.message.text + "\n\n_Reverted_",
+                    parse_mode="Markdown",
+                )
+
+        # Resolve the notification
+        try:
+            notif_service = NotificationService(bot_service._db_client)
+            await notif_service.resolve_proposal_notification(proposal_id, user_id, action)
+        except Exception:
+            pass
+
+    except Exception as e:
+        logger.error("Error handling proposal callback: %s", e, exc_info=True)
+        await callback.answer("Error processing proposal.")
+
+
 @router.callback_query(lambda c: c.data and c.data.startswith("nfb_"))
 async def handle_feedback_callback(callback: types.CallbackQuery) -> None:
     """Handle notification feedback button presses."""
