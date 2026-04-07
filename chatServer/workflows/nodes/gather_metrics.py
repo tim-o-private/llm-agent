@@ -51,6 +51,7 @@ async def gather_metrics(state: dict) -> str:
     metrics["feedback"] = await _collect_feedback(user_id, since)
     metrics["interaction_metrics"] = await _collect_interaction_metrics(user_id, since)
     metrics["workflow_runs"] = await _collect_workflow_runs(user_id, since)
+    metrics["current_skills"] = await _collect_current_skills(user_id)
 
     return json.dumps(metrics, default=str)
 
@@ -124,6 +125,31 @@ async def _collect_interaction_metrics(user_id: str, since: datetime) -> dict[st
     except Exception as e:
         logger.warning("Failed to collect interaction metrics: %s", e)
         return {"error": str(e)}
+
+
+async def _collect_current_skills(user_id: str) -> dict[str, Any]:
+    """Read current skill files from ConfigService (AC-25).
+
+    Returns a summary of each skill's content (first 500 chars) so the
+    analysis step has visibility into what config state produced the signals.
+    """
+    try:
+        from ...services.config_service import get_config_service
+
+        config = get_config_service()
+        skill_paths = await config.list_paths("skills/", user_id)
+        current_skills: dict[str, str] = {}
+        for path in skill_paths:
+            try:
+                content = await config.read(path, user_id)
+                if content:
+                    current_skills[path] = content[:500]  # summary only
+            except Exception as e:
+                logger.debug("Could not read skill %s: %s", path, e)
+        return current_skills
+    except Exception as e:
+        logger.warning("Failed to collect current skills: %s", e)
+        return {}
 
 
 async def _collect_workflow_runs(user_id: str, since: datetime) -> dict[str, Any]:

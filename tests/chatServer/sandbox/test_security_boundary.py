@@ -86,7 +86,9 @@ class TestLoadPolicy:
     def test_default_policy(self):
         policy = load_policy(None)
         assert "/system/**" in policy.immutable_paths
-        assert len(policy.mutable_paths) == 5
+        # /user/skills/** added in SPEC-043 so introspection proposals can write skill files
+        assert "/user/skills/**" in policy.mutable_paths
+        assert len(policy.mutable_paths) == 6
 
     def test_custom_policy_from_dict(self):
         data = {

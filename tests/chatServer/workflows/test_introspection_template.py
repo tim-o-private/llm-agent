@@ -35,12 +35,11 @@ class TestIntrospectionTemplate:
         assert gather.depends_on == []
         assert gather.gate_policy == "none"
 
-    def test_gather_signals_tools(self):
+    def test_gather_signals_no_tools(self):
+        # Service nodes execute Python directly — no LLM tool calls.
         tpl = parse_template(TEMPLATE, "introspection-loop")
         gather = tpl.steps[0]
-        assert "search_memories" in gather.tools
-        assert "read_file" in gather.tools
-        assert "list_files" in gather.tools
+        assert gather.tools == []
 
     def test_analyze_patterns_uses_sonnet(self):
         tpl = parse_template(TEMPLATE, "introspection-loop")
@@ -65,11 +64,11 @@ class TestIntrospectionTemplate:
         assert apply_step.depends_on == ["propose-changes"]
         assert apply_step.gate_policy == "dynamic"
 
-    def test_apply_changes_tools(self):
+    def test_apply_changes_no_tools(self):
+        # Service nodes execute Python via SelfImprovementService — no LLM tool calls.
         tpl = parse_template(TEMPLATE, "introspection-loop")
         apply_step = tpl.steps[3]
-        assert "write_file" in apply_step.tools
-        assert "read_file" in apply_step.tools
+        assert apply_step.tools == []
 
     def test_parameters(self):
         tpl = parse_template(TEMPLATE, "introspection-loop")
@@ -92,8 +91,8 @@ class TestIntrospectionTemplate:
 class TestIntrospectionStepPrompts:
     def test_gather_signals_prompt_has_sections(self):
         assert "User Feedback" in PROMPT_GATHER_SIGNALS
-        assert "Current Config" in PROMPT_GATHER_SIGNALS
-        assert "Interaction History" in PROMPT_GATHER_SIGNALS
+        assert "Current Skill Config" in PROMPT_GATHER_SIGNALS
+        assert "Interaction Metrics" in PROMPT_GATHER_SIGNALS
         assert "Output Format" in PROMPT_GATHER_SIGNALS
 
     def test_analyze_patterns_prompt_has_antipatterns(self):

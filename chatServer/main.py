@@ -32,6 +32,7 @@ from .routers.actions import router as actions_router
 from .routers.chat_history_router import router as chat_history_router
 from .routers.email_agent_router import router as email_agent_router
 from .routers.external_api_router import router as external_api_router
+from .routers.introspection_router import router as introspection_router
 from .routers.notifications_router import router as notifications_router
 from .routers.oauth_router import router as oauth_router
 from .routers.proposals import router as proposals_router
@@ -255,6 +256,7 @@ app.include_router(notifications_router)
 app.include_router(session_open_router)
 app.include_router(telegram_router)
 app.include_router(proposals_router)
+app.include_router(introspection_router)
 
 # --- Logger setup ---
 logger = get_logger(__name__)

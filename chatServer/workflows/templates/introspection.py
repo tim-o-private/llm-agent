@@ -27,9 +27,9 @@ within the mutable layer.
 ### step-1: Gather Signals
 - **agent:** signal-gatherer
 - **depends_on:** []
-- **tools:** [search_memories, read_file, list_files]
+- **tools:** []
 - **node_type:** service
-- **description:** Collect performance data: user feedback, interaction metrics, current config state, agent memory. Output structured signal data for analysis.  # noqa: E501
+- **description:** Collect performance data: user feedback, interaction metrics, current skill config state, agent memory. Output structured signal data for analysis.  # noqa: E501
 - **gate_policy:** none
 
 ### step-2: Analyze Patterns
@@ -51,45 +51,40 @@ within the mutable layer.
 ### step-4: Apply Changes
 - **agent:** config-editor
 - **depends_on:** [propose-changes]
-- **tools:** [write_file, read_file]
+- **tools:** []
 - **node_type:** service
-- **description:** Carry out approved proposals in the sandbox. Write each change, verify it, and commit with rationale. Skip rejected proposals. Respect security boundary.  # noqa: E501
+- **description:** Carry out approved proposals via SelfImprovementService. Write each skill file change, commit with rationale. Skip rejected proposals. Respect security boundary.  # noqa: E501
 - **gate_policy:** dynamic
 """
 
 PROMPT_GATHER_SIGNALS = """\
 # Signal Gathering for Introspection
 
-You are collecting performance data for the agent's periodic self-review.
+This is a Python service step — no LLM tools are invoked here.
+The gather_metrics function collects:
 
-## What to Collect
+1. **User Feedback** -- notification_feedback table (last {period_days} days).
+   Aggregated by category and sentiment.
 
-1. **User Feedback** -- Use search_memories to find feedback-tagged memories
-   from the last {period_days} days. Count positive/negative by category.
+2. **Current Skill Config** -- Reads skill files from ConfigService:
+   - /user/skills/communication-preferences/SKILL.md (user custom instructions)
+   - /user/skills/*/SKILL.md (all user skill overrides)
+   - /system/skills/clarity-soul/SKILL.md (base personality -- read-only reference)
 
-2. **Current Config** -- Read these files from the sandbox:
-   - /user/agent/instructions.md (user instructions)
-   - /user/preferences/*.yaml (all preference files)
-   - /user/memory/observations.md (your observations)
-   - /system/agents/clarity/soul.md (base personality -- read-only reference)
+3. **Interaction Metrics** -- chat_message_history table counts by type.
 
-3. **Interaction History** -- Read /user/memory/ for recent interaction patterns.
-
-4. **Focus Areas** -- If specific focus_areas are provided, prioritize
-   data collection for those areas.
+4. **Workflow Runs** -- workflow_runs table counts by template and status.
 
 ## Output Format
 
-Return structured JSON:
+Returns structured JSON:
 {
   "period": {"start": "ISO date", "end": "ISO date"},
   "feedback": {"positive": N, "negative": N, "by_category": {...}},
-  "config_state": {"instructions_summary": "...", "preferences": {...}},
-  "observations": ["key observation 1", "..."],
-  "interaction_patterns": {"messages_per_day": N, "top_tools": [...]}
+  "current_skills": {"skills/foo/SKILL.md": "first 500 chars..."},
+  "interaction_metrics": {"total_messages": N, "by_type": {...}},
+  "workflow_runs": {"total": N, "by_template": {...}, "by_status": {...}}
 }
-
-Be thorough but concise. Raw data is not needed -- summarize patterns.
 """
 
 PROMPT_ANALYZE_PATTERNS = """\
@@ -144,7 +139,7 @@ You are generating concrete config modifications based on the analysis.
 
 For each proposal, output JSON:
 {
-  "file_path": "/user/preferences/communication.yaml",
+  "file_path": "/user/skills/communication-preferences/SKILL.md",
   "change_type": "update",
   "diff_preview": "- briefing_length: 500\\n+ briefing_length: 300",
   "rationale": "3 negative feedback signals on briefing length this week.
@@ -180,12 +175,12 @@ For each proposal:
 
 ## Rules
 
-- Only write to /user/ paths (mutable layer)
+- Only write to /user/skills/** paths via SelfImprovementService (mutable layer)
 - Never modify /system/ paths (read-only)
 - Skip proposals marked as rejected
 - Skip proposals marked as elevated unless explicitly approved
 - If a file write fails, log the error and continue to the next proposal
-- Each change will be committed separately by the service layer
+- Each change is committed separately by SelfImprovementService.propose_change()
 
 ## Output
 

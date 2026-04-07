@@ -25,6 +25,7 @@ class ModificationPolicy:
     mutable_paths: list[str] = field(
         default_factory=lambda: [
             "/user/agent/**",
+            "/user/skills/**",
             "/user/workflows/**",
             "/user/preferences/**",
             "/user/memory/**",
