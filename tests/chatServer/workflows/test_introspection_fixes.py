@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # AC-23: Template uses skill paths, not old agent paths
 # ---------------------------------------------------------------------------
@@ -22,8 +21,8 @@ def test_template_references_skill_paths():
 
     # Old paths must not appear in the prompts
     for prompt in (PROMPT_GATHER_SIGNALS, PROMPT_PROPOSE_CHANGES, PROMPT_APPLY_CHANGES):
-        assert "/user/agent/" not in prompt, f"Old /user/agent/ path found in prompt"
-        assert "/user/preferences/" not in prompt, f"Old /user/preferences/ path found"
+        assert "/user/agent/" not in prompt, "Old /user/agent/ path found in prompt"
+        assert "/user/preferences/" not in prompt, "Old /user/preferences/ path found"
 
     # New skill paths must appear
     assert "/user/skills/" in PROMPT_GATHER_SIGNALS
