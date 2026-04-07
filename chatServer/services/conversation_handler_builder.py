@@ -34,10 +34,21 @@ _handler_locks: Dict[Tuple[str, str], asyncio.Lock] = {}
 
 
 def _get_anthropic_client() -> anthropic.AsyncAnthropic:
-    """Get or create the singleton AsyncAnthropic client."""
+    """Get or create the singleton AsyncAnthropic client.
+
+    Supports two auth modes:
+    - ANTHROPIC_API_KEY (standard API key)
+    - CLAUDE_CODE_OAUTH_TOKEN (OAuth token from Claude subscription)
+    """
     global _anthropic_client
     if _anthropic_client is None:
-        _anthropic_client = anthropic.AsyncAnthropic()
+        oauth_token = os.getenv("CLAUDE_CODE_OAUTH_TOKEN")
+        if oauth_token:
+            _anthropic_client = anthropic.AsyncAnthropic(auth_token=oauth_token)
+            logger.info("Anthropic client initialized with OAuth token")
+        else:
+            _anthropic_client = anthropic.AsyncAnthropic()
+            logger.info("Anthropic client initialized with API key")
     return _anthropic_client
 
 
