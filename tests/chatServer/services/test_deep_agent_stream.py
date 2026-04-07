@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
 from chatServer.services.conversation_handler import StreamEvent
 from chatServer.services.deep_agent_stream import deep_agent_stream_to_sse
-
 
 # ---------------------------------------------------------------------------
 # Helpers
