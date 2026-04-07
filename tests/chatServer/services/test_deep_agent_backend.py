@@ -1,12 +1,11 @@
 """Unit tests for ClarityBackend — BackendProtocol over ConfigService."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from chatServer.sandbox.security_boundary import ModificationPolicy, SecurityBoundary
-from chatServer.services.deep_agent_backend import ClarityBackend, _run_async
-
+from chatServer.services.deep_agent_backend import ClarityBackend
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -145,8 +144,6 @@ def test_write_strips_leading_slash(backend, config_service, user_id):
 def test_write_to_system_namespace_rejected(config_service, user_id):
     """Paths that map to /system/ are immutable — write must be rejected."""
     # Default policy: /system/** is immutable
-    boundary = SecurityBoundary()
-    b = ClarityBackend(config_service, user_id, boundary)
     # /system/ paths are immutable by default; our mapping sends user paths to /user/,
     # but we can directly test by using a policy that classifies /user/skills/ as immutable
     policy = ModificationPolicy(
