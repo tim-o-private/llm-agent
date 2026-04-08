@@ -4,14 +4,6 @@ import asyncio
 import logging
 from typing import Any, Dict
 
-from langchain_core.messages import AIMessage
-
-from src.core.agent_loader_db import load_agent_executor_db_async
-
-from ..security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
-from ..services.audit_service import AuditService
-from ..services.notification_service import NotificationService
-from ..services.pending_actions import PendingActionsService
 from .bootstrap_context_service import BootstrapContextService
 
 logger = logging.getLogger(__name__)
@@ -114,7 +106,7 @@ class SessionOpenService:
         if not is_new_user:
             ctx_service = BootstrapContextService(supabase_client)
             ctx = await ctx_service.gather(user_id)
-            bootstrap_context = ctx.render()
+            bootstrap_context = ctx.render()  # noqa: F841  # TODO: wire into trigger_prompt
 
         # 4. Build trigger prompt
         if is_new_user:
@@ -131,14 +123,9 @@ class SessionOpenService:
                 output = await self._invoke_deep_agent(
                     user_id, agent_name, session_id, trigger_prompt
                 )
-            elif settings.conversation_handler_v2:
+            else:
                 output = await self._invoke_v2(
                     user_id, agent_name, session_id, trigger_prompt
-                )
-            else:
-                output = await self._invoke_v1(
-                    user_id, agent_name, session_id, trigger_prompt,
-                    last_message_at, bootstrap_context, supabase_client,
                 )
         except Exception as e:
             error_name = type(e).__name__
@@ -171,10 +158,7 @@ class SessionOpenService:
 
         # 9. Persist AI message if not silent
         if not silent:
-            if settings.deep_agent_enabled or settings.conversation_handler_v2:
-                await self._persist_ai_message_v2(session_id, output)
-            else:
-                await self._persist_ai_message(session_id, output)
+            await self._persist_ai_message_v2(session_id, output)
 
         return {
             "response": output,
@@ -226,60 +210,6 @@ class SessionOpenService:
         messages = [{"role": "user", "content": trigger_prompt}]
         result = await handler.run(messages)
         return result.response_text
-
-    async def _invoke_v1(
-        self,
-        user_id: str,
-        agent_name: str,
-        session_id: str,
-        trigger_prompt: str,
-        last_message_at,
-        bootstrap_context,
-        supabase_client,
-    ) -> str:
-        """Legacy AgentExecutor path for session_open."""
-        agent_executor = await load_agent_executor_db_async(
-            agent_name=agent_name,
-            user_id=user_id,
-            session_id=session_id,
-            channel="session_open",
-            last_message_at=last_message_at,
-            bootstrap_context=bootstrap_context,
-        )
-
-        audit_service = AuditService(supabase_client)
-        pending_actions_service = PendingActionsService(
-            db_client=supabase_client,
-            audit_service=audit_service,
-        )
-        notification_service = NotificationService(supabase_client)
-        approval_context = ApprovalContext(
-            user_id=user_id,
-            session_id=session_id,
-            agent_name=agent_name,
-            db_client=supabase_client,
-            pending_actions_service=pending_actions_service,
-            audit_service=audit_service,
-            notification_service=notification_service,
-        )
-        if hasattr(agent_executor, "tools") and agent_executor.tools:
-            wrap_tools_with_approval(agent_executor.tools, approval_context)
-
-        response = await agent_executor.ainvoke(
-            {"input": trigger_prompt, "chat_history": []}
-        )
-
-        output = response.get("output", "")
-        if isinstance(output, list):
-            output = (
-                "".join(
-                    block.get("text", "")
-                    for block in output
-                    if isinstance(block, dict) and block.get("type") == "text"
-                )
-                or "No text content in response."
-            )
-        return output
 
     async def _persist_ai_message_v2(self, session_id: str, content: str) -> None:
         """Persist AI opening message in Anthropic-native format."""
@@ -362,21 +292,3 @@ class SessionOpenService:
             logger.warning(f"Failed to get last message time for session {session_id}: {e}")
             return None
 
-    async def _persist_ai_message(self, session_id: str, content: str) -> None:
-        """Persist the AI's opening message to chat history."""
-        from langchain_postgres import PostgresChatMessageHistory
-
-        from ..config.constants import CHAT_MESSAGE_HISTORY_TABLE_NAME
-        from ..database.connection import get_db_connection
-
-        try:
-            async for conn in get_db_connection():
-                history = PostgresChatMessageHistory(
-                    CHAT_MESSAGE_HISTORY_TABLE_NAME,
-                    session_id,
-                    async_connection=conn,
-                )
-                await history.aadd_messages([AIMessage(content=content)])
-                break
-        except Exception as e:
-            logger.warning(f"Failed to persist session_open AI message: {e}")

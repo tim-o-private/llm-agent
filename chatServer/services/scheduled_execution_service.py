@@ -12,12 +12,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-from src.core.agent_loader_db import load_agent_executor_db_async
-
 from ..database.supabase_client import create_user_scoped_client
-from ..security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
 from ..services.audit_service import AuditService
-from ..services.notification_service import NotificationService
 from ..services.pending_actions import PendingActionsService
 
 logger = logging.getLogger(__name__)
@@ -93,11 +89,7 @@ class ScheduledExecutionService:
                     model_override=model_override,
                     schedule_type=schedule_type,
                 )
-                pending_actions_service = PendingActionsService(
-                    db_client=supabase_client,
-                    audit_service=AuditService(supabase_client),
-                )
-            elif settings.conversation_handler_v2:
+            else:
                 output, model_used = await self._execute_v2(
                     user_id=user_id,
                     agent_name=agent_name,
@@ -108,22 +100,10 @@ class ScheduledExecutionService:
                     model_override=model_override,
                     schedule_type=schedule_type,
                 )
-                pending_actions_service = PendingActionsService(
-                    db_client=supabase_client,
-                    audit_service=AuditService(supabase_client),
-                )
-            else:
-                output, model_used, pending_actions_service = await self._execute_v1(
-                    user_id=user_id,
-                    agent_name=agent_name,
-                    session_id=session_id,
-                    channel=channel,
-                    prompt=prompt,
-                    config=config,
-                    model_override=model_override,
-                    schedule_type=schedule_type,
-                    supabase_client=supabase_client,
-                )
+            pending_actions_service = PendingActionsService(
+                db_client=supabase_client,
+                audit_service=AuditService(supabase_client),
+            )
 
             # 7. Detect HEARTBEAT_OK suppression
             is_heartbeat_ok = (
@@ -349,125 +329,6 @@ class ScheduledExecutionService:
 
         return result.response_text, model_used
 
-    async def _execute_v1(
-        self,
-        user_id: str,
-        agent_name: str,
-        session_id: str,
-        channel: str,
-        prompt: str,
-        config: Dict[str, Any],
-        model_override: Optional[str],
-        schedule_type: str,
-        supabase_client,
-    ) -> tuple:
-        """Legacy AgentExecutor path for scheduled runs."""
-        # 1. Load agent from DB — always fresh, never rely on cache
-        agent_executor = await load_agent_executor_db_async(
-            agent_name=agent_name,
-            user_id=user_id,
-            session_id=session_id,
-            channel=channel,
-        )
-
-        # 1b. Apply model override if specified in schedule config (AC-14, AC-16)
-        model_used = self._get_model_name(agent_executor)
-        if model_override:
-            self._apply_model_override(agent_executor, model_override)
-            model_used = model_override
-            logger.info(f"Applied model override '{model_override}' for scheduled run")
-
-        # 3. Wrap tools with approval system (mirrors chat.py:225-245)
-        audit_service = AuditService(supabase_client)
-        pending_actions_service = PendingActionsService(
-            db_client=supabase_client,
-            audit_service=audit_service,
-        )
-        notification_service = NotificationService(supabase_client)
-        approval_context = ApprovalContext(
-            user_id=user_id,
-            session_id=session_id,
-            agent_name=agent_name,
-            db_client=supabase_client,
-            pending_actions_service=pending_actions_service,
-            audit_service=audit_service,
-            notification_service=notification_service,
-        )
-        if hasattr(agent_executor, "tools") and agent_executor.tools:
-            wrap_tools_with_approval(agent_executor.tools, approval_context)
-            logger.info(
-                f"Wrapped {len(agent_executor.tools)} tools with approval "
-                f"for scheduled run of '{agent_name}'"
-            )
-
-        # 4. Build effective prompt (heartbeat gets checklist formatting)
-        if schedule_type == "heartbeat":
-            effective_prompt = self._build_heartbeat_prompt(
-                prompt, config.get("heartbeat_checklist", [])
-            )
-        else:
-            effective_prompt = prompt
-
-        # 5. Invoke the agent
-        response = await agent_executor.ainvoke(
-            {
-                "input": effective_prompt,
-                "chat_history": [],  # Fresh context for scheduled runs
-            }
-        )
-
-        # 6. Normalize output (handle content block lists from newer langchain-anthropic)
-        output = response.get("output", "")
-        if isinstance(output, list):
-            output = (
-                "".join(
-                    block.get("text", "")
-                    for block in output
-                    if isinstance(block, dict) and block.get("type") == "text"
-                )
-                or "No text content in response."
-            )
-
-        return output, model_used, pending_actions_service
-
-    def _get_model_name(self, agent_executor) -> str:
-        """Extract the model name from the agent executor's LLM chain."""
-        try:
-            agent = getattr(agent_executor, "agent", None)
-            if agent and hasattr(agent, "middle"):
-                for step in agent.middle:
-                    if hasattr(step, "model"):
-                        return step.model
-                    if hasattr(step, "model_name"):
-                        return step.model_name
-            # Fallback: check if the bound LLM has a model attribute
-            if agent and hasattr(agent, "last"):
-                last = agent.last
-                if hasattr(last, "bound") and hasattr(last.bound, "model"):
-                    return last.bound.model
-        except Exception:
-            pass
-        return "unknown"
-
-    def _apply_model_override(self, agent_executor, model_override: str) -> None:
-        """Override the model on the agent executor's LLM instance."""
-        try:
-            agent = getattr(agent_executor, "agent", None)
-            if agent and hasattr(agent, "middle"):
-                for step in agent.middle:
-                    if hasattr(step, "model"):
-                        step.model = model_override
-                        return
-            # Try the bound LLM path
-            if agent and hasattr(agent, "last"):
-                last = agent.last
-                if hasattr(last, "bound") and hasattr(last.bound, "model"):
-                    last.bound.model = model_override
-                    return
-            logger.warning(f"Could not apply model override '{model_override}' — LLM not found in chain")
-        except Exception as e:
-            logger.warning(f"Failed to apply model override: {e}")
-
     def _build_heartbeat_prompt(
         self, original_prompt: str, checklist: list[str]
     ) -> str:
@@ -486,27 +347,6 @@ class ScheduledExecutionService:
             f"If nothing needs attention, respond with exactly: HEARTBEAT_OK\n"
             f"Otherwise, report only what needs action."
         )
-
-    def _build_execution_metadata(
-        self,
-        agent_executor,
-        model_used: str,
-    ) -> Dict[str, Any]:
-        """Build metadata dict with model and token usage info (AC-15)."""
-        metadata: Dict[str, Any] = {"model": model_used}
-        try:
-            # LangChain AgentExecutor may have callback-based token tracking
-            # Try to extract from the LLM's usage metadata if available
-            agent = getattr(agent_executor, "agent", None)
-            if agent and hasattr(agent, "middle"):
-                for step in agent.middle:
-                    usage = getattr(step, "_last_usage_metadata", None)
-                    if usage:
-                        metadata["input_tokens"] = usage.get("input_tokens", 0)
-                        metadata["output_tokens"] = usage.get("output_tokens", 0)
-        except Exception as e:
-            logger.debug(f"Could not extract token usage: {e}")
-        return metadata
 
     async def _store_result(
         self,

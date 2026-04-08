@@ -5,10 +5,10 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from src.core.agent_loader_db import load_agent_executor_db
 from supabase import Client as SupabaseClient
 from supabase import create_client
 
+from .conversation_handler_builder import build_conversation_handler
 from .email_digest_storage_service import get_email_digest_storage_service
 
 logger = logging.getLogger(__name__)
@@ -53,19 +53,18 @@ class EmailDigestService:
         try:
             logger.info(f"Generating email digest for user {self.user_id} (context: {self.context}, hours_back: {hours_back})")  # noqa: E501
 
-            # Load the email_digest_agent from database
-            # This automatically loads the agent's system prompt and Gmail tools
+            # Build the ConversationHandler for email_digest_agent
+            session_id = f"email_digest_{self.context}_{generated_at.strftime('%Y%m%d_%H%M%S')}"
             try:
-                agent_executor = load_agent_executor_db(
+                handler = await build_conversation_handler(
                     agent_name="email_digest_agent",
                     user_id=self.user_id,
-                    session_id=f"email_digest_{self.context}_{generated_at.strftime('%Y%m%d_%H%M%S')}"
+                    session_id=session_id,
+                    channel="scheduled",
                 )
-
-                logger.info(f"Successfully loaded email_digest_agent for user {self.user_id}")
-
+                logger.info(f"Successfully built email_digest_agent handler for user {self.user_id}")
             except Exception as e:
-                logger.error(f"Failed to load email_digest_agent for user {self.user_id}: {e}")
+                logger.error(f"Failed to build email_digest_agent for user {self.user_id}: {e}")
                 raise RuntimeError(f"Could not load email digest agent: {e}")
 
             # Create prompt for the agent
@@ -87,21 +86,11 @@ class EmailDigestService:
 
             logger.info(f"Invoking email_digest_agent with prompt: {prompt[:100]}...")
 
-            # Invoke the agent - it will use its Gmail tools to generate the digest
-            result = await agent_executor.ainvoke({
-                "input": prompt,
-                "chat_history": []  # Fresh context for digest generation
-            })
+            # Invoke the handler — fresh context for digest generation
+            result = await handler.run([{"role": "user", "content": prompt}])
 
-            # Extract the digest content from agent response
-            digest_content = result.get("output", "")
-
-            # Handle content block lists from newer langchain-anthropic versions
-            if isinstance(digest_content, list):
-                digest_content = "".join(
-                    block.get("text", "") for block in digest_content
-                    if isinstance(block, dict) and block.get("type") == "text"
-                ) or ""
+            # Extract the digest content from handler response
+            digest_content = result.response_text
 
             if not digest_content:
                 logger.warning(f"email_digest_agent returned empty response for user {self.user_id}")

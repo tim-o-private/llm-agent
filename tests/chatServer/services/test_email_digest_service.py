@@ -6,6 +6,17 @@ import pytest
 
 from chatServer.services.email_digest_service import EmailDigestService
 
+_BUILD_HANDLER = "chatServer.services.email_digest_service.build_conversation_handler"
+
+
+def _mock_handler(response_text="Digest content"):
+    """Return a mock ConversationHandler whose run() yields response_text."""
+    handler = MagicMock()
+    run_result = MagicMock()
+    run_result.response_text = response_text
+    handler.run = AsyncMock(return_value=run_result)
+    return handler
+
 
 @pytest.fixture
 def service():
@@ -59,12 +70,12 @@ async def test_load_ltm_returns_none_on_missing(service):
 @pytest.mark.asyncio
 async def test_generate_digest_prepends_ltm_to_prompt(service):
     """When LTM exists, it is prepended to the digest prompt."""
-    mock_executor = MagicMock()
-    mock_executor.ainvoke = AsyncMock(return_value={"output": "Digest content"})
+    mock_handler = _mock_handler("Digest content")
 
     with patch(
-        "chatServer.services.email_digest_service.load_agent_executor_db",
-        return_value=mock_executor,
+        _BUILD_HANDLER,
+        new_callable=AsyncMock,
+        return_value=mock_handler,
     ), patch.object(
         service, "_load_ltm", return_value="User prefers concise summaries"
     ), patch.object(
@@ -73,21 +84,22 @@ async def test_generate_digest_prepends_ltm_to_prompt(service):
         result = await service.generate_digest(hours_back=24)
 
     assert result["success"] is True
-    # Verify the prompt included LTM context
-    call_args = mock_executor.ainvoke.call_args[0][0]
-    assert "User context (from memory):" in call_args["input"]
-    assert "User prefers concise summaries" in call_args["input"]
+    # Verify the prompt passed to handler.run() included LTM context
+    messages = mock_handler.run.call_args[0][0]
+    prompt_text = messages[0]["content"]
+    assert "User context (from memory):" in prompt_text
+    assert "User prefers concise summaries" in prompt_text
 
 
 @pytest.mark.asyncio
 async def test_generate_digest_works_without_ltm(service):
     """When no LTM exists, the digest still generates normally."""
-    mock_executor = MagicMock()
-    mock_executor.ainvoke = AsyncMock(return_value={"output": "Digest content"})
+    mock_handler = _mock_handler("Digest content")
 
     with patch(
-        "chatServer.services.email_digest_service.load_agent_executor_db",
-        return_value=mock_executor,
+        _BUILD_HANDLER,
+        new_callable=AsyncMock,
+        return_value=mock_handler,
     ), patch.object(
         service, "_load_ltm", return_value=None
     ), patch.object(
@@ -96,6 +108,7 @@ async def test_generate_digest_works_without_ltm(service):
         result = await service.generate_digest(hours_back=24)
 
     assert result["success"] is True
-    call_args = mock_executor.ainvoke.call_args[0][0]
-    assert "User context (from memory):" not in call_args["input"]
-    assert "email digest" in call_args["input"].lower()
+    messages = mock_handler.run.call_args[0][0]
+    prompt_text = messages[0]["content"]
+    assert "User context (from memory):" not in prompt_text
+    assert "email digest" in prompt_text.lower()

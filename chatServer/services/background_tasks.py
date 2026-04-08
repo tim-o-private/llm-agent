@@ -3,7 +3,7 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional, Tuple
+from typing import Dict, Optional
 
 from croniter import croniter
 
@@ -34,15 +34,10 @@ class BackgroundTaskService:
         self.scheduled_agents_task: Optional[asyncio.Task] = None
         self.reminder_task: Optional[asyncio.Task] = None
         self.job_runner_task: Optional[asyncio.Task] = None
-        self._agent_executor_cache: Optional[Dict[Tuple[str, str], Any]] = None
         self.agent_schedules: Dict[str, Dict] = {}
         self._last_schedule_check: Optional[datetime] = None
         self._job_service = None
         self._job_runner = None
-
-    def set_agent_executor_cache(self, cache: Dict[Tuple[str, str], Any]) -> None:
-        """Set the agent executor cache reference for eviction tasks."""
-        self._agent_executor_cache = cache
 
     async def deactivate_stale_chat_session_instances(self) -> None:
         """Periodically deactivates stale chat session instances."""
@@ -69,41 +64,6 @@ class BackgroundTaskService:
                             logger.info(f"Deactivated {cur.rowcount} stale chat session instances.")
             except Exception as e:
                 logger.error(f"Error in deactivate_stale_chat_session_instances: {e}", exc_info=True)
-
-    async def evict_inactive_executors(self) -> None:
-        """Periodically evicts agent executors if no active session instances exist for them."""
-        while True:
-            await asyncio.sleep(SCHEDULED_TASK_INTERVAL_SECONDS + 30)  # Stagger slightly from the other task
-            logger.debug("Running task: evict_inactive_executors")
-
-            db_manager = get_database_manager()
-            if db_manager.pool is None or self._agent_executor_cache is None:
-                logger.warning("db_pool or agent_executor_cache not available, skipping eviction task cycle.")
-                continue
-
-            keys_to_evict = []
-            # Create a copy of keys to iterate over as cache might be modified
-            current_cache_keys = list(self._agent_executor_cache.keys())
-
-            for user_id, agent_name in current_cache_keys:
-                try:
-                    async with db_manager.pool.connection() as conn:
-                        async with conn.cursor() as cur:
-                            await cur.execute(
-                                """SELECT 1 FROM chat_sessions
-                                   WHERE user_id = %s AND agent_name = %s AND is_active = true LIMIT 1""",
-                                (user_id, agent_name)
-                            )
-                            active_session_exists = await cur.fetchone()
-                            if not active_session_exists:
-                                keys_to_evict.append((user_id, agent_name))
-                except Exception as e:
-                    logger.error(f"Error checking active sessions for ({user_id}, {agent_name}): {e}", exc_info=True)
-
-            for key in keys_to_evict:
-                if key in self._agent_executor_cache:
-                    del self._agent_executor_cache[key]
-                    logger.info(f"Evicted agent executor for {key} due to no active sessions.")
 
     async def run_scheduled_agents(self) -> None:
         """Execute scheduled agents (like daily email digest)."""
@@ -311,7 +271,6 @@ class BackgroundTaskService:
         await self._bootstrap_briefing_jobs()
 
         self.deactivate_task = asyncio.create_task(self.deactivate_stale_chat_session_instances())
-        self.evict_task = asyncio.create_task(self.evict_inactive_executors())
         self.scheduled_agents_task = asyncio.create_task(self.run_scheduled_agents())
         self.reminder_task = asyncio.create_task(self.check_due_reminders())
         self.job_runner_task = asyncio.create_task(self._job_runner.run())
@@ -410,14 +369,6 @@ class BackgroundTaskService:
                 await self.deactivate_task
             except asyncio.CancelledError:
                 logger.info("Deactivate stale sessions task successfully cancelled.")
-
-        if self.evict_task:
-            self.evict_task.cancel()
-            logger.info("Evict inactive executors task cancelling...")
-            try:
-                await self.evict_task
-            except asyncio.CancelledError:
-                logger.info("Evict inactive executors task successfully cancelled.")
 
         if self.scheduled_agents_task:
             self.scheduled_agents_task.cancel()

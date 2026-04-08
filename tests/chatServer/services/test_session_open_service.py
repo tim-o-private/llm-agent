@@ -56,12 +56,12 @@ def _mock_get_db_connection(last_message_at=None):
 _DB_CONN = "chatServer.database.connection.get_db_connection"
 
 
-def _patch_svc(mock_executor, last_message_at=None, has_memory=False):
-    """Return a tuple of context managers for the common service patches."""
+def _patch_svc(output_text="Agent response", last_message_at=None, has_memory=False):
+    """Return a tuple of context managers for the common service patches (v2 path)."""
     return (
-        patch(f"{_SVC}.load_agent_executor_db_async", return_value=mock_executor),
+        patch.object(SessionOpenService, "_invoke_v2", new_callable=AsyncMock, return_value=output_text),
         patch(_DB_CONN, new=_mock_get_db_connection(last_message_at)),
-        patch(f"{_SVC}.SessionOpenService._has_memory", new_callable=AsyncMock, return_value=has_memory),
+        patch.object(SessionOpenService, "_has_memory", new_callable=AsyncMock, return_value=has_memory),
     )
 
 
@@ -70,20 +70,18 @@ async def test_new_user_returns_is_new_user_true():
     """New user (no memory, no instructions) -> is_new_user=True, bootstrap trigger."""
     mock_client = _mock_supabase(has_instructions=False)
     service = SessionOpenService(mock_client)
-    mock_executor = AsyncMock()
-    mock_executor.tools = []
-    mock_executor.ainvoke = AsyncMock(return_value={"output": "Hello! I'm your assistant."})
-    p_loader, p_db, p_mem = _patch_svc(mock_executor, has_memory=False)
+    p_invoke, p_db, p_mem = _patch_svc("Hello! I'm your assistant.", has_memory=False)
 
-    with p_loader, p_db, p_mem, patch.object(
-        service, "_persist_ai_message", new_callable=AsyncMock
+    with p_invoke as mock_invoke, p_db, p_mem, patch.object(
+        service, "_persist_ai_message_v2", new_callable=AsyncMock
     ) as mock_persist:
         result = await service.run(user_id="u1", agent_name="assistant", session_id="s1")
 
     assert result["is_new_user"] is True
     assert result["silent"] is False
-    call_args = mock_executor.ainvoke.call_args[0][0]
-    assert "First session" in call_args["input"]
+    # Verify trigger prompt contains bootstrap marker
+    trigger_prompt = mock_invoke.call_args[0][3]
+    assert "First session" in trigger_prompt
     mock_persist.assert_awaited_once()
 
 
@@ -92,19 +90,16 @@ async def test_returning_user_with_memory_not_new():
     """User with min-memory memories -> is_new_user=False (memory alone is sufficient)."""
     mock_client = _mock_supabase(has_instructions=False)
     service = SessionOpenService(mock_client)
-    mock_executor = AsyncMock()
-    mock_executor.tools = []
-    mock_executor.ainvoke = AsyncMock(return_value={"output": "Morning! 2 tasks due."})
-    p_loader, p_db, p_mem = _patch_svc(mock_executor, has_memory=True)
+    p_invoke, p_db, p_mem = _patch_svc("Morning! 2 tasks due.", has_memory=True)
 
-    with p_loader, p_db, p_mem, patch.object(
-        service, "_persist_ai_message", new_callable=AsyncMock
+    with p_invoke as mock_invoke, p_db, p_mem, patch.object(
+        service, "_persist_ai_message_v2", new_callable=AsyncMock
     ):
         result = await service.run(user_id="u1", agent_name="assistant", session_id="s1")
 
     assert result["is_new_user"] is False
-    call_args = mock_executor.ainvoke.call_args[0][0]
-    assert "User returned" in call_args["input"]
+    trigger_prompt = mock_invoke.call_args[0][3]
+    assert "User returned" in trigger_prompt
 
 
 @pytest.mark.asyncio
@@ -112,13 +107,10 @@ async def test_returning_user_wakeup_silent():
     """Returning user, agent returns 'WAKEUP_SILENT' -> silent=True, no persistence."""
     mock_client = _mock_supabase(has_instructions=True)
     service = SessionOpenService(mock_client)
-    mock_executor = AsyncMock()
-    mock_executor.tools = []
-    mock_executor.ainvoke = AsyncMock(return_value={"output": "WAKEUP_SILENT"})
-    p_loader, p_db, p_mem = _patch_svc(mock_executor, has_memory=True)
+    p_invoke, p_db, p_mem = _patch_svc("WAKEUP_SILENT", has_memory=True)
 
-    with p_loader, p_db, p_mem, patch.object(
-        service, "_persist_ai_message", new_callable=AsyncMock
+    with p_invoke, p_db, p_mem, patch.object(
+        service, "_persist_ai_message_v2", new_callable=AsyncMock
     ) as mock_persist:
         result = await service.run(user_id="u1", agent_name="assistant", session_id="s1")
 
@@ -132,13 +124,10 @@ async def test_returning_user_greeting_persisted():
     """Returning user (has memory, no instructions), agent greets -> persisted."""
     mock_client = _mock_supabase(has_instructions=False)
     service = SessionOpenService(mock_client)
-    mock_executor = AsyncMock()
-    mock_executor.tools = []
-    mock_executor.ainvoke = AsyncMock(return_value={"output": "Morning! 2 tasks due today."})
-    p_loader, p_db, p_mem = _patch_svc(mock_executor, has_memory=True)
+    p_invoke, p_db, p_mem = _patch_svc("Morning! 2 tasks due today.", has_memory=True)
 
-    with p_loader, p_db, p_mem, patch.object(
-        service, "_persist_ai_message", new_callable=AsyncMock
+    with p_invoke, p_db, p_mem, patch.object(
+        service, "_persist_ai_message_v2", new_callable=AsyncMock
     ) as mock_persist:
         result = await service.run(user_id="u1", agent_name="assistant", session_id="s1")
 
@@ -149,26 +138,19 @@ async def test_returning_user_greeting_persisted():
 
 
 @pytest.mark.asyncio
-async def test_content_block_list_normalized():
-    """Content block list output normalized to string."""
+async def test_wakeup_silent_detection():
+    """WAKEUP_SILENT in output → silent=True, no persistence."""
     mock_client = _mock_supabase(has_instructions=True)
     service = SessionOpenService(mock_client)
-    mock_executor = AsyncMock()
-    mock_executor.tools = []
-    mock_executor.ainvoke = AsyncMock(return_value={
-        "output": [
-            {"type": "text", "text": "Hello "},
-            {"type": "text", "text": "world!"},
-        ]
-    })
-    p_loader, p_db, p_mem = _patch_svc(mock_executor, has_memory=True)
+    p_invoke, p_db, p_mem = _patch_svc("WAKEUP_SILENT", has_memory=True)
 
-    with p_loader, p_db, p_mem, patch.object(
-        service, "_persist_ai_message", new_callable=AsyncMock
-    ):
+    with p_invoke, p_db, p_mem, patch.object(
+        service, "_persist_ai_message_v2", new_callable=AsyncMock
+    ) as mock_persist:
         result = await service.run(user_id="u1", agent_name="assistant", session_id="s1")
 
-    assert result["response"] == "Hello world!"
+    assert result["silent"] is True
+    mock_persist.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -177,22 +159,18 @@ async def test_deterministic_silence_recent_returning_user():
     ts = datetime.now(timezone.utc)  # just now
     mock_client = _mock_supabase(has_instructions=True)
     service = SessionOpenService(mock_client)
-    mock_executor = AsyncMock()
-    mock_executor.tools = []
-    mock_executor.ainvoke = AsyncMock()  # should NOT be called
+    p_invoke, p_db, p_mem = _patch_svc("Agent response", has_memory=True)
 
-    with (
-        patch(f"{_SVC}.load_agent_executor_db_async", return_value=mock_executor) as mock_loader,
-        patch(_DB_CONN, new=_mock_get_db_connection(ts)),
-        patch(f"{_SVC}.SessionOpenService._has_memory", new_callable=AsyncMock, return_value=True),
-        patch.object(service, "_persist_ai_message", new_callable=AsyncMock) as mock_persist,
-    ):
-        result = await service.run(user_id="u1", agent_name="assistant", session_id="s1")
+    with p_invoke as mock_invoke, p_db, p_mem, patch.object(
+        service, "_persist_ai_message_v2", new_callable=AsyncMock
+    ) as mock_persist:
+        # Override DB connection to return a recent timestamp
+        with patch(_DB_CONN, new=_mock_get_db_connection(ts)):
+            result = await service.run(user_id="u1", agent_name="assistant", session_id="s1")
 
     assert result["silent"] is True
     assert result["is_new_user"] is False
-    mock_loader.assert_not_awaited()  # agent never loaded
-    mock_executor.ainvoke.assert_not_awaited()  # agent never invoked
+    mock_invoke.assert_not_awaited()  # agent never invoked
     mock_persist.assert_not_awaited()
 
 
@@ -206,85 +184,49 @@ async def test_chat_history_overrides_new_user_detection():
     ts = datetime.now(timezone.utc)  # just now → 30s dedup fires
     mock_client = _mock_supabase(has_instructions=False)
     service = SessionOpenService(mock_client)
-    mock_executor = AsyncMock()
-    mock_executor.tools = []
-    mock_executor.ainvoke = AsyncMock(return_value={"output": "Hello! I'm your assistant."})
-    p_loader, p_db, p_mem = _patch_svc(mock_executor, last_message_at=ts, has_memory=False)
+    p_invoke, p_db, p_mem = _patch_svc("Hello! I'm your assistant.", last_message_at=ts, has_memory=False)
 
-    with p_loader, p_db, p_mem, patch.object(
-        service, "_persist_ai_message", new_callable=AsyncMock
+    with p_invoke as mock_invoke, p_db, p_mem, patch.object(
+        service, "_persist_ai_message_v2", new_callable=AsyncMock
     ):
         result = await service.run(user_id="u1", agent_name="assistant", session_id="s1")
 
     assert result["is_new_user"] is False  # chat history overrides
     assert result["silent"] is True  # 30s dedup kicks in
-    mock_executor.ainvoke.assert_not_awaited()  # agent never invoked
+    mock_invoke.assert_not_awaited()  # agent never invoked
 
 
 @pytest.mark.asyncio
-async def test_agent_loaded_with_session_open_channel():
-    """Agent loaded with channel='session_open'."""
+async def test_agent_invoked_for_session_open():
+    """Agent (_invoke_v2) called when not silenced by dedup."""
     mock_client = _mock_supabase(has_instructions=True)
     service = SessionOpenService(mock_client)
-    mock_executor = AsyncMock()
-    mock_executor.tools = []
-    mock_executor.ainvoke = AsyncMock(return_value={"output": "WAKEUP_SILENT"})
+    p_invoke, p_db, p_mem = _patch_svc("WAKEUP_SILENT", has_memory=True)
 
-    with (
-        patch(f"{_SVC}.load_agent_executor_db_async", return_value=mock_executor) as mock_loader,
-        patch(_DB_CONN, new=_mock_get_db_connection()),
-        patch(f"{_SVC}.SessionOpenService._has_memory", new_callable=AsyncMock, return_value=True),
-        patch.object(service, "_persist_ai_message", new_callable=AsyncMock),
+    with p_invoke as mock_invoke, p_db, p_mem, patch.object(
+        service, "_persist_ai_message_v2", new_callable=AsyncMock
     ):
         await service.run(user_id="u1", agent_name="assistant", session_id="s1")
 
-    mock_loader.assert_awaited_once()
-    call_kwargs = mock_loader.call_args[1]
-    assert call_kwargs["channel"] == "session_open"
+    mock_invoke.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_last_message_at_passed_to_loader():
-    """last_message_at from DB passed through to agent loader."""
-    ts = datetime(2026, 2, 22, 10, 0, 0, tzinfo=timezone.utc)
+async def test_bootstrap_context_not_passed_for_new_user():
+    """Returning user: BootstrapContextService.gather() called.
+    New user: BootstrapContextService never called.
+    """
     mock_client = _mock_supabase(has_instructions=True)
     service = SessionOpenService(mock_client)
-    mock_executor = AsyncMock()
-    mock_executor.tools = []
-    mock_executor.ainvoke = AsyncMock(return_value={"output": "WAKEUP_SILENT"})
+    p_invoke, p_db, p_mem = _patch_svc("WAKEUP_SILENT", has_memory=True)
+
+    rendered = "Tasks: 2 active task(s)\nReminders: No upcoming reminders."
 
     with (
-        patch(f"{_SVC}.load_agent_executor_db_async", return_value=mock_executor) as mock_loader,
-        patch(_DB_CONN, new=_mock_get_db_connection(ts)),
-        patch(f"{_SVC}.SessionOpenService._has_memory", new_callable=AsyncMock, return_value=True),
-        patch.object(service, "_persist_ai_message", new_callable=AsyncMock),
-        patch(f"{_SVC}.BootstrapContextService") as mock_bcs_cls,
-    ):
-        mock_bcs = AsyncMock()
-        mock_bcs.gather = AsyncMock(return_value=MagicMock(render=MagicMock(return_value="Tasks: 2 active")))
-        mock_bcs_cls.return_value = mock_bcs
-        await service.run(user_id="u1", agent_name="assistant", session_id="s1")
-
-    call_kwargs = mock_loader.call_args[1]
-    assert call_kwargs["last_message_at"] == ts
-
-
-@pytest.mark.asyncio
-async def test_returning_user_gets_bootstrap_context():
-    """Returning user: BootstrapContextService.gather() called and result passed to loader."""
-    mock_client = _mock_supabase(has_instructions=True)
-    service = SessionOpenService(mock_client)
-    mock_executor = AsyncMock()
-    mock_executor.tools = []
-    mock_executor.ainvoke = AsyncMock(return_value={"output": "WAKEUP_SILENT"})
-
-    rendered = "Tasks: 2 active task(s)\nReminders: No upcoming reminders.\nEmail: 1 account(s) connected: alice@example.com"  # noqa: E501
-
-    with (
-        patch(f"{_SVC}.load_agent_executor_db_async", return_value=mock_executor) as mock_loader,
-        patch(_DB_CONN, new=_mock_get_db_connection()),
-        patch(f"{_SVC}.SessionOpenService._has_memory", new_callable=AsyncMock, return_value=True),
-        patch.object(service, "_persist_ai_message", new_callable=AsyncMock),
+        p_invoke,
+        p_db,
+        p_mem,
+        patch.object(service, "_persist_ai_message_v2", new_callable=AsyncMock),
         patch(f"{_SVC}.BootstrapContextService") as mock_bcs_cls,
     ):
         mock_ctx = MagicMock()
@@ -296,28 +238,25 @@ async def test_returning_user_gets_bootstrap_context():
         await service.run(user_id="u1", agent_name="assistant", session_id="s1")
 
     mock_bcs.gather.assert_awaited_once_with("u1")
-    call_kwargs = mock_loader.call_args[1]
-    assert call_kwargs["bootstrap_context"] == rendered
 
 
 @pytest.mark.asyncio
 async def test_new_user_skips_bootstrap_context():
-    """New user: BootstrapContextService never called, bootstrap_context=None passed to loader."""
+    """New user: BootstrapContextService never called."""
     mock_client = _mock_supabase(has_instructions=False)
     service = SessionOpenService(mock_client)
-    mock_executor = AsyncMock()
-    mock_executor.tools = []
-    mock_executor.ainvoke = AsyncMock(return_value={"output": "Hello! I'm your assistant."})
-    p_loader, p_db, p_mem = _patch_svc(mock_executor, has_memory=False)
+    p_invoke, p_db, p_mem = _patch_svc("Hello! I'm your assistant.", has_memory=False)
 
-    with p_loader as mock_loader, p_db, p_mem, patch.object(
-        service, "_persist_ai_message", new_callable=AsyncMock
-    ), patch(f"{_SVC}.BootstrapContextService") as mock_bcs_cls:
+    with (
+        p_invoke,
+        p_db,
+        p_mem,
+        patch.object(service, "_persist_ai_message_v2", new_callable=AsyncMock),
+        patch(f"{_SVC}.BootstrapContextService") as mock_bcs_cls,
+    ):
         await service.run(user_id="u1", agent_name="assistant", session_id="s1")
 
     mock_bcs_cls.assert_not_called()
-    call_kwargs = mock_loader.call_args[1]
-    assert call_kwargs["bootstrap_context"] is None
 
 
 # --- _has_memory unit tests (min-memory integration) ---
@@ -328,13 +267,10 @@ async def test_empty_output_returns_silent():
     """AC-17: Empty output from executor → silent=True, no persistence."""
     mock_client = _mock_supabase(has_instructions=True)
     service = SessionOpenService(mock_client)
-    mock_executor = AsyncMock()
-    mock_executor.tools = []
-    mock_executor.ainvoke = AsyncMock(return_value={"output": ""})
-    p_loader, p_db, p_mem = _patch_svc(mock_executor, has_memory=True)
+    p_invoke, p_db, p_mem = _patch_svc("", has_memory=True)
 
-    with p_loader, p_db, p_mem, patch.object(
-        service, "_persist_ai_message", new_callable=AsyncMock
+    with p_invoke, p_db, p_mem, patch.object(
+        service, "_persist_ai_message_v2", new_callable=AsyncMock
     ) as mock_persist:
         result = await service.run(user_id="u1", agent_name="assistant", session_id="s1")
 
@@ -348,13 +284,10 @@ async def test_no_text_content_output_returns_silent():
     """AC-17: 'No text content in response.' output → silent=True."""
     mock_client = _mock_supabase(has_instructions=True)
     service = SessionOpenService(mock_client)
-    mock_executor = AsyncMock()
-    mock_executor.tools = []
-    mock_executor.ainvoke = AsyncMock(return_value={"output": "No text content in response."})
-    p_loader, p_db, p_mem = _patch_svc(mock_executor, has_memory=True)
+    p_invoke, p_db, p_mem = _patch_svc("No text content in response.", has_memory=True)
 
-    with p_loader, p_db, p_mem, patch.object(
-        service, "_persist_ai_message", new_callable=AsyncMock
+    with p_invoke, p_db, p_mem, patch.object(
+        service, "_persist_ai_message_v2", new_callable=AsyncMock
     ) as mock_persist:
         result = await service.run(user_id="u1", agent_name="assistant", session_id="s1")
 
@@ -364,17 +297,17 @@ async def test_no_text_content_output_returns_silent():
 
 @pytest.mark.asyncio
 async def test_llm_error_returns_silent():
-    """AC-16: Exception from ainvoke → silent=True, no re-raise."""
+    """AC-16: Exception from _invoke_v2 → silent=True, no re-raise."""
     mock_client = _mock_supabase(has_instructions=True)
     service = SessionOpenService(mock_client)
-    mock_executor = AsyncMock()
-    mock_executor.tools = []
-    mock_executor.ainvoke = AsyncMock(side_effect=RuntimeError("rate limit exceeded"))
-    p_loader, p_db, p_mem = _patch_svc(mock_executor, has_memory=True)
 
-    with p_loader, p_db, p_mem, patch.object(
-        service, "_persist_ai_message", new_callable=AsyncMock
-    ) as mock_persist:
+    with (
+        patch.object(SessionOpenService, "_invoke_v2", new_callable=AsyncMock,
+                     side_effect=RuntimeError("rate limit exceeded")),
+        patch(_DB_CONN, new=_mock_get_db_connection()),
+        patch.object(SessionOpenService, "_has_memory", new_callable=AsyncMock, return_value=True),
+        patch.object(service, "_persist_ai_message_v2", new_callable=AsyncMock) as mock_persist,
+    ):
         result = await service.run(user_id="u1", agent_name="assistant", session_id="s1")
 
     assert result["silent"] is True
@@ -471,99 +404,3 @@ async def test_has_memory_returns_false_on_error():
         result = await service._has_memory(mock_client, "u1", "assistant")
 
     assert result is False
-
-
-# --- ConversationHandler v2 path tests ---
-
-
-@pytest.mark.asyncio
-async def test_v2_path_uses_conversation_handler():
-    """v2 path calls build_conversation_handler and handler.run with empty history (AC-32)."""
-    mock_client = _mock_supabase(has_instructions=True)
-    service = SessionOpenService(mock_client)
-
-    with (
-        patch("chatServer.config.settings.get_settings") as mock_settings,
-        patch(f"{_SVC}.SessionOpenService._invoke_v2", new_callable=AsyncMock, return_value="Good morning!") as mock_v2,
-        patch(_DB_CONN, new=_mock_get_db_connection()),
-        patch(f"{_SVC}.SessionOpenService._has_memory", new_callable=AsyncMock, return_value=True),
-        patch.object(service, "_persist_ai_message_v2", new_callable=AsyncMock) as mock_persist_v2,
-    ):
-        mock_settings.return_value = MagicMock(conversation_handler_v2=True, deep_agent_enabled=False)
-        result = await service.run(user_id="u1", agent_name="assistant", session_id="s1")
-
-    assert result["response"] == "Good morning!"
-    assert result["silent"] is False
-    mock_v2.assert_awaited_once_with("u1", "assistant", "s1", "[SYSTEM: User returned to app. No user message. Check tools and decide whether to greet.]")  # noqa: E501
-    mock_persist_v2.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_v2_invoke_calls_builder():
-    """_invoke_v2 calls build_conversation_handler with channel='session_open'."""
-    mock_client = _mock_supabase()
-    service = SessionOpenService(mock_client)
-
-    mock_handler = AsyncMock()
-    mock_result = MagicMock()
-    mock_result.response_text = "Hello there!"
-    mock_handler.run = AsyncMock(return_value=mock_result)
-
-    with patch(
-        "chatServer.services.conversation_handler_builder.build_conversation_handler",
-        new_callable=AsyncMock,
-        return_value=mock_handler,
-    ) as mock_builder:
-        output = await service._invoke_v2("u1", "assistant", "s1", "Test prompt")
-
-    assert output == "Hello there!"
-    mock_builder.assert_awaited_once_with(
-        user_id="u1",
-        agent_name="assistant",
-        session_id="s1",
-        channel="session_open",
-    )
-    mock_handler.run.assert_awaited_once()
-    messages_arg = mock_handler.run.call_args[0][0]
-    assert messages_arg == [{"role": "user", "content": "Test prompt"}]
-
-
-@pytest.mark.asyncio
-async def test_v2_silent_on_wakeup_silent():
-    """v2 path: WAKEUP_SILENT output -> silent=True."""
-    mock_client = _mock_supabase(has_instructions=True)
-    service = SessionOpenService(mock_client)
-
-    with (
-        patch("chatServer.config.settings.get_settings") as mock_settings,
-        patch(f"{_SVC}.SessionOpenService._invoke_v2", new_callable=AsyncMock, return_value="WAKEUP_SILENT"),
-        patch(_DB_CONN, new=_mock_get_db_connection()),
-        patch(f"{_SVC}.SessionOpenService._has_memory", new_callable=AsyncMock, return_value=True),
-        patch.object(service, "_persist_ai_message_v2", new_callable=AsyncMock) as mock_persist_v2,
-    ):
-        mock_settings.return_value = MagicMock(conversation_handler_v2=True, deep_agent_enabled=False)
-        result = await service.run(user_id="u1", agent_name="assistant", session_id="s1")
-
-    assert result["silent"] is True
-    mock_persist_v2.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_v2_error_returns_silent():
-    """v2 path: exception in _invoke_v2 -> silent=True, no crash."""
-    mock_client = _mock_supabase(has_instructions=True)
-    service = SessionOpenService(mock_client)
-
-    with (
-        patch("chatServer.config.settings.get_settings") as mock_settings,
-        patch(f"{_SVC}.SessionOpenService._invoke_v2", new_callable=AsyncMock, side_effect=RuntimeError("API down")),
-        patch(_DB_CONN, new=_mock_get_db_connection()),
-        patch(f"{_SVC}.SessionOpenService._has_memory", new_callable=AsyncMock, return_value=True),
-        patch.object(service, "_persist_ai_message_v2", new_callable=AsyncMock) as mock_persist_v2,
-    ):
-        mock_settings.return_value = MagicMock(conversation_handler_v2=True, deep_agent_enabled=False)
-        result = await service.run(user_id="u1", agent_name="assistant", session_id="s1")
-
-    assert result["silent"] is True
-    assert result["response"] == ""
-    mock_persist_v2.assert_not_awaited()

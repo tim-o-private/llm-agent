@@ -6,7 +6,7 @@ from typing import Any, Optional
 import psycopg
 
 from chatServer.config.settings import get_settings
-from src.core.agent_loader_db import load_agent_executor_db
+from chatServer.services.conversation_handler_builder import build_conversation_handler
 
 
 class GmailIntegrationTestHelper:
@@ -123,18 +123,13 @@ class GmailIntegrationTestHelper:
 
     async def create_test_agent(self) -> Any:
         """Create test agent with Gmail tools."""
-        # load_agent_executor_db is synchronous, not async
-        agent = load_agent_executor_db(
+        handler = await build_conversation_handler(
             agent_name="test_email_digest_agent",
             user_id=self.test_user_id,
-            session_id=f"test_session_{self.test_user_id}"
+            session_id=f"test_session_{self.test_user_id}",
+            channel="scheduled",
         )
-
-        # Verify the agent has the required methods
-        if not hasattr(agent, 'ainvoke'):
-            raise RuntimeError(f"Loaded agent {type(agent)} does not have ainvoke method")
-
-        return agent
+        return handler
 
     async def execute_gmail_digest(self,
                                  agent: Any,
@@ -142,16 +137,16 @@ class GmailIntegrationTestHelper:
                                  max_threads: int = 10) -> str:
         """Execute Gmail digest via agent."""
         query = f"Generate an email digest for the last {hours_back} hours, max {max_threads} threads"
-        result = await agent.ainvoke({"input": query})
-        return result.get("output", str(result))
+        result = await agent.run([{"role": "user", "content": query}])
+        return result.response_text
 
     async def execute_gmail_search(self,
                                  agent: Any,
                                  search_query: str = "is:unread") -> str:
         """Execute Gmail search via agent."""
         query = f"Search my Gmail for: {search_query}"
-        result = await agent.ainvoke({"input": query})
-        return result.get("output", str(result))
+        result = await agent.run([{"role": "user", "content": query}])
+        return result.response_text
 
     async def close(self):
         """Clean up resources."""

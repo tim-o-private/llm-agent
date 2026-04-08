@@ -510,13 +510,9 @@ async def handle_message(message: types.Message) -> None:
             output = await _handle_telegram_deep_agent(
                 user_id, session_id, message.text
             )
-        elif settings.conversation_handler_v2:
+        else:
             output = await _handle_telegram_v2(
                 user_id, session_id, message.text
-            )
-        else:
-            output = await _handle_telegram_v1(
-                user_id, session_id, message.text, bot_service
             )
 
         # Send response (split if too long for Telegram's 4096 limit)
@@ -609,88 +605,6 @@ async def _handle_telegram_v2(
 
     return result.response_text
 
-
-async def _handle_telegram_v1(
-    user_id: str,
-    session_id: str,
-    text: str,
-    bot_service: "TelegramBotService",
-) -> str:
-    """Legacy AgentExecutor path for Telegram."""
-    import asyncio
-
-    from src.core.agent_loader_db import load_agent_executor_db
-
-    from ..security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
-    from ..services.audit_service import AuditService
-    from ..services.pending_actions import PendingActionsService
-
-    loop = asyncio.get_event_loop()
-    agent_executor = await loop.run_in_executor(
-        None,
-        lambda: load_agent_executor_db(
-            agent_name="assistant",
-            user_id=user_id,
-            session_id=session_id,
-            channel="telegram",
-        ),
-    )
-
-    audit_service = AuditService(bot_service._db_client)
-    pending_service = PendingActionsService(
-        db_client=bot_service._db_client,
-        audit_service=audit_service,
-    )
-    notification_service = NotificationService(bot_service._db_client)
-    approval_context = ApprovalContext(
-        user_id=user_id,
-        session_id=session_id,
-        agent_name="assistant",
-        db_client=bot_service._db_client,
-        pending_actions_service=pending_service,
-        audit_service=audit_service,
-        notification_service=notification_service,
-    )
-    if hasattr(agent_executor, "tools") and agent_executor.tools:
-        wrap_tools_with_approval(agent_executor.tools, approval_context)
-
-    from ..config.constants import CHAT_MESSAGE_HISTORY_TABLE_NAME
-    from ..database.connection import get_database_manager
-
-    db_manager = get_database_manager()
-    await db_manager.ensure_initialized()
-
-    async with db_manager.pool.connection() as pg_conn:
-        from langchain_postgres import PostgresChatMessageHistory
-
-        from ..services.chat import AsyncConversationBufferWindowMemory
-
-        pg_history = PostgresChatMessageHistory(
-            CHAT_MESSAGE_HISTORY_TABLE_NAME,
-            session_id,
-            async_connection=pg_conn,
-        )
-        agent_executor.memory = AsyncConversationBufferWindowMemory(
-            chat_memory=pg_history,
-            k=50,
-            return_messages=True,
-            memory_key="chat_history",
-            input_key="input",
-        )
-
-        response = await agent_executor.ainvoke({"input": text})
-
-    output = response.get("output", "")
-    if isinstance(output, list):
-        output = (
-            "".join(
-                block.get("text", "") for block in output
-                if isinstance(block, dict) and block.get("type") == "text"
-            )
-            or "No response."
-        )
-
-    return output
 
 
 # =============================================================================

@@ -36,27 +36,18 @@ def mock_supabase():
     return client
 
 
-@pytest.fixture
-def mock_agent_executor():
-    executor = MagicMock()
-    executor.ainvoke = AsyncMock(return_value={"output": "Test response"})
-    executor.tools = [MagicMock(), MagicMock()]
-    return executor
-
-
 def _standard_patches():
-    """Return the common set of patch decorators as a dict of target -> mock."""
+    """Return the common set of patch context managers."""
     return {
-        "load_agent": patch(
-            "chatServer.services.scheduled_execution_service.load_agent_executor_db_async",
+        "execute_v2": patch.object(
+            ScheduledExecutionService,
+            "_execute_v2",
             new_callable=AsyncMock,
+            return_value=("Test response", "test-model"),
         ),
         "get_supabase": patch(
             "chatServer.services.scheduled_execution_service.create_user_scoped_client",
             new_callable=AsyncMock,
-        ),
-        "wrap_tools": patch(
-            "chatServer.services.scheduled_execution_service.wrap_tools_with_approval"
         ),
         "pending_svc": patch(
             "chatServer.services.scheduled_execution_service.PendingActionsService"
@@ -71,18 +62,16 @@ def _standard_patches():
 
 
 @pytest.mark.asyncio
-async def test_execute_success(service, mock_schedule, mock_supabase, mock_agent_executor):
-    """Agent invoked with correct input/chat_history, result stored with status=success, user notified."""
+async def test_execute_success(service, mock_schedule, mock_supabase):
+    """Agent invoked via v2 path, result stored with status=success, user notified."""
     patches = _standard_patches()
     with (
-        patches["load_agent"] as mock_load,
+        patches["execute_v2"] as mock_exec_v2,
         patches["get_supabase"] as mock_get_sb,
-        patches["wrap_tools"],
         patches["pending_svc"] as mock_pending_cls,
         patches["audit_svc"],
         patches["notification_svc"] as mock_notif_cls,
     ):
-        mock_load.return_value = mock_agent_executor
         mock_get_sb.return_value = mock_supabase
         mock_pending_instance = mock_pending_cls.return_value
         mock_pending_instance.get_pending_count = AsyncMock(return_value=0)
@@ -95,10 +84,8 @@ async def test_execute_success(service, mock_schedule, mock_supabase, mock_agent
     assert result["success"] is True
     assert result["output"] == "Test response"
 
-    # Verify agent invoked with correct args (no LTM prepended)
-    mock_agent_executor.ainvoke.assert_awaited_once_with(
-        {"input": "What's new?", "chat_history": []}
-    )
+    # Verify _execute_v2 was called
+    mock_exec_v2.assert_awaited_once()
 
     # Verify result stored in DB
     mock_supabase.table.assert_any_call("agent_execution_results")
@@ -115,9 +102,8 @@ async def test_execute_success(service, mock_schedule, mock_supabase, mock_agent
 
 
 @pytest.mark.asyncio
-async def test_execute_passes_channel_based_on_schedule_type(service, mock_supabase, mock_agent_executor):
-    """load_agent_executor_db is called with channel matching schedule_type."""
-    # Heartbeat schedule → channel="heartbeat"
+async def test_execute_passes_channel_based_on_schedule_type(service, mock_supabase):
+    """_execute_v2 is called with channel matching schedule_type."""
     heartbeat_schedule = {
         "id": "schedule-123",
         "user_id": "user-123",
@@ -125,7 +111,6 @@ async def test_execute_passes_channel_based_on_schedule_type(service, mock_supab
         "prompt": "What's new?",
         "config": {"schedule_type": "heartbeat"},
     }
-    # Regular schedule → channel="scheduled"
     regular_schedule = {
         "id": "schedule-456",
         "user_id": "user-123",
@@ -139,14 +124,12 @@ async def test_execute_passes_channel_based_on_schedule_type(service, mock_supab
     ]:
         patches = _standard_patches()
         with (
-            patches["load_agent"] as mock_load,
+            patches["execute_v2"] as mock_exec_v2,
             patches["get_supabase"] as mock_get_sb,
-            patches["wrap_tools"],
             patches["pending_svc"] as mock_pending_cls,
             patches["audit_svc"],
             patches["notification_svc"] as mock_notif_cls,
         ):
-            mock_load.return_value = mock_agent_executor
             mock_get_sb.return_value = mock_supabase
             mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
             mock_notif_cls.return_value.notify_user = AsyncMock()
@@ -154,25 +137,23 @@ async def test_execute_passes_channel_based_on_schedule_type(service, mock_supab
 
             await service.execute(schedule)
 
-        call_kwargs = mock_load.call_args.kwargs
+        call_kwargs = mock_exec_v2.call_args.kwargs
         assert call_kwargs["channel"] == expected_channel, (
             f"Expected channel='{expected_channel}' for schedule_type='{schedule['config']['schedule_type']}'"
         )
 
 
 @pytest.mark.asyncio
-async def test_execute_does_not_prepend_ltm(service, mock_schedule, mock_supabase, mock_agent_executor):
+async def test_execute_does_not_prepend_ltm(service, mock_schedule, mock_supabase):
     """LTM is NOT prepended to the prompt — agents use read_memory tool on-demand."""
     patches = _standard_patches()
     with (
-        patches["load_agent"] as mock_load,
+        patches["execute_v2"] as mock_exec_v2,
         patches["get_supabase"] as mock_get_sb,
-        patches["wrap_tools"],
         patches["pending_svc"] as mock_pending_cls,
         patches["audit_svc"],
         patches["notification_svc"] as mock_notif_cls,
     ):
-        mock_load.return_value = mock_agent_executor
         mock_get_sb.return_value = mock_supabase
         mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
         mock_notif_cls.return_value.notify_user = AsyncMock()
@@ -181,24 +162,23 @@ async def test_execute_does_not_prepend_ltm(service, mock_schedule, mock_supabas
         await service.execute(mock_schedule)
 
     # Verify the prompt is passed unchanged (no LTM prefix)
-    call_args = mock_agent_executor.ainvoke.call_args[0][0]
-    assert call_args["input"] == "What's new?"
-    assert "User context (from memory):" not in call_args["input"]
+    call_kwargs = mock_exec_v2.call_args.kwargs
+    assert call_kwargs["prompt"] == "What's new?"
+    assert "User context (from memory):" not in call_kwargs["prompt"]
 
 
 @pytest.mark.asyncio
 async def test_execute_error(service, mock_schedule, mock_supabase):
-    """Agent load failure stores error result and returns success=False."""
+    """Agent execution failure stores error result and returns success=False."""
     patches = _standard_patches()
     with (
-        patches["load_agent"] as mock_load,
+        patches["execute_v2"] as mock_exec_v2,
         patches["get_supabase"] as mock_get_sb,
-        patches["wrap_tools"],
         patches["pending_svc"],
         patches["audit_svc"],
         patches["notification_svc"],
     ):
-        mock_load.side_effect = RuntimeError("Agent not found")
+        mock_exec_v2.side_effect = RuntimeError("Agent not found")
         mock_get_sb.return_value = mock_supabase
 
         result = await service.execute(mock_schedule)
@@ -215,54 +195,23 @@ async def test_execute_error(service, mock_schedule, mock_supabase):
 
 
 @pytest.mark.asyncio
-async def test_execute_wraps_tools_with_approval(service, mock_schedule, mock_supabase, mock_agent_executor):
-    """Tools are wrapped with approval using correct ApprovalContext fields."""
+async def test_execute_normalizes_content_blocks(service, mock_schedule, mock_supabase):
+    """_execute_v2 response text is stored as-is (v2 returns plain string)."""
     patches = _standard_patches()
-    with (
-        patches["load_agent"] as mock_load,
-        patches["get_supabase"] as mock_get_sb,
-        patches["wrap_tools"] as mock_wrap,
-        patches["pending_svc"] as mock_pending_cls,
-        patches["audit_svc"],
-        patches["notification_svc"] as mock_notif_cls,
-    ):
-        mock_load.return_value = mock_agent_executor
-        mock_get_sb.return_value = mock_supabase
-        mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
-        mock_notif_cls.return_value.notify_user = AsyncMock()
-        mock_notif_cls.return_value.notify_pending_actions = AsyncMock()
-
-        await service.execute(mock_schedule)
-
-    mock_wrap.assert_called_once()
-    tools_arg, context_arg = mock_wrap.call_args[0]
-    assert tools_arg == mock_agent_executor.tools
-    assert context_arg.user_id == "user-123"
-    assert context_arg.agent_name == "assistant"
-    assert context_arg.session_id.startswith("scheduled_assistant_")
-
-
-@pytest.mark.asyncio
-async def test_execute_normalizes_content_blocks(service, mock_schedule, mock_supabase, mock_agent_executor):
-    """Content block lists are joined into a single string."""
-    mock_agent_executor.ainvoke = AsyncMock(
-        return_value={
-            "output": [
-                {"type": "text", "text": "hello"},
-                {"type": "text", "text": " world"},
-            ]
-        }
+    # Override to return a specific response
+    patches["execute_v2"] = patch.object(
+        ScheduledExecutionService,
+        "_execute_v2",
+        new_callable=AsyncMock,
+        return_value=("hello world", "test-model"),
     )
-    patches = _standard_patches()
     with (
-        patches["load_agent"] as mock_load,
+        patches["execute_v2"],
         patches["get_supabase"] as mock_get_sb,
-        patches["wrap_tools"],
         patches["pending_svc"] as mock_pending_cls,
         patches["audit_svc"],
         patches["notification_svc"] as mock_notif_cls,
     ):
-        mock_load.return_value = mock_agent_executor
         mock_get_sb.return_value = mock_supabase
         mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
         mock_notif_cls.return_value.notify_user = AsyncMock()
@@ -276,18 +225,16 @@ async def test_execute_normalizes_content_blocks(service, mock_schedule, mock_su
 
 
 @pytest.mark.asyncio
-async def test_execute_stores_duration_ms(service, mock_schedule, mock_supabase, mock_agent_executor):
+async def test_execute_stores_duration_ms(service, mock_schedule, mock_supabase):
     """execution_duration_ms is a positive integer in the stored result."""
     patches = _standard_patches()
     with (
-        patches["load_agent"] as mock_load,
+        patches["execute_v2"],
         patches["get_supabase"] as mock_get_sb,
-        patches["wrap_tools"],
         patches["pending_svc"] as mock_pending_cls,
         patches["audit_svc"],
         patches["notification_svc"] as mock_notif_cls,
     ):
-        mock_load.return_value = mock_agent_executor
         mock_get_sb.return_value = mock_supabase
         mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
         mock_notif_cls.return_value.notify_user = AsyncMock()
@@ -302,23 +249,23 @@ async def test_execute_stores_duration_ms(service, mock_schedule, mock_supabase,
 
 
 @pytest.mark.asyncio
-async def test_execute_truncates_result_at_50000_chars(
-    service, mock_schedule, mock_supabase, mock_agent_executor
-):
+async def test_execute_truncates_result_at_50000_chars(service, mock_schedule, mock_supabase):
     """Result content longer than 50000 chars is truncated before storage."""
     long_output = "x" * 60000
-    mock_agent_executor.ainvoke = AsyncMock(return_value={"output": long_output})
-
     patches = _standard_patches()
+    patches["execute_v2"] = patch.object(
+        ScheduledExecutionService,
+        "_execute_v2",
+        new_callable=AsyncMock,
+        return_value=(long_output, "test-model"),
+    )
     with (
-        patches["load_agent"] as mock_load,
+        patches["execute_v2"],
         patches["get_supabase"] as mock_get_sb,
-        patches["wrap_tools"],
         patches["pending_svc"] as mock_pending_cls,
         patches["audit_svc"],
         patches["notification_svc"] as mock_notif_cls,
     ):
-        mock_load.return_value = mock_agent_executor
         mock_get_sb.return_value = mock_supabase
         mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
         mock_notif_cls.return_value.notify_user = AsyncMock()
@@ -331,7 +278,7 @@ async def test_execute_truncates_result_at_50000_chars(
 
 
 @pytest.mark.asyncio
-async def test_execute_creates_chat_session(service, mock_schedule, mock_agent_executor):
+async def test_execute_creates_chat_session(service, mock_schedule):
     """Execute should insert a chat_sessions row with channel='scheduled'."""
     chat_sessions_insert = MagicMock()
     chat_sessions_insert.execute = AsyncMock(return_value=MagicMock(data=[]))
@@ -360,14 +307,12 @@ async def test_execute_creates_chat_session(service, mock_schedule, mock_agent_e
 
     patches = _standard_patches()
     with (
-        patches["load_agent"] as mock_load,
+        patches["execute_v2"],
         patches["get_supabase"] as mock_get_sb,
-        patches["wrap_tools"],
         patches["pending_svc"] as mock_pending_cls,
         patches["audit_svc"],
         patches["notification_svc"] as mock_notif_cls,
     ):
-        mock_load.return_value = mock_agent_executor
         mock_get_sb.return_value = supabase_client
         mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
         mock_notif_cls.return_value.notify_user = AsyncMock()
@@ -387,7 +332,7 @@ async def test_execute_creates_chat_session(service, mock_schedule, mock_agent_e
 
 
 @pytest.mark.asyncio
-async def test_execute_marks_session_inactive_after_completion(service, mock_schedule, mock_agent_executor):
+async def test_execute_marks_session_inactive_after_completion(service, mock_schedule):
     """After successful execution, the session should be marked is_active=False."""
     chat_sessions_insert = MagicMock()
     chat_sessions_insert.execute = AsyncMock(return_value=MagicMock(data=[]))
@@ -416,14 +361,12 @@ async def test_execute_marks_session_inactive_after_completion(service, mock_sch
 
     patches = _standard_patches()
     with (
-        patches["load_agent"] as mock_load,
+        patches["execute_v2"],
         patches["get_supabase"] as mock_get_sb,
-        patches["wrap_tools"],
         patches["pending_svc"] as mock_pending_cls,
         patches["audit_svc"],
         patches["notification_svc"] as mock_notif_cls,
     ):
-        mock_load.return_value = mock_agent_executor
         mock_get_sb.return_value = supabase_client
         mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
         mock_notif_cls.return_value.notify_user = AsyncMock()
@@ -433,17 +376,14 @@ async def test_execute_marks_session_inactive_after_completion(service, mock_sch
 
     chat_sessions_mock.update.assert_called_once_with({"is_active": False})
     eq_calls = [call.args for call in chat_sessions_update_chain.eq.call_args_list]
-    # create_user_scoped_client is mocked — no auto-injection in tests
     assert len(eq_calls) == 1
     assert eq_calls[0][0] == "session_id"
     assert eq_calls[0][1].startswith("scheduled_assistant_")
 
 
 @pytest.mark.asyncio
-async def test_execute_applies_model_override(
-    service, mock_supabase, mock_agent_executor
-):
-    """When config has model_override, it is applied to the agent executor."""
+async def test_execute_applies_model_override(service, mock_supabase):
+    """When config has model_override, it is passed through to _execute_v2."""
     schedule = {
         "id": "schedule-123",
         "user_id": "user-123",
@@ -457,15 +397,12 @@ async def test_execute_applies_model_override(
 
     patches = _standard_patches()
     with (
-        patches["load_agent"] as mock_load,
+        patches["execute_v2"] as mock_exec_v2,
         patches["get_supabase"] as mock_get_sb,
-        patches["wrap_tools"],
         patches["pending_svc"] as mock_pending_cls,
         patches["audit_svc"],
         patches["notification_svc"] as mock_notif_cls,
-        patch.object(service, "_apply_model_override") as mock_apply,
     ):
-        mock_load.return_value = mock_agent_executor
         mock_get_sb.return_value = mock_supabase
         mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
         mock_notif_cls.return_value.notify_user = AsyncMock()
@@ -473,25 +410,27 @@ async def test_execute_applies_model_override(
 
         await service.execute(schedule)
 
-    mock_apply.assert_called_once_with(mock_agent_executor, "claude-sonnet-4-6")
+    call_kwargs = mock_exec_v2.call_args.kwargs
+    assert call_kwargs["model_override"] == "claude-sonnet-4-6"
 
 
 @pytest.mark.asyncio
-async def test_execute_stores_metadata_with_model(
-    service, mock_supabase, mock_agent_executor
-):
-    """Execution metadata includes the model name."""
+async def test_execute_stores_metadata_with_model(service, mock_supabase):
+    """Execution metadata includes the model name from _execute_v2."""
     patches = _standard_patches()
+    patches["execute_v2"] = patch.object(
+        ScheduledExecutionService,
+        "_execute_v2",
+        new_callable=AsyncMock,
+        return_value=("response", "claude-haiku-4-5-20251001"),
+    )
     with (
-        patches["load_agent"] as mock_load,
+        patches["execute_v2"],
         patches["get_supabase"] as mock_get_sb,
-        patches["wrap_tools"],
         patches["pending_svc"] as mock_pending_cls,
         patches["audit_svc"],
         patches["notification_svc"] as mock_notif_cls,
-        patch.object(service, "_get_model_name", return_value="claude-haiku-4-5-20251001"),
     ):
-        mock_load.return_value = mock_agent_executor
         mock_get_sb.return_value = mock_supabase
         mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
         mock_notif_cls.return_value.notify_user = AsyncMock()
@@ -511,14 +450,6 @@ async def test_execute_stores_metadata_with_model(
     assert len(result_inserts) >= 1
     stored = result_inserts[0][0][0]
     assert stored["metadata"]["model"] == "claude-haiku-4-5-20251001"
-
-
-def test_build_execution_metadata_includes_model(service):
-    """_build_execution_metadata returns a dict with model key."""
-    executor = MagicMock()
-    executor.agent = None
-    meta = service._build_execution_metadata(executor, "claude-haiku-4-5-20251001")
-    assert meta["model"] == "claude-haiku-4-5-20251001"
 
 
 def test_no_load_ltm_method(service):
@@ -551,328 +482,3 @@ class TestBuildHeartbeatPrompt:
         """None-ish checklist (evaluated as falsy) returns original prompt."""
         result = service._build_heartbeat_prompt("Check on things", None)
         assert result == "Check on things"
-
-
-# --- HEARTBEAT_OK suppression ---
-
-
-@pytest.mark.asyncio
-async def test_heartbeat_ok_suppresses_notification(
-    service, mock_supabase, mock_agent_executor
-):
-    """HEARTBEAT_OK output stores heartbeat_ok status and skips notification."""
-    mock_agent_executor.ainvoke = AsyncMock(return_value={"output": "HEARTBEAT_OK"})
-    schedule = {
-        "id": "schedule-hb",
-        "user_id": "user-123",
-        "agent_name": "assistant",
-        "prompt": "Check stuff",
-        "config": {"schedule_type": "heartbeat", "heartbeat_checklist": ["Check emails"]},
-    }
-    patches = _standard_patches()
-    with (
-        patches["load_agent"] as mock_load,
-        patches["get_supabase"] as mock_get_sb,
-        patches["wrap_tools"],
-        patches["pending_svc"] as mock_pending_cls,
-        patches["audit_svc"],
-        patches["notification_svc"] as mock_notif_cls,
-    ):
-        mock_load.return_value = mock_agent_executor
-        mock_get_sb.return_value = mock_supabase
-        mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
-        mock_notif_instance = mock_notif_cls.return_value
-        mock_notif_instance.notify_user = AsyncMock()
-        mock_notif_instance.notify_pending_actions = AsyncMock()
-
-        result = await service.execute(schedule)
-
-    assert result["success"] is True
-
-    # Status should be "heartbeat_ok"
-    insert_calls = mock_supabase.table.return_value.insert.call_args_list
-    result_inserts = [c for c in insert_calls if "status" in c[0][0]]
-    assert result_inserts[0][0][0]["status"] == "heartbeat_ok"
-
-    # Notification should NOT have been sent
-    mock_notif_instance.notify_user.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_heartbeat_actionable_output_sends_notification(
-    service, mock_supabase, mock_agent_executor
-):
-    """Non-HEARTBEAT_OK output on heartbeat schedule stores success and notifies."""
-    mock_agent_executor.ainvoke = AsyncMock(
-        return_value={"output": "Found 3 emails needing attention."}
-    )
-    schedule = {
-        "id": "schedule-hb2",
-        "user_id": "user-123",
-        "agent_name": "assistant",
-        "prompt": "Check stuff",
-        "config": {"schedule_type": "heartbeat"},
-    }
-    patches = _standard_patches()
-    with (
-        patches["load_agent"] as mock_load,
-        patches["get_supabase"] as mock_get_sb,
-        patches["wrap_tools"],
-        patches["pending_svc"] as mock_pending_cls,
-        patches["audit_svc"],
-        patches["notification_svc"] as mock_notif_cls,
-    ):
-        mock_load.return_value = mock_agent_executor
-        mock_get_sb.return_value = mock_supabase
-        mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
-        mock_notif_instance = mock_notif_cls.return_value
-        mock_notif_instance.notify_user = AsyncMock()
-        mock_notif_instance.notify_pending_actions = AsyncMock()
-
-        result = await service.execute(schedule)
-
-    assert result["success"] is True
-
-    # Status should be "success" (not "heartbeat_ok")
-    insert_calls = mock_supabase.table.return_value.insert.call_args_list
-    result_inserts = [c for c in insert_calls if "status" in c[0][0]]
-    assert result_inserts[0][0][0]["status"] == "success"
-
-    # Notification SHOULD have been sent
-    mock_notif_instance.notify_user.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_heartbeat_passes_channel_heartbeat(
-    service, mock_supabase, mock_agent_executor
-):
-    """Heartbeat schedule passes channel='heartbeat' to load_agent_executor_db."""
-    schedule = {
-        "id": "schedule-hb3",
-        "user_id": "user-123",
-        "agent_name": "assistant",
-        "prompt": "Check stuff",
-        "config": {"schedule_type": "heartbeat"},
-    }
-    patches = _standard_patches()
-    with (
-        patches["load_agent"] as mock_load,
-        patches["get_supabase"] as mock_get_sb,
-        patches["wrap_tools"],
-        patches["pending_svc"] as mock_pending_cls,
-        patches["audit_svc"],
-        patches["notification_svc"] as mock_notif_cls,
-    ):
-        mock_load.return_value = mock_agent_executor
-        mock_get_sb.return_value = mock_supabase
-        mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
-        mock_notif_cls.return_value.notify_user = AsyncMock()
-        mock_notif_cls.return_value.notify_pending_actions = AsyncMock()
-
-        await service.execute(schedule)
-
-    call_kwargs = mock_load.call_args.kwargs
-    assert call_kwargs["channel"] == "heartbeat"
-
-
-@pytest.mark.asyncio
-async def test_heartbeat_builds_effective_prompt_with_checklist(
-    service, mock_supabase, mock_agent_executor
-):
-    """Heartbeat schedule builds effective prompt including checklist items."""
-    schedule = {
-        "id": "schedule-hb4",
-        "user_id": "user-123",
-        "agent_name": "assistant",
-        "prompt": "Daily check",
-        "config": {
-            "schedule_type": "heartbeat",
-            "heartbeat_checklist": ["Check emails", "Check approvals"],
-        },
-    }
-    patches = _standard_patches()
-    with (
-        patches["load_agent"] as mock_load,
-        patches["get_supabase"] as mock_get_sb,
-        patches["wrap_tools"],
-        patches["pending_svc"] as mock_pending_cls,
-        patches["audit_svc"],
-        patches["notification_svc"] as mock_notif_cls,
-    ):
-        mock_load.return_value = mock_agent_executor
-        mock_get_sb.return_value = mock_supabase
-        mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
-        mock_notif_cls.return_value.notify_user = AsyncMock()
-        mock_notif_cls.return_value.notify_pending_actions = AsyncMock()
-
-        await service.execute(schedule)
-
-    # The prompt passed to ainvoke should contain checklist items
-    call_args = mock_agent_executor.ainvoke.call_args[0][0]
-    assert "Daily check" in call_args["input"]
-    assert "- Check emails" in call_args["input"]
-    assert "- Check approvals" in call_args["input"]
-
-
-# --- ConversationHandler v2 path tests ---
-
-
-def _v2_patches():
-    """Patches for v2 path tests."""
-    return {
-        "build_handler": patch(
-            "chatServer.services.conversation_handler_builder.build_conversation_handler",
-            new_callable=AsyncMock,
-        ),
-        "get_supabase": patch(
-            "chatServer.services.scheduled_execution_service.create_user_scoped_client",
-            new_callable=AsyncMock,
-        ),
-        "get_settings": patch(
-            "chatServer.config.settings.get_settings",
-        ),
-        "pending_svc": patch(
-            "chatServer.services.scheduled_execution_service.PendingActionsService"
-        ),
-        "audit_svc": patch(
-            "chatServer.services.scheduled_execution_service.AuditService"
-        ),
-        "notification_svc": patch(
-            "chatServer.services.notification_service.NotificationService"
-        ),
-    }
-
-
-@pytest.mark.asyncio
-async def test_v2_execute_uses_conversation_handler(service, mock_supabase):
-    """v2 path calls build_conversation_handler and handler.run (AC-20, AC-32)."""
-    mock_handler = MagicMock()
-    mock_result = MagicMock()
-    mock_result.response_text = "V2 response"
-    mock_handler.run = AsyncMock(return_value=mock_result)
-    mock_handler.model = "claude-sonnet-4-20250514"
-
-    schedule = {
-        "id": "schedule-v2",
-        "user_id": "user-123",
-        "agent_name": "assistant",
-        "prompt": "Check stuff",
-        "config": {"schedule_type": "scheduled"},
-    }
-
-    patches = _v2_patches()
-    with (
-        patches["build_handler"] as mock_build,
-        patches["get_supabase"] as mock_get_sb,
-        patches["get_settings"] as mock_settings,
-        patches["pending_svc"] as mock_pending_cls,
-        patches["audit_svc"],
-        patches["notification_svc"] as mock_notif_cls,
-    ):
-        mock_settings.return_value = MagicMock(conversation_handler_v2=True, deep_agent_enabled=False)
-        mock_build.return_value = mock_handler
-        mock_get_sb.return_value = mock_supabase
-        mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
-        mock_notif_cls.return_value.notify_user = AsyncMock()
-        mock_notif_cls.return_value.notify_pending_actions = AsyncMock()
-
-        result = await service.execute(schedule)
-
-    assert result["success"] is True
-    assert result["output"] == "V2 response"
-    mock_build.assert_awaited_once_with(
-        user_id="user-123",
-        agent_name="assistant",
-        session_id=mock_build.call_args.kwargs["session_id"],
-        channel="scheduled",
-    )
-    # AC-32: messages should be [user message with prompt], empty history
-    messages_arg = mock_handler.run.call_args[0][0]
-    assert len(messages_arg) == 1
-    assert messages_arg[0]["role"] == "user"
-    assert messages_arg[0]["content"] == "Check stuff"
-
-
-@pytest.mark.asyncio
-async def test_v2_heartbeat_builds_effective_prompt(service, mock_supabase):
-    """v2 heartbeat path uses checklist-formatted prompt."""
-    mock_handler = MagicMock()
-    mock_result = MagicMock()
-    mock_result.response_text = "HEARTBEAT_OK"
-    mock_handler.run = AsyncMock(return_value=mock_result)
-    mock_handler.model = "claude-sonnet-4-20250514"
-
-    schedule = {
-        "id": "schedule-hb-v2",
-        "user_id": "user-123",
-        "agent_name": "assistant",
-        "prompt": "Daily check",
-        "config": {
-            "schedule_type": "heartbeat",
-            "heartbeat_checklist": ["Check emails"],
-        },
-    }
-
-    patches = _v2_patches()
-    with (
-        patches["build_handler"] as mock_build,
-        patches["get_supabase"] as mock_get_sb,
-        patches["get_settings"] as mock_settings,
-        patches["pending_svc"] as mock_pending_cls,
-        patches["audit_svc"],
-        patches["notification_svc"] as mock_notif_cls,
-    ):
-        mock_settings.return_value = MagicMock(conversation_handler_v2=True, deep_agent_enabled=False)
-        mock_build.return_value = mock_handler
-        mock_get_sb.return_value = mock_supabase
-        mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
-        mock_notif_cls.return_value.notify_user = AsyncMock()
-        mock_notif_cls.return_value.notify_pending_actions = AsyncMock()
-
-        result = await service.execute(schedule)
-
-    assert result["success"] is True
-    messages_arg = mock_handler.run.call_args[0][0]
-    assert "- Check emails" in messages_arg[0]["content"]
-    assert "HEARTBEAT_OK" in messages_arg[0]["content"]
-
-
-@pytest.mark.asyncio
-async def test_v2_applies_model_override(service, mock_supabase):
-    """v2 path applies model override to the handler."""
-    mock_handler = MagicMock()
-    mock_result = MagicMock()
-    mock_result.response_text = "Response"
-    mock_handler.run = AsyncMock(return_value=mock_result)
-    mock_handler.model = "claude-sonnet-4-20250514"
-
-    schedule = {
-        "id": "schedule-v2-override",
-        "user_id": "user-123",
-        "agent_name": "assistant",
-        "prompt": "Test",
-        "config": {
-            "schedule_type": "scheduled",
-            "model_override": "claude-haiku-4-5-20251001",
-        },
-    }
-
-    patches = _v2_patches()
-    with (
-        patches["build_handler"] as mock_build,
-        patches["get_supabase"] as mock_get_sb,
-        patches["get_settings"] as mock_settings,
-        patches["pending_svc"] as mock_pending_cls,
-        patches["audit_svc"],
-        patches["notification_svc"] as mock_notif_cls,
-    ):
-        mock_settings.return_value = MagicMock(conversation_handler_v2=True, deep_agent_enabled=False)
-        mock_build.return_value = mock_handler
-        mock_get_sb.return_value = mock_supabase
-        mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
-        mock_notif_cls.return_value.notify_user = AsyncMock()
-        mock_notif_cls.return_value.notify_pending_actions = AsyncMock()
-
-        await service.execute(schedule)
-
-    assert mock_handler.model == "claude-haiku-4-5-20251001"

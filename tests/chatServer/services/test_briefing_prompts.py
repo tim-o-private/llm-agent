@@ -11,7 +11,6 @@ from chatServer.services.briefing_prompts import (
     get_enabled_sections,
 )
 
-
 # --- AC-32: Prompt constants exist ---
 
 def test_ac_32_prompt_constants_exist():

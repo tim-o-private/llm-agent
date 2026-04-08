@@ -7,15 +7,10 @@ from typing import List
 # Correctly import ConfigLoader
 # For V2 Agent Memory System
 import psycopg
-
-# NEW: Agent Executor Cache
-from cachetools import TTLCache
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-# Import agent_loader
-from core.agents.customizable_agent import CustomizableAgentExecutor  # Added import
 from utils.config_loader import ConfigLoader
 from utils.logging_utils import get_logger
 
@@ -23,7 +18,6 @@ from .config.constants import PROMPT_CUSTOMIZATIONS_TAG
 from .config.settings import get_settings
 from .database.connection import get_db_connection
 from .database.supabase_client import create_user_scoped_client, get_user_scoped_client
-from .dependencies.agent_loader import get_agent_loader
 from .dependencies.auth import get_current_user
 from .models.chat import ChatRequest, ChatResponse
 from .models.prompt_customization import PromptCustomization, PromptCustomizationCreate
@@ -38,11 +32,8 @@ from .routers.oauth_router import router as oauth_router
 from .routers.proposals import router as proposals_router
 from .routers.session_open_router import router as session_open_router
 from .routers.telegram_router import router as telegram_router
-from .services.chat import get_chat_service
 from .services.prompt_customization import get_prompt_customization_service
 
-# Cache for (user_id, agent_name) -> CustomizableAgentExecutor
-AGENT_EXECUTOR_CACHE: TTLCache[tuple[str, str], CustomizableAgentExecutor] = TTLCache(maxsize=100, ttl=900)
 
 # --- START Inserted Environment & Path Setup ---
 def add_project_root_to_path_for_local_dev():
@@ -114,7 +105,6 @@ async def lifespan(app: FastAPI):
         shutdown_user_instructions_cache,
     )
 
-    global AGENT_EXECUTOR_CACHE
     logger.info("Application startup: Initializing resources...")
 
     # Initialize database manager
@@ -165,7 +155,6 @@ async def lifespan(app: FastAPI):
 
     # Initialize and start background tasks
     background_service = get_background_task_service()
-    background_service.set_agent_executor_cache(AGENT_EXECUTOR_CACHE)
     await background_service.start_background_tasks()
 
     # Initialize Telegram bot (optional — only if TELEGRAM_BOT_TOKEN is set)
@@ -267,7 +256,6 @@ async def chat_endpoint(
     request: Request,
     user_id: str = Depends(get_current_user),
     pg_connection: psycopg.AsyncConnection = Depends(get_db_connection),
-    agent_loader_module=Depends(get_agent_loader),
 ):
     """Chat endpoint that processes user messages through agents.
 
@@ -295,14 +283,7 @@ async def chat_endpoint(
             chat_input, user_id, pg_connection, request
         )
 
-    chat_service = get_chat_service(AGENT_EXECUTOR_CACHE)
-    return await chat_service.process_chat(
-        chat_input=chat_input,
-        user_id=user_id,
-        pg_connection=pg_connection,
-        agent_loader_module=agent_loader_module,
-        request=request,
-    )
+    raise HTTPException(status_code=501, detail="No agent runtime enabled")
 
 
 async def _handle_chat_deep_agent(
