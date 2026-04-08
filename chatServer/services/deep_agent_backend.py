@@ -21,32 +21,17 @@ import logging
 import re
 from typing import Optional
 
-try:
-    # Prefer the real package when langchain has been migrated to 1.x.
-    # TODO (SPEC-043): remove the fallback once the AgentExecutor migration lands.
-    from deepagents.backends.protocol import (
-        BackendProtocol,
-        EditResult,
-        FileInfo,
-        GlobResult,
-        GrepMatch,
-        GrepResult,
-        LsResult,
-        ReadResult,
-        WriteResult,
-    )
-except ImportError:
-    from .deep_agent_backend_protocol import (  # type: ignore[assignment]
-        BackendProtocol,
-        EditResult,
-        FileInfo,
-        GlobResult,
-        GrepMatch,
-        GrepResult,
-        LsResult,
-        ReadResult,
-        WriteResult,
-    )
+from deepagents.backends.protocol import (
+    BackendProtocol,
+    EditResult,
+    FileInfo,
+    GlobResult,
+    GrepMatch,
+    GrepResult,
+    LsResult,
+    ReadResult,
+    WriteResult,
+)
 
 from ..sandbox.security_boundary import SecurityBoundary
 from ..sandbox.self_improvement import SelfImprovementService

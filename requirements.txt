@@ -1,12 +1,9 @@
 python-dotenv>=1.0.0
 PyYAML>=6.0
-langchain>=0.3.24,<1.0
-langchain-core>=0.3.37,<1.0
+langchain>=1.2.15
+langchain-core>=0.3.37
 langchain-community>=0.2.0
 langchain-google-genai>=2.0.10,<2.1.0
-# TODO: deepagents>=0.5.0 requires langchain>=1.2.15, which conflicts with the
-# AgentExecutor usage in src/core/agents/customizable_agent.py (removed in 1.x).
-# Pinned below for future migration — see SPEC-043.
 deepagents>=0.5.0,<0.6.0
 click>=8.0.0
 prompt-toolkit>=3.0.0

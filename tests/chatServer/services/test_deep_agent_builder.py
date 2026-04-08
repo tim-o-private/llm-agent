@@ -56,7 +56,7 @@ def _make_handler(response_text: str = "Hello from agent"):
 
 def _make_backend(skill_paths=None, skill_content="# Soul\n\nBe helpful."):
     """Build a mock ClarityBackend."""
-    from chatServer.services.deep_agent_backend_protocol import FileInfo, GlobResult, ReadResult
+    from deepagents.backends.protocol import FileInfo, GlobResult, ReadResult
 
     backend = MagicMock()
     paths = skill_paths or ["/skills/clarity-soul/SKILL.md"]
