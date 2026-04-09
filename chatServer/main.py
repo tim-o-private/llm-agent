@@ -25,10 +25,8 @@ from .routers.actions import router as actions_router
 from .routers.chat_history_router import router as chat_history_router
 from .routers.email_agent_router import router as email_agent_router
 from .routers.external_api_router import router as external_api_router
-from .routers.introspection_router import router as introspection_router
 from .routers.notifications_router import router as notifications_router
 from .routers.oauth_router import router as oauth_router
-from .routers.proposals import router as proposals_router
 from .routers.session_open_router import router as session_open_router
 from .routers.telegram_router import router as telegram_router
 from .services.prompt_customization import get_prompt_customization_service
@@ -100,7 +98,6 @@ async def lifespan(app: FastAPI):
     from .database.supabase_client import get_supabase_manager
     from .services.agent_config_cache_service import initialize_agent_config_cache, shutdown_agent_config_cache
     from .services.background_tasks import get_background_task_service
-    from .services.config_service import initialize_config_service, shutdown_config_service
     from .services.tool_cache_service import initialize_tool_cache, shutdown_tool_cache
     from .services.user_instructions_cache_service import (
         initialize_user_instructions_cache,
@@ -120,30 +117,30 @@ async def lifespan(app: FastAPI):
     supabase_manager = get_supabase_manager()
     await supabase_manager.initialize()
 
-    # Initialize config service (depends on Supabase)
-    try:
-        await initialize_config_service()
-        logger.info("Config service initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize config service: {e}", exc_info=True)
+    # Pull system config from Supabase Storage if needed (AC-26)
+    from pathlib import Path
 
-    # Initialize template registry (depends on config service)
+    data_dir = Path(os.getenv("SANDBOX_DATA_DIR", "/data"))
+    system_dir = data_dir / "config" / "system"
+    if not system_dir.exists() or not any(system_dir.iterdir()):
+        try:
+            from .services.storage_sync import StorageSync
+            supabase_url = os.getenv("SUPABASE_URL", "")
+            supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+            if supabase_url and supabase_key:
+                sync = StorageSync(supabase_url=supabase_url, supabase_key=supabase_key, data_dir=data_dir)
+                await sync.pull_system()
+                logger.info("Pulled system config from Storage")
+        except Exception as e:
+            logger.warning("Failed to pull system config: %s", e)
+
+    # Initialize template registry (reads from local filesystem)
     try:
-        from .services.config_service import get_config_service
         from .workflows.registry import initialize_template_registry
-        initialize_template_registry(get_config_service())
+        initialize_template_registry(system_dir)
         logger.info("Template registry initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize template registry: {e}", exc_info=True)
-
-    # Initialize sandbox provisioner (depends on config service)
-    try:
-        from .sandbox.provisioner import initialize_provisioner
-        from .services.config_service import get_config_service
-        initialize_provisioner(config_service=get_config_service())
-        logger.info("Sandbox provisioner initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize sandbox provisioner: {e}", exc_info=True)
 
     # Initialize cache services
     try:
@@ -197,14 +194,6 @@ async def lifespan(app: FastAPI):
     # Stop background tasks
     await background_service.stop_background_tasks()
 
-    # Shut down sandbox provisioner
-    try:
-        from .sandbox.provisioner import shutdown_provisioner
-        await shutdown_provisioner()
-        logger.info("Sandbox provisioner stopped successfully")
-    except Exception as e:
-        logger.error(f"Failed to stop sandbox provisioner: {e}", exc_info=True)
-
     # Shut down template registry
     try:
         from .workflows.registry import shutdown_template_registry
@@ -212,13 +201,6 @@ async def lifespan(app: FastAPI):
         logger.info("Template registry shut down successfully")
     except Exception as e:
         logger.error(f"Failed to shut down template registry: {e}", exc_info=True)
-
-    # Stop config service
-    try:
-        await shutdown_config_service()
-        logger.info("Config service stopped successfully")
-    except Exception as e:
-        logger.error(f"Failed to stop config service: {e}", exc_info=True)
 
     # Stop cache services
     try:
@@ -263,8 +245,6 @@ app.include_router(chat_history_router)
 app.include_router(notifications_router)
 app.include_router(session_open_router)
 app.include_router(telegram_router)
-app.include_router(proposals_router)
-app.include_router(introspection_router)
 
 # --- Logger setup ---
 logger = get_logger(__name__)

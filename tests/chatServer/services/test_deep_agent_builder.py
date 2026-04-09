@@ -93,8 +93,8 @@ async def test_build_deep_agent_different_users_not_cached():
 
 
 @pytest.mark.asyncio
-async def test_build_deep_agent_fallback_on_config_service_failure():
-    """AC-22: If ConfigService is not initialized, build succeeds with backend=None passed."""
+async def test_build_deep_agent_constructs_bwrap_backend():
+    """AC-22: BwrapBackend is always constructed (no fallback to None)."""
     agent_config = {
         "id": "agent-id-1",
         "agent_name": "clarity",
@@ -104,6 +104,7 @@ async def test_build_deep_agent_fallback_on_config_service_failure():
         "llm_config": {},
     }
     mock_graph = _make_mock_graph()
+    mock_backend = MagicMock()
     with (
         patch("chatServer.services.agent_config_cache_service.get_cached_agent_config", new=AsyncMock(return_value=agent_config)),  # noqa: E501
         patch("src.core.agent_loader_db.load_tools_from_db", return_value=[]),
@@ -118,16 +119,17 @@ async def test_build_deep_agent_fallback_on_config_service_failure():
         patch("chatServer.services.pending_actions.PendingActionsService", return_value=MagicMock()),
         patch("chatServer.services.notification_service.NotificationService", return_value=MagicMock()),
         patch("chatServer.security.tool_wrapper.ApprovalContext", return_value=MagicMock()),
-        # ConfigService raises — simulates not initialized
-        patch("chatServer.services.config_service.get_config_service", side_effect=RuntimeError("not initialized")),  # noqa: E501
+        patch("chatServer.sandbox.bwrap_backend.BwrapBackend", return_value=mock_backend),
+        patch("chatServer.services.storage_sync.StorageSync"),
+        patch.dict(os.environ, {"SUPABASE_URL": "", "SUPABASE_SERVICE_ROLE_KEY": ""}),
         patch("deepagents.create_deep_agent", return_value=mock_graph) as mock_create,
     ):
         agent = await mod.build_deep_agent("user-1", "clarity", "session-1", "web")
 
     assert agent is mock_graph
-    # backend=None is passed when ConfigService fails
+    # BwrapBackend is always passed (not None)
     call_kwargs = mock_create.call_args.kwargs
-    assert call_kwargs.get("backend") is None
+    assert call_kwargs.get("backend") is mock_backend
 
 
 @pytest.mark.asyncio
@@ -156,7 +158,9 @@ async def test_build_deep_agent_model_prefixed_with_anthropic():
         patch("chatServer.services.pending_actions.PendingActionsService", return_value=MagicMock()),
         patch("chatServer.services.notification_service.NotificationService", return_value=MagicMock()),
         patch("chatServer.security.tool_wrapper.ApprovalContext", return_value=MagicMock()),
-        patch("chatServer.services.config_service.get_config_service", side_effect=RuntimeError("not init")),  # noqa: E501
+        patch("chatServer.sandbox.bwrap_backend.BwrapBackend", return_value=MagicMock()),
+        patch("chatServer.services.storage_sync.StorageSync"),
+        patch.dict(os.environ, {"SUPABASE_URL": "", "SUPABASE_SERVICE_ROLE_KEY": ""}),
         patch("deepagents.create_deep_agent", return_value=mock_graph) as mock_create,
     ):
         await mod.build_deep_agent("user-1", "clarity", "session-1", "web")
@@ -191,7 +195,9 @@ async def test_build_deep_agent_model_with_existing_prefix_unchanged():
         patch("chatServer.services.pending_actions.PendingActionsService", return_value=MagicMock()),
         patch("chatServer.services.notification_service.NotificationService", return_value=MagicMock()),
         patch("chatServer.security.tool_wrapper.ApprovalContext", return_value=MagicMock()),
-        patch("chatServer.services.config_service.get_config_service", side_effect=RuntimeError("not init")),  # noqa: E501
+        patch("chatServer.sandbox.bwrap_backend.BwrapBackend", return_value=MagicMock()),
+        patch("chatServer.services.storage_sync.StorageSync"),
+        patch.dict(os.environ, {"SUPABASE_URL": "", "SUPABASE_SERVICE_ROLE_KEY": ""}),
         patch("deepagents.create_deep_agent", return_value=mock_graph) as mock_create,
     ):
         await mod.build_deep_agent("user-1", "clarity", "session-1", "web")
@@ -202,7 +208,7 @@ async def test_build_deep_agent_model_with_existing_prefix_unchanged():
 
 @pytest.mark.asyncio
 async def test_build_deep_agent_passes_tools_and_backend():
-    """create_deep_agent receives tools, backend, skills, and system_prompt."""
+    """create_deep_agent receives tools, BwrapBackend, skills, and system_prompt."""
     agent_config = {
         "id": "agent-id-1",
         "agent_name": "clarity",
@@ -228,9 +234,9 @@ async def test_build_deep_agent_passes_tools_and_backend():
         patch("chatServer.services.pending_actions.PendingActionsService", return_value=MagicMock()),
         patch("chatServer.services.notification_service.NotificationService", return_value=MagicMock()),
         patch("chatServer.security.tool_wrapper.ApprovalContext", return_value=MagicMock()),
-        patch("chatServer.services.deep_agent_backend.ClarityBackend", return_value=mock_backend),
-        patch("chatServer.services.config_service.get_config_service", return_value=MagicMock()),
-        patch("chatServer.sandbox.security_boundary.SecurityBoundary", return_value=MagicMock()),
+        patch("chatServer.sandbox.bwrap_backend.BwrapBackend", return_value=mock_backend),
+        patch("chatServer.services.storage_sync.StorageSync"),
+        patch.dict(os.environ, {"SUPABASE_URL": "", "SUPABASE_SERVICE_ROLE_KEY": ""}),
         patch("deepagents.create_deep_agent", return_value=mock_graph) as mock_create,
     ):
         await mod.build_deep_agent("user-1", "clarity", "session-1", "web")

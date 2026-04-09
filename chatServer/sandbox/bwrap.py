@@ -5,9 +5,18 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
-from .models import CommandResult
+
+@dataclass
+class CommandResult:
+    """Result of a command executed inside a sandbox."""
+
+    stdout: str
+    stderr: str
+    exit_code: int
+    timed_out: bool = False
 
 logger = logging.getLogger(__name__)
 

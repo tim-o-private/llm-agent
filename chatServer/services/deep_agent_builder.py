@@ -1,6 +1,6 @@
 """Builder for Deep Agent (CompiledStateGraph) instances.
 
-Builds a real create_deep_agent() graph backed by ClarityBackend.
+Builds a real create_deep_agent() graph backed by BwrapBackend.
 
 Architecture
 ------------
@@ -51,7 +51,7 @@ _agent_locks: Dict[Tuple[str, str], asyncio.Lock] = {}
 
 # ---------------------------------------------------------------------------
 # Channel-only system prompt  (AC-05: runtime sections only — soul/identity
-# are skills loaded from ClarityBackend at invoke time)
+# are skills loaded from BwrapBackend at invoke time)
 # ---------------------------------------------------------------------------
 
 _CHANNEL_PROMPT_INTRO = (
@@ -97,7 +97,7 @@ def _build_channel_prompt(
     """Assemble the runtime-only system prompt sections.
 
     Deliberately excludes soul, identity, operating model, interaction learning,
-    and channel guidance — those are loaded as skills from ClarityBackend.
+    and channel guidance — those are loaded as skills from BwrapBackend.
 
     This function handles ONLY:
     - A brief framing line
@@ -327,34 +327,24 @@ async def _build_agent(
     except Exception as exc:
         logger.warning("Failed to wrap tools with approval (non-fatal): %s", exc)
 
-    # 5. Create ClarityBackend  (AC-22: fall back gracefully on ConfigService failure)
-    backend = None
-    try:
-        from chatServer.sandbox.disclosure import DisclosureModel
-        from chatServer.sandbox.security_boundary import SecurityBoundary
-        from chatServer.sandbox.self_improvement import SelfImprovementService
-        from chatServer.services.config_service import get_config_service
-        from chatServer.services.deep_agent_backend import ClarityBackend
+    # 5. Create BwrapBackend (AC-22)
+    from pathlib import Path
 
-        security_boundary = SecurityBoundary()
-        self_improvement = SelfImprovementService(
-            security_boundary=security_boundary,
-            disclosure_model=DisclosureModel(),
-            notification_service=notification_service,
-            db_client=supabase_client,
-        )
-        backend = ClarityBackend(
-            config_service=get_config_service(),
-            user_id=user_id,
-            security_boundary=security_boundary,
-            self_improvement_service=self_improvement,
-        )
-    except Exception as exc:
-        logger.warning(
-            "ClarityBackend unavailable (ConfigService not initialized?): %s — "
-            "skills will not be loaded from storage",
-            exc,
-        )
+    from chatServer.sandbox.bwrap_backend import BwrapBackend
+    from chatServer.services.storage_sync import StorageSync
+
+    data_dir = Path(os.getenv("SANDBOX_DATA_DIR", "/data"))
+    system_dir = data_dir / "config" / "system"
+    user_dir = data_dir / "sandboxes" / user_id
+
+    # Hydrate user dir from Storage if needed (AC-23)
+    supabase_url = os.getenv("SUPABASE_URL", "")
+    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    if supabase_url and supabase_key:
+        sync = StorageSync(supabase_url=supabase_url, supabase_key=supabase_key, data_dir=data_dir)
+        await sync.hydrate_user(user_id)
+
+    backend = BwrapBackend(user_dir=user_dir, system_dir=system_dir)
 
     # 6. Build channel-specific system prompt (runtime sections only — soul/identity
     #    come from skills loaded via the backend at invoke time)
@@ -374,18 +364,17 @@ async def _build_agent(
         model=model,
         tools=instantiated_tools,        # BaseTool instances accepted natively
         system_prompt=channel_prompt,
-        backend=backend,                  # ClarityBackend (or None on failure)
+        backend=backend,                  # BwrapBackend
         skills=["/skills/"],              # auto-discover SKILL.md files via backend
         checkpointer=None,                # TODO: add postgres checkpointer later
         name="clarity",
     )
 
     logger.info(
-        "Built deep agent for '%s' (model=%s, %d tools, backend=%s)",
+        "Built deep agent for '%s' (model=%s, %d tools, backend=BwrapBackend)",
         agent_name,
         model,
         len(instantiated_tools),
-        "ClarityBackend" if backend else "None (fallback)",
     )
 
     return agent
