@@ -39,28 +39,34 @@ async def deep_agent_stream_to_sse(
             config=config,
             stream_mode="messages",
         ):
-            # stream_mode="messages" yields (message_chunk, metadata) tuples
-            if isinstance(chunk, tuple) and len(chunk) == 2:
-                token, _metadata = chunk
-                # AIMessageChunk has content (text) and tool_call_chunks
-                content = getattr(token, "content", None)
-                tool_calls = getattr(token, "tool_call_chunks", None)
+            # stream_mode="messages" yields (AIMessageChunk, metadata) tuples
+            if not isinstance(chunk, tuple) or len(chunk) != 2:
+                continue
 
-                if content and isinstance(content, str):
+            token, _metadata = chunk
+            content = getattr(token, "content", None)
+            tool_calls = getattr(token, "tool_call_chunks", None)
+
+            # Content can be a string OR a list of content blocks
+            # Anthropic returns: [{"text": "...", "type": "text", "index": 0}]
+            if content:
+                if isinstance(content, str):
                     yield _format_sse(StreamEvent(type="text_delta", text=content))
+                elif isinstance(content, list):
+                    for block in content:
+                        if isinstance(block, dict) and block.get("type") == "text" and block.get("text"):
+                            yield _format_sse(StreamEvent(type="text_delta", text=block["text"]))
 
-                if tool_calls:
-                    for tc in tool_calls:
-                        name = tc.get("name", "") if isinstance(tc, dict) else ""
-                        tc_id = tc.get("id", "") if isinstance(tc, dict) else ""
-                        if name:
-                            yield _format_sse(StreamEvent(
-                                type="tool_start",
-                                tool_name=name,
-                                tool_call_id=tc_id,
-                            ))
-            else:
-                logger.debug("stream chunk (unexpected type): %s %s", type(chunk).__name__, repr(chunk)[:200])
+            if tool_calls:
+                for tc in tool_calls:
+                    name = tc.get("name", "") if isinstance(tc, dict) else ""
+                    tc_id = tc.get("id", "") if isinstance(tc, dict) else ""
+                    if name:
+                        yield _format_sse(StreamEvent(
+                            type="tool_start",
+                            tool_name=name,
+                            tool_call_id=tc_id,
+                        ))
 
     except Exception as e:
         logger.exception("deep_agent_stream_to_sse: unexpected error: %s", e)

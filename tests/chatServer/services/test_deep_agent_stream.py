@@ -13,8 +13,12 @@ from chatServer.services.deep_agent_stream import deep_agent_stream_to_sse
 # ---------------------------------------------------------------------------
 
 
-def _make_token(content: str = "", tool_call_chunks: list | None = None) -> MagicMock:
-    """Build a mock LangChain AIMessageChunk."""
+def _make_token(content: str | list = "", tool_call_chunks: list | None = None) -> MagicMock:
+    """Build a mock LangChain AIMessageChunk.
+
+    content can be a string or a list of content blocks (Anthropic format):
+    [{"text": "Hello", "type": "text", "index": 0}]
+    """
     token = MagicMock()
     token.content = content
     token.tool_call_chunks = tool_call_chunks or []
@@ -50,6 +54,18 @@ async def _collect(gen) -> list[str]:
 async def test_text_chunk_yields_text_delta():
     """(token, metadata) tuple with text content → text_delta SSE."""
     token = _make_token("Hello")
+    agent = _make_agent([(token, {})])
+
+    results = await _collect(deep_agent_stream_to_sse(agent, {"messages": []}))
+
+    assert any("text_delta" in r for r in results)
+    assert any("Hello" in r for r in results)
+
+
+@pytest.mark.asyncio
+async def test_content_blocks_yield_text_delta():
+    """Anthropic-style content blocks [{"text": ..., "type": "text"}] → text_delta."""
+    token = _make_token([{"text": "Hello", "type": "text", "index": 0}])
     agent = _make_agent([(token, {})])
 
     results = await _collect(deep_agent_stream_to_sse(agent, {"messages": []}))
