@@ -191,6 +191,54 @@ def _add_session_open_section(
 
 
 # ---------------------------------------------------------------------------
+# Backend construction
+# ---------------------------------------------------------------------------
+
+
+def _create_backend(system_dir, user_dir):
+    """Create the best available sandbox backend.
+
+    Tries BwrapBackend first (OS-level isolation). If bwrap isn't available
+    (e.g., macOS, restricted Linux), falls back to CompositeBackend with
+    FilesystemBackend (no isolation, but agent can still read/write skills).
+    """
+    import shutil
+
+    if shutil.which("bwrap"):
+        try:
+            import subprocess
+
+            # Quick smoke test — bwrap may exist but fail due to AppArmor/seccomp
+            result = subprocess.run(  # noqa: S603, S607
+                ["bwrap", "--unshare-all", "--die-with-parent",
+                 "--ro-bind", "/usr", "/usr", "--", "true"],
+                capture_output=True, timeout=5,
+            )
+            if result.returncode == 0:
+                from chatServer.sandbox.bwrap_backend import BwrapBackend
+
+                logger.info("Using BwrapBackend (OS-level sandbox)")
+                return BwrapBackend(user_dir=user_dir, system_dir=system_dir)
+        except Exception as exc:
+            logger.warning("bwrap smoke test failed: %s", exc)
+
+    # Fallback: CompositeBackend with FilesystemBackend for path routing.
+    # Same /system/ and /user/ paths as bwrap — just no OS-level isolation.
+    from deepagents.backends import CompositeBackend, FilesystemBackend
+
+    logger.info(
+        "bwrap unavailable — using FilesystemBackend (no sandbox isolation)"
+    )
+    return CompositeBackend(
+        default=FilesystemBackend(root_dir=str(user_dir), virtual_mode=True),
+        routes={
+            "/system": FilesystemBackend(root_dir=str(system_dir), virtual_mode=True),
+            "/user": FilesystemBackend(root_dir=str(user_dir), virtual_mode=True),
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
 # Public builder
 # ---------------------------------------------------------------------------
 
@@ -327,15 +375,17 @@ async def _build_agent(
     except Exception as exc:
         logger.warning("Failed to wrap tools with approval (non-fatal): %s", exc)
 
-    # 5. Create BwrapBackend (AC-22)
+    # 5. Create sandbox backend (AC-22)
     from pathlib import Path
 
-    from chatServer.sandbox.bwrap_backend import BwrapBackend
     from chatServer.services.storage_sync import StorageSync
 
     data_dir = Path(os.getenv("SANDBOX_DATA_DIR", "/data"))
     system_dir = data_dir / "config" / "system"
     user_dir = data_dir / "sandboxes" / user_id
+
+    # Ensure user dir exists
+    user_dir.mkdir(parents=True, exist_ok=True)
 
     # Hydrate user dir from Storage if needed (AC-23)
     supabase_url = os.getenv("SUPABASE_URL", "")
@@ -344,7 +394,8 @@ async def _build_agent(
         sync = StorageSync(supabase_url=supabase_url, supabase_key=supabase_key, data_dir=data_dir)
         await sync.hydrate_user(user_id)
 
-    backend = BwrapBackend(user_dir=user_dir, system_dir=system_dir)
+    # Try BwrapBackend (OS-level isolation), fall back to FilesystemBackend
+    backend = _create_backend(system_dir, user_dir)
 
     # 6. Build channel-specific system prompt (runtime sections only — soul/identity
     #    come from skills loaded via the backend at invoke time)
@@ -365,7 +416,7 @@ async def _build_agent(
         tools=instantiated_tools,        # BaseTool instances accepted natively
         system_prompt=channel_prompt,
         backend=backend,                  # BwrapBackend
-        skills=["/skills/"],              # auto-discover SKILL.md files via backend
+        skills=["/system/skills/", "/user/skills/"],  # system (ro) + user (rw) skills
         checkpointer=None,                # TODO: add postgres checkpointer later
         name="clarity",
     )

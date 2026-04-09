@@ -119,7 +119,7 @@ async def test_build_deep_agent_constructs_bwrap_backend():
         patch("chatServer.services.pending_actions.PendingActionsService", return_value=MagicMock()),
         patch("chatServer.services.notification_service.NotificationService", return_value=MagicMock()),
         patch("chatServer.security.tool_wrapper.ApprovalContext", return_value=MagicMock()),
-        patch("chatServer.sandbox.bwrap_backend.BwrapBackend", return_value=mock_backend),
+        patch.object(mod, "_create_backend", return_value=mock_backend),
         patch("chatServer.services.storage_sync.StorageSync"),
         patch.dict(os.environ, {"SUPABASE_URL": "", "SUPABASE_SERVICE_ROLE_KEY": ""}),
         patch("deepagents.create_deep_agent", return_value=mock_graph) as mock_create,
@@ -236,7 +236,7 @@ async def test_build_deep_agent_passes_tools_and_backend():
         patch("chatServer.services.pending_actions.PendingActionsService", return_value=MagicMock()),
         patch("chatServer.services.notification_service.NotificationService", return_value=MagicMock()),
         patch("chatServer.security.tool_wrapper.ApprovalContext", return_value=MagicMock()),
-        patch("chatServer.sandbox.bwrap_backend.BwrapBackend", return_value=mock_backend),
+        patch.object(mod, "_create_backend", return_value=mock_backend),
         patch("chatServer.services.storage_sync.StorageSync"),
         patch.dict(os.environ, {"SUPABASE_URL": "", "SUPABASE_SERVICE_ROLE_KEY": ""}),
         patch("deepagents.create_deep_agent", return_value=mock_graph) as mock_create,
@@ -246,7 +246,7 @@ async def test_build_deep_agent_passes_tools_and_backend():
     call_kwargs = mock_create.call_args.kwargs
     assert call_kwargs["tools"] == [mock_tool]
     assert call_kwargs["backend"] is mock_backend
-    assert call_kwargs["skills"] == ["/skills/"]
+    assert call_kwargs["skills"] == ["/system/skills/", "/user/skills/"]
     assert call_kwargs["name"] == "clarity"
     assert "system_prompt" in call_kwargs
 
