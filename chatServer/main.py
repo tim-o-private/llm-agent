@@ -388,8 +388,32 @@ async def _handle_chat_deep_agent_stream(
         pg_connection=pg_connection,
     )
 
+    async def _stream_and_persist():
+        """Wrap the SSE stream to accumulate and persist the AI response."""
+        accumulated_text = []
+        async for sse_line in deep_agent_stream_to_sse(agent, {"messages": messages}):
+            # Extract text from text_delta events for persistence
+            if '"text_delta"' in sse_line:
+                import json as _json
+                try:
+                    payload = _json.loads(sse_line.removeprefix("data: ").strip())
+                    if payload.get("text"):
+                        accumulated_text.append(payload["text"])
+                except (ValueError, KeyError):
+                    pass
+            yield sse_line
+
+        # Persist the AI response after streaming completes
+        if accumulated_text:
+            ai_msg = {"role": "assistant", "content": "".join(accumulated_text)}
+            await MessageHistoryAdapter.save_messages(
+                session_id=chat_input.session_id,
+                messages=[ai_msg],
+                pg_connection=pg_connection,
+            )
+
     return StreamingResponse(
-        deep_agent_stream_to_sse(agent, {"messages": messages}),
+        _stream_and_persist(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
