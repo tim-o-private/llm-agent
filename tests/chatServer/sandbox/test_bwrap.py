@@ -36,7 +36,6 @@ class TestBwrapSandboxCreate:
         sandbox = BwrapSandbox(
             user_dir=tmp_path / "user",
             system_dir=tmp_path / "system",
-            tools_dir=tmp_path / "tools",
             bwrap_path="/nonexistent/bwrap",
         )
         with pytest.raises(FileNotFoundError, match="bwrap binary not found"):
@@ -50,7 +49,6 @@ class TestBwrapSandboxCreate:
         sandbox = BwrapSandbox(
             user_dir=tmp_path / "user",
             system_dir=tmp_path / "system",
-            tools_dir=tmp_path / "tools",
             bwrap_path=str(fake_bwrap),
         )
         with pytest.raises(PermissionError, match="not executable"):
@@ -64,7 +62,6 @@ class TestBwrapSandboxCreate:
         sandbox = BwrapSandbox(
             user_dir=tmp_path / "user",
             system_dir=tmp_path / "system",
-            tools_dir=tmp_path / "tools",
             bwrap_path=str(fake_bwrap),
         )
         result = await sandbox.create()
@@ -78,7 +75,6 @@ class TestBwrapArgs:
         sandbox = BwrapSandbox(
             user_dir=tmp_path / "user",
             system_dir=tmp_path / "system",
-            tools_dir=tmp_path / "tools",
             bwrap_path="/usr/bin/bwrap",
         )
         args = sandbox._build_bwrap_args("/user")
@@ -94,7 +90,6 @@ class TestBwrapArgs:
         sandbox = BwrapSandbox(
             user_dir=tmp_path / "user",
             system_dir=tmp_path / "system",
-            tools_dir=tmp_path / "tools",
         )
         args = sandbox._build_bwrap_args("/tmp")
         idx = args.index("--chdir")
@@ -104,12 +99,11 @@ class TestBwrapArgs:
         sandbox = BwrapSandbox(
             user_dir=tmp_path / "user",
             system_dir=tmp_path / "system",
-            tools_dir=tmp_path / "tools",
         )
         args = sandbox._build_bwrap_args("/user")
-        # ro-bind for system and tools
+        # ro-bind for system
         ro_indices = [i for i, a in enumerate(args) if a == "--ro-bind"]
-        assert len(ro_indices) == 2  # system + tools
+        assert len(ro_indices) == 1  # system
 
         # rw bind for user
         bind_idx = args.index("--bind")
@@ -124,7 +118,6 @@ class TestBwrapExecute:
         sandbox = BwrapSandbox(
             user_dir=tmp_path,
             system_dir=tmp_path,
-            tools_dir=tmp_path,
         )
 
         mock_proc = AsyncMock()
@@ -144,7 +137,6 @@ class TestBwrapExecute:
         sandbox = BwrapSandbox(
             user_dir=tmp_path,
             system_dir=tmp_path,
-            tools_dir=tmp_path,
         )
 
         mock_proc = AsyncMock()
@@ -163,7 +155,6 @@ class TestBwrapExecute:
         sandbox = BwrapSandbox(
             user_dir=tmp_path,
             system_dir=tmp_path,
-            tools_dir=tmp_path,
         )
 
         mock_proc = AsyncMock()
@@ -182,7 +173,6 @@ class TestBwrapExecute:
         sandbox = BwrapSandbox(
             user_dir=tmp_path,
             system_dir=tmp_path,
-            tools_dir=tmp_path,
         )
 
         mock_proc = AsyncMock()
@@ -204,7 +194,6 @@ class TestBwrapExecute:
         sandbox = BwrapSandbox(
             user_dir=tmp_path,
             system_dir=tmp_path,
-            tools_dir=tmp_path,
         )
 
         mock_proc = AsyncMock()
@@ -223,7 +212,6 @@ class TestBwrapExecute:
         sandbox = BwrapSandbox(
             user_dir=tmp_path,
             system_dir=tmp_path,
-            tools_dir=tmp_path,
         )
 
         # 2 MB of output

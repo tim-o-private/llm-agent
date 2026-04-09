@@ -37,12 +37,10 @@ class BwrapSandbox:
         self,
         user_dir: Path,
         system_dir: Path,
-        tools_dir: Path,
         bwrap_path: str = "bwrap",
     ) -> None:
         self._user_dir = user_dir
         self._system_dir = system_dir
-        self._tools_dir = tools_dir
         self._bwrap_path = bwrap_path
 
     # -- lifecycle ---------------------------------------------------------
@@ -137,7 +135,6 @@ class BwrapSandbox:
             "--die-with-parent",
             "--ro-bind", str(self._system_dir), "/system",
             "--bind", str(self._user_dir), "/user",
-            "--ro-bind", str(self._tools_dir), "/tools",
             "--tmpfs", "/tmp",
             "--dev", "/dev",
             "--proc", "/proc",
