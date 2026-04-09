@@ -1,16 +1,9 @@
 """SSE stream adapter for Deep Agent (CompiledStateGraph).
 
-Maps real LangGraph v2 stream events to SSE-framed StreamEvents.
+Maps LangGraph stream events to SSE-framed StreamEvents.
 
-v2 chunk format (version="v2"):
-    {
-        "type": "messages" | "updates" | "custom",
-        "ns": tuple,   # () for main agent
-        "data": ...,   # mode-specific payload
-    }
-
-"messages" data: (token, metadata) — token.content is the streamed text
-"updates"  data: dict of node_name → state updates (tool results in "tools" node)
+Uses stream_mode="messages" which yields (AIMessageChunk, metadata) tuples.
+AIMessageChunk.content is the streamed text; .tool_call_chunks has tool info.
 """
 
 from __future__ import annotations
@@ -44,36 +37,30 @@ async def deep_agent_stream_to_sse(
         async for chunk in agent.astream(
             input_data,
             config=config,
-            stream_mode=["messages", "updates"],
-            version="v2",
+            stream_mode="messages",
         ):
-            chunk_type = chunk.get("type") if isinstance(chunk, dict) else None
-            data = chunk.get("data") if isinstance(chunk, dict) else None
+            # stream_mode="messages" yields (message_chunk, metadata) tuples
+            if isinstance(chunk, tuple) and len(chunk) == 2:
+                token, _metadata = chunk
+                # AIMessageChunk has content (text) and tool_call_chunks
+                content = getattr(token, "content", None)
+                tool_calls = getattr(token, "tool_call_chunks", None)
 
-            if chunk_type == "messages":
-                # data is a tuple (token, metadata)
-                if isinstance(data, tuple) and len(data) == 2:
-                    token, _metadata = data
-                    content = getattr(token, "content", None)
-                    if content and isinstance(content, str):
-                        yield _format_sse(StreamEvent(type="text_delta", text=content))
+                if content and isinstance(content, str):
+                    yield _format_sse(StreamEvent(type="text_delta", text=content))
 
-            elif chunk_type == "updates":
-                # data is a dict of node_name → state updates
-                if isinstance(data, dict):
-                    for node_name, node_output in data.items():
-                        if node_name == "tools" and isinstance(node_output, dict):
-                            for msg in node_output.get("messages", []):
-                                tool_name = getattr(msg, "name", "") or ""
-                                tool_call_id = getattr(msg, "tool_call_id", "") or ""
-                                content = getattr(msg, "content", "") or ""
-                                if tool_name or tool_call_id:
-                                    yield _format_sse(StreamEvent(
-                                        type="tool_result",
-                                        tool_name=tool_name,
-                                        tool_call_id=tool_call_id,
-                                        result=str(content),
-                                    ))
+                if tool_calls:
+                    for tc in tool_calls:
+                        name = tc.get("name", "") if isinstance(tc, dict) else ""
+                        tc_id = tc.get("id", "") if isinstance(tc, dict) else ""
+                        if name:
+                            yield _format_sse(StreamEvent(
+                                type="tool_start",
+                                tool_name=name,
+                                tool_call_id=tc_id,
+                            ))
+            else:
+                logger.debug("stream chunk (unexpected type): %s %s", type(chunk).__name__, repr(chunk)[:200])
 
     except Exception as e:
         logger.exception("deep_agent_stream_to_sse: unexpected error: %s", e)
