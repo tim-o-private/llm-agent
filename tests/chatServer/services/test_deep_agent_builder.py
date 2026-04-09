@@ -29,13 +29,6 @@ def clear_agent_cache():
     _agent_locks.clear()
 
 
-def _make_mock_settings(sandbox_enabled=True):
-    """Return a mock Settings object with sandbox_enabled configurable."""
-    settings = MagicMock()
-    settings.sandbox_enabled = sandbox_enabled
-    return settings
-
-
 def _make_mock_graph():
     """Return a mock CompiledStateGraph."""
     graph = MagicMock()
@@ -101,7 +94,7 @@ async def test_build_deep_agent_different_users_not_cached():
 
 @pytest.mark.asyncio
 async def test_build_deep_agent_constructs_bwrap_backend():
-    """AC-22/AC-36: BwrapBackend constructed when sandbox_enabled=True."""
+    """AC-22: BwrapBackend always constructed."""
     agent_config = {
         "id": "agent-id-1",
         "agent_name": "clarity",
@@ -126,7 +119,6 @@ async def test_build_deep_agent_constructs_bwrap_backend():
         patch("chatServer.services.pending_actions.PendingActionsService", return_value=MagicMock()),
         patch("chatServer.services.notification_service.NotificationService", return_value=MagicMock()),
         patch("chatServer.security.tool_wrapper.ApprovalContext", return_value=MagicMock()),
-        patch("chatServer.config.settings.get_settings", return_value=_make_mock_settings(sandbox_enabled=True)),  # noqa: E501
         patch("chatServer.sandbox.bwrap_backend.BwrapBackend", return_value=mock_backend),
         patch("chatServer.services.storage_sync.StorageSync"),
         patch.dict(os.environ, {"SUPABASE_URL": "", "SUPABASE_SERVICE_ROLE_KEY": ""}),
@@ -135,45 +127,9 @@ async def test_build_deep_agent_constructs_bwrap_backend():
         agent = await mod.build_deep_agent("user-1", "clarity", "session-1", "web")
 
     assert agent is mock_graph
-    # BwrapBackend is passed when sandbox_enabled=True
+    # BwrapBackend is always passed as backend
     call_kwargs = mock_create.call_args.kwargs
     assert call_kwargs.get("backend") is mock_backend
-
-
-@pytest.mark.asyncio
-async def test_build_deep_agent_backend_none_when_sandbox_disabled():
-    """AC-36: backend=None when sandbox_enabled=False."""
-    agent_config = {
-        "id": "agent-id-1",
-        "agent_name": "clarity",
-        "soul": "Be helpful.",
-        "identity": {"name": "Clarity"},
-        "prompt_template": None,
-        "llm_config": {},
-    }
-    mock_graph = _make_mock_graph()
-    with (
-        patch("chatServer.services.agent_config_cache_service.get_cached_agent_config", new=AsyncMock(return_value=agent_config)),  # noqa: E501
-        patch("src.core.agent_loader_db.load_tools_from_db", return_value=[]),
-        patch("src.core.agent_loader_db._fetch_agent_config_from_db_async", new=AsyncMock(return_value=agent_config)),  # noqa: E501
-        patch("src.core.agent_loader_db._prefetch_memory_notes", new=AsyncMock(return_value=None)),
-        patch("src.core.agent_loader_db._resolve_memory_user_id", new=AsyncMock(return_value="user-1")),
-        patch("chatServer.services.tool_cache_service.get_cached_tools_for_agent", new=AsyncMock(return_value=[])),  # noqa: E501
-        patch("chatServer.services.user_instructions_cache_service.get_cached_user_instructions", new=AsyncMock(return_value=None)),  # noqa: E501
-        patch("chatServer.database.supabase_client.create_user_scoped_client", new=AsyncMock(return_value=MagicMock())),  # noqa: E501
-        patch("chatServer.security.tool_wrapper.wrap_tools_with_approval"),
-        patch("chatServer.services.audit_service.AuditService", return_value=MagicMock()),
-        patch("chatServer.services.pending_actions.PendingActionsService", return_value=MagicMock()),
-        patch("chatServer.services.notification_service.NotificationService", return_value=MagicMock()),
-        patch("chatServer.security.tool_wrapper.ApprovalContext", return_value=MagicMock()),
-        patch("chatServer.config.settings.get_settings", return_value=_make_mock_settings(sandbox_enabled=False)),  # noqa: E501
-        patch("deepagents.create_deep_agent", return_value=mock_graph) as mock_create,
-    ):
-        agent = await mod.build_deep_agent("user-1", "clarity", "session-1", "web")
-
-    assert agent is mock_graph
-    call_kwargs = mock_create.call_args.kwargs
-    assert call_kwargs.get("backend") is None
 
 
 @pytest.mark.asyncio
@@ -202,7 +158,7 @@ async def test_build_deep_agent_model_prefixed_with_anthropic():
         patch("chatServer.services.pending_actions.PendingActionsService", return_value=MagicMock()),
         patch("chatServer.services.notification_service.NotificationService", return_value=MagicMock()),
         patch("chatServer.security.tool_wrapper.ApprovalContext", return_value=MagicMock()),
-        patch("chatServer.config.settings.get_settings", return_value=_make_mock_settings(sandbox_enabled=True)),  # noqa: E501
+
         patch("chatServer.sandbox.bwrap_backend.BwrapBackend", return_value=MagicMock()),
         patch("chatServer.services.storage_sync.StorageSync"),
         patch.dict(os.environ, {"SUPABASE_URL": "", "SUPABASE_SERVICE_ROLE_KEY": ""}),
@@ -240,7 +196,7 @@ async def test_build_deep_agent_model_with_existing_prefix_unchanged():
         patch("chatServer.services.pending_actions.PendingActionsService", return_value=MagicMock()),
         patch("chatServer.services.notification_service.NotificationService", return_value=MagicMock()),
         patch("chatServer.security.tool_wrapper.ApprovalContext", return_value=MagicMock()),
-        patch("chatServer.config.settings.get_settings", return_value=_make_mock_settings(sandbox_enabled=True)),  # noqa: E501
+
         patch("chatServer.sandbox.bwrap_backend.BwrapBackend", return_value=MagicMock()),
         patch("chatServer.services.storage_sync.StorageSync"),
         patch.dict(os.environ, {"SUPABASE_URL": "", "SUPABASE_SERVICE_ROLE_KEY": ""}),
@@ -280,7 +236,6 @@ async def test_build_deep_agent_passes_tools_and_backend():
         patch("chatServer.services.pending_actions.PendingActionsService", return_value=MagicMock()),
         patch("chatServer.services.notification_service.NotificationService", return_value=MagicMock()),
         patch("chatServer.security.tool_wrapper.ApprovalContext", return_value=MagicMock()),
-        patch("chatServer.config.settings.get_settings", return_value=_make_mock_settings(sandbox_enabled=True)),  # noqa: E501
         patch("chatServer.sandbox.bwrap_backend.BwrapBackend", return_value=mock_backend),
         patch("chatServer.services.storage_sync.StorageSync"),
         patch.dict(os.environ, {"SUPABASE_URL": "", "SUPABASE_SERVICE_ROLE_KEY": ""}),
