@@ -298,6 +298,8 @@ async def _build_agent(
     )
 
     # 4. Wrap tools with approval (same as existing builder — non-fatal on failure)
+    supabase_client = None
+    notification_service = None
     try:
         from chatServer.database.supabase_client import create_user_scoped_client
         from chatServer.security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
@@ -328,14 +330,24 @@ async def _build_agent(
     # 5. Create ClarityBackend  (AC-22: fall back gracefully on ConfigService failure)
     backend = None
     try:
+        from chatServer.sandbox.disclosure import DisclosureModel
         from chatServer.sandbox.security_boundary import SecurityBoundary
+        from chatServer.sandbox.self_improvement import SelfImprovementService
         from chatServer.services.config_service import get_config_service
         from chatServer.services.deep_agent_backend import ClarityBackend
 
+        security_boundary = SecurityBoundary()
+        self_improvement = SelfImprovementService(
+            security_boundary=security_boundary,
+            disclosure_model=DisclosureModel(),
+            notification_service=notification_service,
+            db_client=supabase_client,
+        )
         backend = ClarityBackend(
             config_service=get_config_service(),
             user_id=user_id,
-            security_boundary=SecurityBoundary(),
+            security_boundary=security_boundary,
+            self_improvement_service=self_improvement,
         )
     except Exception as exc:
         logger.warning(
