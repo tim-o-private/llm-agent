@@ -1,21 +1,15 @@
-"""Builder for DeepAgentWrapper instances.
+"""Builder for Deep Agent (CompiledStateGraph) instances.
 
-Mirrors conversation_handler_builder.py but produces a DeepAgentWrapper
-(the Deep Agents interface shim) instead of a ConversationHandler.
+Builds a real create_deep_agent() graph backed by ClarityBackend.
 
 Architecture
 ------------
-Until the langchain 1.x migration unlocks the real deepagents package,
-DeepAgentWrapper bridges the Deep Agent interface over ConversationHandler:
+    caller → build_deep_agent(user_id, agent_name, session_id, channel)
+           → loads config, tools, approval wrapping, backend, channel prompt
+           → create_deep_agent(model, tools, system_prompt, backend, skills)
+           → returns CompiledStateGraph (LangGraph)
 
-    caller → DeepAgentWrapper.ainvoke/astream
-           → loads skills from ClarityBackend (Supabase Storage)
-           → builds full system prompt (channel prompt + skill content)
-           → delegates to ConversationHandler
-
-When deepagents becomes installable, DeepAgentWrapper.ainvoke/astream is
-replaced by a real create_deep_agent() call. The builder's external API
-(build_deep_agent signature, return type interface) stays unchanged.
+Callers use .ainvoke() / .astream() directly on the CompiledStateGraph.
 """
 
 from __future__ import annotations
@@ -24,12 +18,9 @@ import asyncio
 import logging
 import os
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, Tuple
+from typing import Any, Dict, Tuple
 
 from cachetools import TTLCache
-
-if TYPE_CHECKING:
-    from .conversation_handler import ConversationHandler
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +28,7 @@ logger = logging.getLogger(__name__)
 # Agent cache  (same pattern as conversation_handler_builder.py)
 # ---------------------------------------------------------------------------
 
-_agent_cache: TTLCache[Tuple[str, str], "DeepAgentWrapper"] = TTLCache(
+_agent_cache: TTLCache[Tuple[str, str], Any] = TTLCache(
     maxsize=100, ttl=900  # 15-min TTL
 )
 _agent_locks: Dict[Tuple[str, str], asyncio.Lock] = {}
@@ -184,126 +175,6 @@ def _add_session_open_section(
 
 
 # ---------------------------------------------------------------------------
-# DeepAgentWrapper  (TEMPORARY SHIM — see module docstring)
-# ---------------------------------------------------------------------------
-
-
-class DeepAgentWrapper:
-    """Temporary shim implementing the Deep Agent interface over ConversationHandler.
-
-    TODO: Replace with real create_deep_agent() call once langchain 1.x migration
-    is complete and deepagents>=0.5.0 can be installed without breaking AgentExecutor.
-
-    External interface (stable):
-        await agent.ainvoke({"messages": [...]}) → {"messages": [...]}
-        async for event in agent.astream({"messages": [...]}, stream_mode=..., version="v2"):
-            ...
-
-    The wrapper:
-    1. Loads skill content from ClarityBackend at each invocation.
-    2. Builds the full system prompt = skills content + channel prompt.
-    3. Delegates the actual LLM call to ConversationHandler.
-    """
-
-    def __init__(
-        self,
-        handler: "ConversationHandler",
-        channel_prompt: str,
-        backend: Any | None = None,
-    ) -> None:
-        self._handler = handler
-        self._channel_prompt = channel_prompt
-        self._backend = backend
-
-    async def _build_full_prompt(self) -> str:
-        """Load skill SKILL.md files and prepend them to the channel prompt."""
-        if self._backend is None:
-            return self._channel_prompt
-
-        skill_sections: list[str] = []
-        try:
-            glob_result = self._backend.glob("SKILL.md", "/skills/")
-            skill_paths = (
-                [e["path"] for e in glob_result.matches]
-                if glob_result.matches
-                else []
-            )
-            for path in sorted(skill_paths):
-                read_result = self._backend.read(path)
-                if read_result.error or not read_result.file_data:
-                    continue
-                raw = read_result.file_data.get("content", "")
-                if raw:
-                    # Strip YAML frontmatter before inserting as a prompt section
-                    content = _strip_frontmatter(raw).strip()
-                    if content:
-                        skill_sections.append(content)
-        except Exception as exc:
-            logger.warning("Failed to load skills from backend: %s", exc)
-
-        if skill_sections:
-            skills_block = "\n\n---\n\n".join(skill_sections)
-            return f"{skills_block}\n\n---\n\n{self._channel_prompt}"
-        return self._channel_prompt
-
-    async def ainvoke(
-        self,
-        input: dict[str, Any],
-        config: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """Run the agent non-streaming. Returns {"messages": [...]}."""
-        messages = input.get("messages", [])
-        # Normalise to Anthropic format  (Deep Agents uses role/content dicts)
-        anthropic_messages = [_normalise_message(m) for m in messages]
-
-        full_prompt = await self._build_full_prompt()
-        self._handler.system_prompt = full_prompt
-
-        result = await self._handler.run(anthropic_messages)
-        return {
-            "messages": anthropic_messages
-            + [{"role": "assistant", "content": result.response_text}]
-        }
-
-    async def astream(
-        self,
-        input: dict[str, Any],
-        stream_mode: list[str] | str | None = None,
-        config: dict[str, Any] | None = None,
-        version: str = "v2",
-        subgraphs: bool = False,
-    ) -> AsyncIterator[dict[str, Any]]:
-        """Run the agent with streaming. Yields event dicts."""
-        messages = input.get("messages", [])
-        anthropic_messages = [_normalise_message(m) for m in messages]
-
-        full_prompt = await self._build_full_prompt()
-        self._handler.system_prompt = full_prompt
-
-        async for event in self._handler.run_stream(anthropic_messages):
-            # Translate StreamEvent to a dict consumers expect
-            yield {"type": event.type, "event": event}
-
-
-def _normalise_message(msg: dict[str, Any]) -> dict[str, Any]:
-    """Ensure message has the minimal role/content structure."""
-    if isinstance(msg, dict) and "role" in msg:
-        return msg
-    return {"role": "user", "content": str(msg)}
-
-
-def _strip_frontmatter(content: str) -> str:
-    """Remove YAML frontmatter (---...---) from a SKILL.md string."""
-    stripped = content.strip()
-    if not stripped.startswith("---"):
-        return content
-    end = stripped.find("---", 3)
-    if end == -1:
-        return content
-    return stripped[end + 3 :].lstrip("\n")
-
-
-# ---------------------------------------------------------------------------
 # Public builder
 # ---------------------------------------------------------------------------
 
@@ -313,17 +184,16 @@ async def build_deep_agent(
     agent_name: str,
     session_id: str,
     channel: str = "web",
-) -> DeepAgentWrapper:
-    """Build or retrieve a cached DeepAgentWrapper.
+) -> Any:
+    """Build or retrieve a cached CompiledStateGraph.
 
-    Mirrors build_conversation_handler() but returns a DeepAgentWrapper
-    instead of a ConversationHandler.  Cached per (user_id, agent_name)
-    with 15-min TTL.
+    Returns a LangGraph CompiledStateGraph created by create_deep_agent().
+    Cached per (user_id, agent_name) with 15-min TTL.
     """
     cache_key = (user_id, agent_name)
 
     if cache_key in _agent_cache:
-        logger.debug("DeepAgentWrapper cache HIT: %s", cache_key)
+        logger.debug("Deep agent cache HIT: %s", cache_key)
         return _agent_cache[cache_key]
 
     lock = _agent_locks.setdefault(cache_key, asyncio.Lock())
@@ -331,7 +201,7 @@ async def build_deep_agent(
         if cache_key in _agent_cache:
             return _agent_cache[cache_key]
 
-        logger.info("Building DeepAgentWrapper for %s", cache_key)
+        logger.info("Building deep agent for %s", cache_key)
         agent = await _build_agent(user_id, agent_name, session_id, channel)
         _agent_cache[cache_key] = agent
         return agent
@@ -342,12 +212,12 @@ async def _build_agent(
     agent_name: str,
     session_id: str,
     channel: str,
-) -> DeepAgentWrapper:
-    """Load everything from DB and construct a DeepAgentWrapper."""
+) -> Any:
+    """Load everything from DB and construct a CompiledStateGraph via create_deep_agent()."""
+    from deepagents import create_deep_agent
+
     # Lazy imports — same pattern as conversation_handler_builder.py
     from chatServer.services.agent_config_cache_service import get_cached_agent_config
-    from chatServer.services.conversation_handler import ConversationHandler
-    from chatServer.services.conversation_handler_builder import _get_anthropic_client
     from chatServer.services.tool_cache_service import get_cached_tools_for_agent
     from chatServer.services.user_instructions_cache_service import get_cached_user_instructions
     from src.core.agent_loader_db import (
@@ -401,7 +271,7 @@ async def _build_agent(
         for tc in cached_tools_data
     ]
 
-    # 3. Instantiate tools (no LangChainToolBridge — Deep Agents takes BaseTool directly)
+    # 3. Instantiate tools (Deep Agents takes BaseTool directly — no bridge needed)
     instantiated_tools = load_tools_from_db(
         tools_data=tools_data,
         user_id=user_id,
@@ -412,8 +282,6 @@ async def _build_agent(
     )
 
     # 4. Wrap tools with approval (same as existing builder — non-fatal on failure)
-    tool_schemas: list[dict] = []
-    tool_executors: dict = {}
     try:
         from chatServer.database.supabase_client import create_user_scoped_client
         from chatServer.security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
@@ -440,10 +308,6 @@ async def _build_agent(
         wrap_tools_with_approval(instantiated_tools, approval_context)
     except Exception as exc:
         logger.warning("Failed to wrap tools with approval (non-fatal): %s", exc)
-
-    # Convert to ConversationHandler format via bridge
-    from chatServer.services.langchain_tool_bridge import LangChainToolBridge
-    tool_schemas, tool_executors = LangChainToolBridge.convert_tools(instantiated_tools)
 
     # 5. Create ClarityBackend  (AC-22: fall back gracefully on ConfigService failure)
     backend = None
@@ -472,51 +336,28 @@ async def _build_agent(
         user_instructions=user_instructions,
     )
 
-    # 7. Create ConversationHandler (the actual LLM engine)
+    # 7. Resolve model — Deep Agents uses "provider:model" format
     llm_config = agent_db_config.get("llm_config") or {}
-    model = llm_config.get("model", "claude-sonnet-4-20250514")
-    client = _get_anthropic_client()
+    model_name = llm_config.get("model", "claude-sonnet-4-20250514")
+    model = model_name if ":" in model_name else f"anthropic:{model_name}"
 
-    handler = ConversationHandler(
-        client=client,
+    # 8. Build CompiledStateGraph via create_deep_agent
+    agent = create_deep_agent(
         model=model,
-        system_prompt=channel_prompt,  # overwritten at ainvoke time with full prompt
-        tools=tool_schemas,
-        tool_executors=tool_executors,
-        max_tokens=llm_config.get("max_tokens", 4096),
-        temperature=llm_config.get("temperature", 0.7),
-        session_id=session_id,
-        user_id=user_id,
+        tools=instantiated_tools,        # BaseTool instances accepted natively
+        system_prompt=channel_prompt,
+        backend=backend,                  # ClarityBackend (or None on failure)
+        skills=["/skills/"],              # auto-discover SKILL.md files via backend
+        checkpointer=None,                # TODO: add postgres checkpointer later
+        name="clarity",
     )
 
-    # Wire dispatch_workflow executor (same as existing builder)
-    try:
-        from chatServer.workflows.dispatch import dispatch_workflow as _real_dispatch_workflow
-
-        async def _dispatch_executor(args: dict) -> str:
-            return await _real_dispatch_workflow(
-                args=args,
-                user_id=user_id,
-                db_client=supabase_client,
-                anthropic_client=client,
-                tool_schemas=tool_schemas,
-                tool_executors=tool_executors,
-            )
-
-        handler.tool_executors["dispatch_workflow"] = _dispatch_executor
-    except Exception as exc:
-        logger.debug("dispatch_workflow executor not wired: %s", exc)
-
     logger.info(
-        "Built DeepAgentWrapper for '%s' (model=%s, %d tools, backend=%s)",
+        "Built deep agent for '%s' (model=%s, %d tools, backend=%s)",
         agent_name,
         model,
-        len(tool_schemas),
+        len(instantiated_tools),
         "ClarityBackend" if backend else "None (fallback)",
     )
 
-    return DeepAgentWrapper(
-        handler=handler,
-        channel_prompt=channel_prompt,
-        backend=backend,
-    )
+    return agent

@@ -1,47 +1,83 @@
-"""SSE stream adapter for DeepAgentWrapper.
+"""SSE stream adapter for Deep Agent (CompiledStateGraph).
 
-Thin shim that formats DeepAgentWrapper.astream output as SSE-framed strings.
-DeepAgentWrapper.astream already yields StreamEvent-bearing dicts (same payload
-as ConversationHandler.run_stream), so we reuse _format_sse from sse_stream.py.
+Maps real LangGraph v2 stream events to SSE-framed StreamEvents.
 
-TODO SPEC-043: when langchain 1.x migration lands and real deepagents events
-are available, update the event-extraction logic here to handle the v2 envelope.
+v2 chunk format (version="v2"):
+    {
+        "type": "messages" | "updates" | "custom",
+        "ns": tuple,   # () for main agent
+        "data": ...,   # mode-specific payload
+    }
+
+"messages" data: (token, metadata) — token.content is the streamed text
+"updates"  data: dict of node_name → state updates (tool results in "tools" node)
 """
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, AsyncIterator
+from typing import TYPE_CHECKING, Any, AsyncIterator, Optional
+
+from chatServer.services.conversation_handler import StreamEvent
 
 if TYPE_CHECKING:
-    from .deep_agent_builder import DeepAgentWrapper
+    pass
 
 logger = logging.getLogger(__name__)
 
 
 async def deep_agent_stream_to_sse(
-    agent: "DeepAgentWrapper",
+    agent: Any,
     input_data: dict,
+    config: Optional[dict] = None,
 ) -> AsyncIterator[str]:
-    """Yield SSE-formatted strings from a DeepAgentWrapper.astream call.
+    """Yield SSE-formatted strings from a CompiledStateGraph.astream call.
 
-    DeepAgentWrapper.astream yields ``{"type": ..., "event": StreamEvent}``
-    dicts.  We unwrap the StreamEvent and pass it to _format_sse so the wire
-    format is identical to the existing ConversationHandler SSE path.
+    Handles real LangGraph v2 events:
+    - "messages" chunks → text_delta StreamEvents
+    - "updates" chunks with "tools" node → tool_result StreamEvents
+    - End of stream → message_complete StreamEvent
     """
-    from .conversation_handler import StreamEvent
     from .sse_stream import _format_sse
 
     try:
-        async for envelope in agent.astream(input_data):
-            if isinstance(envelope, dict) and "event" in envelope:
-                inner = envelope["event"]
-                if isinstance(inner, StreamEvent):
-                    yield _format_sse(inner)
-            elif isinstance(envelope, StreamEvent):
-                # Defensive: handle direct StreamEvent in case wrapper changes
-                yield _format_sse(envelope)
+        async for chunk in agent.astream(
+            input_data,
+            config=config,
+            stream_mode=["messages", "updates"],
+            version="v2",
+        ):
+            chunk_type = chunk.get("type") if isinstance(chunk, dict) else None
+            data = chunk.get("data") if isinstance(chunk, dict) else None
+
+            if chunk_type == "messages":
+                # data is a tuple (token, metadata)
+                if isinstance(data, tuple) and len(data) == 2:
+                    token, _metadata = data
+                    content = getattr(token, "content", None)
+                    if content and isinstance(content, str):
+                        yield _format_sse(StreamEvent(type="text_delta", text=content))
+
+            elif chunk_type == "updates":
+                # data is a dict of node_name → state updates
+                if isinstance(data, dict):
+                    for node_name, node_output in data.items():
+                        if node_name == "tools" and isinstance(node_output, dict):
+                            for msg in node_output.get("messages", []):
+                                tool_name = getattr(msg, "name", "") or ""
+                                tool_call_id = getattr(msg, "tool_call_id", "") or ""
+                                content = getattr(msg, "content", "") or ""
+                                if tool_name or tool_call_id:
+                                    yield _format_sse(StreamEvent(
+                                        type="tool_result",
+                                        tool_name=tool_name,
+                                        tool_call_id=tool_call_id,
+                                        result=str(content),
+                                    ))
+
     except Exception as e:
         logger.exception("deep_agent_stream_to_sse: unexpected error: %s", e)
-        error_event = StreamEvent(type="error", message=str(e))
-        yield _format_sse(error_event)
+        yield _format_sse(StreamEvent(type="error", message=str(e)))
+        return
+
+    yield _format_sse(StreamEvent(type="message_complete"))

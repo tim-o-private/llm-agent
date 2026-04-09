@@ -555,7 +555,12 @@ async def _handle_telegram_deep_agent(
         messages.append(user_msg)
 
         result = await agent.ainvoke({"messages": messages})
-        response_text = result["messages"][-1]["content"] if result["messages"] else ""
+        last_msg = result["messages"][-1] if result["messages"] else None
+        response_text = (
+            last_msg.content if hasattr(last_msg, "content")
+            else last_msg.get("content", "") if isinstance(last_msg, dict)
+            else ""
+        ) if last_msg else ""
 
         await MessageHistoryAdapter.save_messages(
             session_id=session_id,

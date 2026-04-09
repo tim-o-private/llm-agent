@@ -187,7 +187,12 @@ class SessionOpenService:
         # AC-32: empty history for session_open
         messages = [{"role": "user", "content": trigger_prompt}]
         result = await agent.ainvoke({"messages": messages})
-        return result["messages"][-1]["content"] if result["messages"] else ""
+        last_msg = result["messages"][-1] if result["messages"] else None
+        return (
+            last_msg.content if hasattr(last_msg, "content")
+            else last_msg.get("content", "") if isinstance(last_msg, dict)
+            else ""
+        ) if last_msg else ""
 
     async def _invoke_v2(
         self,

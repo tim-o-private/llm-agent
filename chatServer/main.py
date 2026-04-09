@@ -125,6 +125,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to initialize config service: {e}", exc_info=True)
 
+    # Initialize template registry (depends on config service)
+    try:
+        from .services.config_service import get_config_service
+        from .workflows.registry import initialize_template_registry
+        initialize_template_registry(get_config_service())
+        logger.info("Template registry initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize template registry: {e}", exc_info=True)
+
     # Initialize sandbox provisioner (depends on config service)
     try:
         from .sandbox.provisioner import initialize_provisioner
@@ -193,6 +202,14 @@ async def lifespan(app: FastAPI):
         logger.info("Sandbox provisioner stopped successfully")
     except Exception as e:
         logger.error(f"Failed to stop sandbox provisioner: {e}", exc_info=True)
+
+    # Shut down template registry
+    try:
+        from .workflows.registry import shutdown_template_registry
+        shutdown_template_registry()
+        logger.info("Template registry shut down successfully")
+    except Exception as e:
+        logger.error(f"Failed to shut down template registry: {e}", exc_info=True)
 
     # Stop config service
     try:
@@ -314,7 +331,12 @@ async def _handle_chat_deep_agent(
     messages.append(user_msg)
 
     result = await agent.ainvoke({"messages": messages})
-    response_text = result["messages"][-1]["content"] if result["messages"] else ""
+    last_msg = result["messages"][-1] if result["messages"] else None
+    response_text = (
+        last_msg.content if hasattr(last_msg, "content")
+        else last_msg.get("content", "") if isinstance(last_msg, dict)
+        else ""
+    ) if last_msg else ""
 
     await MessageHistoryAdapter.save_messages(
         session_id=chat_input.session_id,
