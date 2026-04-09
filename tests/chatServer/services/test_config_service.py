@@ -1,6 +1,6 @@
 """Tests for ConfigService — overlay resolution, caching, path protection."""
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -17,12 +17,17 @@ def clear_cache():
 
 @pytest.fixture
 def mock_supabase():
-    """Mock Supabase client with storage bucket proxy."""
+    """Mock Supabase client with async storage bucket proxy."""
     client = MagicMock()
     bucket_proxy = MagicMock()
+    # Storage bucket methods are async in storage3
+    bucket_proxy.download = AsyncMock()
+    bucket_proxy.upload = AsyncMock()
+    bucket_proxy.remove = AsyncMock()
+    bucket_proxy.list = AsyncMock(return_value=[])
     client.storage.from_.return_value = bucket_proxy
-    client.storage.get_bucket = MagicMock()
-    client.storage.create_bucket = MagicMock()
+    client.storage.get_bucket = AsyncMock()
+    client.storage.create_bucket = AsyncMock()
     return client, bucket_proxy
 
 

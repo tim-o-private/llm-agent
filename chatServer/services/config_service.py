@@ -8,7 +8,6 @@ Overlay resolution: user path wins over system path.
 Simple dict cache with invalidate-on-write (no TTL complexity).
 """
 
-import asyncio
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -75,8 +74,7 @@ class ConfigService:
         user_full = f"users/{user_id}/{path}"
 
         bucket = self._bucket()
-        await asyncio.to_thread(
-            bucket.upload,
+        await bucket.upload(
             path=user_full,
             file=content.encode("utf-8"),
             file_options={"content-type": self._content_type(path), "upsert": "true"},
@@ -92,8 +90,7 @@ class ConfigService:
         system_full = f"system/{path}"
 
         bucket = self._bucket()
-        await asyncio.to_thread(
-            bucket.upload,
+        await bucket.upload(
             path=system_full,
             file=content.encode("utf-8"),
             file_options={"content-type": self._content_type(path), "upsert": "true"},
@@ -113,7 +110,7 @@ class ConfigService:
 
         try:
             bucket = self._bucket()
-            await asyncio.to_thread(bucket.remove, [user_full])
+            await bucket.remove([user_full])
             logger.info("Config deleted: %s", user_full)
         except StorageApiError as e:
             if "not found" in str(e).lower() or (hasattr(e, "status") and e.status == 404):
@@ -144,10 +141,10 @@ class ConfigService:
     async def ensure_bucket(self) -> None:
         """Create the config bucket if it doesn't exist."""
         try:
-            self._storage.get_bucket(self.BUCKET)
+            await self._storage.get_bucket(self.BUCKET)
             logger.info("Config bucket already exists")
         except StorageApiError:
-            self._storage.create_bucket(
+            await self._storage.create_bucket(
                 self.BUCKET,
                 options={
                     "public": False,
@@ -176,7 +173,7 @@ class ConfigService:
 
         try:
             bucket = self._bucket()
-            data: bytes = await asyncio.to_thread(bucket.download, full_path)
+            data: bytes = await bucket.download(full_path)
             content = data.decode("utf-8")
             _cache[full_path] = content
             return content
@@ -196,7 +193,7 @@ class ConfigService:
             # Split prefix into folder path and name prefix for Supabase list API
             # The list API takes a path (folder) and returns items in it
             bucket = self._bucket()
-            items = await asyncio.to_thread(bucket.list, path=prefix)
+            items = await bucket.list(path=prefix)
             return [f"{prefix}{item['name']}" for item in items if item.get("name")]
         except StorageApiError as e:
             if "not found" in str(e).lower() or (hasattr(e, "status") and e.status == 404):
