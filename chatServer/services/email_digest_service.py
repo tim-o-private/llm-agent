@@ -1,12 +1,9 @@
 """Unified Email Digest Service for both scheduled and on-demand execution."""
 
 import logging
-import os
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-
-from supabase import Client as SupabaseClient
-from supabase import create_client
 
 from .deep_agent_builder import build_deep_agent, extract_agent_response
 from .email_digest_storage_service import get_email_digest_storage_service
@@ -161,12 +158,9 @@ class EmailDigestService:
     async def _load_ltm(self, user_id: str, agent_name: str) -> Optional[str]:
         """Load long-term memory notes for user+agent from the database."""
         try:
-            url = os.getenv("SUPABASE_URL", "")
-            key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-            if not url or not key:
-                return None
+            from ..database.supabase_client import create_system_client
 
-            db: SupabaseClient = create_client(url, key)
+            db = await create_system_client()
             result = (
                 db.table("agent_long_term_memory")
                 .select("notes")
@@ -185,9 +179,6 @@ class EmailDigestService:
     def _extract_email_count(self, digest_content: str) -> Optional[int]:
         """Extract email count from digest content if possible."""
         try:
-            # Look for patterns like "20 unread emails found" or "Summary: 15 emails"
-            import re
-
             patterns = [
                 r'(\d+)\s+(?:unread\s+)?emails?\s+found',
                 r'Summary:\s*(\d+)\s+(?:unread\s+)?emails?',

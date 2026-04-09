@@ -34,11 +34,9 @@ async def test_load_ltm_returns_notes(service):
     chain.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_result
 
     with patch(
-        "chatServer.services.email_digest_service.create_client",
+        "chatServer.database.supabase_client.create_system_client",
+        new_callable=AsyncMock,
         return_value=mock_db,
-    ), patch.dict(
-        "os.environ",
-        {"SUPABASE_URL": "https://test.supabase.co", "SUPABASE_SERVICE_ROLE_KEY": "key"},
     ):
         result = await service._load_ltm("user-123", "email_digest_agent")
 
@@ -56,11 +54,9 @@ async def test_load_ltm_returns_none_on_missing(service):
     chain.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value = mock_result
 
     with patch(
-        "chatServer.services.email_digest_service.create_client",
+        "chatServer.database.supabase_client.create_system_client",
+        new_callable=AsyncMock,
         return_value=mock_db,
-    ), patch.dict(
-        "os.environ",
-        {"SUPABASE_URL": "https://test.supabase.co", "SUPABASE_SERVICE_ROLE_KEY": "key"},
     ):
         result = await service._load_ltm("user-123", "email_digest_agent")
 

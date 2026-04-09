@@ -74,15 +74,23 @@ class ScheduledExecutionService:
                 }
             ).execute()
 
+            # Build effective prompt (heartbeat gets a structured checklist)
+            if schedule_type == "heartbeat":
+                effective_prompt = self._build_heartbeat_prompt(
+                    prompt, config.get("heartbeat_checklist", [])
+                )
+            else:
+                effective_prompt = prompt
+
+            if model_override:
+                logger.warning(f"Model override '{model_override}' requested but not supported by Deep Agent runtime")  # noqa: E501
+
             output, model_used = await self._execute_agent(
                 user_id=user_id,
                 agent_name=agent_name,
                 session_id=session_id,
                 channel=channel,
-                prompt=prompt,
-                config=config,
-                model_override=model_override,
-                schedule_type=schedule_type,
+                prompt=effective_prompt,
                 )
             pending_actions_service = PendingActionsService(
                 db_client=supabase_client,
@@ -237,11 +245,11 @@ class ScheduledExecutionService:
         session_id: str,
         channel: str,
         prompt: str,
-        config: Dict[str, Any],
-        model_override: Optional[str],
-        schedule_type: str,
-    ) -> tuple:
-        """Invoke the Deep Agent runtime for scheduled runs."""
+    ) -> tuple[str, str]:
+        """Invoke the Deep Agent runtime for scheduled runs.
+
+        Returns (response_text, model_name).
+        """
         from ..services.deep_agent_builder import build_deep_agent, extract_agent_response
 
         agent = await build_deep_agent(
@@ -251,23 +259,9 @@ class ScheduledExecutionService:
             channel=channel,
         )
 
-        # Model override is not supported on CompiledStateGraph at runtime
-        model_used = model_override or "default"
-        if model_override:
-            logger.info(f"Model override '{model_override}' requested for scheduled run (not applied — graph built with DB config)")  # noqa: E501
-
-        # Build effective prompt
-        if schedule_type == "heartbeat":
-            effective_prompt = self._build_heartbeat_prompt(
-                prompt, config.get("heartbeat_checklist", [])
-            )
-        else:
-            effective_prompt = prompt
-
-        # AC-32: empty history for scheduled runs
-        messages = [{"role": "user", "content": effective_prompt}]
+        messages = [{"role": "user", "content": prompt}]
         result = await agent.ainvoke({"messages": messages})
-        return extract_agent_response(result), model_used
+        return extract_agent_response(result), "default"
 
 
     def _build_heartbeat_prompt(

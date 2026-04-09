@@ -39,7 +39,7 @@ def mock_supabase():
 def _standard_patches():
     """Return the common set of patch context managers."""
     return {
-        "execute_v2": patch.object(
+        "execute_agent": patch.object(
             ScheduledExecutionService,
             "_execute_agent",
             new_callable=AsyncMock,
@@ -63,10 +63,10 @@ def _standard_patches():
 
 @pytest.mark.asyncio
 async def test_execute_success(service, mock_schedule, mock_supabase):
-    """Agent invoked via v2 path, result stored with status=success, user notified."""
+    """Agent invoked, result stored with status=success, user notified."""
     patches = _standard_patches()
     with (
-        patches["execute_v2"] as mock_exec_v2,
+        patches["execute_agent"] as mock_exec_v2,
         patches["get_supabase"] as mock_get_sb,
         patches["pending_svc"] as mock_pending_cls,
         patches["audit_svc"],
@@ -124,7 +124,7 @@ async def test_execute_passes_channel_based_on_schedule_type(service, mock_supab
     ]:
         patches = _standard_patches()
         with (
-            patches["execute_v2"] as mock_exec_v2,
+            patches["execute_agent"] as mock_exec_v2,
             patches["get_supabase"] as mock_get_sb,
             patches["pending_svc"] as mock_pending_cls,
             patches["audit_svc"],
@@ -148,7 +148,7 @@ async def test_execute_does_not_prepend_ltm(service, mock_schedule, mock_supabas
     """LTM is NOT prepended to the prompt — agents use read_memory tool on-demand."""
     patches = _standard_patches()
     with (
-        patches["execute_v2"] as mock_exec_v2,
+        patches["execute_agent"] as mock_exec_v2,
         patches["get_supabase"] as mock_get_sb,
         patches["pending_svc"] as mock_pending_cls,
         patches["audit_svc"],
@@ -172,7 +172,7 @@ async def test_execute_error(service, mock_schedule, mock_supabase):
     """Agent execution failure stores error result and returns success=False."""
     patches = _standard_patches()
     with (
-        patches["execute_v2"] as mock_exec_v2,
+        patches["execute_agent"] as mock_exec_v2,
         patches["get_supabase"] as mock_get_sb,
         patches["pending_svc"],
         patches["audit_svc"],
@@ -196,17 +196,17 @@ async def test_execute_error(service, mock_schedule, mock_supabase):
 
 @pytest.mark.asyncio
 async def test_execute_normalizes_content_blocks(service, mock_schedule, mock_supabase):
-    """_execute_agent response text is stored as-is (v2 returns plain string)."""
+    """_execute_agent response text is stored as-is."""
     patches = _standard_patches()
     # Override to return a specific response
-    patches["execute_v2"] = patch.object(
+    patches["execute_agent"] = patch.object(
         ScheduledExecutionService,
         "_execute_agent",
         new_callable=AsyncMock,
         return_value=("hello world", "test-model"),
     )
     with (
-        patches["execute_v2"],
+        patches["execute_agent"],
         patches["get_supabase"] as mock_get_sb,
         patches["pending_svc"] as mock_pending_cls,
         patches["audit_svc"],
@@ -229,7 +229,7 @@ async def test_execute_stores_duration_ms(service, mock_schedule, mock_supabase)
     """execution_duration_ms is a positive integer in the stored result."""
     patches = _standard_patches()
     with (
-        patches["execute_v2"],
+        patches["execute_agent"],
         patches["get_supabase"] as mock_get_sb,
         patches["pending_svc"] as mock_pending_cls,
         patches["audit_svc"],
@@ -253,14 +253,14 @@ async def test_execute_truncates_result_at_50000_chars(service, mock_schedule, m
     """Result content longer than 50000 chars is truncated before storage."""
     long_output = "x" * 60000
     patches = _standard_patches()
-    patches["execute_v2"] = patch.object(
+    patches["execute_agent"] = patch.object(
         ScheduledExecutionService,
         "_execute_agent",
         new_callable=AsyncMock,
         return_value=(long_output, "test-model"),
     )
     with (
-        patches["execute_v2"],
+        patches["execute_agent"],
         patches["get_supabase"] as mock_get_sb,
         patches["pending_svc"] as mock_pending_cls,
         patches["audit_svc"],
@@ -307,7 +307,7 @@ async def test_execute_creates_chat_session(service, mock_schedule):
 
     patches = _standard_patches()
     with (
-        patches["execute_v2"],
+        patches["execute_agent"],
         patches["get_supabase"] as mock_get_sb,
         patches["pending_svc"] as mock_pending_cls,
         patches["audit_svc"],
@@ -361,7 +361,7 @@ async def test_execute_marks_session_inactive_after_completion(service, mock_sch
 
     patches = _standard_patches()
     with (
-        patches["execute_v2"],
+        patches["execute_agent"],
         patches["get_supabase"] as mock_get_sb,
         patches["pending_svc"] as mock_pending_cls,
         patches["audit_svc"],
@@ -382,8 +382,8 @@ async def test_execute_marks_session_inactive_after_completion(service, mock_sch
 
 
 @pytest.mark.asyncio
-async def test_execute_applies_model_override(service, mock_supabase):
-    """When config has model_override, it is passed through to _execute_agent."""
+async def test_execute_logs_model_override_warning(service, mock_supabase, caplog):
+    """When config has model_override, a warning is logged (not supported at runtime)."""
     schedule = {
         "id": "schedule-123",
         "user_id": "user-123",
@@ -397,7 +397,7 @@ async def test_execute_applies_model_override(service, mock_supabase):
 
     patches = _standard_patches()
     with (
-        patches["execute_v2"] as mock_exec_v2,
+        patches["execute_agent"],
         patches["get_supabase"] as mock_get_sb,
         patches["pending_svc"] as mock_pending_cls,
         patches["audit_svc"],
@@ -408,24 +408,25 @@ async def test_execute_applies_model_override(service, mock_supabase):
         mock_notif_cls.return_value.notify_user = AsyncMock()
         mock_notif_cls.return_value.notify_pending_actions = AsyncMock()
 
-        await service.execute(schedule)
+        import logging
+        with caplog.at_level(logging.WARNING):
+            await service.execute(schedule)
 
-    call_kwargs = mock_exec_v2.call_args.kwargs
-    assert call_kwargs["model_override"] == "claude-sonnet-4-6"
+    assert any("model override" in r.message.lower() for r in caplog.records)
 
 
 @pytest.mark.asyncio
 async def test_execute_stores_metadata_with_model(service, mock_supabase):
     """Execution metadata includes the model name from _execute_agent."""
     patches = _standard_patches()
-    patches["execute_v2"] = patch.object(
+    patches["execute_agent"] = patch.object(
         ScheduledExecutionService,
         "_execute_agent",
         new_callable=AsyncMock,
         return_value=("response", "claude-haiku-4-5-20251001"),
     )
     with (
-        patches["execute_v2"],
+        patches["execute_agent"],
         patches["get_supabase"] as mock_get_sb,
         patches["pending_svc"] as mock_pending_cls,
         patches["audit_svc"],
