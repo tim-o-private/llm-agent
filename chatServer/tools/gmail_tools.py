@@ -18,11 +18,11 @@ try:
     from google.oauth2.credentials import Credentials
     from langchain_google_community import GmailToolkit
     from langchain_google_community.gmail.search import GmailSearch
-except ImportError:
+except ImportError as e:
     raise ImportError(
         "langchain-google-community is required for Gmail tools. "
-        "Install with: pip install langchain-google-community[gmail]"
-    )
+        f"Install with: pip install langchain-google-community[gmail] (original error: {e})"
+    ) from e
 
 logger = logging.getLogger(__name__)
 
