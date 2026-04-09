@@ -6,7 +6,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from chatServer.services.conversation_handler import StreamEvent
 from chatServer.services.deep_agent_stream import deep_agent_stream_to_sse
 
 # ---------------------------------------------------------------------------
@@ -191,7 +190,7 @@ async def test_astream_exception_yields_error_sse():
 
     async def _broken_astream(input_data, **kwargs):
         raise RuntimeError("stream failed")
-        yield  # make it a generator  # noqa: unreachable
+        yield  # make it a generator
 
     agent.astream = _broken_astream
 
@@ -210,7 +209,7 @@ async def test_passes_input_data_to_astream():
     async def _astream(input_data, **kwargs):
         captured["input_data"] = input_data
         return
-        yield  # noqa: unreachable
+        yield  # make it a generator
 
     agent.astream = _astream
     input_data = {"messages": [{"role": "user", "content": "hi"}]}
@@ -229,7 +228,7 @@ async def test_passes_version_v2_to_astream():
     async def _astream(input_data, **kwargs):
         captured["kwargs"] = kwargs
         return
-        yield  # noqa: unreachable
+        yield  # make it a generator
 
     agent.astream = _astream
 
@@ -247,7 +246,7 @@ async def test_passes_stream_modes_to_astream():
     async def _astream(input_data, **kwargs):
         captured["kwargs"] = kwargs
         return
-        yield  # noqa: unreachable
+        yield  # make it a generator
 
     agent.astream = _astream
 
