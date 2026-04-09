@@ -31,7 +31,10 @@
       "mcp__memory__search",
       "WebFetch(domain:assistant-ui.com)",
       "WebFetch(domain:www.assistant-ui.com)",
-      "Skill(claude-api)"
+      "Skill(claude-api)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "WebFetch(domain:docs.langchain.com)",
+      "WebFetch(domain:pypi.org)"
     ]
   },
   "prefersReducedMotion": true
