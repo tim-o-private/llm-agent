@@ -6,7 +6,7 @@ from typing import Any, Optional
 import psycopg
 
 from chatServer.config.settings import get_settings
-from chatServer.services.conversation_handler_builder import build_conversation_handler
+from chatServer.services.deep_agent_builder import build_deep_agent
 
 
 class GmailIntegrationTestHelper:
@@ -123,13 +123,13 @@ class GmailIntegrationTestHelper:
 
     async def create_test_agent(self) -> Any:
         """Create test agent with Gmail tools."""
-        handler = await build_conversation_handler(
+        agent = await build_deep_agent(
             agent_name="test_email_digest_agent",
             user_id=self.test_user_id,
             session_id=f"test_session_{self.test_user_id}",
             channel="scheduled",
         )
-        return handler
+        return agent
 
     async def execute_gmail_digest(self,
                                  agent: Any,

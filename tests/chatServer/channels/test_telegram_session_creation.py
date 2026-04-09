@@ -69,7 +69,7 @@ async def test_handle_message_upserts_chat_session():
     with (
         patch("chatServer.channels.telegram_bot.get_telegram_bot_service", return_value=bot_service),
         patch(
-            "chatServer.channels.telegram_bot._handle_telegram_v2",
+            "chatServer.channels.telegram_bot._handle_telegram_agent",
             new_callable=AsyncMock,
             return_value="hi there",
         ),

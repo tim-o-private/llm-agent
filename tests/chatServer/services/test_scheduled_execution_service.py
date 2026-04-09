@@ -41,7 +41,7 @@ def _standard_patches():
     return {
         "execute_v2": patch.object(
             ScheduledExecutionService,
-            "_execute_v2",
+            "_execute_agent",
             new_callable=AsyncMock,
             return_value=("Test response", "test-model"),
         ),
@@ -84,7 +84,7 @@ async def test_execute_success(service, mock_schedule, mock_supabase):
     assert result["success"] is True
     assert result["output"] == "Test response"
 
-    # Verify _execute_v2 was called
+    # Verify _execute_agent was called
     mock_exec_v2.assert_awaited_once()
 
     # Verify result stored in DB
@@ -103,7 +103,7 @@ async def test_execute_success(service, mock_schedule, mock_supabase):
 
 @pytest.mark.asyncio
 async def test_execute_passes_channel_based_on_schedule_type(service, mock_supabase):
-    """_execute_v2 is called with channel matching schedule_type."""
+    """_execute_agent is called with channel matching schedule_type."""
     heartbeat_schedule = {
         "id": "schedule-123",
         "user_id": "user-123",
@@ -196,12 +196,12 @@ async def test_execute_error(service, mock_schedule, mock_supabase):
 
 @pytest.mark.asyncio
 async def test_execute_normalizes_content_blocks(service, mock_schedule, mock_supabase):
-    """_execute_v2 response text is stored as-is (v2 returns plain string)."""
+    """_execute_agent response text is stored as-is (v2 returns plain string)."""
     patches = _standard_patches()
     # Override to return a specific response
     patches["execute_v2"] = patch.object(
         ScheduledExecutionService,
-        "_execute_v2",
+        "_execute_agent",
         new_callable=AsyncMock,
         return_value=("hello world", "test-model"),
     )
@@ -255,7 +255,7 @@ async def test_execute_truncates_result_at_50000_chars(service, mock_schedule, m
     patches = _standard_patches()
     patches["execute_v2"] = patch.object(
         ScheduledExecutionService,
-        "_execute_v2",
+        "_execute_agent",
         new_callable=AsyncMock,
         return_value=(long_output, "test-model"),
     )
@@ -383,7 +383,7 @@ async def test_execute_marks_session_inactive_after_completion(service, mock_sch
 
 @pytest.mark.asyncio
 async def test_execute_applies_model_override(service, mock_supabase):
-    """When config has model_override, it is passed through to _execute_v2."""
+    """When config has model_override, it is passed through to _execute_agent."""
     schedule = {
         "id": "schedule-123",
         "user_id": "user-123",
@@ -416,11 +416,11 @@ async def test_execute_applies_model_override(service, mock_supabase):
 
 @pytest.mark.asyncio
 async def test_execute_stores_metadata_with_model(service, mock_supabase):
-    """Execution metadata includes the model name from _execute_v2."""
+    """Execution metadata includes the model name from _execute_agent."""
     patches = _standard_patches()
     patches["execute_v2"] = patch.object(
         ScheduledExecutionService,
-        "_execute_v2",
+        "_execute_agent",
         new_callable=AsyncMock,
         return_value=("response", "claude-haiku-4-5-20251001"),
     )

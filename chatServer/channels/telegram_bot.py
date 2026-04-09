@@ -502,18 +502,9 @@ async def handle_message(message: types.Message) -> None:
         # Send typing indicator
         await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
-        # Feature flag: ConversationHandler v2 or legacy AgentExecutor
-        from ..config.settings import get_settings
-        settings = get_settings()
-
-        if settings.deep_agent_enabled:
-            output = await _handle_telegram_deep_agent(
-                user_id, session_id, message.text
-            )
-        else:
-            output = await _handle_telegram_v2(
-                user_id, session_id, message.text
-            )
+        output = await _handle_telegram_agent(
+            user_id, session_id, message.text
+        )
 
         # Send response (split if too long for Telegram's 4096 limit)
         if len(output) > 4000:
@@ -527,12 +518,12 @@ async def handle_message(message: types.Message) -> None:
         await message.answer("Sorry, something went wrong. Please try again.")
 
 
-async def _handle_telegram_deep_agent(
+async def _handle_telegram_agent(
     user_id: str, session_id: str, text: str
 ) -> str:
-    """Deep agent path for Telegram."""
+    """Invoke the Deep Agent runtime for a Telegram message."""
     from ..database.connection import get_database_manager
-    from ..services.deep_agent_builder import build_deep_agent
+    from ..services.deep_agent_builder import build_deep_agent, extract_agent_response
     from ..services.message_history_adapter import MessageHistoryAdapter
 
     agent = await build_deep_agent(
@@ -555,12 +546,7 @@ async def _handle_telegram_deep_agent(
         messages.append(user_msg)
 
         result = await agent.ainvoke({"messages": messages})
-        last_msg = result["messages"][-1] if result["messages"] else None
-        response_text = (
-            last_msg.content if hasattr(last_msg, "content")
-            else last_msg.get("content", "") if isinstance(last_msg, dict)
-            else ""
-        ) if last_msg else ""
+        response_text = extract_agent_response(result)
 
         await MessageHistoryAdapter.save_messages(
             session_id=session_id,
@@ -570,45 +556,6 @@ async def _handle_telegram_deep_agent(
 
     return response_text
 
-
-async def _handle_telegram_v2(
-    user_id: str, session_id: str, text: str
-) -> str:
-    """ConversationHandler v2 path for Telegram (AC-19)."""
-    from ..database.connection import get_database_manager
-    from ..services.conversation_handler_builder import (
-        build_conversation_handler,
-    )
-    from ..services.message_history_adapter import MessageHistoryAdapter
-
-    handler = await build_conversation_handler(
-        user_id=user_id,
-        agent_name="assistant",
-        session_id=session_id,
-        channel="telegram",
-    )
-
-    db_manager = get_database_manager()
-    await db_manager.ensure_initialized()
-
-    async with db_manager.pool.connection() as pg_conn:
-        messages = await MessageHistoryAdapter.load_history(
-            session_id=session_id,
-            pg_connection=pg_conn,
-            limit=100,
-        )
-        user_msg = {"role": "user", "content": text}
-        messages.append(user_msg)
-
-        result = await handler.run(messages)
-
-        await MessageHistoryAdapter.save_messages(
-            session_id=session_id,
-            messages=[user_msg] + result.new_messages,
-            pg_connection=pg_conn,
-        )
-
-    return result.response_text
 
 
 

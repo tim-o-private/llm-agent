@@ -114,19 +114,10 @@ class SessionOpenService:
         else:
             trigger_prompt = "[SYSTEM: User returned to app. No user message. Check tools and decide whether to greet.]"  # noqa: E501
 
-        # Feature flag: ConversationHandler v2 or legacy AgentExecutor
-        from ..config.settings import get_settings
-        settings = get_settings()
-
         try:
-            if settings.deep_agent_enabled:
-                output = await self._invoke_deep_agent(
-                    user_id, agent_name, session_id, trigger_prompt
-                )
-            else:
-                output = await self._invoke_v2(
-                    user_id, agent_name, session_id, trigger_prompt
-                )
+            output = await self._invoke_agent(
+                user_id, agent_name, session_id, trigger_prompt
+            )
         except Exception as e:
             error_name = type(e).__name__
             logger.error(
@@ -158,7 +149,7 @@ class SessionOpenService:
 
         # 9. Persist AI message if not silent
         if not silent:
-            await self._persist_ai_message_v2(session_id, output)
+            await self._persist_ai_message(session_id, output)
 
         return {
             "response": output,
@@ -167,15 +158,15 @@ class SessionOpenService:
             "session_id": session_id,
         }
 
-    async def _invoke_deep_agent(
+    async def _invoke_agent(
         self,
         user_id: str,
         agent_name: str,
         session_id: str,
         trigger_prompt: str,
     ) -> str:
-        """Deep agent path for session_open."""
-        from ..services.deep_agent_builder import build_deep_agent
+        """Invoke the Deep Agent runtime for session_open."""
+        from ..services.deep_agent_builder import build_deep_agent, extract_agent_response
 
         agent = await build_deep_agent(
             user_id=user_id,
@@ -187,37 +178,10 @@ class SessionOpenService:
         # AC-32: empty history for session_open
         messages = [{"role": "user", "content": trigger_prompt}]
         result = await agent.ainvoke({"messages": messages})
-        last_msg = result["messages"][-1] if result["messages"] else None
-        return (
-            last_msg.content if hasattr(last_msg, "content")
-            else last_msg.get("content", "") if isinstance(last_msg, dict)
-            else ""
-        ) if last_msg else ""
+        return extract_agent_response(result)
 
-    async def _invoke_v2(
-        self,
-        user_id: str,
-        agent_name: str,
-        session_id: str,
-        trigger_prompt: str,
-    ) -> str:
-        """ConversationHandler v2 path for session_open (AC-21, AC-32)."""
-        from ..services.conversation_handler_builder import build_conversation_handler
-
-        handler = await build_conversation_handler(
-            user_id=user_id,
-            agent_name=agent_name,
-            session_id=session_id,
-            channel="session_open",
-        )
-
-        # AC-32: empty history for session_open
-        messages = [{"role": "user", "content": trigger_prompt}]
-        result = await handler.run(messages)
-        return result.response_text
-
-    async def _persist_ai_message_v2(self, session_id: str, content: str) -> None:
-        """Persist AI opening message in Anthropic-native format."""
+    async def _persist_ai_message(self, session_id: str, content: str) -> None:
+        """Persist AI opening message."""
         from ..database.connection import get_database_manager
         from ..services.message_history_adapter import MessageHistoryAdapter
 
@@ -231,7 +195,7 @@ class SessionOpenService:
                     pg_connection=pg_conn,
                 )
         except Exception as e:
-            logger.warning(f"Failed to persist session_open AI message (v2): {e}")
+            logger.warning(f"Failed to persist session_open AI message: {e}")
 
     async def _has_memory(self, supabase_client, user_id: str, agent_name: str) -> bool:
         """Check if user has any memories in min-memory."""

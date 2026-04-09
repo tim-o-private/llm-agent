@@ -302,33 +302,3 @@ def test_channel_prompt_session_open_new_user():
     assert "first time" in prompt.lower()
 
 
-# ---------------------------------------------------------------------------
-# Feature flag — settings.py
-# ---------------------------------------------------------------------------
-
-
-def test_feature_flag_defaults_false():
-    """DEEP_AGENT_ENABLED defaults to False."""
-    env_without_flag = {k: v for k, v in os.environ.items() if k != "DEEP_AGENT_ENABLED"}
-    with patch.dict(os.environ, env_without_flag, clear=True):
-        from chatServer.config.settings import Settings
-
-        s = Settings()
-        assert s.deep_agent_enabled is False
-
-
-def test_feature_flag_enabled_via_env():
-    """DEEP_AGENT_ENABLED=true activates the flag."""
-    with patch.dict(os.environ, {"DEEP_AGENT_ENABLED": "true"}):
-        from chatServer.config.settings import Settings
-
-        s = Settings()
-        assert s.deep_agent_enabled is True
-
-
-def test_feature_flag_case_insensitive():
-    with patch.dict(os.environ, {"DEEP_AGENT_ENABLED": "TRUE"}):
-        from chatServer.config.settings import Settings
-
-        s = Settings()
-        assert s.deep_agent_enabled is True

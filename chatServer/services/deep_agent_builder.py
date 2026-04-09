@@ -24,8 +24,24 @@ from cachetools import TTLCache
 
 logger = logging.getLogger(__name__)
 
+
+def extract_agent_response(result: dict) -> str:
+    """Extract response text from a Deep Agent ainvoke() result.
+
+    Handles both LangChain message objects (.content attr) and plain dicts.
+    """
+    messages = result.get("messages")
+    if not messages:
+        return ""
+    last_msg = messages[-1]
+    if hasattr(last_msg, "content"):
+        return last_msg.content
+    if isinstance(last_msg, dict):
+        return last_msg.get("content", "")
+    return ""
+
 # ---------------------------------------------------------------------------
-# Agent cache  (same pattern as conversation_handler_builder.py)
+# Agent cache  (keyed on user_id + agent_name)
 # ---------------------------------------------------------------------------
 
 _agent_cache: TTLCache[Tuple[str, str], Any] = TTLCache(
@@ -216,7 +232,7 @@ async def _build_agent(
     """Load everything from DB and construct a CompiledStateGraph via create_deep_agent()."""
     from deepagents import create_deep_agent
 
-    # Lazy imports — same pattern as conversation_handler_builder.py
+    # Lazy imports to avoid circular dependencies
     from chatServer.services.agent_config_cache_service import get_cached_agent_config
     from chatServer.services.tool_cache_service import get_cached_tools_for_agent
     from chatServer.services.user_instructions_cache_service import get_cached_user_instructions

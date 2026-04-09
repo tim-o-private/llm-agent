@@ -6,16 +6,16 @@ import pytest
 
 from chatServer.services.email_digest_service import EmailDigestService
 
-_BUILD_HANDLER = "chatServer.services.email_digest_service.build_conversation_handler"
+_BUILD_AGENT = "chatServer.services.email_digest_service.build_deep_agent"
 
 
-def _mock_handler(response_text="Digest content"):
-    """Return a mock ConversationHandler whose run() yields response_text."""
-    handler = MagicMock()
-    run_result = MagicMock()
-    run_result.response_text = response_text
-    handler.run = AsyncMock(return_value=run_result)
-    return handler
+def _mock_agent(response_text="Digest content"):
+    """Return a mock Deep Agent whose ainvoke() yields response_text."""
+    agent = MagicMock()
+    last_msg = MagicMock()
+    last_msg.content = response_text
+    agent.ainvoke = AsyncMock(return_value={"messages": [last_msg]})
+    return agent
 
 
 @pytest.fixture
@@ -70,12 +70,12 @@ async def test_load_ltm_returns_none_on_missing(service):
 @pytest.mark.asyncio
 async def test_generate_digest_prepends_ltm_to_prompt(service):
     """When LTM exists, it is prepended to the digest prompt."""
-    mock_handler = _mock_handler("Digest content")
+    mock_agent = _mock_agent("Digest content")
 
     with patch(
-        _BUILD_HANDLER,
+        _BUILD_AGENT,
         new_callable=AsyncMock,
-        return_value=mock_handler,
+        return_value=mock_agent,
     ), patch.object(
         service, "_load_ltm", return_value="User prefers concise summaries"
     ), patch.object(
@@ -84,9 +84,9 @@ async def test_generate_digest_prepends_ltm_to_prompt(service):
         result = await service.generate_digest(hours_back=24)
 
     assert result["success"] is True
-    # Verify the prompt passed to handler.run() included LTM context
-    messages = mock_handler.run.call_args[0][0]
-    prompt_text = messages[0]["content"]
+    # Verify the prompt passed to agent.ainvoke() included LTM context
+    invoke_arg = mock_agent.ainvoke.call_args[0][0]
+    prompt_text = invoke_arg["messages"][0]["content"]
     assert "User context (from memory):" in prompt_text
     assert "User prefers concise summaries" in prompt_text
 
@@ -94,12 +94,12 @@ async def test_generate_digest_prepends_ltm_to_prompt(service):
 @pytest.mark.asyncio
 async def test_generate_digest_works_without_ltm(service):
     """When no LTM exists, the digest still generates normally."""
-    mock_handler = _mock_handler("Digest content")
+    mock_agent = _mock_agent("Digest content")
 
     with patch(
-        _BUILD_HANDLER,
+        _BUILD_AGENT,
         new_callable=AsyncMock,
-        return_value=mock_handler,
+        return_value=mock_agent,
     ), patch.object(
         service, "_load_ltm", return_value=None
     ), patch.object(
@@ -108,7 +108,7 @@ async def test_generate_digest_works_without_ltm(service):
         result = await service.generate_digest(hours_back=24)
 
     assert result["success"] is True
-    messages = mock_handler.run.call_args[0][0]
-    prompt_text = messages[0]["content"]
+    invoke_arg = mock_agent.ainvoke.call_args[0][0]
+    prompt_text = invoke_arg["messages"][0]["content"]
     assert "User context (from memory):" not in prompt_text
     assert "email digest" in prompt_text.lower()

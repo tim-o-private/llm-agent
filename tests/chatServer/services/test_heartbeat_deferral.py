@@ -52,7 +52,7 @@ async def test_ac_22_heartbeat_deferred_in_execute_when_briefings_enabled(servic
 
     with (
         patch.object(
-            ScheduledExecutionService, "_execute_v2",
+            ScheduledExecutionService, "_execute_agent",
             new_callable=AsyncMock,
             return_value=("Found something important!", "test-model"),
         ),
@@ -97,7 +97,7 @@ async def test_ac_23_heartbeat_immediate_when_briefings_disabled(service):
 
     with (
         patch.object(
-            ScheduledExecutionService, "_execute_v2",
+            ScheduledExecutionService, "_execute_agent",
             new_callable=AsyncMock,
             return_value=("Found something important!", "test-model"),
         ),

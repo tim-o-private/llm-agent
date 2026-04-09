@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 from supabase import Client as SupabaseClient
 from supabase import create_client
 
-from .conversation_handler_builder import build_conversation_handler
+from .deep_agent_builder import build_deep_agent, extract_agent_response
 from .email_digest_storage_service import get_email_digest_storage_service
 
 logger = logging.getLogger(__name__)
@@ -53,16 +53,16 @@ class EmailDigestService:
         try:
             logger.info(f"Generating email digest for user {self.user_id} (context: {self.context}, hours_back: {hours_back})")  # noqa: E501
 
-            # Build the ConversationHandler for email_digest_agent
+            # Build the Deep Agent for email_digest_agent
             session_id = f"email_digest_{self.context}_{generated_at.strftime('%Y%m%d_%H%M%S')}"
             try:
-                handler = await build_conversation_handler(
+                agent = await build_deep_agent(
                     agent_name="email_digest_agent",
                     user_id=self.user_id,
                     session_id=session_id,
                     channel="scheduled",
                 )
-                logger.info(f"Successfully built email_digest_agent handler for user {self.user_id}")
+                logger.info(f"Successfully built email_digest_agent for user {self.user_id}")
             except Exception as e:
                 logger.error(f"Failed to build email_digest_agent for user {self.user_id}: {e}")
                 raise RuntimeError(f"Could not load email digest agent: {e}")
@@ -86,11 +86,9 @@ class EmailDigestService:
 
             logger.info(f"Invoking email_digest_agent with prompt: {prompt[:100]}...")
 
-            # Invoke the handler — fresh context for digest generation
-            result = await handler.run([{"role": "user", "content": prompt}])
-
-            # Extract the digest content from handler response
-            digest_content = result.response_text
+            # Invoke the deep agent — fresh context for digest generation
+            result = await agent.ainvoke({"messages": [{"role": "user", "content": prompt}]})
+            digest_content = extract_agent_response(result)
 
             if not digest_content:
                 logger.warning(f"email_digest_agent returned empty response for user {self.user_id}")

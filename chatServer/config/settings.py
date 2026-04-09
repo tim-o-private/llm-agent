@@ -29,13 +29,6 @@ class Settings:
         self.telegram_bot_token: Optional[str] = os.getenv("TELEGRAM_BOT_TOKEN")
         self.telegram_webhook_url: Optional[str] = os.getenv("TELEGRAM_WEBHOOK_URL")
 
-        # Feature flags
-        self.conversation_handler_v2: bool = (
-            os.getenv("CONVERSATION_HANDLER_V2", "false").lower() == "true"
-        )
-        self.deep_agent_enabled: bool = (
-            os.getenv("DEEP_AGENT_ENABLED", "false").lower() == "true"
-        )
 
         # Sandbox settings
         self.sandbox_enabled: bool = os.getenv("BWRAP_ENABLED", "false").lower() == "true"
@@ -82,12 +75,7 @@ class Settings:
         self.llm_agent_src_path = os.getenv("LLM_AGENT_SRC_PATH", "src")
         self.telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
         self.telegram_webhook_url = os.getenv("TELEGRAM_WEBHOOK_URL")
-        self.conversation_handler_v2 = (
-            os.getenv("CONVERSATION_HANDLER_V2", "false").lower() == "true"
-        )
-        self.deep_agent_enabled = (
-            os.getenv("DEEP_AGENT_ENABLED", "false").lower() == "true"
-        )
+        # Feature flags (reserved for future use)
         self.sandbox_enabled = os.getenv("BWRAP_ENABLED", "false").lower() == "true"
         self.sandbox_base_path = os.getenv("SANDBOX_BASE_PATH", "/data/sandboxes")
         self.sandbox_system_path = os.getenv("SANDBOX_SYSTEM_PATH", "/data/sandbox-system")

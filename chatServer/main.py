@@ -1,10 +1,10 @@
+import json
 import logging
 import os
 import sys
 from contextlib import asynccontextmanager
 from typing import List
 
-# For V2 Agent Memory System
 import psycopg
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -276,42 +276,23 @@ async def chat_endpoint(
     user_id: str = Depends(get_current_user),
     pg_connection: psycopg.AsyncConnection = Depends(get_db_connection),
 ):
-    """Chat endpoint that processes user messages through agents.
+    """Chat endpoint that processes user messages through the Deep Agent runtime.
 
-    Routes to ConversationHandler (v2) or ChatService based on the
-    CONVERSATION_HANDLER_V2 feature flag.  V2 supports SSE streaming
-    when ``Accept: text/event-stream`` is sent.
+    Supports SSE streaming when ``Accept: text/event-stream`` is sent.
     """
-    settings = get_settings()
-
-    if settings.deep_agent_enabled:
-        wants_stream = "text/event-stream" in request.headers.get("accept", "")
-        if wants_stream:
-            return await _handle_chat_deep_agent_stream(chat_input, user_id, pg_connection)
-        return await _handle_chat_deep_agent(chat_input, user_id, pg_connection)
-
-    if settings.conversation_handler_v2:
-        wants_stream = "text/event-stream" in request.headers.get(
-            "accept", ""
-        )
-        if wants_stream:
-            return await _handle_chat_v2_stream(
-                chat_input, user_id, pg_connection
-            )
-        return await _handle_chat_v2(
-            chat_input, user_id, pg_connection, request
-        )
-
-    raise HTTPException(status_code=501, detail="No agent runtime enabled")
+    wants_stream = "text/event-stream" in request.headers.get("accept", "")
+    if wants_stream:
+        return await _handle_chat_stream(chat_input, user_id, pg_connection)
+    return await _handle_chat(chat_input, user_id, pg_connection)
 
 
-async def _handle_chat_deep_agent(
+async def _handle_chat(
     chat_input: ChatRequest,
     user_id: str,
     pg_connection: psycopg.AsyncConnection,
 ) -> ChatResponse:
-    """Deep agent path — DeepAgentWrapper over ConversationHandler (non-streaming)."""
-    from .services.deep_agent_builder import build_deep_agent
+    """Non-streaming chat via Deep Agent runtime."""
+    from .services.deep_agent_builder import build_deep_agent, extract_agent_response
     from .services.message_history_adapter import MessageHistoryAdapter
 
     if not chat_input.session_id:
@@ -333,12 +314,7 @@ async def _handle_chat_deep_agent(
     messages.append(user_msg)
 
     result = await agent.ainvoke({"messages": messages})
-    last_msg = result["messages"][-1] if result["messages"] else None
-    response_text = (
-        last_msg.content if hasattr(last_msg, "content")
-        else last_msg.get("content", "") if isinstance(last_msg, dict)
-        else ""
-    ) if last_msg else ""
+    response_text = extract_agent_response(result)
 
     await MessageHistoryAdapter.save_messages(
         session_id=chat_input.session_id,
@@ -353,12 +329,12 @@ async def _handle_chat_deep_agent(
     )
 
 
-async def _handle_chat_deep_agent_stream(
+async def _handle_chat_stream(
     chat_input: ChatRequest,
     user_id: str,
     pg_connection: psycopg.AsyncConnection,
 ):
-    """Deep agent SSE streaming path."""
+    """SSE streaming chat via Deep Agent runtime."""
     from fastapi.responses import StreamingResponse
 
     from .services.deep_agent_builder import build_deep_agent
@@ -394,14 +370,12 @@ async def _handle_chat_deep_agent_stream(
         """Wrap the SSE stream to accumulate and persist the AI response."""
         accumulated_text = []
         async for sse_line in deep_agent_stream_to_sse(agent, {"messages": messages}):
-            # Extract text from text_delta events for persistence
-            if '"text_delta"' in sse_line:
-                import json as _json
+            if sse_line.startswith("data: "):
                 try:
-                    payload = _json.loads(sse_line.removeprefix("data: ").strip())
-                    if payload.get("text"):
+                    payload = json.loads(sse_line[6:])
+                    if payload.get("type") == "text_delta" and payload.get("text"):
                         accumulated_text.append(payload["text"])
-                except (ValueError, KeyError):
+                except (json.JSONDecodeError, KeyError):
                     pass
             yield sse_line
 
@@ -422,128 +396,6 @@ async def _handle_chat_deep_agent_stream(
             "Connection": "keep-alive",
         },
     )
-
-
-async def _handle_chat_v2(
-    chat_input: ChatRequest,
-    user_id: str,
-    pg_connection: psycopg.AsyncConnection,
-    request: Request,
-) -> ChatResponse:
-    """ConversationHandler v2 path — direct Anthropic Messages API."""
-    from .services.conversation_handler_builder import (
-        build_conversation_handler,
-    )
-    from .services.message_history_adapter import MessageHistoryAdapter
-
-    if not chat_input.session_id:
-        raise HTTPException(status_code=400, detail="session_id is required")
-
-    handler = await build_conversation_handler(
-        user_id=user_id,
-        agent_name=chat_input.agent_name,
-        session_id=chat_input.session_id,
-    )
-
-    # Load history and append current user message
-    messages = await MessageHistoryAdapter.load_history(
-        session_id=chat_input.session_id,
-        pg_connection=pg_connection,
-        limit=100,
-    )
-    user_msg = {"role": "user", "content": chat_input.message}
-    messages.append(user_msg)
-
-    # Run the handler
-    result = await handler.run(messages)
-
-    # Persist: user message + all messages generated during the run
-    await MessageHistoryAdapter.save_messages(
-        session_id=chat_input.session_id,
-        messages=[user_msg] + result.new_messages,
-        pg_connection=pg_connection,
-    )
-
-    # Telegram cross-channel push (best-effort, AC-33)
-    try:
-        from .services.telegram_push import push_to_telegram_if_linked
-
-        db_client = await create_user_scoped_client(user_id)
-        tg_text = (
-            f"*You (web):* {chat_input.message}\n\n{result.response_text}"
-        )
-        await push_to_telegram_if_linked(
-            user_id, chat_input.session_id, tg_text, db_client
-        )
-    except Exception as e:
-        logger.debug("Telegram push skipped: %s", e)
-
-    return ChatResponse(
-        session_id=chat_input.session_id,
-        response=result.response_text,
-        error=None,
-    )
-
-
-async def _handle_chat_v2_stream(
-    chat_input: ChatRequest,
-    user_id: str,
-    pg_connection: psycopg.AsyncConnection,
-):
-    """ConversationHandler v2 SSE streaming path (AC-10 – AC-14)."""
-    from fastapi.responses import StreamingResponse
-
-    from .services.conversation_handler_builder import (
-        build_conversation_handler,
-    )
-    from .services.message_history_adapter import MessageHistoryAdapter
-    from .services.sse_stream import sse_stream
-
-    if not chat_input.session_id:
-        raise HTTPException(status_code=400, detail="session_id is required")
-
-    handler = await build_conversation_handler(
-        user_id=user_id,
-        agent_name=chat_input.agent_name,
-        session_id=chat_input.session_id,
-    )
-
-    messages = await MessageHistoryAdapter.load_history(
-        session_id=chat_input.session_id,
-        pg_connection=pg_connection,
-        limit=100,
-    )
-    user_msg = {"role": "user", "content": chat_input.message}
-    messages.append(user_msg)
-
-    # Save user message before streaming begins
-    await MessageHistoryAdapter.save_messages(
-        session_id=chat_input.session_id,
-        messages=[user_msg],
-        pg_connection=pg_connection,
-    )
-
-    return StreamingResponse(
-        sse_stream(handler, messages),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-        },
-    )
-
-
-# V2 Agent Memory: API endpoint for batch archival of messages -- REMOVED (or to be re-evaluated)
-# This was for client-side batching. With server-side per-turn history saving via PostgresChatMessageHistory,
-# this specific endpoint's role might change or become redundant if the new history table
-# serves as the complete, viewable chat log.
-# For now, commenting out:
-# class ArchiveMessagesPayload(BaseModel):
-# ... (rest of the old archive endpoint code commented out or removed) ...
-
-# Placeholder for PromptManagerService if not fully defined elsewhere for this snippet
-# class PromptManagerService:
-# ... existing code ...
 
 
 # --- API Endpoints for Prompt Customizations ---
