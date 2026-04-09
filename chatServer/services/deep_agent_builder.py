@@ -327,24 +327,32 @@ async def _build_agent(
     except Exception as exc:
         logger.warning("Failed to wrap tools with approval (non-fatal): %s", exc)
 
-    # 5. Create BwrapBackend (AC-22)
-    from pathlib import Path
+    # 5. Create BwrapBackend if enabled (AC-22, AC-36)
+    from chatServer.config.settings import get_settings
 
-    from chatServer.sandbox.bwrap_backend import BwrapBackend
-    from chatServer.services.storage_sync import StorageSync
+    settings = get_settings()
+    backend = None
 
-    data_dir = Path(os.getenv("SANDBOX_DATA_DIR", "/data"))
-    system_dir = data_dir / "config" / "system"
-    user_dir = data_dir / "sandboxes" / user_id
+    if settings.sandbox_enabled:
+        from pathlib import Path
 
-    # Hydrate user dir from Storage if needed (AC-23)
-    supabase_url = os.getenv("SUPABASE_URL", "")
-    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-    if supabase_url and supabase_key:
-        sync = StorageSync(supabase_url=supabase_url, supabase_key=supabase_key, data_dir=data_dir)
-        await sync.hydrate_user(user_id)
+        from chatServer.sandbox.bwrap_backend import BwrapBackend
+        from chatServer.services.storage_sync import StorageSync
 
-    backend = BwrapBackend(user_dir=user_dir, system_dir=system_dir)
+        data_dir = Path(os.getenv("SANDBOX_DATA_DIR", "/data"))
+        system_dir = data_dir / "config" / "system"
+        user_dir = data_dir / "sandboxes" / user_id
+
+        # Hydrate user dir from Storage if needed (AC-23)
+        supabase_url = os.getenv("SUPABASE_URL", "")
+        supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+        if supabase_url and supabase_key:
+            sync = StorageSync(supabase_url=supabase_url, supabase_key=supabase_key, data_dir=data_dir)
+            await sync.hydrate_user(user_id)
+
+        backend = BwrapBackend(user_dir=user_dir, system_dir=system_dir)
+    else:
+        logger.info("bwrap sandbox disabled (BWRAP_ENABLED=false); backend=None")
 
     # 6. Build channel-specific system prompt (runtime sections only — soul/identity
     #    come from skills loaded via the backend at invoke time)

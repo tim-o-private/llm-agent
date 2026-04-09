@@ -8,6 +8,12 @@ ENV RUNNING_IN_DOCKER="true"
 ENV PYTHONPATH="/app/src"
 ENV CHAT_SERVER_BASE_URL="https://clarity-chatserver.fly.dev"
 
+# Install system dependencies (bubblewrap for agent sandbox isolation)
+RUN apt-get update && apt-get install -y --no-install-recommends bubblewrap && rm -rf /var/lib/apt/lists/*
+
+# Create sandbox data directories
+RUN mkdir -p /data/config/system /data/sandboxes
+
 # Install dependencies from the single source-of-truth requirements.txt
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
