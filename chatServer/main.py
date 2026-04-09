@@ -4,7 +4,6 @@ import sys
 from contextlib import asynccontextmanager
 from typing import List
 
-# Correctly import ConfigLoader
 # For V2 Agent Memory System
 import psycopg
 from dotenv import load_dotenv
@@ -33,6 +32,9 @@ from .routers.proposals import router as proposals_router
 from .routers.session_open_router import router as session_open_router
 from .routers.telegram_router import router as telegram_router
 from .services.prompt_customization import get_prompt_customization_service
+
+# Langsmith startup serialization is noisy at DEBUG — suppress to WARNING
+logging.getLogger("langsmith").setLevel(logging.WARNING)
 
 
 # --- START Inserted Environment & Path Setup ---
