@@ -238,14 +238,14 @@ class TestListEntitiesTool:
         tool = _make_tool(ListEntitiesTool, mock_memory_client)
         await tool._arun(scope="project", project="myproj")
         mock_memory_client.call_tool.assert_called_once_with(
-            "list_entities", {"scope": "project", "project": "myproj"},
+            "list_entities", {"scope": "project", "project": "myproj", "limit": 20},
         )
 
     @pytest.mark.asyncio
     async def test_omits_empty_filters(self, mock_memory_client):
         tool = _make_tool(ListEntitiesTool, mock_memory_client)
         await tool._arun()
-        mock_memory_client.call_tool.assert_called_once_with("list_entities", {})
+        mock_memory_client.call_tool.assert_called_once_with("list_entities", {"limit": 20})
 
 
 class TestSearchEntitiesTool:

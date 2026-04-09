@@ -1,14 +1,11 @@
 """Unified Email Digest Service for both scheduled and on-demand execution."""
 
 import logging
-import os
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from src.core.agent_loader_db import load_agent_executor_db
-from supabase import Client as SupabaseClient
-from supabase import create_client
-
+from .deep_agent_builder import build_deep_agent, extract_agent_response
 from .email_digest_storage_service import get_email_digest_storage_service
 
 logger = logging.getLogger(__name__)
@@ -53,19 +50,18 @@ class EmailDigestService:
         try:
             logger.info(f"Generating email digest for user {self.user_id} (context: {self.context}, hours_back: {hours_back})")  # noqa: E501
 
-            # Load the email_digest_agent from database
-            # This automatically loads the agent's system prompt and Gmail tools
+            # Build the Deep Agent for email_digest_agent
+            session_id = f"email_digest_{self.context}_{generated_at.strftime('%Y%m%d_%H%M%S')}"
             try:
-                agent_executor = load_agent_executor_db(
+                agent = await build_deep_agent(
                     agent_name="email_digest_agent",
                     user_id=self.user_id,
-                    session_id=f"email_digest_{self.context}_{generated_at.strftime('%Y%m%d_%H%M%S')}"
+                    session_id=session_id,
+                    channel="scheduled",
                 )
-
-                logger.info(f"Successfully loaded email_digest_agent for user {self.user_id}")
-
+                logger.info(f"Successfully built email_digest_agent for user {self.user_id}")
             except Exception as e:
-                logger.error(f"Failed to load email_digest_agent for user {self.user_id}: {e}")
+                logger.error(f"Failed to build email_digest_agent for user {self.user_id}: {e}")
                 raise RuntimeError(f"Could not load email digest agent: {e}")
 
             # Create prompt for the agent
@@ -87,21 +83,9 @@ class EmailDigestService:
 
             logger.info(f"Invoking email_digest_agent with prompt: {prompt[:100]}...")
 
-            # Invoke the agent - it will use its Gmail tools to generate the digest
-            result = await agent_executor.ainvoke({
-                "input": prompt,
-                "chat_history": []  # Fresh context for digest generation
-            })
-
-            # Extract the digest content from agent response
-            digest_content = result.get("output", "")
-
-            # Handle content block lists from newer langchain-anthropic versions
-            if isinstance(digest_content, list):
-                digest_content = "".join(
-                    block.get("text", "") for block in digest_content
-                    if isinstance(block, dict) and block.get("type") == "text"
-                ) or ""
+            # Invoke the deep agent — fresh context for digest generation
+            result = await agent.ainvoke({"messages": [{"role": "user", "content": prompt}]})
+            digest_content = extract_agent_response(result)
 
             if not digest_content:
                 logger.warning(f"email_digest_agent returned empty response for user {self.user_id}")
@@ -174,12 +158,9 @@ class EmailDigestService:
     async def _load_ltm(self, user_id: str, agent_name: str) -> Optional[str]:
         """Load long-term memory notes for user+agent from the database."""
         try:
-            url = os.getenv("SUPABASE_URL", "")
-            key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-            if not url or not key:
-                return None
+            from ..database.supabase_client import create_system_client
 
-            db: SupabaseClient = create_client(url, key)
+            db = await create_system_client()
             result = (
                 db.table("agent_long_term_memory")
                 .select("notes")
@@ -198,9 +179,6 @@ class EmailDigestService:
     def _extract_email_count(self, digest_content: str) -> Optional[int]:
         """Extract email count from digest content if possible."""
         try:
-            # Look for patterns like "20 unread emails found" or "Summary: 15 emails"
-            import re
-
             patterns = [
                 r'(\d+)\s+(?:unread\s+)?emails?\s+found',
                 r'Summary:\s*(\d+)\s+(?:unread\s+)?emails?',

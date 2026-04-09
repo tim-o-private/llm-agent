@@ -23,4 +23,6 @@ USER_SCOPED_TABLES: set[str] = {
     "agent_execution_results",
     "user_preferences",
     "deferred_observations",
+    "workflow_runs",
+    "config_change_proposals",
 }

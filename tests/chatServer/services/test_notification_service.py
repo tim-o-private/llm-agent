@@ -391,3 +391,46 @@ async def test_submit_feedback_memory_failure_does_not_block(service, db_client)
         result = await service.submit_feedback("notif-4", "useful", "user-1")
 
     assert result == {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# resolve_proposal_notification
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_resolve_proposal_notification_found(service, db_client):
+    """Finds config_change notification by proposal_id and resolves it."""
+    notif_data = [
+        {"id": "notif-99", "metadata": {"proposal_id": "prop-1", "actions": ["approve", "revert"]}},
+    ]
+    mock_select_exec = AsyncMock(return_value=MagicMock(data=notif_data))
+    chain = db_client.table.return_value.select.return_value
+    chain.eq.return_value = chain
+    chain.execute = mock_select_exec
+
+    mock_update_exec = AsyncMock(return_value=MagicMock(data=[]))
+    update_chain = db_client.table.return_value.update.return_value
+    update_chain.eq.return_value = update_chain
+    update_chain.execute = mock_update_exec
+
+    result = await service.resolve_proposal_notification("prop-1", "user-1", "approved")
+
+    assert result is True
+    update_call = db_client.table.return_value.update.call_args
+    updated = update_call[0][0]
+    assert updated["read"] is True
+    assert updated["metadata"]["action_status"] == "approved"
+
+
+@pytest.mark.asyncio
+async def test_resolve_proposal_notification_not_found(service, db_client):
+    """Returns False when no matching notification exists."""
+    mock_exec = AsyncMock(return_value=MagicMock(data=[]))
+    chain = db_client.table.return_value.select.return_value
+    chain.eq.return_value = chain
+    chain.execute = mock_exec
+
+    result = await service.resolve_proposal_notification("prop-999", "user-1", "approved")
+
+    assert result is False

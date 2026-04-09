@@ -1,6 +1,6 @@
 """Agent loader dependency."""
 
-from core import agent_loader
+from src.core import agent_loader_db as agent_loader
 
 
 def get_agent_loader():

@@ -107,17 +107,6 @@ async def authenticated_client(supabase_fixture, mock_psycopg_conn):
     app.dependency_overrides[get_supabase_client] = lambda: supabase_fixture
     app.dependency_overrides[get_db_connection] = _make_db_conn_generator(mock_psycopg_conn)
 
-    # Clear agent executor cache
-    from chatServer import main as chat_main_module
-
-    if hasattr(chat_main_module, "AGENT_EXECUTOR_CACHE"):
-        chat_main_module.AGENT_EXECUTOR_CACHE.clear()
-
-    # Reset chat service singleton
-    import chatServer.services.chat
-
-    chatServer.services.chat._chat_service = None
-
     # Start lifespan and create client
     stack = AsyncExitStack()
     await stack.enter_async_context(app.router.lifespan_context(app))
@@ -179,15 +168,6 @@ async def telegram_webhook_client(supabase_fixture, mock_psycopg_conn):
     # Override DB dependencies but NOT auth
     app.dependency_overrides[get_supabase_client] = lambda: supabase_fixture
     app.dependency_overrides[get_db_connection] = _make_db_conn_generator(mock_psycopg_conn)
-
-    from chatServer import main as chat_main_module
-
-    if hasattr(chat_main_module, "AGENT_EXECUTOR_CACHE"):
-        chat_main_module.AGENT_EXECUTOR_CACHE.clear()
-
-    import chatServer.services.chat
-
-    chatServer.services.chat._chat_service = None
 
     stack = AsyncExitStack()
     await stack.enter_async_context(app.router.lifespan_context(app))

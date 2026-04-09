@@ -105,6 +105,7 @@ class GetEntitiesInput(BaseModel):
     scope: str = Field(default="", description="Filter by scope.")
     project: str = Field(default="", description="Filter by project.")
     memory_type: str = Field(default="", description="Filter by memory type.")
+    limit: int = Field(default=20, description="Maximum number of entities to return.")
 
 
 class SearchEntitiesInput(BaseModel):
@@ -298,9 +299,9 @@ class GetEntitiesTool(_MemoryToolBase):
     args_schema: Type[BaseModel] = GetEntitiesInput
     _mcp_tool_name: str = "list_entities"
 
-    async def _arun(self, scope: str = "", project: str = "", memory_type: str = "") -> str:
+    async def _arun(self, scope: str = "", project: str = "", memory_type: str = "", limit: int = 20) -> str:
         try:
-            args: dict[str, Any] = {}
+            args: dict[str, Any] = {"limit": limit}
             if scope:
                 args["scope"] = scope
             if project:

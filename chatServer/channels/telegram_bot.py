@@ -234,6 +234,136 @@ async def handle_approval_callback(callback: types.CallbackQuery) -> None:
         await callback.answer("Error processing action.")
 
 
+@router.callback_query(lambda c: c.data and c.data.startswith("proposal:"))
+async def handle_proposal_callback(callback: types.CallbackQuery) -> None:
+    """Handle inline keyboard approve/revert for config change proposals."""
+    if not callback.data:
+        return
+
+    # Format: proposal:{proposal_id}:approve or proposal:{proposal_id}:revert
+    parts = callback.data.split(":", 2)
+    if len(parts) != 3:
+        await callback.answer("Invalid callback data")
+        return
+
+    _, proposal_id, action = parts
+    if action not in ("approve", "revert"):
+        await callback.answer("Invalid action")
+        return
+
+    chat_id = str(callback.message.chat.id) if callback.message else None
+    if not chat_id:
+        return
+
+    bot_service = get_telegram_bot_service()
+    if not bot_service or not bot_service._db_client:
+        await callback.answer("Bot not ready. Try again.")
+        return
+
+    try:
+        # Look up user_id from chat_id
+        result = (
+            await bot_service._db_client.table("user_channels")
+            .select("user_id")
+            .eq("channel_type", "telegram")
+            .eq("channel_id", chat_id)
+            .eq("is_active", True)
+            .single()
+            .execute()
+        )
+
+        if not result.data:
+            await callback.answer("Account not linked.")
+            return
+
+        user_id = result.data["user_id"]
+
+        from ..sandbox.disclosure import DisclosureModel
+        from ..sandbox.security_boundary import SecurityBoundary
+        from ..sandbox.self_improvement import SelfImprovementService
+        from ..sandbox.sync import SyncService
+        from ..services.config_service import get_config_service
+        from ..services.notification_service import NotificationService
+
+        security_boundary = SecurityBoundary()
+        self_improvement = SelfImprovementService(
+            security_boundary=security_boundary,
+            disclosure_model=DisclosureModel(),
+            db_client=bot_service._db_client,
+        )
+
+        if action == "approve":
+            proposal = await self_improvement.approve_change(proposal_id)
+            if not proposal:
+                await callback.answer("Proposal not found.")
+                return
+
+            # Sync to Supabase Storage
+            synced = 0
+            try:
+                from ..sandbox.git_tracker import GitTracker
+                from ..sandbox.provisioner import get_provisioner
+
+                provisioner = get_provisioner()
+                await provisioner.get_or_create(user_id)
+                user_dir = provisioner.get_user_dir(user_id)
+                git_tracker = GitTracker(user_dir)
+                config_service = get_config_service()
+                sync_service = SyncService(security_boundary=security_boundary, config_service=config_service)
+                synced_files = await sync_service.sync_to_storage(
+                    user_id=user_id,
+                    git_tracker=git_tracker,
+                    user_dir=user_dir,
+                    commit_hash=proposal.git_commit_hash,
+                )
+                synced = len(synced_files)
+            except RuntimeError:
+                pass  # Sandbox unavailable — approval still recorded
+
+            await callback.answer(f"Approved! {synced} file(s) synced.")
+            if callback.message:
+                await callback.message.edit_text(
+                    callback.message.text + f"\n\n_Approved ({synced} file synced)_",
+                    parse_mode="Markdown",
+                )
+
+        elif action == "revert":
+            try:
+                from ..sandbox.git_tracker import GitTracker
+                from ..sandbox.provisioner import get_provisioner
+
+                provisioner = get_provisioner()
+                await provisioner.get_or_create(user_id)
+                user_dir = provisioner.get_user_dir(user_id)
+                git_tracker = GitTracker(user_dir)
+            except RuntimeError:
+                await callback.answer("Sandbox unavailable — cannot revert.")
+                return
+
+            proposal = await self_improvement.reject_change(proposal_id, git_tracker)
+            if not proposal:
+                await callback.answer("Proposal not found.")
+                return
+
+            await callback.answer("Reverted.")
+            if callback.message:
+                await callback.message.edit_text(
+                    callback.message.text + "\n\n_Reverted_",
+                    parse_mode="Markdown",
+                )
+
+        # Resolve the notification
+        try:
+            notif_service = NotificationService(bot_service._db_client)
+            await notif_service.resolve_proposal_notification(proposal_id, user_id, action)
+        except Exception:
+            pass
+
+    except Exception as e:
+        logger.error("Error handling proposal callback: %s", e, exc_info=True)
+        await callback.answer("Error processing proposal.")
+
+
 @router.callback_query(lambda c: c.data and c.data.startswith("nfb_"))
 async def handle_feedback_callback(callback: types.CallbackQuery) -> None:
     """Handle notification feedback button presses."""
@@ -327,17 +457,10 @@ async def handle_message(message: types.Message) -> None:
         )
 
         if not result.data:
-            await message.answer("Your account isn't linked yet. Go to Settings in the web app to connect Telegram.")
+            await message.answer("Your account isn't linked yet. Go to Settings in the web app to connect Telegram.")  # noqa: E501
             return
 
         user_id = result.data["user_id"]
-
-        # Route to assistant agent
-        from src.core.agent_loader_db import load_agent_executor_db
-
-        from ..security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
-        from ..services.audit_service import AuditService
-        from ..services.pending_actions import PendingActionsService
 
         # Cross-channel session sharing: reuse most recent web session if one exists
         web_session_result = (
@@ -376,77 +499,12 @@ async def handle_message(message: types.Message) -> None:
                 }
             ).execute()
 
-        import asyncio
-        loop = asyncio.get_event_loop()
-        agent_executor = await loop.run_in_executor(
-            None,
-            lambda: load_agent_executor_db(
-                agent_name="assistant",
-                user_id=user_id,
-                session_id=session_id,
-                channel="telegram",
-            ),
+        # Send typing indicator
+        await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
+
+        output = await _handle_telegram_agent(
+            user_id, session_id, message.text
         )
-
-        # Wrap tools with approval
-        audit_service = AuditService(bot_service._db_client)
-        pending_service = PendingActionsService(
-            db_client=bot_service._db_client,
-            audit_service=audit_service,
-        )
-        notification_service = NotificationService(bot_service._db_client)
-        approval_context = ApprovalContext(
-            user_id=user_id,
-            session_id=session_id,
-            agent_name="assistant",
-            db_client=bot_service._db_client,
-            pending_actions_service=pending_service,
-            audit_service=audit_service,
-            notification_service=notification_service,
-        )
-        if hasattr(agent_executor, "tools") and agent_executor.tools:
-            wrap_tools_with_approval(agent_executor.tools, approval_context)
-
-        # Set up persistent memory and invoke agent within a DB connection scope
-        from ..config.constants import CHAT_MESSAGE_HISTORY_TABLE_NAME
-        from ..database.connection import get_database_manager
-
-        db_manager = get_database_manager()
-        await db_manager.ensure_initialized()
-
-        async with db_manager.pool.connection() as pg_conn:
-            # Wire up memory so this turn is saved to the shared message store
-            from langchain_postgres import PostgresChatMessageHistory
-
-            from ..services.chat import AsyncConversationBufferWindowMemory
-
-            pg_history = PostgresChatMessageHistory(
-                CHAT_MESSAGE_HISTORY_TABLE_NAME,
-                session_id,
-                async_connection=pg_conn,
-            )
-            agent_executor.memory = AsyncConversationBufferWindowMemory(
-                chat_memory=pg_history,
-                k=50,
-                return_messages=True,
-                memory_key="chat_history",
-                input_key="input",
-            )
-
-            # Send typing indicator
-            await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
-
-            # Invoke agent (memory auto-saves the turn to message_store)
-            response = await agent_executor.ainvoke({"input": message.text})
-
-        output = response.get("output", "")
-        if isinstance(output, list):
-            output = (
-                "".join(
-                    block.get("text", "") for block in output if isinstance(block, dict) and block.get("type") == "text"
-                )
-                or "No response."
-            )
 
         # Send response (split if too long for Telegram's 4096 limit)
         if len(output) > 4000:
@@ -458,6 +516,47 @@ async def handle_message(message: types.Message) -> None:
     except Exception as e:
         logger.error(f"Error handling Telegram message from {chat_id}: {e}", exc_info=True)
         await message.answer("Sorry, something went wrong. Please try again.")
+
+
+async def _handle_telegram_agent(
+    user_id: str, session_id: str, text: str
+) -> str:
+    """Invoke the Deep Agent runtime for a Telegram message."""
+    from ..database.connection import get_database_manager
+    from ..services.deep_agent_builder import build_deep_agent, extract_agent_response
+    from ..services.message_history_adapter import MessageHistoryAdapter
+
+    agent = await build_deep_agent(
+        user_id=user_id,
+        agent_name="assistant",
+        session_id=session_id,
+        channel="telegram",
+    )
+
+    db_manager = get_database_manager()
+    await db_manager.ensure_initialized()
+
+    async with db_manager.pool.connection() as pg_conn:
+        messages = await MessageHistoryAdapter.load_history(
+            session_id=session_id,
+            pg_connection=pg_conn,
+            limit=100,
+        )
+        user_msg = {"role": "user", "content": text}
+        messages.append(user_msg)
+
+        result = await agent.ainvoke({"messages": messages})
+        response_text = extract_agent_response(result)
+
+        await MessageHistoryAdapter.save_messages(
+            session_id=session_id,
+            messages=[user_msg, {"role": "assistant", "content": response_text}],
+            pg_connection=pg_conn,
+        )
+
+    return response_text
+
+
 
 
 # =============================================================================

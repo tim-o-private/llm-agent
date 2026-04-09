@@ -95,7 +95,7 @@ Agent team: `orchestrator` (lead), `database-dev`, `backend-dev`, `frontend-dev`
 
 These affect ALL domains. Domain-specific gotchas live in their respective skills.
 
-1. **Two requirements.txt files** — Root `requirements.txt` (local dev) and `chatServer/requirements.txt` (Docker). New Python deps MUST go in both.
+1. **Single requirements.txt** — All Python deps live in root `requirements.txt`. `pyproject.toml` reads from it dynamically. Dockerfile and CI both use this file.
 2. **New env vars require three places** — Local `.env`, Fly secrets (`flyctl secrets set`), GitHub secrets if used in CI.
 3. **chatServer is a proper Python package** — Run via `python -m chatServer.main`. Never use try/except ImportError hacks for bare import fallbacks. See Gotcha #15 in backend-patterns skill.
 4. **ES256 JWT tokens** — Supabase issues ES256, not HS256. Don't revert `auth.py` to HS256-only.

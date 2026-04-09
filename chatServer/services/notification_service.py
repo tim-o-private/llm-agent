@@ -246,6 +246,43 @@ class NotificationService:
             logger.error(f"Failed to resolve approval notification for action {pending_action_id}: {e}")
             return False
 
+    async def resolve_proposal_notification(
+        self,
+        proposal_id: str,
+        user_id: str,
+        action_status: str,
+    ) -> bool:
+        """Update a config_change notification after proposal approve/revert.
+
+        Finds the notification whose metadata.proposal_id matches, then
+        sets action_status and marks as read.
+        """
+        try:
+            result = (
+                await self.db.table("notifications")
+                .select("id, metadata")
+                .eq("user_id", user_id)
+                .eq("category", "config_change")
+                .execute()
+            )
+            for notif in (result.data or []):
+                metadata = notif.get("metadata") or {}
+                if metadata.get("proposal_id") == proposal_id:
+                    metadata["action_status"] = action_status
+                    await (
+                        self.db.table("notifications")
+                        .update({"metadata": metadata, "read": True})
+                        .eq("id", notif["id"])
+                        .eq("user_id", user_id)
+                        .execute()
+                    )
+                    return True
+            logger.debug("No config_change notification found for proposal_id=%s", proposal_id)
+            return False
+        except Exception as e:
+            logger.error("Failed to resolve proposal notification %s: %s", proposal_id, e)
+            return False
+
     async def submit_feedback(
         self,
         notification_id: str,
@@ -394,14 +431,32 @@ class NotificationService:
 
             text = f"*{title}*\n\n{body}"
             keyboard = None
-            if notification_id:
+
+            # Config change proposals get approve/revert buttons
+            proposal_id = metadata.get("proposal_id")
+            actions = metadata.get("actions")
+            if proposal_id and actions:
+                buttons = []
+                if "approve" in actions:
+                    buttons.append(InlineKeyboardButton(
+                        text="Approve",
+                        callback_data=f"proposal:{proposal_id}:approve",
+                    ))
+                if "revert" in actions:
+                    buttons.append(InlineKeyboardButton(
+                        text="Revert",
+                        callback_data=f"proposal:{proposal_id}:revert",
+                    ))
+                if buttons:
+                    keyboard = InlineKeyboardMarkup(inline_keyboard=[buttons])
+            elif notification_id:
                 keyboard = InlineKeyboardMarkup(inline_keyboard=[[
                     InlineKeyboardButton(
-                        text="👍 Useful",
+                        text="\U0001f44d Useful",
                         callback_data=f"nfb_{notification_id}_useful",
                     ),
                     InlineKeyboardButton(
-                        text="👎 Not useful",
+                        text="\U0001f44e Not useful",
                         callback_data=f"nfb_{notification_id}_not_useful",
                     ),
                 ]])

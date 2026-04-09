@@ -10,7 +10,7 @@ class TestGetAgentLoader(unittest.TestCase):
     """Test cases for get_agent_loader function."""
 
     def test_get_agent_loader_returns_agent_loader_module(self):
-        """Test that get_agent_loader returns the agent_loader module."""
+        """Test that get_agent_loader returns the agent_loader_db module."""
         with patch('chatServer.dependencies.agent_loader.agent_loader') as mock_agent_loader:
             mock_agent_loader.some_function = MagicMock()
 

@@ -29,6 +29,13 @@ class Settings:
         self.telegram_bot_token: Optional[str] = os.getenv("TELEGRAM_BOT_TOKEN")
         self.telegram_webhook_url: Optional[str] = os.getenv("TELEGRAM_WEBHOOK_URL")
 
+
+        # Sandbox settings
+        self.sandbox_enabled: bool = os.getenv("BWRAP_ENABLED", "false").lower() == "true"
+        self.sandbox_base_path: str = os.getenv("SANDBOX_BASE_PATH", "/data/sandboxes")
+        self.sandbox_system_path: str = os.getenv("SANDBOX_SYSTEM_PATH", "/data/sandbox-system")
+        self.bwrap_binary: str = os.getenv("BWRAP_PATH", "bwrap")
+
         # CORS origins
         self.cors_origins = [
             "https://clarity-webapp.fly.dev",
@@ -48,7 +55,7 @@ class Settings:
                 missing.append("SUPABASE_DB_HOST")
             raise RuntimeError(f"Database connection cannot be initialized. Missing env vars: {missing}")
 
-        return f"postgresql://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}?connect_timeout=10&sslmode=require"
+        return f"postgresql://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}?connect_timeout=10&sslmode=require"  # noqa: E501
 
     def reload_from_env(self) -> None:
         """Re-read all settings from environment variables.
@@ -68,6 +75,11 @@ class Settings:
         self.llm_agent_src_path = os.getenv("LLM_AGENT_SRC_PATH", "src")
         self.telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
         self.telegram_webhook_url = os.getenv("TELEGRAM_WEBHOOK_URL")
+        # Feature flags (reserved for future use)
+        self.sandbox_enabled = os.getenv("BWRAP_ENABLED", "false").lower() == "true"
+        self.sandbox_base_path = os.getenv("SANDBOX_BASE_PATH", "/data/sandboxes")
+        self.sandbox_system_path = os.getenv("SANDBOX_SYSTEM_PATH", "/data/sandbox-system")
+        self.bwrap_binary = os.getenv("BWRAP_PATH", "bwrap")
 
     def validate_required_settings(self) -> None:
         """Validate that all required settings are present."""

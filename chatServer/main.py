@@ -1,29 +1,22 @@
+import json
 import logging
 import os
 import sys
 from contextlib import asynccontextmanager
 from typing import List
 
-# Correctly import ConfigLoader
-# For V2 Agent Memory System
 import psycopg
-
-# NEW: Agent Executor Cache
-from cachetools import TTLCache
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-# Import agent_loader
-from core.agents.customizable_agent import CustomizableAgentExecutor  # Added import
 from utils.config_loader import ConfigLoader
 from utils.logging_utils import get_logger
 
 from .config.constants import PROMPT_CUSTOMIZATIONS_TAG
 from .config.settings import get_settings
 from .database.connection import get_db_connection
-from .database.supabase_client import get_user_scoped_client
-from .dependencies.agent_loader import get_agent_loader
+from .database.supabase_client import create_user_scoped_client, get_user_scoped_client
 from .dependencies.auth import get_current_user
 from .models.chat import ChatRequest, ChatResponse
 from .models.prompt_customization import PromptCustomization, PromptCustomizationCreate
@@ -32,15 +25,17 @@ from .routers.actions import router as actions_router
 from .routers.chat_history_router import router as chat_history_router
 from .routers.email_agent_router import router as email_agent_router
 from .routers.external_api_router import router as external_api_router
+from .routers.introspection_router import router as introspection_router
 from .routers.notifications_router import router as notifications_router
 from .routers.oauth_router import router as oauth_router
+from .routers.proposals import router as proposals_router
 from .routers.session_open_router import router as session_open_router
 from .routers.telegram_router import router as telegram_router
-from .services.chat import get_chat_service
 from .services.prompt_customization import get_prompt_customization_service
 
-# Cache for (user_id, agent_name) -> CustomizableAgentExecutor
-AGENT_EXECUTOR_CACHE: TTLCache[tuple[str, str], CustomizableAgentExecutor] = TTLCache(maxsize=100, ttl=900)
+# Langsmith startup serialization is noisy at DEBUG — suppress to WARNING
+logging.getLogger("langsmith").setLevel(logging.WARNING)
+
 
 # --- START Inserted Environment & Path Setup ---
 def add_project_root_to_path_for_local_dev():
@@ -105,13 +100,13 @@ async def lifespan(app: FastAPI):
     from .database.supabase_client import get_supabase_manager
     from .services.agent_config_cache_service import initialize_agent_config_cache, shutdown_agent_config_cache
     from .services.background_tasks import get_background_task_service
+    from .services.config_service import initialize_config_service, shutdown_config_service
     from .services.tool_cache_service import initialize_tool_cache, shutdown_tool_cache
     from .services.user_instructions_cache_service import (
         initialize_user_instructions_cache,
         shutdown_user_instructions_cache,
     )
 
-    global AGENT_EXECUTOR_CACHE
     logger.info("Application startup: Initializing resources...")
 
     # Initialize database manager
@@ -124,6 +119,31 @@ async def lifespan(app: FastAPI):
     # Initialize Supabase manager
     supabase_manager = get_supabase_manager()
     await supabase_manager.initialize()
+
+    # Initialize config service (depends on Supabase)
+    try:
+        await initialize_config_service()
+        logger.info("Config service initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize config service: {e}", exc_info=True)
+
+    # Initialize template registry (depends on config service)
+    try:
+        from .services.config_service import get_config_service
+        from .workflows.registry import initialize_template_registry
+        initialize_template_registry(get_config_service())
+        logger.info("Template registry initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize template registry: {e}", exc_info=True)
+
+    # Initialize sandbox provisioner (depends on config service)
+    try:
+        from .sandbox.provisioner import initialize_provisioner
+        from .services.config_service import get_config_service
+        initialize_provisioner(config_service=get_config_service())
+        logger.info("Sandbox provisioner initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize sandbox provisioner: {e}", exc_info=True)
 
     # Initialize cache services
     try:
@@ -146,7 +166,6 @@ async def lifespan(app: FastAPI):
 
     # Initialize and start background tasks
     background_service = get_background_task_service()
-    background_service.set_agent_executor_cache(AGENT_EXECUTOR_CACHE)
     await background_service.start_background_tasks()
 
     # Initialize Telegram bot (optional — only if TELEGRAM_BOT_TOKEN is set)
@@ -177,6 +196,29 @@ async def lifespan(app: FastAPI):
 
     # Stop background tasks
     await background_service.stop_background_tasks()
+
+    # Shut down sandbox provisioner
+    try:
+        from .sandbox.provisioner import shutdown_provisioner
+        await shutdown_provisioner()
+        logger.info("Sandbox provisioner stopped successfully")
+    except Exception as e:
+        logger.error(f"Failed to stop sandbox provisioner: {e}", exc_info=True)
+
+    # Shut down template registry
+    try:
+        from .workflows.registry import shutdown_template_registry
+        shutdown_template_registry()
+        logger.info("Template registry shut down successfully")
+    except Exception as e:
+        logger.error(f"Failed to shut down template registry: {e}", exc_info=True)
+
+    # Stop config service
+    try:
+        await shutdown_config_service()
+        logger.info("Config service stopped successfully")
+    except Exception as e:
+        logger.error(f"Failed to stop config service: {e}", exc_info=True)
 
     # Stop cache services
     try:
@@ -221,39 +263,139 @@ app.include_router(chat_history_router)
 app.include_router(notifications_router)
 app.include_router(session_open_router)
 app.include_router(telegram_router)
+app.include_router(proposals_router)
+app.include_router(introspection_router)
 
 # --- Logger setup ---
 logger = get_logger(__name__)
 
-@app.post("/api/chat", response_model=ChatResponse)
+@app.post("/api/chat")
 async def chat_endpoint(
     chat_input: ChatRequest,
     request: Request,
     user_id: str = Depends(get_current_user),
     pg_connection: psycopg.AsyncConnection = Depends(get_db_connection),
-    agent_loader_module = Depends(get_agent_loader),
 ):
-    """Chat endpoint that processes user messages through agents."""
-    chat_service = get_chat_service(AGENT_EXECUTOR_CACHE)
-    return await chat_service.process_chat(
-        chat_input=chat_input,
+    """Chat endpoint that processes user messages through the Deep Agent runtime.
+
+    Supports SSE streaming when ``Accept: text/event-stream`` is sent.
+    """
+    wants_stream = "text/event-stream" in request.headers.get("accept", "")
+    if wants_stream:
+        return await _handle_chat_stream(chat_input, user_id, pg_connection)
+    return await _handle_chat(chat_input, user_id, pg_connection)
+
+
+async def _handle_chat(
+    chat_input: ChatRequest,
+    user_id: str,
+    pg_connection: psycopg.AsyncConnection,
+) -> ChatResponse:
+    """Non-streaming chat via Deep Agent runtime."""
+    from .services.deep_agent_builder import build_deep_agent, extract_agent_response
+    from .services.message_history_adapter import MessageHistoryAdapter
+
+    if not chat_input.session_id:
+        raise HTTPException(status_code=400, detail="session_id is required")
+
+    agent = await build_deep_agent(
         user_id=user_id,
-        pg_connection=pg_connection,
-        agent_loader_module=agent_loader_module,
-        request=request
+        agent_name=chat_input.agent_name,
+        session_id=chat_input.session_id,
+        channel="web",
     )
 
-# V2 Agent Memory: API endpoint for batch archival of messages -- REMOVED (or to be re-evaluated)
-# This was for client-side batching. With server-side per-turn history saving via PostgresChatMessageHistory,
-# this specific endpoint's role might change or become redundant if the new history table
-# serves as the complete, viewable chat log.
-# For now, commenting out:
-# class ArchiveMessagesPayload(BaseModel):
-# ... (rest of the old archive endpoint code commented out or removed) ...
+    messages = await MessageHistoryAdapter.load_history(
+        session_id=chat_input.session_id,
+        pg_connection=pg_connection,
+        limit=100,
+    )
+    user_msg = {"role": "user", "content": chat_input.message}
+    messages.append(user_msg)
 
-# Placeholder for PromptManagerService if not fully defined elsewhere for this snippet
-# class PromptManagerService:
-# ... existing code ...
+    result = await agent.ainvoke({"messages": messages})
+    response_text = extract_agent_response(result)
+
+    await MessageHistoryAdapter.save_messages(
+        session_id=chat_input.session_id,
+        messages=[user_msg, {"role": "assistant", "content": response_text}],
+        pg_connection=pg_connection,
+    )
+
+    return ChatResponse(
+        session_id=chat_input.session_id,
+        response=response_text,
+        error=None,
+    )
+
+
+async def _handle_chat_stream(
+    chat_input: ChatRequest,
+    user_id: str,
+    pg_connection: psycopg.AsyncConnection,
+):
+    """SSE streaming chat via Deep Agent runtime."""
+    from fastapi.responses import StreamingResponse
+
+    from .services.deep_agent_builder import build_deep_agent
+    from .services.deep_agent_stream import deep_agent_stream_to_sse
+    from .services.message_history_adapter import MessageHistoryAdapter
+
+    if not chat_input.session_id:
+        raise HTTPException(status_code=400, detail="session_id is required")
+
+    agent = await build_deep_agent(
+        user_id=user_id,
+        agent_name=chat_input.agent_name,
+        session_id=chat_input.session_id,
+        channel="web",
+    )
+
+    messages = await MessageHistoryAdapter.load_history(
+        session_id=chat_input.session_id,
+        pg_connection=pg_connection,
+        limit=100,
+    )
+    user_msg = {"role": "user", "content": chat_input.message}
+    messages.append(user_msg)
+
+    # Save user message before streaming begins
+    await MessageHistoryAdapter.save_messages(
+        session_id=chat_input.session_id,
+        messages=[user_msg],
+        pg_connection=pg_connection,
+    )
+
+    async def _stream_and_persist():
+        """Wrap the SSE stream to accumulate and persist the AI response."""
+        accumulated_text = []
+        async for sse_line in deep_agent_stream_to_sse(agent, {"messages": messages}):
+            if sse_line.startswith("data: "):
+                try:
+                    payload = json.loads(sse_line[6:])
+                    if payload.get("type") == "text_delta" and payload.get("text"):
+                        accumulated_text.append(payload["text"])
+                except (json.JSONDecodeError, KeyError):
+                    pass
+            yield sse_line
+
+        # Persist the AI response after streaming completes
+        if accumulated_text:
+            ai_msg = {"role": "assistant", "content": "".join(accumulated_text)}
+            await MessageHistoryAdapter.save_messages(
+                session_id=chat_input.session_id,
+                messages=[ai_msg],
+                pg_connection=pg_connection,
+            )
+
+    return StreamingResponse(
+        _stream_and_persist(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 # --- API Endpoints for Prompt Customizations ---

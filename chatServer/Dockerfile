@@ -8,8 +8,8 @@ ENV RUNNING_IN_DOCKER="true"
 ENV PYTHONPATH="/app/src"
 ENV CHAT_SERVER_BASE_URL="https://clarity-chatserver.fly.dev"
 
-# Copy chatServer requirements and install dependencies
-COPY chatServer/requirements.txt /app/requirements.txt
+# Install dependencies from the single source-of-truth requirements.txt
+COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # Copy the src directory (core agent logic — available via PYTHONPATH)

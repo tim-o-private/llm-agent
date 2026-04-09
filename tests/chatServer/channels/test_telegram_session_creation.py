@@ -66,18 +66,13 @@ async def test_handle_message_upserts_chat_session():
 
     message = _make_message(text="hello", chat_id=12345)
 
-    mock_executor = MagicMock()
-    mock_executor.ainvoke = AsyncMock(return_value={"output": "hi there"})
-    mock_executor.tools = []
-
     with (
         patch("chatServer.channels.telegram_bot.get_telegram_bot_service", return_value=bot_service),
-        patch("src.core.agent_loader_db.load_agent_executor_db", return_value=mock_executor),
-        patch.dict("sys.modules", {
-            "chatServer.security.tool_wrapper": MagicMock(),
-            "chatServer.services.audit_service": MagicMock(),
-            "chatServer.services.pending_actions": MagicMock(),
-        }),
+        patch(
+            "chatServer.channels.telegram_bot._handle_telegram_agent",
+            new_callable=AsyncMock,
+            return_value="hi there",
+        ),
     ):
         await handle_message(message)
 
