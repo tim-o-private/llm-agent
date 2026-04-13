@@ -133,8 +133,7 @@ When an agent makes a mistake, log it in `docs/sdlc/DEVIATIONS.md` with: what ha
 
 | File | Purpose |
 |------|---------|
-| `docs/sdlc/ROADMAP.md` | Milestones and goals |
-| `docs/sdlc/BACKLOG.md` | Prioritized task queue |
+| `PRODUCT.md` | Single source of truth: what exists, what's building, what's next |
 | `docs/sdlc/specs/` | Spec files |
 | `docs/sdlc/DEVIATIONS.md` | Agent error log |
 | `.claude/agents/orchestrator.md` | Team lead definition |
