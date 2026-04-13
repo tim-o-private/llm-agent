@@ -18,7 +18,6 @@ CANONICAL_TOOL_NAMES = {
     "get_tasks", "create_tasks", "update_tasks", "delete_tasks",
     "get_reminders", "create_reminders", "delete_reminders",
     "get_schedules", "create_schedules", "delete_schedules",
-    "update_instructions",
     "search_gmail", "get_gmail",
     "create_memories", "search_memories", "get_memories",
     "update_memories", "delete_memories",

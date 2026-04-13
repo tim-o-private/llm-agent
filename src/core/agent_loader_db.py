@@ -26,7 +26,6 @@ from chatServer.tools.memory_tools import (
 from chatServer.tools.reminder_tools import CreateRemindersTool, DeleteRemindersTool, GetRemindersTool
 from chatServer.tools.schedule_tools import CreateSchedulesTool, DeleteSchedulesTool, GetSchedulesTool
 from chatServer.tools.task_tools import CreateTasksTool, DeleteTasksTool, GetTasksTool, UpdateTasksTool
-from chatServer.tools.update_instructions_tool import UpdateInstructionsTool
 from chatServer.tools.web_search_tool import SearchWebTool
 from core.tools.crud_tool import CRUDTool, CRUDToolInput
 from supabase import Client as SupabaseClient
@@ -67,8 +66,6 @@ TOOL_REGISTRY: Dict[str, Type] = {
     "GetSchedulesTool": GetSchedulesTool,
     "CreateSchedulesTool": CreateSchedulesTool,
     "DeleteSchedulesTool": DeleteSchedulesTool,
-    # Instructions
-    "UpdateInstructionsTool": UpdateInstructionsTool,
     # Web search
     "SearchWebTool": SearchWebTool,
     # Calendar

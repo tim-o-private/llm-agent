@@ -177,7 +177,8 @@ class SessionOpenService:
 
         # AC-32: empty history for session_open
         messages = [{"role": "user", "content": trigger_prompt}]
-        result = await agent.ainvoke({"messages": messages})
+        config = {"configurable": {"thread_id": session_id}}
+        result = await agent.ainvoke({"messages": messages}, config=config)
         return extract_agent_response(result)
 
     async def _persist_ai_message(self, session_id: str, content: str) -> None:

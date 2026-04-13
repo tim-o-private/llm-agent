@@ -1,13 +1,14 @@
 """Template registry — loads workflow templates from the local filesystem.
 
 System templates at {system_dir}/workflows/{name}.md.
+User templates at {user_dir}/workflows/{name}.md (user shadows system).
 Caches parsed templates with 300s TTL.
 """
 
 import logging
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from .models import GraphTemplate, TemplateNotFoundError
 from .template_parser import parse_template
@@ -21,15 +22,29 @@ _WORKFLOWS_PREFIX = "workflows"
 class TemplateRegistry:
     """Loads and caches workflow templates from local filesystem."""
 
-    def __init__(self, system_dir: Path):
-        """Initialize with a system config directory."""
+    def __init__(
+        self,
+        system_dir: Path,
+        user_dir_resolver: Optional[Callable[[str], Path]] = None,
+    ):
+        """Initialize with a system config directory and optional user dir resolver.
+
+        Args:
+            system_dir: Path to system config directory containing workflows/.
+            user_dir_resolver: Callable that maps user_id to user sandbox Path.
+                User templates at {user_dir}/workflows/ shadow system ones.
+        """
         self._system_dir = system_dir
+        self._user_dir_resolver = user_dir_resolver
         self._cache: dict[str, tuple[GraphTemplate, float]] = {}
 
     async def get_template(
         self, name: str, user_id: str
     ) -> GraphTemplate:
         """Get a parsed template by name.
+
+        Checks user dir first (user templates shadow system ones),
+        then falls back to system dir.
 
         Raises:
             TemplateNotFoundError: If template doesn't exist.
@@ -41,7 +56,18 @@ class TemplateRegistry:
             if time.monotonic() - cached_at < _CACHE_TTL_SECONDS:
                 return template
 
-        path = self._system_dir / _WORKFLOWS_PREFIX / f"{name}.md"
+        # Try user dir first (user templates shadow system ones)
+        path = None
+        if self._user_dir_resolver:
+            user_dir = self._user_dir_resolver(user_id)
+            user_path = user_dir / _WORKFLOWS_PREFIX / f"{name}.md"
+            if user_path.is_file():
+                path = user_path
+
+        # Fall back to system dir
+        if path is None:
+            path = self._system_dir / _WORKFLOWS_PREFIX / f"{name}.md"
+
         if not path.is_file():
             raise TemplateNotFoundError(
                 f"Workflow template '{name}' not found"
@@ -53,19 +79,29 @@ class TemplateRegistry:
         return template
 
     async def list_templates(self, user_id: str) -> list[str]:
-        """List available template names.
+        """List available template names from both system and user directories.
 
-        Returns template names (without path prefix or .md extension).
+        Returns template names (without path prefix or .md extension),
+        merged and deduplicated.
         """
-        workflows_dir = self._system_dir / _WORKFLOWS_PREFIX
-        if not workflows_dir.is_dir():
-            return []
+        names: set[str] = set()
 
-        names = []
-        for path in workflows_dir.glob("*.md"):
-            name = path.stem
-            if name:
-                names.append(name)
+        # System templates
+        system_workflows = self._system_dir / _WORKFLOWS_PREFIX
+        if system_workflows.is_dir():
+            for path in system_workflows.glob("*.md"):
+                if path.stem:
+                    names.add(path.stem)
+
+        # User templates (may shadow system)
+        if self._user_dir_resolver:
+            user_dir = self._user_dir_resolver(user_id)
+            user_workflows = user_dir / _WORKFLOWS_PREFIX
+            if user_workflows.is_dir():
+                for path in user_workflows.glob("*.md"):
+                    if path.stem:
+                        names.add(path.stem)
+
         return sorted(names)
 
     def invalidate(self, name: Optional[str] = None) -> None:
@@ -100,10 +136,13 @@ def get_template_registry() -> TemplateRegistry:
     return _registry
 
 
-def initialize_template_registry(system_dir: Path) -> TemplateRegistry:
+def initialize_template_registry(
+    system_dir: Path,
+    user_dir_resolver: Optional[Callable[[str], Path]] = None,
+) -> TemplateRegistry:
     """Initialize the global TemplateRegistry."""
     global _registry
-    _registry = TemplateRegistry(system_dir)
+    _registry = TemplateRegistry(system_dir, user_dir_resolver=user_dir_resolver)
     logger.info("TemplateRegistry initialized (system_dir=%s)", system_dir)
     return _registry
 

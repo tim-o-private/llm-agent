@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -33,6 +34,10 @@ from .services.prompt_customization import get_prompt_customization_service
 
 # Langsmith startup serialization is noisy at DEBUG — suppress to WARNING
 logging.getLogger("langsmith").setLevel(logging.WARNING)
+# Anthropic client logs full request/response bodies at DEBUG — suppress to WARNING
+logging.getLogger("anthropic").setLevel(logging.WARNING)
+# httpx logs every HTTP request at DEBUG — suppress to WARNING
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 # --- START Inserted Environment & Path Setup ---
@@ -134,10 +139,23 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("Failed to pull system config: %s", e)
 
+    # Seed workflow templates to local filesystem (idempotent)
+    try:
+        from .workflows.templates.seed import seed_workflow_templates
+
+        count = await seed_workflow_templates(system_dir)
+        logger.info("Seeded %d workflow template files", count)
+    except Exception as e:
+        logger.warning("Failed to seed workflow templates: %s", e)
+
     # Initialize template registry (reads from local filesystem)
     try:
         from .workflows.registry import initialize_template_registry
-        initialize_template_registry(system_dir)
+
+        def _user_dir_resolver(user_id: str) -> Path:
+            return data_dir / "sandboxes" / user_id
+
+        initialize_template_registry(system_dir, user_dir_resolver=_user_dir_resolver)
         logger.info("Template registry initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize template registry: {e}", exc_info=True)
@@ -160,6 +178,14 @@ async def lifespan(app: FastAPI):
         logger.info("User instructions cache service initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize user instructions cache service: {e}", exc_info=True)
+
+    # Initialize workflow checkpointer (shared by Deep Agent + workflows)
+    try:
+        from .workflows.checkpointer import initialize_workflow_checkpointer
+        await initialize_workflow_checkpointer()
+        logger.info("Workflow checkpointer initialized successfully")
+    except Exception as e:
+        logger.warning(f"Failed to initialize workflow checkpointer (non-fatal): {e}", exc_info=True)
 
     # Initialize and start background tasks
     background_service = get_background_task_service()
@@ -193,6 +219,14 @@ async def lifespan(app: FastAPI):
 
     # Stop background tasks
     await background_service.stop_background_tasks()
+
+    # Shut down workflow checkpointer
+    try:
+        from .workflows.checkpointer import shutdown_workflow_checkpointer
+        await shutdown_workflow_checkpointer()
+        logger.info("Workflow checkpointer shut down successfully")
+    except Exception as e:
+        logger.error(f"Failed to shut down workflow checkpointer: {e}", exc_info=True)
 
     # Shut down template registry
     try:
@@ -271,8 +305,16 @@ async def _handle_chat(
     user_id: str,
     pg_connection: psycopg.AsyncConnection,
 ) -> ChatResponse:
-    """Non-streaming chat via Deep Agent runtime."""
-    from .services.deep_agent_builder import build_deep_agent, extract_agent_response
+    """Non-streaming chat via Deep Agent runtime.
+
+    Checkpointer manages conversation state — only the new message is passed.
+    Messages are also saved to chat_message_history for the read API.
+    """
+    from .services.deep_agent_builder import (  # noqa: E501
+        build_deep_agent,
+        extract_agent_response,
+        sync_user_files_after_invocation,
+    )
     from .services.message_history_adapter import MessageHistoryAdapter
 
     if not chat_input.session_id:
@@ -285,17 +327,21 @@ async def _handle_chat(
         channel="web",
     )
 
-    messages = await MessageHistoryAdapter.load_history(
-        session_id=chat_input.session_id,
-        pg_connection=pg_connection,
-        limit=100,
-    )
-    user_msg = {"role": "user", "content": chat_input.message}
-    messages.append(user_msg)
+    from .services.agent_callbacks import tool_call_logger
 
-    result = await agent.ainvoke({"messages": messages})
+    user_msg = {"role": "user", "content": chat_input.message}
+    config = {
+        "configurable": {"thread_id": chat_input.session_id},
+        "callbacks": [tool_call_logger],
+    }
+
+    result = await agent.ainvoke({"messages": [user_msg]}, config=config)
     response_text = extract_agent_response(result)
 
+    # Fire-and-forget sync of user changes to durable storage
+    asyncio.create_task(sync_user_files_after_invocation(user_id))
+
+    # Persist to chat_message_history for the /api/chat-history/ read endpoint
     await MessageHistoryAdapter.save_messages(
         session_id=chat_input.session_id,
         messages=[user_msg, {"role": "assistant", "content": response_text}],
@@ -314,10 +360,14 @@ async def _handle_chat_stream(
     user_id: str,
     pg_connection: psycopg.AsyncConnection,
 ):
-    """SSE streaming chat via Deep Agent runtime."""
+    """SSE streaming chat via Deep Agent runtime.
+
+    Checkpointer manages conversation state — only the new message is passed.
+    Messages are also saved to chat_message_history for the read API.
+    """
     from fastapi.responses import StreamingResponse
 
-    from .services.deep_agent_builder import build_deep_agent
+    from .services.deep_agent_builder import build_deep_agent, sync_user_files_after_invocation
     from .services.deep_agent_stream import deep_agent_stream_to_sse
     from .services.message_history_adapter import MessageHistoryAdapter
 
@@ -331,13 +381,13 @@ async def _handle_chat_stream(
         channel="web",
     )
 
-    messages = await MessageHistoryAdapter.load_history(
-        session_id=chat_input.session_id,
-        pg_connection=pg_connection,
-        limit=100,
-    )
+    from .services.agent_callbacks import tool_call_logger
+
     user_msg = {"role": "user", "content": chat_input.message}
-    messages.append(user_msg)
+    config = {
+        "configurable": {"thread_id": chat_input.session_id},
+        "callbacks": [tool_call_logger],
+    }
 
     # Save user message before streaming begins
     await MessageHistoryAdapter.save_messages(
@@ -349,7 +399,7 @@ async def _handle_chat_stream(
     async def _stream_and_persist():
         """Wrap the SSE stream to accumulate and persist the AI response."""
         accumulated_text = []
-        async for sse_line in deep_agent_stream_to_sse(agent, {"messages": messages}):
+        async for sse_line in deep_agent_stream_to_sse(agent, {"messages": [user_msg]}, config=config):
             if sse_line.startswith("data: "):
                 try:
                     payload = json.loads(sse_line[6:])
@@ -367,6 +417,9 @@ async def _handle_chat_stream(
                 messages=[ai_msg],
                 pg_connection=pg_connection,
             )
+
+        # Fire-and-forget sync of user changes to durable storage
+        asyncio.create_task(sync_user_files_after_invocation(user_id))
 
     return StreamingResponse(
         _stream_and_persist(),

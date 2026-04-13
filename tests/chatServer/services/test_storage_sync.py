@@ -122,18 +122,18 @@ async def test_pull_system_downloads_files(storage_sync, mock_bucket, tmp_data_d
             {"name": "skills", "id": None},
         ],
         [
-            {"name": "clarity-soul", "id": None},
+            {"name": "interaction-learning", "id": None},
         ],
         [
             {"name": "SKILL.md", "id": "abc"},
         ],
     ]
-    mock_bucket.download.return_value = b"# Soul text"
+    mock_bucket.download.return_value = b"# Interaction Learning"
 
     await storage_sync.pull_system()
 
     system_dir = tmp_data_dir / "config" / "system"
-    assert (system_dir / "skills" / "clarity-soul" / "SKILL.md").read_bytes() == b"# Soul text"
+    assert (system_dir / "skills" / "interaction-learning" / "SKILL.md").read_bytes() == b"# Interaction Learning"
 
 
 @pytest.mark.asyncio

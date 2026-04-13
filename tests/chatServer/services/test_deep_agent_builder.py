@@ -1,4 +1,4 @@
-"""Unit tests for deep_agent_builder.py — build_deep_agent and _build_channel_prompt."""
+"""Unit tests for deep_agent_builder.py — build_deep_agent and _build_system_prompt."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import chatServer.services.deep_agent_builder as mod
 from chatServer.services.deep_agent_builder import (
     _agent_cache,
     _agent_locks,
-    _build_channel_prompt,
+    _build_system_prompt,
 )
 
 # ---------------------------------------------------------------------------
@@ -59,7 +59,7 @@ async def test_build_deep_agent_returns_agent():
 
 @pytest.mark.asyncio
 async def test_build_deep_agent_caches():
-    """Second call with same (user_id, agent_name) returns the cached instance."""
+    """Second call with same (user_id, agent_name, channel) returns the cached instance."""
     mock_graph = _make_mock_graph()
     with patch.object(mod, "_build_agent", new_callable=AsyncMock, return_value=mock_graph) as mock_build:
         agent1 = await mod.build_deep_agent("user-1", "clarity", "session-1")
@@ -87,14 +87,32 @@ async def test_build_deep_agent_different_users_not_cached():
     assert mock_build.await_count == 2
 
 
+@pytest.mark.asyncio
+async def test_build_deep_agent_different_channels_not_cached():
+    """Different channel → different agents (system_prompt varies by channel)."""
+    graph1 = _make_mock_graph()
+    graph2 = _make_mock_graph()
+    with patch.object(
+        mod,
+        "_build_agent",
+        new_callable=AsyncMock,
+        side_effect=[graph1, graph2],
+    ) as mock_build:
+        agent1 = await mod.build_deep_agent("user-1", "clarity", "s1", "web")
+        agent2 = await mod.build_deep_agent("user-1", "clarity", "s2", "telegram")
+
+    assert agent1 is not agent2
+    assert mock_build.await_count == 2
+
+
 # ---------------------------------------------------------------------------
-# build_deep_agent — create_deep_agent integration (AC-22 backend fallback)
+# build_deep_agent — create_deep_agent integration
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_build_deep_agent_constructs_bwrap_backend():
-    """AC-22: BwrapBackend always constructed."""
+    """BwrapBackend always constructed via _create_backend."""
     agent_config = {
         "id": "agent-id-1",
         "agent_name": "clarity",
@@ -109,7 +127,6 @@ async def test_build_deep_agent_constructs_bwrap_backend():
         patch("chatServer.services.agent_config_cache_service.get_cached_agent_config", new=AsyncMock(return_value=agent_config)),  # noqa: E501
         patch("src.core.agent_loader_db.load_tools_from_db", return_value=[]),
         patch("src.core.agent_loader_db._fetch_agent_config_from_db_async", new=AsyncMock(return_value=agent_config)),  # noqa: E501
-        patch("src.core.agent_loader_db._prefetch_memory_notes", new=AsyncMock(return_value=None)),
         patch("src.core.agent_loader_db._resolve_memory_user_id", new=AsyncMock(return_value="user-1")),
         patch("chatServer.services.tool_cache_service.get_cached_tools_for_agent", new=AsyncMock(return_value=[])),  # noqa: E501
         patch("chatServer.services.user_instructions_cache_service.get_cached_user_instructions", new=AsyncMock(return_value=None)),  # noqa: E501
@@ -148,7 +165,6 @@ async def test_build_deep_agent_model_prefixed_with_anthropic():
         patch("chatServer.services.agent_config_cache_service.get_cached_agent_config", new=AsyncMock(return_value=agent_config)),  # noqa: E501
         patch("src.core.agent_loader_db.load_tools_from_db", return_value=[]),
         patch("src.core.agent_loader_db._fetch_agent_config_from_db_async", new=AsyncMock(return_value=agent_config)),  # noqa: E501
-        patch("src.core.agent_loader_db._prefetch_memory_notes", new=AsyncMock(return_value=None)),
         patch("src.core.agent_loader_db._resolve_memory_user_id", new=AsyncMock(return_value="user-1")),
         patch("chatServer.services.tool_cache_service.get_cached_tools_for_agent", new=AsyncMock(return_value=[])),  # noqa: E501
         patch("chatServer.services.user_instructions_cache_service.get_cached_user_instructions", new=AsyncMock(return_value=None)),  # noqa: E501
@@ -186,7 +202,6 @@ async def test_build_deep_agent_model_with_existing_prefix_unchanged():
         patch("chatServer.services.agent_config_cache_service.get_cached_agent_config", new=AsyncMock(return_value=agent_config)),  # noqa: E501
         patch("src.core.agent_loader_db.load_tools_from_db", return_value=[]),
         patch("src.core.agent_loader_db._fetch_agent_config_from_db_async", new=AsyncMock(return_value=agent_config)),  # noqa: E501
-        patch("src.core.agent_loader_db._prefetch_memory_notes", new=AsyncMock(return_value=None)),
         patch("src.core.agent_loader_db._resolve_memory_user_id", new=AsyncMock(return_value="user-1")),
         patch("chatServer.services.tool_cache_service.get_cached_tools_for_agent", new=AsyncMock(return_value=[])),  # noqa: E501
         patch("chatServer.services.user_instructions_cache_service.get_cached_user_instructions", new=AsyncMock(return_value=None)),  # noqa: E501
@@ -209,8 +224,8 @@ async def test_build_deep_agent_model_with_existing_prefix_unchanged():
 
 
 @pytest.mark.asyncio
-async def test_build_deep_agent_passes_tools_and_backend():
-    """create_deep_agent receives tools, BwrapBackend, skills, and system_prompt."""
+async def test_build_deep_agent_passes_tools_backend_skills_memory():
+    """create_deep_agent receives tools, backend, skills, memory, and system_prompt."""
     agent_config = {
         "id": "agent-id-1",
         "agent_name": "clarity",
@@ -226,7 +241,6 @@ async def test_build_deep_agent_passes_tools_and_backend():
         patch("chatServer.services.agent_config_cache_service.get_cached_agent_config", new=AsyncMock(return_value=agent_config)),  # noqa: E501
         patch("src.core.agent_loader_db.load_tools_from_db", return_value=[mock_tool]),
         patch("src.core.agent_loader_db._fetch_agent_config_from_db_async", new=AsyncMock(return_value=agent_config)),  # noqa: E501
-        patch("src.core.agent_loader_db._prefetch_memory_notes", new=AsyncMock(return_value=None)),
         patch("src.core.agent_loader_db._resolve_memory_user_id", new=AsyncMock(return_value="user-1")),
         patch("chatServer.services.tool_cache_service.get_cached_tools_for_agent", new=AsyncMock(return_value=[])),  # noqa: E501
         patch("chatServer.services.user_instructions_cache_service.get_cached_user_instructions", new=AsyncMock(return_value=None)),  # noqa: E501
@@ -247,66 +261,65 @@ async def test_build_deep_agent_passes_tools_and_backend():
     assert call_kwargs["tools"] == [mock_tool]
     assert call_kwargs["backend"] is mock_backend
     assert call_kwargs["skills"] == ["/system/skills/", "/user/skills/"]
+    assert call_kwargs["memory"] == ["/user/memory/AGENTS.md"]
     assert call_kwargs["name"] == "clarity"
     assert "system_prompt" in call_kwargs
+    # Subagents: researcher subagent is always included
+    subagents = call_kwargs.get("subagents")
+    assert subagents is not None
+    assert len(subagents) == 1
+    assert subagents[0]["name"] == "researcher"
 
 
 # ---------------------------------------------------------------------------
-# _build_channel_prompt — AC-05 (runtime-only content)
+# _build_system_prompt — always-present identity + runtime context
 # ---------------------------------------------------------------------------
 
 
-def test_channel_prompt_includes_channel_guidance():
-    prompt = _build_channel_prompt("web")
+def test_system_prompt_includes_soul():
+    prompt = _build_system_prompt(soul="Be deeply helpful.")
+    assert "Be deeply helpful." in prompt
+    assert "Soul" in prompt
+
+
+def test_system_prompt_includes_identity():
+    prompt = _build_system_prompt(identity={"name": "Clarity", "vibe": "warm"})
+    assert "Clarity" in prompt
+    assert "warm" in prompt
+
+
+def test_system_prompt_includes_channel():
+    prompt = _build_system_prompt(channel="web")
     assert "Channel" in prompt
 
 
-def test_channel_prompt_includes_time():
-    prompt = _build_channel_prompt("web")
+def test_system_prompt_includes_time():
+    prompt = _build_system_prompt(channel="web")
     assert "Current Time" in prompt
 
 
-def test_channel_prompt_includes_memory_notes():
-    prompt = _build_channel_prompt("web", memory_notes="User likes brevity.")
-    assert "User likes brevity." in prompt
-
-
-def test_channel_prompt_includes_user_instructions():
-    prompt = _build_channel_prompt("web", user_instructions="Always reply in bullet points.")
+def test_system_prompt_includes_user_instructions():
+    prompt = _build_system_prompt(channel="web", user_instructions="Always reply in bullet points.")
     assert "Always reply in bullet points." in prompt
 
 
-def test_channel_prompt_excludes_soul_and_identity():
-    """AC-05: soul/identity are skills — must NOT appear in the channel-only prompt."""
-    prompt = _build_channel_prompt("web")
-    assert "Soul" not in prompt
-    assert "Identity" not in prompt
-    assert "Operating Model" not in prompt
-
-
-def test_channel_prompt_scheduled_mode():
-    prompt = _build_channel_prompt("scheduled")
+def test_system_prompt_scheduled_mode():
+    prompt = _build_system_prompt(channel="scheduled")
     assert "automated" in prompt.lower() or "scheduled" in prompt.lower()
 
 
-def test_channel_prompt_heartbeat_mode():
-    prompt = _build_channel_prompt("heartbeat")
+def test_system_prompt_heartbeat_mode():
+    prompt = _build_system_prompt(channel="heartbeat")
     assert "HEARTBEAT_OK" in prompt
 
 
-def test_channel_prompt_onboarding_when_no_memory_or_instructions():
-    prompt = _build_channel_prompt("web", memory_notes=None, user_instructions=None)
-    assert "first interaction" in prompt.lower() or "onboarding" in prompt.lower()
-
-
-def test_channel_prompt_no_onboarding_when_memory_exists():
-    prompt = _build_channel_prompt("web", memory_notes="Likes cats.")
-    assert "Onboarding" not in prompt
-
-
-def test_channel_prompt_session_open_new_user():
-    prompt = _build_channel_prompt("session_open", memory_notes=None, user_instructions=None)
+def test_system_prompt_session_open_new_user():
+    prompt = _build_system_prompt(channel="session_open", user_instructions=None)
     assert "Session Open" in prompt
     assert "first time" in prompt.lower()
 
 
+def test_system_prompt_telegram_channel():
+    prompt = _build_system_prompt(channel="telegram")
+    assert "Telegram" in prompt
+    assert "4096" in prompt

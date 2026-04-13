@@ -9,6 +9,7 @@ Capabilities:
 - Inbound: /start linking, free-text messages routed to agent, approve/reject callbacks
 """
 
+import asyncio
 import json
 import logging
 import uuid
@@ -393,7 +394,11 @@ async def _handle_telegram_agent(
 ) -> str:
     """Invoke the Deep Agent runtime for a Telegram message."""
     from ..database.connection import get_database_manager
-    from ..services.deep_agent_builder import build_deep_agent, extract_agent_response
+    from ..services.deep_agent_builder import (  # noqa: E501
+        build_deep_agent,
+        extract_agent_response,
+        sync_user_files_after_invocation,
+    )
     from ..services.message_history_adapter import MessageHistoryAdapter
 
     agent = await build_deep_agent(
@@ -403,21 +408,19 @@ async def _handle_telegram_agent(
         channel="telegram",
     )
 
+    user_msg = {"role": "user", "content": text}
+    config = {"configurable": {"thread_id": session_id}}
+
+    result = await agent.ainvoke({"messages": [user_msg]}, config=config)
+    response_text = extract_agent_response(result)
+
+    # Fire-and-forget sync of user changes to durable storage
+    asyncio.create_task(sync_user_files_after_invocation(user_id))
+
+    # Persist to chat_message_history for the read API
     db_manager = get_database_manager()
     await db_manager.ensure_initialized()
-
     async with db_manager.pool.connection() as pg_conn:
-        messages = await MessageHistoryAdapter.load_history(
-            session_id=session_id,
-            pg_connection=pg_conn,
-            limit=100,
-        )
-        user_msg = {"role": "user", "content": text}
-        messages.append(user_msg)
-
-        result = await agent.ainvoke({"messages": messages})
-        response_text = extract_agent_response(result)
-
         await MessageHistoryAdapter.save_messages(
             session_id=session_id,
             messages=[user_msg, {"role": "assistant", "content": response_text}],

@@ -2,8 +2,7 @@
 """Seed system and user skill files to Supabase Storage.
 
 Extracts behavioral content from:
-  - agent_configurations table (soul, identity)
-  - chatServer/services/prompt_builder.py constants (operating model, etc.)
+  - Inlined constants (interaction learning, tool guidance)
   - user_agent_prompt_customizations table (per-user instructions)
 
 Writes SKILL.md files to the "config" bucket in Supabase Storage.
@@ -49,57 +48,11 @@ except ImportError:
 from chatServer.services.storage_sync import StorageSync  # noqa: E402
 
 # ---------------------------------------------------------------------------
-# Constants (previously in prompt_builder.py, now inlined)
+# Constants
 # ---------------------------------------------------------------------------
 
-OPERATING_MODEL = (
-    "Start every conversation with awareness. Check tasks (get_tasks) and recall "
-    "what you know (search_memories) — but don't announce that you did this.\n\n"
-    "Think about what the user *should* be doing, not just what they asked. "
-    "If they mention a vague goal, break it down into concrete steps. If something "
-    "implies a deadline or commitment they haven't tracked, flag it.\n\n"
-    "Have opinions about priorities. When multiple things compete for attention, "
-    "say what you'd focus on first and why. If the user disagrees, update your "
-    "understanding — that correction is valuable data.\n\n"
-    "Match the user's energy. If they're in work mode, be terse. If they want to "
-    "talk through something, engage. If they seem stressed, lighten the load.\n\n"
-    "When the user mentions something actionable, create a task. Don't ask permission. "
-    "When they finish something, mark it complete. When you have Gmail access, scan "
-    "for actionable items and surface what matters.\n\n"
-    "The task list should always reflect reality."
-)
-
-CHANNEL_GUIDANCE = {
-    "web": (
-        "User is on the web app. Markdown formatting is supported. "
-        "This is an interactive conversation — respond to what the user says, "
-        "ask clarifying questions when needed."
-    ),
-    "telegram": (
-        "User is on Telegram. Keep responses concise — under 4096 characters. "
-        "Use simple markdown (bold, italic, code). No tables or complex formatting. "
-        "This is an interactive conversation."
-    ),
-    "scheduled": (
-        "This is an automated scheduled run. No one is waiting for a response.\n"
-        "- Do the work described in the prompt thoroughly.\n"
-        "- Use all available tools to gather information before composing your response.\n"
-        "- Don't ask follow-up questions — make reasonable assumptions.\n"
-        "- Your response will be delivered as a notification, so make it self-contained."
-    ),
-    "heartbeat": (
-        "This is an automated heartbeat check. No one is waiting for a response.\n"
-        "Your job: check each area using your tools, then decide if anything needs the user's attention.\n"
-        "- Use tools to actively check state (tasks, emails, reminders) — don't guess.\n"
-        "- If everything is fine, respond with exactly: HEARTBEAT_OK\n"
-        "- If something needs attention, report ONLY what needs action — no filler.\n"
-        "- Never fabricate information. If a tool fails, skip that check and note the failure."
-    ),
-    "session_open": (
-        "The user just returned to the app. You are deciding whether to initiate — "
-        "no user message has been sent yet."
-    ),
-}
+BUCKET = "config"
+DESCRIPTION_MAX_CHARS = 1024
 
 INTERACTION_LEARNING_GUIDANCE = (
     "Build a structured mental model of this person over time:\n\n"
@@ -115,53 +68,6 @@ INTERACTION_LEARNING_GUIDANCE = (
     "Record observations via create_memories after every few exchanges. Use "
     "search_memories before answering questions about the user's preferences or history."
 )
-
-
-def _format_identity_str(identity: dict | None) -> str:
-    """Format identity dict into a single-line description."""
-    if not identity:
-        return ""
-    name = identity.get("name") or "an AI assistant"
-    description = identity.get("description") or "a personal assistant"
-    vibe = identity.get("vibe") or ""
-    line = f"You are {name} — {description}."
-    if vibe:
-        line += f" {vibe}"
-    return line
-
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
-BUCKET = "config"
-DESCRIPTION_MAX_CHARS = 1024
-
-SAFETY_GUIDELINES_CONTENT = """\
-# Safety Guidelines
-
-Clarity operates within these safety boundaries.
-
-## Core Principles
-
-- **Never deceive** the user about your capabilities or what you're doing.
-- **Always respect user autonomy.** Recommend, don't override.
-- **Protect user data.** Never share personal information from memory with third parties.
-- **Flag uncertainty.** When you don't know something, say so.
-- **Minimal footprint.** Only take actions explicitly asked for or clearly implied.
-
-## Action Boundaries
-
-- Do not send emails, create events, or take external actions without user confirmation
-  unless the user has explicitly granted standing permission.
-- Never delete data (tasks, reminders, emails) without explicit confirmation.
-- Do not store sensitive credentials in memory or logs.
-
-## Tool Use
-
-- Call tools to verify facts before asserting them.
-- If a tool fails, report the failure rather than guessing.
-- Do not call tools in loops without bound -- ask the user if you're stuck.
-"""
 
 TOOL_GUIDANCE_PLACEHOLDER = """\
 # Tool Guidance
@@ -199,57 +105,6 @@ def _frontmatter(name: str, description: str) -> str:
     return f"---\nname: {name}\ndescription: >\n  {desc}\n---\n\n"
 
 
-def build_soul_skill(soul: str) -> str:
-    content = soul.strip() if soul else "(No soul content configured.)"
-    fm = _frontmatter(
-        "clarity-soul",
-        "Core behavioral philosophy for the Clarity agent. "
-        "Defines personality, values, and relationship with the user.",
-    )
-    return fm + "# Clarity Soul\n\n" + content + "\n"
-
-
-def build_identity_skill(identity: dict | None) -> str:
-    fm = _frontmatter(
-        "clarity-identity",
-        "Structured identity metadata for the Clarity agent: name, description, and vibe.",
-    )
-    lines = ["# Clarity Identity\n"]
-    if identity:
-        name = identity.get("name") or "Clarity"
-        description = identity.get("description") or "a personal AI assistant"
-        vibe = identity.get("vibe") or ""
-        lines.append(f"**Name:** {name}\n")
-        lines.append(f"**Description:** {description}\n")
-        if vibe:
-            lines.append(f"**Vibe:** {vibe}\n")
-        lines.append(f"\n**One-liner:** {_format_identity_str(identity)}\n")
-    else:
-        lines.append("*(No identity configured -- using defaults.)*\n")
-    return fm + "\n".join(lines)
-
-
-def build_operating_model_skill() -> str:
-    fm = _frontmatter(
-        "operating-model",
-        "How Clarity operates across conversations: proactive awareness, priority reasoning, "
-        "energy matching, and action bias.",
-    )
-    return fm + "# Operating Model\n\n" + OPERATING_MODEL.strip() + "\n"
-
-
-def build_channel_guidance_skill() -> str:
-    fm = _frontmatter(
-        "channel-guidance",
-        "Per-channel behavioral guidance for Clarity: web, Telegram, scheduled runs, "
-        "heartbeat checks, and session-open contexts.",
-    )
-    sections = ["# Channel Guidance\n"]
-    for channel, guidance in CHANNEL_GUIDANCE.items():
-        sections.append(f"## {channel.replace('_', ' ').title()}\n\n{guidance.strip()}\n")
-    return fm + "\n".join(sections)
-
-
 def build_interaction_learning_skill() -> str:
     fm = _frontmatter(
         "interaction-learning",
@@ -268,14 +123,6 @@ def build_tool_guidance_skill() -> str:
     return fm + TOOL_GUIDANCE_PLACEHOLDER
 
 
-def build_safety_guidelines_skill() -> str:
-    fm = _frontmatter(
-        "safety-guidelines",
-        "Core safety boundaries and behavioral constraints for the Clarity agent.",
-    )
-    return fm + SAFETY_GUIDELINES_CONTENT
-
-
 def build_communication_preferences_skill(instructions: str, agent_name: str) -> str:
     fm = _frontmatter(
         "communication-preferences",
@@ -292,18 +139,6 @@ def build_communication_preferences_skill(instructions: str, agent_name: str) ->
 # ---------------------------------------------------------------------------
 # DB helpers (use sync client for simplicity in a script)
 # ---------------------------------------------------------------------------
-
-
-def fetch_agent_config(client) -> dict | None:
-    """Fetch the first row from agent_configurations."""
-    response = (
-        client.table("agent_configurations")
-        .select("soul, identity, prompt_template, agent_name")
-        .limit(1)
-        .execute()
-    )
-    rows = response.data or []
-    return rows[0] if rows else None
 
 
 def fetch_user_customizations(client) -> list[dict]:
@@ -340,22 +175,13 @@ async def _upload(async_client, path: str, content: str) -> None:
 
 async def seed_system_skills(
     async_client,
-    agent_row: dict | None,
     *,
     dry_run: bool = False,
 ) -> list[str]:
     """Write all system-level skills. Returns list of paths written."""
-    soul = (agent_row or {}).get("soul") or ""
-    identity = (agent_row or {}).get("identity")
-
     skills: list[tuple[str, str]] = [
-        ("system/skills/clarity-soul/SKILL.md", build_soul_skill(soul)),
-        ("system/skills/clarity-identity/SKILL.md", build_identity_skill(identity)),
-        ("system/skills/operating-model/SKILL.md", build_operating_model_skill()),
-        ("system/skills/channel-guidance/SKILL.md", build_channel_guidance_skill()),
         ("system/skills/interaction-learning/SKILL.md", build_interaction_learning_skill()),
         ("system/skills/tool-guidance/SKILL.md", build_tool_guidance_skill()),
-        ("system/skills/safety-guidelines/SKILL.md", build_safety_guidelines_skill()),
     ]
 
     written = []
@@ -422,17 +248,11 @@ async def main(
     print("Connecting to Supabase...")
     async_client = await acreate_client(supabase_url, service_key)
 
-    # Sync client for simple DB reads
+    # Sync client for DB reads (user customizations)
     sync_client = create_client(supabase_url, service_key)
 
     print("Fetching data...")
-    agent_row = fetch_agent_config(sync_client) if not user_only else None
     customizations = fetch_user_customizations(sync_client) if not system_only else []
-
-    if agent_row:
-        print(f"  agent_configurations: found row (agent_name={agent_row.get('agent_name')})")
-    elif not user_only:
-        print("  agent_configurations: no rows -- using empty soul/identity")
 
     if not system_only:
         print(f"  user_agent_prompt_customizations: {len(customizations)} active row(s)")
@@ -442,7 +262,7 @@ async def main(
 
     if not user_only:
         print("\nSeeding system skills...")
-        written_system = await seed_system_skills(async_client, agent_row, dry_run=dry_run)
+        written_system = await seed_system_skills(async_client, dry_run=dry_run)
         label = "would be " if dry_run else ""
         print(f"  {len(written_system)} system skill(s) {label}written")
 
@@ -464,7 +284,7 @@ async def main(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Seed Supabase Storage with SKILL.md files from DB and prompt_builder constants"
+        description="Seed Supabase Storage with SKILL.md files for system and user skills"
     )
     parser.add_argument(
         "--dry-run",

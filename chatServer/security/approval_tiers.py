@@ -74,9 +74,6 @@ TOOL_APPROVAL_DEFAULTS: dict[str, tuple[ApprovalTier, ApprovalTier]] = {
     "search_entities": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
     "get_context": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
 
-    # Update instructions
-    "update_instructions": (ApprovalTier.USER_CONFIGURABLE, ApprovalTier.REQUIRES_APPROVAL),
-
     # Web search - read-only, no user data
     "search_web": (ApprovalTier.AUTO_APPROVE, ApprovalTier.AUTO_APPROVE),
 

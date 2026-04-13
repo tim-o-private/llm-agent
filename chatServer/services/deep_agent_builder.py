@@ -1,23 +1,30 @@
 """Builder for Deep Agent (CompiledStateGraph) instances.
 
-Builds a real create_deep_agent() graph backed by BwrapBackend.
+Builds a create_deep_agent() graph with:
+- BwrapBackend (OS-level sandbox) or FilesystemBackend fallback
+- AGENTS.md working memory via MemoryMiddleware (always loaded, agent-editable)
+- Skills via SkillsMiddleware (on-demand, progressive disclosure)
+- AsyncPostgresSaver checkpointer for conversation state persistence
+- MemoryClient tools for semantic search (separate from AGENTS.md)
 
 Architecture
 ------------
     caller → build_deep_agent(user_id, agent_name, session_id, channel)
-           → loads config, tools, approval wrapping, backend, channel prompt
-           → create_deep_agent(model, tools, system_prompt, backend, skills)
+           → loads config, tools, approval wrapping, backend, system prompt
+           → create_deep_agent(model, tools, system_prompt, backend, skills, memory, checkpointer)
            → returns CompiledStateGraph (LangGraph)
 
-Callers use .ainvoke() / .astream() directly on the CompiledStateGraph.
+Callers use .ainvoke() / .astream() with config={"configurable": {"thread_id": session_id}}.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, Tuple
 
 from cachetools import TTLCache
@@ -41,24 +48,17 @@ def extract_agent_response(result: dict) -> str:
     return ""
 
 # ---------------------------------------------------------------------------
-# Agent cache  (keyed on user_id + agent_name)
+# Agent cache  (keyed on user_id + agent_name + channel)
 # ---------------------------------------------------------------------------
 
-_agent_cache: TTLCache[Tuple[str, str], Any] = TTLCache(
+_agent_cache: TTLCache[Tuple[str, str, str], Any] = TTLCache(
     maxsize=100, ttl=900  # 15-min TTL
 )
-_agent_locks: Dict[Tuple[str, str], asyncio.Lock] = {}
+_agent_locks: Dict[Tuple[str, str, str], asyncio.Lock] = {}
 
 # ---------------------------------------------------------------------------
-# Channel-only system prompt  (AC-05: runtime sections only — soul/identity
-# are skills loaded from BwrapBackend at invoke time)
+# System prompt — always-present identity + runtime context
 # ---------------------------------------------------------------------------
-
-_CHANNEL_PROMPT_INTRO = (
-    "You are operating via the Clarity platform. "
-    "Your behavioral guidelines, personality, and domain expertise are loaded "
-    "from your skill library — see the skill sections prepended above.\n\n"
-)
 
 _CHANNEL_HEADERS = {
     "web": "User is on the web app. Markdown formatting is supported.",
@@ -87,27 +87,64 @@ _CHANNEL_HEADERS = {
 }
 
 
-def _build_channel_prompt(
-    channel: str,
-    memory_notes: str | None = None,
+def _format_identity(identity: dict | None) -> str:
+    """Format identity dict into readable text."""
+    if not identity:
+        return ""
+    parts = []
+    if identity.get("name"):
+        parts.append(f"Name: {identity['name']}")
+    if identity.get("description"):
+        parts.append(f"Description: {identity['description']}")
+    if identity.get("vibe"):
+        parts.append(f"Vibe: {identity['vibe']}")
+    return "\n".join(parts)
+
+
+def _read_system_file(path: Path) -> str:
+    """Read a system config file, stripping YAML frontmatter."""
+    if not path.exists():
+        return ""
+    text = path.read_text(encoding="utf-8")
+    # Strip YAML frontmatter (--- ... ---)
+    if text.startswith("---"):
+        end = text.find("---", 3)
+        if end != -1:
+            text = text[end + 3:].strip()
+    return text
+
+
+def _build_system_prompt(
+    soul: str | None = None,
+    identity: dict | None = None,
+    channel: str = "web",
     user_instructions: str | None = None,
     last_message_at: datetime | None = None,
     bootstrap_context: str | None = None,
 ) -> str:
-    """Assemble the runtime-only system prompt sections.
+    """Assemble the full system prompt with always-present identity + runtime context.
 
-    Deliberately excludes soul, identity, operating model, interaction learning,
-    and channel guidance — those are loaded as skills from BwrapBackend.
-
-    This function handles ONLY:
-    - A brief framing line
-    - Channel-specific runtime mode
+    Includes:
+    - Soul (personality, values — includes operating model and safety guidelines)
+    - Identity (name, description, vibe)
+    - Channel-specific guidance
     - Current time
-    - Memory notes (user-specific, not skill-level)
     - User custom instructions
     - Session/onboarding flow
+
+    Memory (AGENTS.md) is handled separately by MemoryMiddleware.
+    Skills are handled separately by SkillsMiddleware.
     """
     sections: list[str] = []
+
+    # Soul — core personality (now includes operating model + safety guidelines)
+    if soul:
+        sections.append(f"## Soul\n{soul}")
+
+    # Identity — name and metadata
+    identity_text = _format_identity(identity)
+    if identity_text:
+        sections.append(f"## Identity\n{identity_text}")
 
     # Channel mode
     channel_text = _CHANNEL_HEADERS.get(channel, _CHANNEL_HEADERS["web"])
@@ -118,40 +155,43 @@ def _build_channel_prompt(
     time_str = now.strftime("%A, %B %d, %Y %I:%M %p (UTC)")
     sections.append(f"## Current Time\n{time_str}")
 
-    # Memory notes
-    if memory_notes:
-        sections.append(f"## What You Know\n{memory_notes[:4000]}")
-
     # User instructions
     if user_instructions:
         instr = user_instructions[:2000]
         sections.append(f"## User Instructions\n{instr}")
 
+    # Workflow creation capabilities
+    sections.append(
+        "## Workflows\n"
+        "Pre-built workflows are available at `/system/workflows/` (email-triage, morning-briefing, evening-briefing, draft-reply).\n"  # noqa: E501
+        "These run automatically via scheduled tasks.\n\n"
+        "You can create custom workflows by writing Markdown template files to `/user/workflows/`.\n"
+        "Templates use YAML frontmatter + step definitions. Use `ls /system/workflows/` and "
+        "`read_file` on any template to see the format."
+    )
+
     # Session/onboarding sections (only for interactive channels)
     if channel == "session_open":
         _add_session_open_section(
-            sections, memory_notes, user_instructions, last_message_at, bootstrap_context
+            sections, user_instructions, last_message_at, bootstrap_context
         )
-    elif channel in ("web", "telegram") and not memory_notes and not user_instructions:
-        sections.append(
-            "## Onboarding\n"
-            "This appears to be your first interaction. Introduce yourself briefly, "
-            "then ask one concrete open-ended question to start learning about this person. "
-            "Do NOT call get_tasks, get_reminders, or search_gmail — there's nothing yet."
-        )
+    elif channel in ("web", "telegram") and not user_instructions:
+        # Onboarding hint — MemoryMiddleware handles the "has memory" check
+        # via AGENTS.md content. If AGENTS.md is empty/new, agent will see
+        # "(No memory loaded)" and know to introduce itself.
+        pass
 
     return "\n\n".join(sections)
 
 
 def _add_session_open_section(
     sections: list[str],
-    memory_notes: str | None,
     user_instructions: str | None,
-    last_message_at: datetime | None,
-    bootstrap_context: str | None,
+    last_message_at: datetime | None = None,
+    bootstrap_context: str | None = None,
 ) -> None:
     """Append the session_open decision block to sections."""
-    is_new_user = not memory_notes and not user_instructions and last_message_at is None
+    is_new_user = not user_instructions and last_message_at is None
     if is_new_user:
         sections.append(
             "## Session Open\n"
@@ -164,7 +204,7 @@ def _add_session_open_section(
 
     # Returning user — format time context
     if last_message_at:
-        elapsed = datetime.now(timezone.utc) - last_message_at.replace(
+        elapsed = datetime.now(timezone.utc) - last_message_at.replace(  # noqa: E501
             tzinfo=timezone.utc
         ) if not last_message_at.tzinfo else datetime.now(timezone.utc) - last_message_at
         minutes = int(elapsed.total_seconds() / 60)
@@ -191,6 +231,26 @@ def _add_session_open_section(
 
 
 # ---------------------------------------------------------------------------
+# AGENTS.md seed content for new users
+# ---------------------------------------------------------------------------
+
+_SEED_AGENTS_MD = """\
+# Agent Memory
+
+This file is your working memory. Update it as you learn about the user.
+
+## User Profile
+*(Not yet known — learn through conversation.)*
+
+## Preferences
+*(None observed yet.)*
+
+## Key Context
+*(Nothing recorded yet.)*
+"""
+
+
+# ---------------------------------------------------------------------------
 # Backend construction
 # ---------------------------------------------------------------------------
 
@@ -211,7 +271,10 @@ def _create_backend(system_dir, user_dir):
             # Quick smoke test — bwrap may exist but fail due to AppArmor/seccomp
             result = subprocess.run(  # noqa: S603, S607
                 ["bwrap", "--unshare-all", "--die-with-parent",
-                 "--ro-bind", "/usr", "/usr", "--", "true"],
+                 "--ro-bind", "/usr", "/usr",
+                 "--ro-bind", "/lib", "/lib",
+                 "--ro-bind", "/lib64", "/lib64",
+                 "--", "/usr/bin/true"],
                 capture_output=True, timeout=5,
             )
             if result.returncode == 0:
@@ -252,9 +315,9 @@ async def build_deep_agent(
     """Build or retrieve a cached CompiledStateGraph.
 
     Returns a LangGraph CompiledStateGraph created by create_deep_agent().
-    Cached per (user_id, agent_name) with 15-min TTL.
+    Cached per (user_id, agent_name, channel) with 15-min TTL.
     """
-    cache_key = (user_id, agent_name)
+    cache_key = (user_id, agent_name, channel)
 
     if cache_key in _agent_cache:
         logger.debug("Deep agent cache HIT: %s", cache_key)
@@ -286,7 +349,6 @@ async def _build_agent(
     from chatServer.services.user_instructions_cache_service import get_cached_user_instructions
     from src.core.agent_loader_db import (
         _fetch_agent_config_from_db_async,
-        _prefetch_memory_notes,
         _resolve_memory_user_id,
         load_tools_from_db,
     )
@@ -294,7 +356,7 @@ async def _build_agent(
     effective_supabase_url = os.getenv("SUPABASE_URL")
     effective_supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
-    # Memory client
+    # Memory client (for semantic search tool — separate from AGENTS.md working memory)
     memory_client = None
     mem_url = os.getenv("MEMORY_SERVER_URL", "")
     mem_key = os.getenv("MEMORY_SERVER_BACKEND_KEY", "")
@@ -317,11 +379,10 @@ async def _build_agent(
     if not agent_id:
         raise ValueError(f"Agent '{agent_name}' has no ID")
 
-    # 2. Parallel fetch: tools + instructions + memory  (mirrors builder lines 138-142)
-    cached_tools_data, user_instructions, memory_notes = await asyncio.gather(
+    # 2. Parallel fetch: tools + instructions
+    cached_tools_data, user_instructions = await asyncio.gather(
         get_cached_tools_for_agent(str(agent_id)),
         get_cached_user_instructions(user_id, agent_name),
-        _prefetch_memory_notes(memory_client),
     )
 
     tools_data = [
@@ -335,7 +396,7 @@ async def _build_agent(
         for tc in cached_tools_data
     ]
 
-    # 3. Instantiate tools (Deep Agents takes BaseTool directly — no bridge needed)
+    # 3. Instantiate tools (Deep Agents takes BaseTool directly)
     instantiated_tools = load_tools_from_db(
         tools_data=tools_data,
         user_id=user_id,
@@ -345,9 +406,7 @@ async def _build_agent(
         memory_client=memory_client,
     )
 
-    # 4. Wrap tools with approval (same as existing builder — non-fatal on failure)
-    supabase_client = None
-    notification_service = None
+    # 4. Wrap tools with approval (non-fatal on failure)
     try:
         from chatServer.database.supabase_client import create_user_scoped_client
         from chatServer.security.tool_wrapper import ApprovalContext, wrap_tools_with_approval
@@ -375,9 +434,7 @@ async def _build_agent(
     except Exception as exc:
         logger.warning("Failed to wrap tools with approval (non-fatal): %s", exc)
 
-    # 5. Create sandbox backend (AC-22)
-    from pathlib import Path
-
+    # 5. Create sandbox backend
     from chatServer.services.storage_sync import StorageSync
 
     data_dir = Path(os.getenv("SANDBOX_DATA_DIR", "/data"))
@@ -387,21 +444,37 @@ async def _build_agent(
     # Ensure user dir exists
     user_dir.mkdir(parents=True, exist_ok=True)
 
-    # Hydrate user dir from Storage if needed (AC-23)
+    # Hydrate user dir from Storage if needed
     supabase_url = os.getenv("SUPABASE_URL", "")
     supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
     if supabase_url and supabase_key:
         sync = StorageSync(supabase_url=supabase_url, supabase_key=supabase_key, data_dir=data_dir)
         await sync.hydrate_user(user_id)
 
+    # Seed AGENTS.md for new users
+    agents_md_path = user_dir / "memory" / "AGENTS.md"
+    if not agents_md_path.exists():
+        agents_md_path.parent.mkdir(parents=True, exist_ok=True)
+        agents_md_path.write_text(_SEED_AGENTS_MD, encoding="utf-8")
+        logger.info("Seeded AGENTS.md for user %s", user_id)
+
     # Try BwrapBackend (OS-level isolation), fall back to FilesystemBackend
     backend = _create_backend(system_dir, user_dir)
 
-    # 6. Build channel-specific system prompt (runtime sections only — soul/identity
-    #    come from skills loaded via the backend at invoke time)
-    channel_prompt = _build_channel_prompt(
+    # 6. Build system prompt — always-present identity + runtime context
+    #    (soul/identity from DB; operating model + safety now baked into system_prompt)
+    soul = agent_db_config.get("soul") or ""
+    identity = agent_db_config.get("identity")
+    if isinstance(identity, str):
+        try:
+            identity = json.loads(identity)
+        except (json.JSONDecodeError, TypeError):
+            identity = {"name": identity} if identity else None
+
+    system_prompt = _build_system_prompt(
+        soul=soul,
+        identity=identity,
         channel=channel,
-        memory_notes=memory_notes,
         user_instructions=user_instructions,
     )
 
@@ -410,22 +483,96 @@ async def _build_agent(
     model_name = llm_config.get("model", "claude-sonnet-4-20250514")
     model = model_name if ":" in model_name else f"anthropic:{model_name}"
 
-    # 8. Build CompiledStateGraph via create_deep_agent
+    # 8. Resolve checkpointer (if initialized)
+    checkpointer = None
+    try:
+        from chatServer.workflows.checkpointer import get_workflow_checkpointer
+        cp = get_workflow_checkpointer()
+        if cp.is_ready:
+            checkpointer = cp.saver
+    except RuntimeError:
+        logger.debug("WorkflowCheckpointer not initialized — running without checkpointer")
+
+    # 9. Build CompiledStateGraph via create_deep_agent
     agent = create_deep_agent(
         model=model,
-        tools=instantiated_tools,        # BaseTool instances accepted natively
-        system_prompt=channel_prompt,
-        backend=backend,                  # BwrapBackend
-        skills=["/system/skills/", "/user/skills/"],  # system (ro) + user (rw) skills
-        checkpointer=None,                # TODO: add postgres checkpointer later
-        name="clarity",
+        tools=instantiated_tools,
+        system_prompt=system_prompt,
+        backend=backend,
+        skills=["/system/skills/", "/user/skills/"],
+        memory=["/user/memory/AGENTS.md"],
+        checkpointer=checkpointer,
+        name=agent_db_config.get("agent_name", "clarity"),
+        subagents=[
+            {
+                "name": "researcher",
+                "description": "Research a topic using web search, memory, and file tools. Use for gathering information, fact-checking, or deep investigation.",  # noqa: E501
+                "system_prompt": "You are a research assistant. Use your tools to thoroughly investigate the given topic. Summarize findings clearly with sources.",  # noqa: E501
+            },
+        ],
     )
 
     logger.info(
-        "Built deep agent for '%s' (model=%s, %d tools, backend=BwrapBackend)",
+        "Built deep agent for '%s' (model=%s, %d tools, checkpointer=%s)",
         agent_name,
         model,
         len(instantiated_tools),
+        "postgres" if checkpointer else "none",
     )
 
     return agent
+
+
+# ---------------------------------------------------------------------------
+# Post-invocation file sync
+# ---------------------------------------------------------------------------
+
+
+async def sync_user_files_after_invocation(user_id: str) -> None:
+    """Fire-and-forget sync of user-modified files to Supabase Storage.
+
+    Called after agent invocation to persist any changes the agent made
+    to AGENTS.md or user skills back to durable storage.
+    """
+    try:
+        from chatServer.config.settings import get_settings
+        from chatServer.services.storage_sync import StorageSync
+
+        settings = get_settings()
+        data_dir = Path(os.getenv("SANDBOX_DATA_DIR", "/data"))
+        supabase_url = settings.SUPABASE_URL
+        supabase_key = settings.SUPABASE_SERVICE_ROLE_KEY
+
+        if not supabase_url or not supabase_key:
+            return
+
+        sync = StorageSync(
+            supabase_url=supabase_url,
+            supabase_key=supabase_key,
+            data_dir=data_dir,
+        )
+
+        # Sync key user files that the agent may have modified
+        user_dir = data_dir / "sandboxes" / user_id
+        memory_file = user_dir / "memory" / "AGENTS.md"
+
+        if memory_file.exists():
+            await sync.sync_file(user_id, "memory/AGENTS.md")
+
+        # Sync any user skills
+        skills_dir = user_dir / "skills"
+        if skills_dir.exists():
+            for skill_dir in skills_dir.iterdir():
+                if skill_dir.is_dir():
+                    skill_file = skill_dir / "SKILL.md"
+                    if skill_file.exists():
+                        await sync.sync_file(user_id, f"skills/{skill_dir.name}/SKILL.md")
+
+        # Sync any user workflows
+        workflows_dir = user_dir / "workflows"
+        if workflows_dir.exists():
+            for wf_file in workflows_dir.glob("*.md"):
+                await sync.sync_file(user_id, f"workflows/{wf_file.name}")
+
+    except Exception as e:
+        logger.warning(f"Post-invocation sync failed for user {user_id} (non-fatal): {e}")

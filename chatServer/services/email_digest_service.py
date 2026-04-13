@@ -1,11 +1,12 @@
 """Unified Email Digest Service for both scheduled and on-demand execution."""
 
+import asyncio
 import logging
 import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from .deep_agent_builder import build_deep_agent, extract_agent_response
+from .deep_agent_builder import build_deep_agent, extract_agent_response, sync_user_files_after_invocation
 from .email_digest_storage_service import get_email_digest_storage_service
 
 logger = logging.getLogger(__name__)
@@ -84,8 +85,12 @@ class EmailDigestService:
             logger.info(f"Invoking email_digest_agent with prompt: {prompt[:100]}...")
 
             # Invoke the deep agent — fresh context for digest generation
-            result = await agent.ainvoke({"messages": [{"role": "user", "content": prompt}]})
+            config = {"configurable": {"thread_id": session_id}}
+            result = await agent.ainvoke({"messages": [{"role": "user", "content": prompt}]}, config=config)
             digest_content = extract_agent_response(result)
+
+            # Fire-and-forget sync of user changes to durable storage
+            asyncio.create_task(sync_user_files_after_invocation(self.user_id))
 
             if not digest_content:
                 logger.warning(f"email_digest_agent returned empty response for user {self.user_id}")
