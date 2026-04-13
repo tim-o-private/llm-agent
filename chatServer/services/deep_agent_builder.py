@@ -344,6 +344,7 @@ async def _build_agent(
     from deepagents import create_deep_agent
 
     # Lazy imports to avoid circular dependencies
+    from chatServer.config.settings import get_settings
     from chatServer.services.agent_config_cache_service import get_cached_agent_config
     from chatServer.services.tool_cache_service import get_cached_tools_for_agent
     from chatServer.services.user_instructions_cache_service import get_cached_user_instructions
@@ -353,8 +354,9 @@ async def _build_agent(
         load_tools_from_db,
     )
 
-    effective_supabase_url = os.getenv("SUPABASE_URL")
-    effective_supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    settings = get_settings()
+    effective_supabase_url = settings.supabase_url
+    effective_supabase_key = settings.supabase_service_key
 
     # Memory client (for semantic search tool — separate from AGENTS.md working memory)
     memory_client = None
@@ -445,10 +447,8 @@ async def _build_agent(
     user_dir.mkdir(parents=True, exist_ok=True)
 
     # Hydrate user dir from Storage if needed
-    supabase_url = os.getenv("SUPABASE_URL", "")
-    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-    if supabase_url and supabase_key:
-        sync = StorageSync(supabase_url=supabase_url, supabase_key=supabase_key, data_dir=data_dir)
+    if settings.supabase_url and settings.supabase_service_key:
+        sync = StorageSync(supabase_url=settings.supabase_url, supabase_key=settings.supabase_service_key, data_dir=data_dir)  # noqa: E501
         await sync.hydrate_user(user_id)
 
     # Seed AGENTS.md for new users
@@ -540,8 +540,8 @@ async def sync_user_files_after_invocation(user_id: str) -> None:
 
         settings = get_settings()
         data_dir = Path(os.getenv("SANDBOX_DATA_DIR", "/data"))
-        supabase_url = settings.SUPABASE_URL
-        supabase_key = settings.SUPABASE_SERVICE_ROLE_KEY
+        supabase_url = settings.supabase_url
+        supabase_key = settings.supabase_service_key
 
         if not supabase_url or not supabase_key:
             return
