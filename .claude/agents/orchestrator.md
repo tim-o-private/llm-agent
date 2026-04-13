@@ -219,7 +219,7 @@ Multi-branch:
 Single-branch: `PR #42 — SPEC-NNN: <title> (single PR, N commits)`
 
 **Wrap Up:**
-- Update spec status to "Done" and `docs/sdlc/BACKLOG.md`
+- Update spec status to "Done" and `PRODUCT.md` sections 2-3
 - Clean up worktrees: `git worktree remove ../llm-agent-SPEC-NNN-<unit>`
 - Shut down teammates: `SendMessage` with `type: "shutdown_request"`
 - `TeamDelete`

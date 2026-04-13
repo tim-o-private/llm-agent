@@ -6,6 +6,9 @@ __pycache__/
 # C extensions
 *.so
 
+# User runtime state (hydrated from Supabase Storage)
+data/sandboxes/
+
 # Distribution / packaging
 .Python
 bin/
@@ -30,12 +33,9 @@ MANIFEST
 
 *session_log.*
 holistic_rubric*
-data/agents/*/memory/*
-data/agents/*/output/*
 
-# BUT, do NOT ignore the README.md files within these specific directories
-!data/agents/*/memory/README.md
-!data/agents/*/output/README.md
+# Legacy agent runtime data (pre-Deep Agents)
+data/agents/
 
 # PyInstaller
 #  Usually these files are written by a python script from a template

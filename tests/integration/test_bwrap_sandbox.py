@@ -1,102 +1,91 @@
-"""Integration tests for bwrap sandbox — requires bwrap binary on system.
+"""Integration tests for BwrapBackend — requires bwrap binary on the host.
 
-Gated behind @pytest.mark.integration (--run-integration flag).
+Gated behind ``@pytest.mark.sandbox``. Run with ``pytest --run-sandbox``.
 """
+
+from __future__ import annotations
 
 import shutil
 
 import pytest
 
-from chatServer.sandbox.bwrap import BwrapSandbox
-from chatServer.sandbox.models import SandboxConfig
-from chatServer.sandbox.provisioner import SandboxProvisioner
+from chatServer.sandbox.bwrap_backend import BwrapBackend
 
-# Skip all tests if bwrap is not available
-pytestmark = [
-    pytest.mark.integration,
-    pytest.mark.skipif(
-        shutil.which("bwrap") is None,
-        reason="bwrap binary not installed",
-    ),
-]
+pytestmark = pytest.mark.sandbox
 
 
-@pytest.fixture
-def sandbox_dirs(tmp_path):
-    """Create the minimal directory layout for a sandbox."""
-    system_dir = tmp_path / "system"
-    system_dir.mkdir()
-    (system_dir / "defaults.txt").write_text("system default\n")
-
-    user_dir = tmp_path / "user"
-    user_dir.mkdir()
-
-    tools_dir = tmp_path / "tools"
-    tools_dir.mkdir()
-
-    return user_dir, system_dir, tools_dir
+@pytest.fixture(autouse=True)
+def skip_if_no_bwrap():
+    """Skip all tests in this module if bwrap is not installed."""
+    if not shutil.which("bwrap"):
+        pytest.skip("bwrap not available")
 
 
-@pytest.fixture
-def sandbox(sandbox_dirs):
-    user_dir, system_dir, tools_dir = sandbox_dirs
-    return BwrapSandbox(
-        user_dir=user_dir,
-        system_dir=system_dir,
-        tools_dir=tools_dir,
-        bwrap_path=shutil.which("bwrap"),
-    )
+class TestBwrapSandboxIntegration:
+    """End-to-end tests running real bwrap namespaces."""
 
+    def test_basic_execute(self, tmp_path):
+        """BwrapBackend can execute a simple command."""
+        user_dir = tmp_path / "user"
+        system_dir = tmp_path / "system"
+        user_dir.mkdir()
+        system_dir.mkdir()
 
-class TestBwrapIntegration:
-    @pytest.mark.asyncio
-    async def test_basic_command(self, sandbox):
-        await sandbox.create()
-        result = await sandbox.execute("echo hello")
-        assert result.stdout.strip() == "hello"
+        backend = BwrapBackend(user_dir=user_dir, system_dir=system_dir)
+        result = backend.execute("echo 'hello from sandbox'")
+
         assert result.exit_code == 0
+        assert "hello from sandbox" in result.output
 
-    @pytest.mark.asyncio
-    async def test_user_dir_writable(self, sandbox):
-        await sandbox.create()
-        result = await sandbox.execute("echo 'test' > /user/test.txt && cat /user/test.txt")
+    def test_python3_available(self, tmp_path):
+        """Python3 is available inside the sandbox."""
+        user_dir = tmp_path / "user"
+        system_dir = tmp_path / "system"
+        user_dir.mkdir()
+        system_dir.mkdir()
+
+        backend = BwrapBackend(user_dir=user_dir, system_dir=system_dir)
+        result = backend.execute("python3 -c \"print('python works')\"")
+
         assert result.exit_code == 0
-        assert "test" in result.stdout
+        assert "python works" in result.output
 
-    @pytest.mark.asyncio
-    async def test_system_dir_readonly(self, sandbox):
-        await sandbox.create()
-        result = await sandbox.execute("echo 'hack' > /system/evil.txt")
+    def test_system_dir_read_only(self, tmp_path):
+        """System dir is mounted read-only."""
+        user_dir = tmp_path / "user"
+        system_dir = tmp_path / "system"
+        user_dir.mkdir()
+        system_dir.mkdir()
+        (system_dir / "test.txt").write_text("original")
+
+        backend = BwrapBackend(user_dir=user_dir, system_dir=system_dir)
+        result = backend.execute("echo 'overwrite' > /system/test.txt")
+
         assert result.exit_code != 0
+        # Original content should be unchanged on host
+        assert (system_dir / "test.txt").read_text() == "original"
 
-    @pytest.mark.asyncio
-    async def test_env_injection(self, sandbox):
-        await sandbox.create()
-        result = await sandbox.execute("echo $MY_SECRET", env={"MY_SECRET": "s3cr3t"})
-        assert result.stdout.strip() == "s3cr3t"
+    def test_user_dir_writable(self, tmp_path):
+        """User dir is writable."""
+        user_dir = tmp_path / "user"
+        system_dir = tmp_path / "system"
+        user_dir.mkdir()
+        system_dir.mkdir()
 
-    @pytest.mark.asyncio
-    async def test_timeout(self, sandbox):
-        await sandbox.create()
-        result = await sandbox.execute("sleep 60", timeout=1)
-        assert result.timed_out is True
+        backend = BwrapBackend(user_dir=user_dir, system_dir=system_dir)
+        result = backend.execute("echo 'written in sandbox' > /user/output.txt")
 
-    @pytest.mark.asyncio
-    async def test_provisioner_full_lifecycle(self, tmp_path):
-        config = SandboxConfig(
-            enabled=True,
-            base_path=tmp_path,
-            system_path=tmp_path / "system",
-            bwrap_binary=shutil.which("bwrap"),
-        )
-        (tmp_path / "system").mkdir(exist_ok=True)
-        (tmp_path / "tools").mkdir(exist_ok=True)
+        assert result.exit_code == 0
+        assert (user_dir / "output.txt").read_text().strip() == "written in sandbox"
 
-        prov = SandboxProvisioner(config)
-        sandbox = await prov.provision("test-user")
+    def test_host_filesystem_not_visible(self, tmp_path):
+        """Host paths outside mounts are not visible."""
+        user_dir = tmp_path / "user"
+        system_dir = tmp_path / "system"
+        user_dir.mkdir()
+        system_dir.mkdir()
 
-        result = await sandbox.execute("echo provisioned")
-        assert result.stdout.strip() == "provisioned"
+        backend = BwrapBackend(user_dir=user_dir, system_dir=system_dir)
+        result = backend.execute("ls /home 2>/dev/null && echo 'visible' || echo 'hidden'")
 
-        await prov.destroy("test-user")
-        assert "test-user" not in prov.active_sandboxes
+        assert "hidden" in result.output

@@ -14,7 +14,6 @@ from .job_handlers import (
     handle_agent_invocation,
     handle_email_processing,
     handle_evening_briefing,
-    handle_introspection,
     handle_morning_briefing,
     handle_reminder_delivery,
     handle_workflow,
@@ -88,20 +87,22 @@ class BackgroundTaskService:
                 # Check for agents that need to run
                 for schedule_id, schedule in self.agent_schedules.items():
                     if self._should_run_now(schedule, current_time):
-                        # Create task for async execution without blocking the loop
+                        # Record immediately to prevent double-fires on next tick
+                        await self._record_schedule_run(schedule)
                         asyncio.create_task(self._execute_scheduled_agent(schedule))
 
             except Exception as e:
                 logger.error(f"Error in run_scheduled_agents: {e}", exc_info=True)
 
     async def _reload_agent_schedules(self) -> None:
-        """Reload agent schedules from database."""
+        """Reload agent schedules from database, including persisted last_run_at."""
         try:
             db_manager = get_database_manager()
             async with db_manager.pool.connection() as conn:
                 async with conn.cursor() as cur:
                     await cur.execute("""
-                        SELECT id, user_id, agent_name, schedule_cron, prompt, config
+                        SELECT id, user_id, agent_name, schedule_cron, prompt, config,
+                               last_run_at
                         FROM agent_schedules
                         WHERE active = true
                     """)
@@ -112,7 +113,7 @@ class BackgroundTaskService:
                     self.agent_schedules.clear()
 
                     for schedule_row in schedules:
-                        schedule_id, user_id, agent_name, schedule_cron, prompt, config = schedule_row
+                        schedule_id, user_id, agent_name, schedule_cron, prompt, config, last_run_at = schedule_row
 
                         self.agent_schedules[str(schedule_id)] = {
                             'id': schedule_id,
@@ -121,7 +122,7 @@ class BackgroundTaskService:
                             'schedule_cron': schedule_cron,
                             'prompt': prompt,
                             'config': config or {},
-                            'last_run': None  # Track last execution time
+                            'last_run_at': last_run_at,
                         }
 
                     logger.info(f"Loaded {len(self.agent_schedules)} active agent schedules")
@@ -130,30 +131,48 @@ class BackgroundTaskService:
             logger.error(f"Error reloading agent schedules: {e}", exc_info=True)
 
     def _should_run_now(self, schedule: Dict, current_time: datetime) -> bool:
-        """Check if a schedule should run now based on cron expression."""
+        """Check if a schedule should run now based on cron expression.
+
+        Uses DB-persisted last_run_at to survive restarts.  If the most recent
+        scheduled time hasn't been executed yet, fire it.
+        """
         try:
             cron_expr = schedule['schedule_cron']
-            last_run = schedule.get('last_run')
+            last_run_at = schedule.get('last_run_at')
 
-            # Create croniter instance
             cron = croniter(cron_expr, current_time)
-
-            # Get the previous scheduled time
             prev_time = cron.get_prev(datetime)
 
-            # If we've never run, or the previous scheduled time is after our last run
-            if last_run is None or prev_time > last_run:
-                # Check if we're within 2 minutes of the scheduled time to avoid missing runs
-                time_diff = abs((current_time - prev_time).total_seconds())
-                if time_diff <= 120:  # Within 2 minutes
-                    schedule['last_run'] = current_time  # Update last run time
-                    return True
+            # Make prev_time tz-aware if it isn't (croniter may return naive)
+            if prev_time.tzinfo is None:
+                prev_time = prev_time.replace(tzinfo=timezone.utc)
+
+            # Fire if the most recent scheduled time hasn't been executed yet
+            if last_run_at is None or prev_time > last_run_at:
+                return True
 
             return False
 
         except Exception as e:
             logger.error(f"Error checking schedule for {schedule.get('id')}: {e}")
             return False
+
+    async def _record_schedule_run(self, schedule: Dict) -> None:
+        """Persist last_run_at to the database after a schedule fires."""
+        schedule_id = schedule['id']
+        now = datetime.now(timezone.utc)
+        schedule['last_run_at'] = now
+        try:
+            db_manager = get_database_manager()
+            async with db_manager.pool.connection() as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute(
+                        "UPDATE agent_schedules SET last_run_at = %s WHERE id = %s",
+                        (now, schedule_id),
+                    )
+                await conn.commit()
+        except Exception as e:
+            logger.error(f"Failed to persist last_run_at for schedule {schedule_id}: {e}")
 
     async def _execute_scheduled_agent(self, schedule: Dict) -> None:
         """Execute a single scheduled agent.
@@ -264,7 +283,6 @@ class BackgroundTaskService:
         self._job_runner.register_handler('morning_briefing', handle_morning_briefing)
         self._job_runner.register_handler('evening_briefing', handle_evening_briefing)
         self._job_runner.register_handler('workflow', handle_workflow)
-        self._job_runner.register_handler('introspection', handle_introspection)
 
         # Bootstrap briefing jobs before starting the runner —
         # ensures all eligible users have pending briefing jobs

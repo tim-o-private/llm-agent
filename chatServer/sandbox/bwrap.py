@@ -5,9 +5,18 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
-from .models import CommandResult
+
+@dataclass
+class CommandResult:
+    """Result of a command executed inside a sandbox."""
+
+    stdout: str
+    stderr: str
+    exit_code: int
+    timed_out: bool = False
 
 logger = logging.getLogger(__name__)
 
@@ -37,12 +46,10 @@ class BwrapSandbox:
         self,
         user_dir: Path,
         system_dir: Path,
-        tools_dir: Path,
         bwrap_path: str = "bwrap",
     ) -> None:
         self._user_dir = user_dir
         self._system_dir = system_dir
-        self._tools_dir = tools_dir
         self._bwrap_path = bwrap_path
 
     # -- lifecycle ---------------------------------------------------------
@@ -137,7 +144,6 @@ class BwrapSandbox:
             "--die-with-parent",
             "--ro-bind", str(self._system_dir), "/system",
             "--bind", str(self._user_dir), "/user",
-            "--ro-bind", str(self._tools_dir), "/tools",
             "--tmpfs", "/tmp",
             "--dev", "/dev",
             "--proc", "/proc",

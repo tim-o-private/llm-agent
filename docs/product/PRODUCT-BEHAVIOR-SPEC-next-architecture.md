@@ -177,4 +177,4 @@ PRD-002 features survive conceptually but not architecturally. Briefings, draft-
 
 ## 9. Open Questions for Architecture
 
-(Resolved — see `docs/product/ARCHITECTURE-PROPOSAL-next-gen.md`)
+(Resolved — see `docs/product/ARCHITECTURE-DESIGN-v0.1.md`)

@@ -1,12 +1,14 @@
-"""Template registry — loads workflow templates from ConfigService with caching.
+"""Template registry — loads workflow templates from the local filesystem.
 
-System templates at workflows/{name}.md, user templates shadow system templates.
+System templates at {system_dir}/workflows/{name}.md.
+User templates at {user_dir}/workflows/{name}.md (user shadows system).
 Caches parsed templates with 300s TTL.
 """
 
 import logging
 import time
-from typing import Optional
+from pathlib import Path
+from typing import Callable, Optional
 
 from .models import GraphTemplate, TemplateNotFoundError
 from .template_parser import parse_template
@@ -14,23 +16,35 @@ from .template_parser import parse_template
 logger = logging.getLogger(__name__)
 
 _CACHE_TTL_SECONDS = 300
-_WORKFLOWS_PREFIX = "workflows/"
+_WORKFLOWS_PREFIX = "workflows"
 
 
 class TemplateRegistry:
-    """Loads and caches workflow templates from ConfigService."""
+    """Loads and caches workflow templates from local filesystem."""
 
-    def __init__(self, config_service):
-        """Initialize with a ConfigService instance."""
-        self._config = config_service
+    def __init__(
+        self,
+        system_dir: Path,
+        user_dir_resolver: Optional[Callable[[str], Path]] = None,
+    ):
+        """Initialize with a system config directory and optional user dir resolver.
+
+        Args:
+            system_dir: Path to system config directory containing workflows/.
+            user_dir_resolver: Callable that maps user_id to user sandbox Path.
+                User templates at {user_dir}/workflows/ shadow system ones.
+        """
+        self._system_dir = system_dir
+        self._user_dir_resolver = user_dir_resolver
         self._cache: dict[str, tuple[GraphTemplate, float]] = {}
 
     async def get_template(
         self, name: str, user_id: str
     ) -> GraphTemplate:
-        """Get a parsed template by name, with user overlay.
+        """Get a parsed template by name.
 
-        User templates shadow system templates of the same name.
+        Checks user dir first (user templates shadow system ones),
+        then falls back to system dir.
 
         Raises:
             TemplateNotFoundError: If template doesn't exist.
@@ -42,32 +56,52 @@ class TemplateRegistry:
             if time.monotonic() - cached_at < _CACHE_TTL_SECONDS:
                 return template
 
-        path = f"{_WORKFLOWS_PREFIX}{name}.md"
-        content = await self._config.read(path, user_id)
-        if content is None:
+        # Try user dir first (user templates shadow system ones)
+        path = None
+        if self._user_dir_resolver:
+            user_dir = self._user_dir_resolver(user_id)
+            user_path = user_dir / _WORKFLOWS_PREFIX / f"{name}.md"
+            if user_path.is_file():
+                path = user_path
+
+        # Fall back to system dir
+        if path is None:
+            path = self._system_dir / _WORKFLOWS_PREFIX / f"{name}.md"
+
+        if not path.is_file():
             raise TemplateNotFoundError(
                 f"Workflow template '{name}' not found"
             )
 
+        content = path.read_text()
         template = parse_template(content, source_name=name)
         self._cache[cache_key] = (template, time.monotonic())
         return template
 
     async def list_templates(self, user_id: str) -> list[str]:
-        """List available template names (merged system + user).
+        """List available template names from both system and user directories.
 
-        Returns template names (without path prefix or .md extension).
+        Returns template names (without path prefix or .md extension),
+        merged and deduplicated.
         """
-        paths = await self._config.list_paths(
-            _WORKFLOWS_PREFIX, user_id
-        )
-        names = []
-        for path in paths:
-            if path.endswith(".md"):
-                # Strip prefix and extension: "workflows/email-triage.md" → "email-triage"
-                name = path.removeprefix(_WORKFLOWS_PREFIX).removesuffix(".md")
-                if name:
-                    names.append(name)
+        names: set[str] = set()
+
+        # System templates
+        system_workflows = self._system_dir / _WORKFLOWS_PREFIX
+        if system_workflows.is_dir():
+            for path in system_workflows.glob("*.md"):
+                if path.stem:
+                    names.add(path.stem)
+
+        # User templates (may shadow system)
+        if self._user_dir_resolver:
+            user_dir = self._user_dir_resolver(user_id)
+            user_workflows = user_dir / _WORKFLOWS_PREFIX
+            if user_workflows.is_dir():
+                for path in user_workflows.glob("*.md"):
+                    if path.stem:
+                        names.add(path.stem)
+
         return sorted(names)
 
     def invalidate(self, name: Optional[str] = None) -> None:
@@ -102,11 +136,14 @@ def get_template_registry() -> TemplateRegistry:
     return _registry
 
 
-def initialize_template_registry(config_service) -> TemplateRegistry:
+def initialize_template_registry(
+    system_dir: Path,
+    user_dir_resolver: Optional[Callable[[str], Path]] = None,
+) -> TemplateRegistry:
     """Initialize the global TemplateRegistry."""
     global _registry
-    _registry = TemplateRegistry(config_service)
-    logger.info("TemplateRegistry initialized")
+    _registry = TemplateRegistry(system_dir, user_dir_resolver=user_dir_resolver)
+    logger.info("TemplateRegistry initialized (system_dir=%s)", system_dir)
     return _registry
 
 

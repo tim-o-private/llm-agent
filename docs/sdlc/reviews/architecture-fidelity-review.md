@@ -4,7 +4,7 @@
 > **Reviewer:** Claude (Principal Engineer)
 > **Branch:** `feat/SPEC-033-conversation-handler`
 > **Scope:** All commits on branch vs `main` (28 commits, 103 files, ~14,500 LOC)
-> **Compared against:** `PRODUCT-BEHAVIOR-SPEC-next-architecture.md`, `ARCHITECTURE-PROPOSAL-next-gen.md`
+> **Compared against:** `PRODUCT-BEHAVIOR-SPEC-next-architecture.md`, `ARCHITECTURE-DESIGN-v0.1.md`
 
 ---
 

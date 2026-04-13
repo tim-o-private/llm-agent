@@ -7,7 +7,6 @@ from chatServer.tools.memory_tools import CreateMemoriesTool
 from chatServer.tools.reminder_tools import GetRemindersTool
 from chatServer.tools.schedule_tools import GetSchedulesTool
 from chatServer.tools.task_tools import GetTasksTool
-from chatServer.tools.update_instructions_tool import UpdateInstructionsTool
 
 
 class TestGetTasksToolPromptSection:
@@ -216,43 +215,6 @@ class TestGetSchedulesToolPromptSection:
         assert web == telegram
 
 
-class TestUpdateInstructionsToolPromptSection:
-    """Tests for UpdateInstructionsTool.prompt_section()."""
-
-    def test_web_returns_string(self):
-        """UpdateInstructionsTool.prompt_section('web') returns non-None string."""
-        result = UpdateInstructionsTool.prompt_section("web")
-        assert isinstance(result, str)
-        assert len(result) > 0
-
-    def test_telegram_returns_string(self):
-        """UpdateInstructionsTool.prompt_section('telegram') returns non-None string."""
-        result = UpdateInstructionsTool.prompt_section("telegram")
-        assert isinstance(result, str)
-        assert len(result) > 0
-
-    def test_heartbeat_returns_none(self):
-        """UpdateInstructionsTool.prompt_section('heartbeat') returns None."""
-        result = UpdateInstructionsTool.prompt_section("heartbeat")
-        assert result is None
-
-    def test_scheduled_returns_none(self):
-        """UpdateInstructionsTool.prompt_section('scheduled') returns None."""
-        result = UpdateInstructionsTool.prompt_section("scheduled")
-        assert result is None
-
-    def test_web_mentions_always_or_never(self):
-        """UpdateInstructionsTool.prompt_section('web') mentions always or never."""
-        result = UpdateInstructionsTool.prompt_section("web")
-        assert "always" in result.lower() or "never" in result.lower()
-
-    def test_web_and_telegram_same(self):
-        """UpdateInstructionsTool prompt sections for web and telegram are the same."""
-        web = UpdateInstructionsTool.prompt_section("web")
-        telegram = UpdateInstructionsTool.prompt_section("telegram")
-        assert web == telegram
-
-
 class TestPromptSectionLengthLimits:
     """Tests that all prompt sections respect length limits."""
 
@@ -262,7 +224,6 @@ class TestPromptSectionLengthLimits:
         SearchGmailTool,
         GetRemindersTool,
         GetSchedulesTool,
-        UpdateInstructionsTool,
     ])
     @pytest.mark.parametrize("channel", ["web", "telegram", "heartbeat", "scheduled"])
     def test_prompt_section_length_under_600_chars(self, tool_class, channel):
@@ -284,7 +245,6 @@ class TestPromptSectionConsistency:
         SearchGmailTool,
         GetRemindersTool,
         GetSchedulesTool,
-        UpdateInstructionsTool,
     ])
     def test_prompt_section_returns_str_or_none(self, tool_class):
         """All tool classes have prompt_section() that returns str or None."""

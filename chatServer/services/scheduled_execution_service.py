@@ -8,6 +8,7 @@ execution logic in BackgroundTaskService._execute_scheduled_agent.
 Pattern mirrors chatServer/services/chat.py:225-258 for approval wrapping.
 """
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
@@ -250,7 +251,11 @@ class ScheduledExecutionService:
 
         Returns (response_text, model_name).
         """
-        from ..services.deep_agent_builder import build_deep_agent, extract_agent_response
+        from ..services.deep_agent_builder import (  # noqa: E501
+            build_deep_agent,
+            extract_agent_response,
+            sync_user_files_after_invocation,
+        )
 
         agent = await build_deep_agent(
             user_id=user_id,
@@ -260,7 +265,12 @@ class ScheduledExecutionService:
         )
 
         messages = [{"role": "user", "content": prompt}]
-        result = await agent.ainvoke({"messages": messages})
+        config = {"configurable": {"thread_id": session_id}}
+        result = await agent.ainvoke({"messages": messages}, config=config)
+
+        # Fire-and-forget sync of user changes to durable storage
+        asyncio.create_task(sync_user_files_after_invocation(user_id))
+
         return extract_agent_response(result), "default"
 
 

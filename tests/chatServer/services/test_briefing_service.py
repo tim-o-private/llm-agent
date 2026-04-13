@@ -47,7 +47,6 @@ def _mock_prefs(db_client, data=None):
 async def test_ac_04_lazy_preference_creation(service, db_client):
     """First call creates preferences row when none exists."""
     # First select returns empty (no row)
-    empty_exec = AsyncMock(return_value=MagicMock(data=[]))
     insert_exec = AsyncMock(return_value=MagicMock(data=[{"user_id": "user-1"}]))
     # Second select returns the created row
     created_data = [{
@@ -55,7 +54,7 @@ async def test_ac_04_lazy_preference_creation(service, db_client):
         "timezone": "America/New_York",
         "morning_briefing_enabled": True,
     }]
-    created_exec = AsyncMock(return_value=MagicMock(data=created_data))
+    # created_data is used in mock_select_execute below
 
     call_count = 0
 
@@ -220,7 +219,7 @@ async def test_ac_12_update_normalizes_time(service, db_client):
         "morning_briefing_time": "08:00:00",
     }]))
 
-    result = await service.update_user_preferences("user-1", {"morning_briefing_time": "08:00"})
+    await service.update_user_preferences("user-1", {"morning_briefing_time": "08:00"})
 
     # Verify the update call had :00 appended
     update_call = db_client.table.return_value.update.call_args
@@ -237,7 +236,7 @@ async def test_ac_38_briefing_uses_skip_notification_and_chat_message(service, d
         mock_ses.execute = AsyncMock(return_value={"success": True, "output": "Briefing text"})
         MockSES.return_value = mock_ses
 
-        result = await service._invoke_briefing_agent(
+        await service._invoke_briefing_agent(
             user_id="user-1",
             prompt="Test prompt",
             briefing_type="morning",

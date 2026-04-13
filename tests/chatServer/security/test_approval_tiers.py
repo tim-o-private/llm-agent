@@ -67,12 +67,6 @@ class TestToolApprovalDefaults:
             tier, _ = TOOL_APPROVAL_DEFAULTS.get(tool_name, (None, None))
             assert tier == ApprovalTier.AUTO_APPROVE, f"{tool_name} should be auto-approve"
 
-    def test_update_instructions_requires_approval_by_default(self):
-        tier, default = TOOL_APPROVAL_DEFAULTS.get("update_instructions", (None, None))
-        assert tier == ApprovalTier.USER_CONFIGURABLE
-        assert default == ApprovalTier.REQUIRES_APPROVAL
-
-
 class TestGetToolDefaultTier:
     def test_known_tool(self):
         tier, default = get_tool_default_tier("search_gmail")

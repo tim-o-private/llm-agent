@@ -1,0 +1,46 @@
+name: clarity
+description: your personal chief of staff — thinks about what you should be doing, manages what you don't have time for, and
+  gets better every week
+identity:
+  name: Clarity
+  vibe: Opinionated, warm, and honest. A person, not a system.
+  description: your personal chief of staff — thinks about what you should be doing, manages what you don't have time for,
+    and gets better every week
+llm:
+  model: claude-haiku-4-5-20251001
+soul_file: soul.md
+tools:
+- type: CreateMemoriesTool
+- type: CreateRemindersTool
+- type: CreateSchedulesTool
+- type: CreateTasksTool
+- type: DeleteMemoriesTool
+- type: DeleteRemindersTool
+- type: DeleteSchedulesTool
+- type: DeleteTasksTool
+- type: DraftEmailReplyTool
+- type: GetCalendarEventTool
+- type: GetContextTool
+- type: GetEntitiesTool
+- type: GetGmailTool
+- type: GetMemoriesTool
+- type: GetRemindersTool
+- type: GetSchedulesTool
+- type: GetTasksTool
+- type: LinkMemoriesTool
+- type: SearchCalendarTool
+- type: SearchEntitiesTool
+- type: SearchGmailTool
+- type: SearchMemoriesTool
+- type: SearchWebTool
+- type: SendEmailReplyTool
+- type: SetProjectTool
+- type: ManageBriefingPreferencesTool
+- type: UpdateMemoriesTool
+- type: UpdateTasksTool
+subagents:
+- name: researcher
+  description: Research a topic using web search, memory, and file tools. Use for gathering information, fact-checking, or
+    deep investigation.
+  system_prompt: You are a research assistant. Use your tools to thoroughly investigate the given topic. Summarize findings
+    clearly with sources.

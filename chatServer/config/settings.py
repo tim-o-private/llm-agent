@@ -31,7 +31,6 @@ class Settings:
 
 
         # Sandbox settings
-        self.sandbox_enabled: bool = os.getenv("BWRAP_ENABLED", "false").lower() == "true"
         self.sandbox_base_path: str = os.getenv("SANDBOX_BASE_PATH", "/data/sandboxes")
         self.sandbox_system_path: str = os.getenv("SANDBOX_SYSTEM_PATH", "/data/sandbox-system")
         self.bwrap_binary: str = os.getenv("BWRAP_PATH", "bwrap")
@@ -75,8 +74,6 @@ class Settings:
         self.llm_agent_src_path = os.getenv("LLM_AGENT_SRC_PATH", "src")
         self.telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
         self.telegram_webhook_url = os.getenv("TELEGRAM_WEBHOOK_URL")
-        # Feature flags (reserved for future use)
-        self.sandbox_enabled = os.getenv("BWRAP_ENABLED", "false").lower() == "true"
         self.sandbox_base_path = os.getenv("SANDBOX_BASE_PATH", "/data/sandboxes")
         self.sandbox_system_path = os.getenv("SANDBOX_SYSTEM_PATH", "/data/sandbox-system")
         self.bwrap_binary = os.getenv("BWRAP_PATH", "bwrap")

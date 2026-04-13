@@ -40,13 +40,8 @@ class WorkflowRunManager:
         self._active_tasks: dict[str, asyncio.Task] = {}
         self._builder = GraphBuilder()
 
-        # Register service node handlers for templates that use Python service steps.
-        # GraphBuilder.build() raises ValueError if a service step has no handler.
-        from .nodes.apply_improvements import apply_improvements
-        from .nodes.gather_metrics import gather_metrics
-
-        self._builder.register_service("gather-signals", gather_metrics)
-        self._builder.register_service("apply-changes", apply_improvements)
+        # Service node handlers for templates that use Python service steps
+        # are registered here. Introspection nodes were removed in SPEC-044.
 
     async def start_run(
         self,

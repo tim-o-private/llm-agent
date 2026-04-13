@@ -26,7 +26,6 @@ from chatServer.tools.memory_tools import (
 from chatServer.tools.reminder_tools import CreateRemindersTool, DeleteRemindersTool, GetRemindersTool
 from chatServer.tools.schedule_tools import CreateSchedulesTool, DeleteSchedulesTool, GetSchedulesTool
 from chatServer.tools.task_tools import CreateTasksTool, DeleteTasksTool, GetTasksTool, UpdateTasksTool
-from chatServer.tools.update_instructions_tool import UpdateInstructionsTool
 from chatServer.tools.web_search_tool import SearchWebTool
 from core.tools.crud_tool import CRUDTool, CRUDToolInput
 from supabase import Client as SupabaseClient
@@ -67,8 +66,6 @@ TOOL_REGISTRY: Dict[str, Type] = {
     "GetSchedulesTool": GetSchedulesTool,
     "CreateSchedulesTool": CreateSchedulesTool,
     "DeleteSchedulesTool": DeleteSchedulesTool,
-    # Instructions
-    "UpdateInstructionsTool": UpdateInstructionsTool,
     # Web search
     "SearchWebTool": SearchWebTool,
     # Calendar
@@ -268,24 +265,33 @@ def load_tools_from_db(
         db_tool_type_str = str(tool_row["type"]) # 'type' column from agent_tools table
         db_tool_config_json = tool_row.get("config") or {} # JSONB 'config' column from agent_tools
 
-        db_tool_name = tool_row.get("name") # 'name' column (for Langchain tool name)
-        db_tool_description = tool_row.get("description") # 'description' column (for LLM)
-
-        if not db_tool_name:
-            logger.error(f"DB entry for tool type '{db_tool_type_str}' is missing 'name'. Skipping. Row: {tool_row}")
-            continue
-        if not db_tool_description:
-            logger.error(f"DB entry for tool '{db_tool_name}' (type '{db_tool_type_str}') is missing 'description'. Skipping. Row: {tool_row}")  # noqa: E501
-            continue
-
-        # Convert to strings after validation
-        db_tool_name = str(db_tool_name)
-        db_tool_description = str(db_tool_description)
+        db_tool_name = tool_row.get("name")
+        db_tool_description = tool_row.get("description")
 
         original_python_tool_class = TOOL_REGISTRY.get(db_tool_type_str)
         if db_tool_type_str not in TOOL_REGISTRY:
             logger.warning(f"Tool type '{db_tool_type_str}' (for tool name '{db_tool_name}') not found in TOOL_REGISTRY. Skipping tool.")  # noqa: E501
             continue
+
+        # Fall back to class defaults for name/description when not provided (file-based config)
+        if not db_tool_name and original_python_tool_class and hasattr(original_python_tool_class, 'model_fields'):
+            name_field = original_python_tool_class.model_fields.get("name")
+            if name_field and name_field.default:
+                db_tool_name = name_field.default
+        if not db_tool_description and original_python_tool_class and hasattr(original_python_tool_class, 'model_fields'):  # noqa: E501
+            desc_field = original_python_tool_class.model_fields.get("description")
+            if desc_field and desc_field.default:
+                db_tool_description = desc_field.default
+
+        if not db_tool_name:
+            logger.error(f"Tool type '{db_tool_type_str}' has no name (not in config or class). Skipping.")
+            continue
+        if not db_tool_description:
+            logger.error(f"Tool '{db_tool_name}' (type '{db_tool_type_str}') has no description. Skipping.")
+            continue
+
+        db_tool_name = str(db_tool_name)
+        db_tool_description = str(db_tool_description)
 
         # Special handling for GmailTool type - use tool_class config to determine specific class
         if db_tool_type_str == "GmailTool":

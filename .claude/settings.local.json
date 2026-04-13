@@ -34,7 +34,13 @@
       "Skill(claude-api)",
       "WebFetch(domain:docs.anthropic.com)",
       "WebFetch(domain:docs.langchain.com)",
-      "WebFetch(domain:pypi.org)"
+      "WebFetch(domain:pypi.org)",
+      "WebFetch(domain:hermes-agent.nousresearch.com)",
+      "WebFetch(domain:www.turingpost.com)",
+      "WebFetch(domain:thenewstack.io)",
+      "WebFetch(domain:www.mindstudio.ai)",
+      "WebFetch(domain:velvetshark.com)",
+      "WebFetch(domain:nervegna.substack.com)"
     ]
   },
   "prefersReducedMotion": true
