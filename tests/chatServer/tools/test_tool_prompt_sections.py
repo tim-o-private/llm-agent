@@ -8,6 +8,7 @@ from chatServer.tools.reminder_tools import GetRemindersTool
 from chatServer.tools.schedule_tools import GetSchedulesTool
 from chatServer.tools.task_tools import GetTasksTool
 
+
 class TestGetTasksToolPromptSection:
     """Tests for GetTasksTool.prompt_section()."""
 

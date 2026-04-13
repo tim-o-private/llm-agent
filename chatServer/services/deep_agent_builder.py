@@ -73,10 +73,12 @@ _CHANNEL_HEADERS = {
         "- Your response will be delivered as a notification, so make it self-contained."
     ),
     "heartbeat": (
-        "This is an automated heartbeat check. No one is waiting.\n"
-        "Check each area using your tools, then decide if anything needs the user's attention.\n"
-        "- If everything is fine, respond with exactly: HEARTBEAT_OK\n"
-        "- If something needs attention, report ONLY what needs action — no filler.\n"
+        "This is an automated heartbeat check. No one is waiting.\n\n"
+        "Review your working memory for active plans and open threads.\n"
+        "Then check signals: calendar (next 4 hours), email (unread from key people), overdue tasks.\n\n"
+        "- If nothing needs the user's attention: respond exactly HEARTBEAT_OK\n"
+        "- If something does: report what and why, in 2-3 sentences max. Be specific.\n"
+        "- Target 3-5 proactive messages per day total. Silence is usually correct.\n"
         "- Never fabricate. If a tool fails, skip that check and note it."
     ),
     "session_open": (
@@ -223,8 +225,9 @@ def _add_session_open_section(
         "No message typed yet — decide whether to initiate.\n\n"
         f"Context from your tools (pre-fetched):\n{ctx}\n\n"
         "Decision rules:\n"
+        "- Reference your working memory for active plans and open threads.\n"
         "- If nothing needs attention and <30 min since last message: respond WAKEUP_SILENT\n"
-        "- Otherwise: greet with a brief (2-4 sentence) summary of what needs attention.\n"
+        "- Otherwise: lead with what matters — active plans, upcoming deadlines, things needing follow-up.\n"
         "Don't re-call tools to fetch what's already in the context above."
     )
 
@@ -236,16 +239,30 @@ def _add_session_open_section(
 _SEED_AGENTS_MD = """\
 # Agent Memory
 
-This file is your working memory. Update it as you learn about the user.
+Your working memory. Read it every session. Rewrite sections to stay current — \
+don't append forever. Keep under 100 lines.
 
-## User Profile
-*(Not yet known — learn through conversation.)*
+## Who This Person Is
+*(Name, role, what they care about, how they communicate. Learn through conversation.)*
 
-## Preferences
-*(None observed yet.)*
+## Life Domains
+*(Work, family, health, home, finances, interests — which are active, what matters in each.)*
 
-## Key Context
-*(Nothing recorded yet.)*
+## Key People
+*(Name → relationship, context, what matters about them.)*
+
+## Active Plans
+*(Goals the user is working toward. For each: goal, current status, next step, blockers. \
+Use parent tasks with subtasks to track these — reference task IDs here. \
+Remove completed plans.)*
+
+## Open Threads
+*(Things needing follow-up: emails awaiting replies, decisions pending, promises made. \
+Include dates and deadlines.)*
+
+## Observations
+*(Patterns: preferences, triggers, recurring struggles, what works. Priority signals: \
+what the user responds to quickly, what they dismiss, what stresses them.)*
 """
 
 

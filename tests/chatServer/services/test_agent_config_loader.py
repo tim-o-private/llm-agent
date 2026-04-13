@@ -1,7 +1,6 @@
 """Tests for chatServer.services.agent_config_loader — file-based agent config."""
 
 import textwrap
-from pathlib import Path
 
 import pytest
 

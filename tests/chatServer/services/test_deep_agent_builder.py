@@ -84,7 +84,7 @@ def _standard_patches(agent_config=None, mock_graph=None, mock_backend=None, too
         patch("chatServer.security.tool_wrapper.ApprovalContext", return_value=MagicMock()),
         patch.object(mod, "_create_backend", return_value=mock_backend),
         patch("chatServer.services.storage_sync.StorageSync"),
-        patch.dict(os.environ, {"SUPABASE_URL": "", "SUPABASE_SERVICE_ROLE_KEY": ""}),
+        patch.dict(os.environ, {"SUPABASE_URL": "", "SUPABASE_SERVICE_ROLE_KEY": "", "SANDBOX_DATA_DIR": "/tmp/test-sandbox"}),  # noqa: E501
         patch("deepagents.create_deep_agent", return_value=mock_graph),
     ]
     return patches
