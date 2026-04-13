@@ -41,6 +41,55 @@ def _make_mock_graph():
     return graph
 
 
+def _make_agent_config():
+    """Return a file-based agent config dict matching AgentConfigLoader.load() output."""
+    return {
+        "agent_name": "clarity",
+        "soul": "Be helpful.",
+        "identity": {"name": "Clarity"},
+        "llm_config": {"model": "claude-sonnet-4-20250514"},
+        "tools": [],
+        "subagents": [
+            {
+                "name": "researcher",
+                "description": "Research a topic.",
+                "system_prompt": "You are a research assistant.",
+            },
+        ],
+    }
+
+
+def _standard_patches(agent_config=None, mock_graph=None, mock_backend=None, tools=None):
+    """Return a list of context managers for the standard mock stack."""
+    if agent_config is None:
+        agent_config = _make_agent_config()
+    if mock_graph is None:
+        mock_graph = _make_mock_graph()
+    if mock_backend is None:
+        mock_backend = MagicMock()
+
+    mock_loader = MagicMock()
+    mock_loader.load.return_value = agent_config
+
+    patches = [
+        patch("chatServer.services.agent_config_loader.get_agent_config_loader", return_value=mock_loader),
+        patch("src.core.agent_loader_db.load_tools_from_db", return_value=tools or []),
+        patch("src.core.agent_loader_db._resolve_memory_user_id", new=AsyncMock(return_value="user-1")),
+        patch("chatServer.services.user_instructions_cache_service.get_cached_user_instructions", new=AsyncMock(return_value=None)),  # noqa: E501
+        patch("chatServer.database.supabase_client.create_user_scoped_client", new=AsyncMock(return_value=MagicMock())),
+        patch("chatServer.security.tool_wrapper.wrap_tools_with_approval"),
+        patch("chatServer.services.audit_service.AuditService", return_value=MagicMock()),
+        patch("chatServer.services.pending_actions.PendingActionsService", return_value=MagicMock()),
+        patch("chatServer.services.notification_service.NotificationService", return_value=MagicMock()),
+        patch("chatServer.security.tool_wrapper.ApprovalContext", return_value=MagicMock()),
+        patch.object(mod, "_create_backend", return_value=mock_backend),
+        patch("chatServer.services.storage_sync.StorageSync"),
+        patch.dict(os.environ, {"SUPABASE_URL": "", "SUPABASE_SERVICE_ROLE_KEY": ""}),
+        patch("deepagents.create_deep_agent", return_value=mock_graph),
+    ]
+    return patches
+
+
 # ---------------------------------------------------------------------------
 # build_deep_agent — caching behavior
 # ---------------------------------------------------------------------------
@@ -111,75 +160,35 @@ async def test_build_deep_agent_different_channels_not_cached():
 
 
 @pytest.mark.asyncio
-async def test_build_deep_agent_constructs_bwrap_backend():
-    """BwrapBackend always constructed via _create_backend."""
-    agent_config = {
-        "id": "agent-id-1",
-        "agent_name": "clarity",
-        "soul": "Be helpful.",
-        "identity": {"name": "Clarity"},
-        "prompt_template": None,
-        "llm_config": {},
-    }
+async def test_build_deep_agent_constructs_backend():
+    """Backend always constructed via _create_backend."""
     mock_graph = _make_mock_graph()
     mock_backend = MagicMock()
-    with (
-        patch("chatServer.services.agent_config_cache_service.get_cached_agent_config", new=AsyncMock(return_value=agent_config)),  # noqa: E501
-        patch("src.core.agent_loader_db.load_tools_from_db", return_value=[]),
-        patch("src.core.agent_loader_db._fetch_agent_config_from_db_async", new=AsyncMock(return_value=agent_config)),  # noqa: E501
-        patch("src.core.agent_loader_db._resolve_memory_user_id", new=AsyncMock(return_value="user-1")),
-        patch("chatServer.services.tool_cache_service.get_cached_tools_for_agent", new=AsyncMock(return_value=[])),  # noqa: E501
-        patch("chatServer.services.user_instructions_cache_service.get_cached_user_instructions", new=AsyncMock(return_value=None)),  # noqa: E501
-        patch("chatServer.database.supabase_client.create_user_scoped_client", new=AsyncMock(return_value=MagicMock())),  # noqa: E501
-        patch("chatServer.security.tool_wrapper.wrap_tools_with_approval"),
-        patch("chatServer.services.audit_service.AuditService", return_value=MagicMock()),
-        patch("chatServer.services.pending_actions.PendingActionsService", return_value=MagicMock()),
-        patch("chatServer.services.notification_service.NotificationService", return_value=MagicMock()),
-        patch("chatServer.security.tool_wrapper.ApprovalContext", return_value=MagicMock()),
-        patch.object(mod, "_create_backend", return_value=mock_backend),
-        patch("chatServer.services.storage_sync.StorageSync"),
-        patch.dict(os.environ, {"SUPABASE_URL": "", "SUPABASE_SERVICE_ROLE_KEY": ""}),
-        patch("deepagents.create_deep_agent", return_value=mock_graph) as mock_create,
-    ):
+    patches = _standard_patches(mock_graph=mock_graph, mock_backend=mock_backend)
+
+    from contextlib import ExitStack
+    with ExitStack() as stack:
+        cms = [stack.enter_context(p) for p in patches]
+        mock_create = cms[-1]  # deepagents.create_deep_agent
         agent = await mod.build_deep_agent("user-1", "clarity", "session-1", "web")
 
     assert agent is mock_graph
-    # BwrapBackend is always passed as backend
     call_kwargs = mock_create.call_args.kwargs
     assert call_kwargs.get("backend") is mock_backend
 
 
 @pytest.mark.asyncio
 async def test_build_deep_agent_model_prefixed_with_anthropic():
-    """Model from DB is prefixed with 'anthropic:' when no provider prefix present."""
-    agent_config = {
-        "id": "agent-id-1",
-        "agent_name": "clarity",
-        "soul": "Be helpful.",
-        "identity": {"name": "Clarity"},
-        "prompt_template": None,
-        "llm_config": {"model": "claude-sonnet-4-20250514"},
-    }
+    """Model from config is prefixed with 'anthropic:' when no provider prefix present."""
+    config = _make_agent_config()
+    config["llm_config"] = {"model": "claude-sonnet-4-20250514"}
     mock_graph = _make_mock_graph()
-    with (
-        patch("chatServer.services.agent_config_cache_service.get_cached_agent_config", new=AsyncMock(return_value=agent_config)),  # noqa: E501
-        patch("src.core.agent_loader_db.load_tools_from_db", return_value=[]),
-        patch("src.core.agent_loader_db._fetch_agent_config_from_db_async", new=AsyncMock(return_value=agent_config)),  # noqa: E501
-        patch("src.core.agent_loader_db._resolve_memory_user_id", new=AsyncMock(return_value="user-1")),
-        patch("chatServer.services.tool_cache_service.get_cached_tools_for_agent", new=AsyncMock(return_value=[])),  # noqa: E501
-        patch("chatServer.services.user_instructions_cache_service.get_cached_user_instructions", new=AsyncMock(return_value=None)),  # noqa: E501
-        patch("chatServer.database.supabase_client.create_user_scoped_client", new=AsyncMock(return_value=MagicMock())),  # noqa: E501
-        patch("chatServer.security.tool_wrapper.wrap_tools_with_approval"),
-        patch("chatServer.services.audit_service.AuditService", return_value=MagicMock()),
-        patch("chatServer.services.pending_actions.PendingActionsService", return_value=MagicMock()),
-        patch("chatServer.services.notification_service.NotificationService", return_value=MagicMock()),
-        patch("chatServer.security.tool_wrapper.ApprovalContext", return_value=MagicMock()),
+    patches = _standard_patches(agent_config=config, mock_graph=mock_graph)
 
-        patch("chatServer.sandbox.bwrap_backend.BwrapBackend", return_value=MagicMock()),
-        patch("chatServer.services.storage_sync.StorageSync"),
-        patch.dict(os.environ, {"SUPABASE_URL": "", "SUPABASE_SERVICE_ROLE_KEY": ""}),
-        patch("deepagents.create_deep_agent", return_value=mock_graph) as mock_create,
-    ):
+    from contextlib import ExitStack
+    with ExitStack() as stack:
+        cms = [stack.enter_context(p) for p in patches]
+        mock_create = cms[-1]
         await mod.build_deep_agent("user-1", "clarity", "session-1", "web")
 
     call_kwargs = mock_create.call_args.kwargs
@@ -189,34 +198,15 @@ async def test_build_deep_agent_model_prefixed_with_anthropic():
 @pytest.mark.asyncio
 async def test_build_deep_agent_model_with_existing_prefix_unchanged():
     """Model with existing 'provider:' prefix is not double-prefixed."""
-    agent_config = {
-        "id": "agent-id-1",
-        "agent_name": "clarity",
-        "soul": "Be helpful.",
-        "identity": {"name": "Clarity"},
-        "prompt_template": None,
-        "llm_config": {"model": "openai:gpt-4o"},
-    }
+    config = _make_agent_config()
+    config["llm_config"] = {"model": "openai:gpt-4o"}
     mock_graph = _make_mock_graph()
-    with (
-        patch("chatServer.services.agent_config_cache_service.get_cached_agent_config", new=AsyncMock(return_value=agent_config)),  # noqa: E501
-        patch("src.core.agent_loader_db.load_tools_from_db", return_value=[]),
-        patch("src.core.agent_loader_db._fetch_agent_config_from_db_async", new=AsyncMock(return_value=agent_config)),  # noqa: E501
-        patch("src.core.agent_loader_db._resolve_memory_user_id", new=AsyncMock(return_value="user-1")),
-        patch("chatServer.services.tool_cache_service.get_cached_tools_for_agent", new=AsyncMock(return_value=[])),  # noqa: E501
-        patch("chatServer.services.user_instructions_cache_service.get_cached_user_instructions", new=AsyncMock(return_value=None)),  # noqa: E501
-        patch("chatServer.database.supabase_client.create_user_scoped_client", new=AsyncMock(return_value=MagicMock())),  # noqa: E501
-        patch("chatServer.security.tool_wrapper.wrap_tools_with_approval"),
-        patch("chatServer.services.audit_service.AuditService", return_value=MagicMock()),
-        patch("chatServer.services.pending_actions.PendingActionsService", return_value=MagicMock()),
-        patch("chatServer.services.notification_service.NotificationService", return_value=MagicMock()),
-        patch("chatServer.security.tool_wrapper.ApprovalContext", return_value=MagicMock()),
+    patches = _standard_patches(agent_config=config, mock_graph=mock_graph)
 
-        patch("chatServer.sandbox.bwrap_backend.BwrapBackend", return_value=MagicMock()),
-        patch("chatServer.services.storage_sync.StorageSync"),
-        patch.dict(os.environ, {"SUPABASE_URL": "", "SUPABASE_SERVICE_ROLE_KEY": ""}),
-        patch("deepagents.create_deep_agent", return_value=mock_graph) as mock_create,
-    ):
+    from contextlib import ExitStack
+    with ExitStack() as stack:
+        cms = [stack.enter_context(p) for p in patches]
+        mock_create = cms[-1]
         await mod.build_deep_agent("user-1", "clarity", "session-1", "web")
 
     call_kwargs = mock_create.call_args.kwargs
@@ -226,35 +216,15 @@ async def test_build_deep_agent_model_with_existing_prefix_unchanged():
 @pytest.mark.asyncio
 async def test_build_deep_agent_passes_tools_backend_skills_memory():
     """create_deep_agent receives tools, backend, skills, memory, and system_prompt."""
-    agent_config = {
-        "id": "agent-id-1",
-        "agent_name": "clarity",
-        "soul": "Be helpful.",
-        "identity": {"name": "Clarity"},
-        "prompt_template": None,
-        "llm_config": {},
-    }
     mock_tool = MagicMock()
     mock_backend = MagicMock()
     mock_graph = _make_mock_graph()
-    with (
-        patch("chatServer.services.agent_config_cache_service.get_cached_agent_config", new=AsyncMock(return_value=agent_config)),  # noqa: E501
-        patch("src.core.agent_loader_db.load_tools_from_db", return_value=[mock_tool]),
-        patch("src.core.agent_loader_db._fetch_agent_config_from_db_async", new=AsyncMock(return_value=agent_config)),  # noqa: E501
-        patch("src.core.agent_loader_db._resolve_memory_user_id", new=AsyncMock(return_value="user-1")),
-        patch("chatServer.services.tool_cache_service.get_cached_tools_for_agent", new=AsyncMock(return_value=[])),  # noqa: E501
-        patch("chatServer.services.user_instructions_cache_service.get_cached_user_instructions", new=AsyncMock(return_value=None)),  # noqa: E501
-        patch("chatServer.database.supabase_client.create_user_scoped_client", new=AsyncMock(return_value=MagicMock())),  # noqa: E501
-        patch("chatServer.security.tool_wrapper.wrap_tools_with_approval"),
-        patch("chatServer.services.audit_service.AuditService", return_value=MagicMock()),
-        patch("chatServer.services.pending_actions.PendingActionsService", return_value=MagicMock()),
-        patch("chatServer.services.notification_service.NotificationService", return_value=MagicMock()),
-        patch("chatServer.security.tool_wrapper.ApprovalContext", return_value=MagicMock()),
-        patch.object(mod, "_create_backend", return_value=mock_backend),
-        patch("chatServer.services.storage_sync.StorageSync"),
-        patch.dict(os.environ, {"SUPABASE_URL": "", "SUPABASE_SERVICE_ROLE_KEY": ""}),
-        patch("deepagents.create_deep_agent", return_value=mock_graph) as mock_create,
-    ):
+    patches = _standard_patches(mock_graph=mock_graph, mock_backend=mock_backend, tools=[mock_tool])
+
+    from contextlib import ExitStack
+    with ExitStack() as stack:
+        cms = [stack.enter_context(p) for p in patches]
+        mock_create = cms[-1]
         await mod.build_deep_agent("user-1", "clarity", "session-1", "web")
 
     call_kwargs = mock_create.call_args.kwargs
@@ -264,7 +234,7 @@ async def test_build_deep_agent_passes_tools_backend_skills_memory():
     assert call_kwargs["memory"] == ["/user/memory/AGENTS.md"]
     assert call_kwargs["name"] == "clarity"
     assert "system_prompt" in call_kwargs
-    # Subagents: researcher subagent is always included
+    # Subagents from file config
     subagents = call_kwargs.get("subagents")
     assert subagents is not None
     assert len(subagents) == 1

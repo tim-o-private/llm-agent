@@ -20,7 +20,6 @@ Callers use .ainvoke() / .astream() with config={"configurable": {"thread_id": s
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
 from datetime import datetime, timezone
@@ -340,16 +339,14 @@ async def _build_agent(
     session_id: str,
     channel: str,
 ) -> Any:
-    """Load everything from DB and construct a CompiledStateGraph via create_deep_agent()."""
+    """Load config from files and construct a CompiledStateGraph via create_deep_agent()."""
     from deepagents import create_deep_agent
 
     # Lazy imports to avoid circular dependencies
     from chatServer.config.settings import get_settings
-    from chatServer.services.agent_config_cache_service import get_cached_agent_config
-    from chatServer.services.tool_cache_service import get_cached_tools_for_agent
+    from chatServer.services.agent_config_loader import get_agent_config_loader
     from chatServer.services.user_instructions_cache_service import get_cached_user_instructions
     from src.core.agent_loader_db import (
-        _fetch_agent_config_from_db_async,
         _resolve_memory_user_id,
         load_tools_from_db,
     )
@@ -370,39 +367,19 @@ async def _build_agent(
             base_url=mem_url, backend_key=mem_key, user_id=memory_user_id
         )
 
-    # 1. Agent config
-    agent_db_config = await get_cached_agent_config(agent_name)
-    if not agent_db_config:
-        agent_db_config = await _fetch_agent_config_from_db_async(agent_name)
-    if not agent_db_config:
-        raise ValueError(f"Agent '{agent_name}' not found in DB")
+    # 1. Agent config from files (YAML + soul.md)
+    loader = get_agent_config_loader()
+    agent_config = loader.load(agent_name)
 
-    agent_id = agent_db_config.get("id")
-    if not agent_id:
-        raise ValueError(f"Agent '{agent_name}' has no ID")
-
-    # 2. Parallel fetch: tools + instructions
-    cached_tools_data, user_instructions = await asyncio.gather(
-        get_cached_tools_for_agent(str(agent_id)),
-        get_cached_user_instructions(user_id, agent_name),
-    )
-
-    tools_data = [
-        {
-            "name": tc["name"],
-            "type": tc.get("type", "CRUDTool"),
-            "description": tc.get("description", ""),
-            "config": tc.get("config", {}),
-            "is_active": tc.get("is_active", True),
-        }
-        for tc in cached_tools_data
-    ]
+    # 2. Tools from file config + user instructions from DB
+    tools_data = agent_config["tools"]
+    user_instructions = await get_cached_user_instructions(user_id, agent_name)
 
     # 3. Instantiate tools (Deep Agents takes BaseTool directly)
     instantiated_tools = load_tools_from_db(
         tools_data=tools_data,
         user_id=user_id,
-        agent_name=agent_db_config["agent_name"],
+        agent_name=agent_config["agent_name"],
         supabase_url=effective_supabase_url,
         supabase_key=effective_supabase_key,
         memory_client=memory_client,
@@ -462,14 +439,8 @@ async def _build_agent(
     backend = _create_backend(system_dir, user_dir)
 
     # 6. Build system prompt — always-present identity + runtime context
-    #    (soul/identity from DB; operating model + safety now baked into system_prompt)
-    soul = agent_db_config.get("soul") or ""
-    identity = agent_db_config.get("identity")
-    if isinstance(identity, str):
-        try:
-            identity = json.loads(identity)
-        except (json.JSONDecodeError, TypeError):
-            identity = {"name": identity} if identity else None
+    soul = agent_config.get("soul") or ""
+    identity = agent_config.get("identity")
 
     system_prompt = _build_system_prompt(
         soul=soul,
@@ -479,7 +450,7 @@ async def _build_agent(
     )
 
     # 7. Resolve model — Deep Agents uses "provider:model" format
-    llm_config = agent_db_config.get("llm_config") or {}
+    llm_config = agent_config.get("llm_config") or {}
     model_name = llm_config.get("model", "claude-sonnet-4-20250514")
     model = model_name if ":" in model_name else f"anthropic:{model_name}"
 
@@ -502,14 +473,8 @@ async def _build_agent(
         skills=["/system/skills/", "/user/skills/"],
         memory=["/user/memory/AGENTS.md"],
         checkpointer=checkpointer,
-        name=agent_db_config.get("agent_name", "clarity"),
-        subagents=[
-            {
-                "name": "researcher",
-                "description": "Research a topic using web search, memory, and file tools. Use for gathering information, fact-checking, or deep investigation.",  # noqa: E501
-                "system_prompt": "You are a research assistant. Use your tools to thoroughly investigate the given topic. Summarize findings clearly with sources.",  # noqa: E501
-            },
-        ],
+        name=agent_config.get("agent_name", "clarity"),
+        subagents=agent_config.get("subagents", []),
     )
 
     logger.info(

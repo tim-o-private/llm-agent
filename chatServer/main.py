@@ -101,9 +101,7 @@ SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")  # Set this in your .env 
 async def lifespan(app: FastAPI):
     from .database.connection import get_database_manager
     from .database.supabase_client import get_supabase_manager
-    from .services.agent_config_cache_service import initialize_agent_config_cache, shutdown_agent_config_cache
     from .services.background_tasks import get_background_task_service
-    from .services.tool_cache_service import initialize_tool_cache, shutdown_tool_cache
     from .services.user_instructions_cache_service import (
         initialize_user_instructions_cache,
         shutdown_user_instructions_cache,
@@ -122,22 +120,11 @@ async def lifespan(app: FastAPI):
     supabase_manager = get_supabase_manager()
     await supabase_manager.initialize()
 
-    # Pull system config from Supabase Storage if needed (AC-26)
+    # System config lives in git at data/config/system/ — no Storage pull needed.
     from pathlib import Path
 
     data_dir = Path(os.getenv("SANDBOX_DATA_DIR", "/data"))
     system_dir = data_dir / "config" / "system"
-    if not system_dir.exists() or not any(system_dir.iterdir()):
-        try:
-            from .services.storage_sync import StorageSync
-            supabase_url = os.getenv("SUPABASE_URL", "")
-            supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-            if supabase_url and supabase_key:
-                sync = StorageSync(supabase_url=supabase_url, supabase_key=supabase_key, data_dir=data_dir)
-                await sync.pull_system()
-                logger.info("Pulled system config from Storage")
-        except Exception as e:
-            logger.warning("Failed to pull system config: %s", e)
 
     # Seed workflow templates to local filesystem (idempotent)
     try:
@@ -161,17 +148,6 @@ async def lifespan(app: FastAPI):
         logger.error(f"Failed to initialize template registry: {e}", exc_info=True)
 
     # Initialize cache services
-    try:
-        await initialize_tool_cache()
-        logger.info("Tool cache service initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize tool cache service: {e}", exc_info=True)
-
-    try:
-        await initialize_agent_config_cache()
-        logger.info("Agent config cache service initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize agent config cache service: {e}", exc_info=True)
 
     try:
         await initialize_user_instructions_cache()
@@ -243,17 +219,6 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to stop user instructions cache service: {e}", exc_info=True)
 
-    try:
-        await shutdown_agent_config_cache()
-        logger.info("Agent config cache service stopped successfully")
-    except Exception as e:
-        logger.error(f"Failed to stop agent config cache service: {e}", exc_info=True)
-
-    try:
-        await shutdown_tool_cache()
-        logger.info("Tool cache service stopped successfully")
-    except Exception as e:
-        logger.error(f"Failed to stop tool cache service: {e}", exc_info=True)
 
     # Close database manager
     await db_manager.close()

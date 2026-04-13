@@ -1,21 +1,18 @@
 #!/usr/bin/env python3
-"""Seed system and user skill files to Supabase Storage.
+"""Seed skill files to Supabase Storage.
 
-Extracts behavioral content from:
-  - Inlined constants (interaction learning, tool guidance)
-  - user_agent_prompt_customizations table (per-user instructions)
-
-Writes SKILL.md files to the "config" bucket in Supabase Storage.
-Optionally calls StorageSync.pull_system() to populate local disk.
+System config (skills, agents, workflows) is git-managed at data/config/system/.
+This script uploads:
+  - System skills to Storage (for legacy compatibility)
+  - Per-user communication-preferences skills from user_agent_prompt_customizations
 
 Idempotent: uses upsert semantics. Safe to run multiple times.
 
 Usage:
-    python scripts/seed_system_skills.py                  # seed all + pull to local disk
+    python scripts/seed_system_skills.py                  # seed all
     python scripts/seed_system_skills.py --system-only    # system skills only
     python scripts/seed_system_skills.py --user-only      # user skills only
     python scripts/seed_system_skills.py --dry-run        # show what would be written
-    python scripts/seed_system_skills.py --no-pull        # skip pull_system() after seeding
 
 Requires in .env (or environment):
     SUPABASE_URL
@@ -45,7 +42,6 @@ except ImportError:
 # Imports that need sys.path set first
 # ---------------------------------------------------------------------------
 
-from chatServer.services.storage_sync import StorageSync  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -196,6 +192,7 @@ async def seed_system_skills(
     return written
 
 
+
 async def seed_user_skills(
     async_client,
     customizations: list[dict],
@@ -234,7 +231,6 @@ async def main(
     dry_run: bool = False,
     system_only: bool = False,
     user_only: bool = False,
-    no_pull: bool = False,
 ) -> None:
     supabase_url = os.environ.get("SUPABASE_URL", "")
     service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
@@ -272,12 +268,8 @@ async def main(
         label = "would be " if dry_run else ""
         print(f"  {len(written_user)} user skill(s) {label}written")
 
-    # AC-21: pull system config to local disk after seeding
-    if not no_pull and not dry_run and not user_only:
-        print("\nPulling system config to local disk...")
-        storage_sync = StorageSync(supabase_url, service_key)
-        await storage_sync.pull_system()
-        print("  System config pulled to /data/config/system/")
+    # System config (skills, agent configs, workflows) is git-managed.
+    # No pull_system() needed — files are deployed with the code.
 
     print("\nDone.")
 
@@ -301,11 +293,6 @@ if __name__ == "__main__":
         action="store_true",
         help="Only write user-level skills",
     )
-    parser.add_argument(
-        "--no-pull",
-        action="store_true",
-        help="Skip pull_system() after seeding (default: pull to /data/config/system/)",
-    )
     args = parser.parse_args()
 
     asyncio.run(
@@ -313,6 +300,5 @@ if __name__ == "__main__":
             dry_run=args.dry_run,
             system_only=args.system_only,
             user_only=args.user_only,
-            no_pull=args.no_pull,
         )
     )
