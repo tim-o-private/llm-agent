@@ -102,12 +102,13 @@ async function submitNotificationFeedback(
 
 // Hooks
 
-export function useNotifications(unreadOnly = false, limit = 50, sessionId?: string | null) {
+export function useNotifications(unreadOnly = false, limit = 50, sessionId?: string | null, enabled = true) {
   return useQuery<Notification[], Error>({
     queryKey: [NOTIFICATIONS_QUERY_KEY, unreadOnly, limit, sessionId],
     queryFn: () => fetchNotifications(unreadOnly, limit, 0, sessionId),
     refetchInterval: 5000,
     retry: false,
+    enabled,
   });
 }
 

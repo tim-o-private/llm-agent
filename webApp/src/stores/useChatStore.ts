@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabaseClient';
+import { queryClient } from '@/lib/queryClient';
 import { useAuthStore } from '@/features/auth/useAuthStore';
 import { generateNewChatId } from '@/api/hooks/useChatSessionHooks';
 import { useEffect } from 'react';
@@ -50,9 +51,10 @@ interface ChatStore {
 }
 
 const CHAT_ID_LOCAL_STORAGE_PREFIX = 'chatUI_activeChatId';
+export const PARSED_MESSAGES_QUERY_KEY = 'chat-messages-parsed';
 
 /** Shared helper: fetch historical messages for a chat_id from the backend API. */
-async function loadHistoricalMessages(chatId: string): Promise<ChatMessage[]> {
+export async function loadHistoricalMessages(chatId: string): Promise<ChatMessage[]> {
   try {
     const {
       data: { session: authSession },
@@ -299,8 +301,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         `Successfully created new session instance in DB. ID: ${newSessionInstanceId}, Chat ID: ${chatIdToUse}`,
       );
 
-      // 5. Load historical messages from server
-      const historicalMessages = chatIdToUse ? await loadHistoricalMessages(chatIdToUse) : [];
+      // 5. Load historical messages — prefer React Query cache (populated by prefetch)
+      const cached = chatIdToUse
+        ? queryClient.getQueryData<ChatMessage[]>([PARSED_MESSAGES_QUERY_KEY, chatIdToUse])
+        : undefined;
+      const historicalMessages = chatIdToUse ? (cached ?? await loadHistoricalMessages(chatIdToUse)) : [];
 
       // Session open wakeup — always fires on init; agent decides whether to respond
       const sessionOpenResult = await callSessionOpen(agentName, chatIdToUse);
@@ -426,8 +431,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     console.log(`Switching to conversation: ${chatId}`);
 
     try {
-      // 3. Load historical messages
-      const historicalMessages = await loadHistoricalMessages(chatId);
+      // 3. Load historical messages — prefer React Query cache (populated by prefetch)
+      const cached = queryClient.getQueryData<ChatMessage[]>([PARSED_MESSAGES_QUERY_KEY, chatId]);
+      const historicalMessages = cached ?? await loadHistoricalMessages(chatId);
 
       // 4. Create new session instance in DB
       const newSessionInstanceId = await createSessionInstanceInDb(user.id, currentAgentName, chatId);

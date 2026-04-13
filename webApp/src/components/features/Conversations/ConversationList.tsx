@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { Send } from 'lucide-react';
-import { useChatSessions, type ChatSession } from '@/api/hooks/useChatHistoryHooks';
+import { useChatSessions, usePrefetchConversationMessages, type ChatSession } from '@/api/hooks/useChatHistoryHooks';
 import { useChatStore } from '@/stores/useChatStore';
 import { useTelegramStatus } from '@/api/hooks/useTelegramHooks';
 
@@ -19,6 +19,7 @@ interface ConversationListProps {
 export const ConversationList: React.FC<ConversationListProps> = ({ agentName }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const { data: sessions, isLoading, error } = useChatSessions(undefined, 100);
+  usePrefetchConversationMessages(sessions);
   const { activeChatId, startNewConversationAsync, switchToConversationAsync } = useChatStore();
   const { data: telegramStatus } = useTelegramStatus();
 

@@ -1,21 +1,13 @@
 import React, { useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { Theme } from '@radix-ui/themes';
 import App from './App';
+import { queryClient } from '@/lib/queryClient';
 import { useThemeStore, getEffectiveAppearance } from '@/stores/useThemeStore'; // Changed to @/ alias
 import '@/styles/index.css'; // Changed to @/ alias
 import '@/styles/ui-components.css'; // Changed to @/ alias
 import '@/styles/card-system.css'; // Card stacking system styles
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 1000 * 60 * 5, // 5 minutes
-      retry: 1,
-    },
-  },
-});
 
 // Create a wrapper component to use the Zustand hook
 function ThemedApp() {
