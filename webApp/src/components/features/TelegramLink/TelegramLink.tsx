@@ -6,6 +6,7 @@
  */
 
 import React, { useState } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import { Card } from '@/components/ui/Card';
 import { useTelegramStatus, useGenerateLinkToken, useUnlinkTelegram } from '@/api/hooks/useTelegramHooks';
 
@@ -119,41 +120,70 @@ interface UnlinkedStateProps {
   error: string | null;
 }
 
-const UnlinkedState: React.FC<UnlinkedStateProps> = ({ tokenData, onGenerate, isGenerating, error }) => (
-  <div className="space-y-3">
-    {!tokenData ? (
-      <>
-        <button
-          onClick={onGenerate}
-          disabled={isGenerating}
-          className="px-4 py-2 text-sm rounded bg-brand-primary text-brand-primary-text hover:bg-brand-primary-hover disabled:opacity-50"
-        >
-          {isGenerating ? 'Generating...' : 'Connect Telegram'}
-        </button>
-        {error && <p className="text-destructive text-sm">{error}</p>}
-      </>
-    ) : (
-      <div className="space-y-3 p-4 rounded bg-ui-bg-alt border border-ui-border">
-        <p className="text-text-primary text-sm font-medium">To connect your Telegram account:</p>
-        <ol className="text-text-secondary text-sm space-y-2 list-decimal list-inside">
-          <li>
-            Open Telegram and search for <span className="font-mono text-text-accent">@{tokenData.bot_username}</span>
-          </li>
-          <li>Send this message to the bot:</li>
-        </ol>
-        <div className="flex items-center gap-2">
-          <code className="flex-1 block p-2 rounded bg-ui-bg text-text-primary text-sm font-mono break-all border border-ui-border">
-            /start {tokenData.token}
-          </code>
+const UnlinkedState: React.FC<UnlinkedStateProps> = ({ tokenData, onGenerate, isGenerating, error }) => {
+  const deepLink = tokenData ? `https://t.me/${tokenData.bot_username}?start=${tokenData.token}` : null;
+
+  return (
+    <div className="space-y-3">
+      {!tokenData ? (
+        <>
           <button
-            onClick={() => navigator.clipboard.writeText(`/start ${tokenData.token}`)}
-            className="px-3 py-2 text-sm rounded bg-ui-interactive-bg text-text-secondary hover:bg-ui-interactive-bg-hover shrink-0"
+            onClick={onGenerate}
+            disabled={isGenerating}
+            className="px-4 py-2 text-sm rounded bg-brand-primary text-brand-primary-text hover:bg-brand-primary-hover disabled:opacity-50"
           >
-            Copy
+            {isGenerating ? 'Generating...' : 'Connect Telegram'}
           </button>
+          {error && <p className="text-destructive text-sm">{error}</p>}
+        </>
+      ) : (
+        <div className="space-y-4 p-4 rounded bg-ui-bg-alt border border-ui-border">
+          <p className="text-text-primary text-sm font-medium">Connect your Telegram account:</p>
+
+          <div className="flex flex-col sm:flex-row gap-4">
+            {/* QR code for scanning from phone */}
+            <div className="flex flex-col items-center gap-2">
+              <div className="p-3 bg-white rounded-lg">
+                <QRCodeSVG value={deepLink!} size={160} />
+              </div>
+              <p className="text-text-muted text-xs text-center">Scan with your phone camera</p>
+            </div>
+
+            {/* Text instructions */}
+            <div className="flex-1 space-y-3">
+              <p className="text-text-secondary text-sm">Scan the QR code, or:</p>
+              <ol className="text-text-secondary text-sm space-y-2 list-decimal list-inside">
+                <li>
+                  <a
+                    href={deepLink!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-text-accent underline hover:opacity-80"
+                  >
+                    Open in Telegram
+                  </a>
+                </li>
+                <li>
+                  Or search for <span className="font-mono text-text-accent">@{tokenData.bot_username}</span> and send:
+                </li>
+              </ol>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 block p-2 rounded bg-ui-bg text-text-primary text-sm font-mono break-all border border-ui-border">
+                  /start {tokenData.token}
+                </code>
+                <button
+                  onClick={() => navigator.clipboard.writeText(`/start ${tokenData.token}`)}
+                  className="px-3 py-2 text-sm rounded bg-ui-interactive-bg text-text-secondary hover:bg-ui-interactive-bg-hover shrink-0"
+                >
+                  Copy
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <p className="text-text-muted text-xs">This token expires in 10 minutes.</p>
         </div>
-        <p className="text-text-muted text-xs">This token expires in 10 minutes.</p>
-      </div>
-    )}
-  </div>
-);
+      )}
+    </div>
+  );
+};

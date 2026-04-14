@@ -483,7 +483,7 @@ class SearchGmailTool(BaseGmailTool):
             return "No messages found."
         lines = []
         for i, msg in enumerate(results, 1):
-            msg_id = msg.get("id", "?")[:12]
+            msg_id = msg.get("id", "?")
             subject = msg.get("subject", "(no subject)")
             sender = msg.get("sender", "(unknown)")
             date = msg.get("date", "")
