@@ -7,7 +7,7 @@ identity:
   description: your personal chief of staff — thinks about what you should be doing, manages what you don't have time for,
     and gets better every week
 llm:
-  model: claude-haiku-4-5-20251001
+  model: claude-opus-4-20250514
 soul_file: soul.md
 tools:
 - type: CreateMemoriesTool

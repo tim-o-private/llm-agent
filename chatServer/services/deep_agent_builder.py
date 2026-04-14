@@ -122,12 +122,15 @@ def _build_system_prompt(
     user_instructions: str | None = None,
     last_message_at: datetime | None = None,
     bootstrap_context: str | None = None,
+    phase: str = "management",
+    system_dir: Path | None = None,
 ) -> str:
     """Assemble the full system prompt with always-present identity + runtime context.
 
     Includes:
     - Soul (personality, values — includes operating model and safety guidelines)
     - Identity (name, description, vibe)
+    - Orientation guidance (auto-injected when phase="orientation")
     - Channel-specific guidance
     - Current time
     - User custom instructions
@@ -141,6 +144,13 @@ def _build_system_prompt(
     # Soul — core personality (now includes operating model + safety guidelines)
     if soul:
         sections.append(f"## Soul\n{soul}")
+
+    # Orientation guidance — auto-injected during bootstrapping phase
+    if phase == "orientation" and system_dir:
+        skill_path = system_dir / "skills" / "bootstrapping" / "SKILL.md"
+        orientation_text = _read_system_file(skill_path)
+        if orientation_text:
+            sections.append(f"## Orientation\n{orientation_text}")
 
     # Identity — name and metadata
     identity_text = _format_identity(identity)
@@ -197,9 +207,10 @@ def _add_session_open_section(
         sections.append(
             "## Session Open\n"
             "This is the first time meeting this user. No message typed yet — you are initiating.\n\n"
-            "1. Introduce yourself in one sentence.\n"
-            "2. Ask one concrete open-ended question to start learning about them.\n"
-            "3. Do NOT call get_tasks, get_reminders, or search_gmail — nothing to find yet."
+            "Introduce yourself briefly — you're their chief of staff, starting from zero.\n"
+            "Then start learning about their life. Show genuine curiosity.\n"
+            "Do NOT present a menu of capabilities. Do NOT ask 'how can I help?'\n"
+            "Your job right now is understanding — that IS the help."
         )
         return
 
@@ -226,6 +237,8 @@ def _add_session_open_section(
         f"Context from your tools (pre-fetched):\n{ctx}\n\n"
         "Decision rules:\n"
         "- Reference your working memory for active plans and open threads.\n"
+        "- If your working memory still has empty sections, your priority is learning more —\n"
+        "  reference what you know and what you'd like to understand this session.\n"
         "- If nothing needs attention and <30 min since last message: respond WAKEUP_SILENT\n"
         "- Otherwise: lead with what matters — active plans, upcoming deadlines, things needing follow-up.\n"
         "Don't re-call tools to fetch what's already in the context above."
@@ -264,6 +277,74 @@ Include dates and deadlines.)*
 *(Patterns: preferences, triggers, recurring struggles, what works. Priority signals: \
 what the user responds to quickly, what they dismiss, what stresses them.)*
 """
+
+
+# ---------------------------------------------------------------------------
+# Phase detection — orientation vs. management
+# ---------------------------------------------------------------------------
+
+_AGENTS_MD_SECTIONS = [
+    "## Who This Person Is",
+    "## Life Domains",
+    "## Key People",
+    "## Active Plans",
+    "## Open Threads",
+    "## Observations",
+]
+
+_PLACEHOLDER_MARKER = "*("
+
+
+def _detect_agent_phase(agents_md_content: str) -> str:
+    """Detect whether the user is in orientation or management phase.
+
+    Uses two strategies and takes the best signal:
+    1. Header-based: counts known section headers with real (non-placeholder) content.
+    2. Content-based: counts lines of real content regardless of header names.
+       This handles old-format AGENTS.md files whose headers don't match the seed.
+
+    Returns "management" if either strategy shows substantial content,
+    "orientation" otherwise.
+    """
+    # Strategy 1: check known new-format headers
+    populated = 0
+    for i, header in enumerate(_AGENTS_MD_SECTIONS):
+        header_pos = agents_md_content.find(header)
+        if header_pos == -1:
+            continue
+        # Get content between this header and the next (or end of file)
+        after_header = agents_md_content[header_pos + len(header):]
+        next_header_pos = len(after_header)
+        for next_h in _AGENTS_MD_SECTIONS[i + 1:]:
+            pos = after_header.find(next_h)
+            if pos != -1:
+                next_header_pos = min(next_header_pos, pos)
+                break
+        section_content = after_header[:next_header_pos].strip()
+        # A section is "populated" if it has content that isn't just a placeholder
+        if section_content and not section_content.startswith(_PLACEHOLDER_MARKER):
+            populated += 1
+
+    if populated >= 4:
+        return "management"
+
+    # Strategy 2: content-line heuristic — works for any header format.
+    # Strip headers, placeholder lines, blank lines, and count real content.
+    content_lines = 0
+    for line in agents_md_content.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("#"):
+            continue
+        if stripped.startswith(_PLACEHOLDER_MARKER):
+            continue
+        content_lines += 1
+
+    if content_lines > 10:
+        return "management"
+
+    return "orientation"
 
 
 # ---------------------------------------------------------------------------
@@ -327,26 +408,39 @@ async def build_deep_agent(
     agent_name: str,
     session_id: str,
     channel: str = "web",
+    bootstrap_context: str | None = None,
+    last_message_at: datetime | None = None,
 ) -> Any:
     """Build or retrieve a cached CompiledStateGraph.
 
     Returns a LangGraph CompiledStateGraph created by create_deep_agent().
     Cached per (user_id, agent_name, channel) with 15-min TTL.
+
+    session_open is never cached — bootstrap_context changes every invocation.
     """
+    # session_open embeds runtime data (bootstrap_context, last_message_at)
+    # in the system prompt, so it must be rebuilt fresh every time.
+    skip_cache = channel == "session_open"
+
     cache_key = (user_id, agent_name, channel)
 
-    if cache_key in _agent_cache:
+    if not skip_cache and cache_key in _agent_cache:
         logger.debug("Deep agent cache HIT: %s", cache_key)
         return _agent_cache[cache_key]
 
     lock = _agent_locks.setdefault(cache_key, asyncio.Lock())
     async with lock:
-        if cache_key in _agent_cache:
+        if not skip_cache and cache_key in _agent_cache:
             return _agent_cache[cache_key]
 
         logger.info("Building deep agent for %s", cache_key)
-        agent = await _build_agent(user_id, agent_name, session_id, channel)
-        _agent_cache[cache_key] = agent
+        agent = await _build_agent(
+            user_id, agent_name, session_id, channel,
+            bootstrap_context=bootstrap_context,
+            last_message_at=last_message_at,
+        )
+        if not skip_cache:
+            _agent_cache[cache_key] = agent
         return agent
 
 
@@ -355,6 +449,9 @@ async def _build_agent(
     agent_name: str,
     session_id: str,
     channel: str,
+    *,
+    bootstrap_context: str | None = None,
+    last_message_at: datetime | None = None,
 ) -> Any:
     """Load config from files and construct a CompiledStateGraph via create_deep_agent()."""
     from deepagents import create_deep_agent
@@ -455,6 +552,12 @@ async def _build_agent(
     # Try BwrapBackend (OS-level isolation), fall back to FilesystemBackend
     backend = _create_backend(system_dir, user_dir)
 
+    # 5b. Detect agent phase from AGENTS.md content
+    agents_md_content = agents_md_path.read_text(encoding="utf-8") if agents_md_path.exists() else ""
+    phase = _detect_agent_phase(agents_md_content)
+    if phase == "orientation":
+        logger.info("User %s in orientation phase", user_id)
+
     # 6. Build system prompt — always-present identity + runtime context
     soul = agent_config.get("soul") or ""
     identity = agent_config.get("identity")
@@ -464,6 +567,10 @@ async def _build_agent(
         identity=identity,
         channel=channel,
         user_instructions=user_instructions,
+        last_message_at=last_message_at,
+        bootstrap_context=bootstrap_context,
+        phase=phase,
+        system_dir=system_dir,
     )
 
     # 7. Resolve model — Deep Agents uses "provider:model" format

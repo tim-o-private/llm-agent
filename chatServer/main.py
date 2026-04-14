@@ -72,6 +72,13 @@ else:
 
 # Re-read settings now that .env has been loaded (Settings was created before load_dotenv)
 settings.reload_from_env()
+
+# Allow CLARITY_ANTHROPIC_API_KEY as an alias so the .env doesn't pollute
+# Claude Code sessions that share the same shell environment.
+# On Fly.io, ANTHROPIC_API_KEY is set directly and this is a no-op.
+_clarity_key = os.getenv("CLARITY_ANTHROPIC_API_KEY")
+if _clarity_key and not os.getenv("ANTHROPIC_API_KEY"):
+    os.environ["ANTHROPIC_API_KEY"] = _clarity_key
 # --- END Inserted Environment & Path Setup ---
 
 # --- Global Cache and Configuration ---

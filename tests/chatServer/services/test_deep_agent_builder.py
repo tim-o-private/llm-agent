@@ -12,6 +12,7 @@ from chatServer.services.deep_agent_builder import (
     _agent_cache,
     _agent_locks,
     _build_system_prompt,
+    _detect_agent_phase,
 )
 
 # ---------------------------------------------------------------------------
@@ -293,3 +294,124 @@ def test_system_prompt_telegram_channel():
     prompt = _build_system_prompt(channel="telegram")
     assert "Telegram" in prompt
     assert "4096" in prompt
+
+
+# ---------------------------------------------------------------------------
+# Phase detection tests
+# ---------------------------------------------------------------------------
+
+
+class TestDetectAgentPhase:
+    """Tests for _detect_agent_phase() — orientation vs. management."""
+
+    def test_empty_seed_is_orientation(self):
+        seed = (
+            "# Agent Memory\n\n"
+            "## Who This Person Is\n"
+            "*(Not yet known)*\n\n"
+            "## Life Domains\n"
+            "*(Work, family, health)*\n\n"
+            "## Key People\n"
+            "*(Name → relationship)*\n\n"
+            "## Active Plans\n"
+            "*(Goals the user is working toward)*\n\n"
+            "## Open Threads\n"
+            "*(Things needing follow-up)*\n\n"
+            "## Observations\n"
+            "*(Patterns)*\n"
+        )
+        assert _detect_agent_phase(seed) == "orientation"
+
+    def test_fully_populated_is_management(self):
+        content = (
+            "# Agent Memory\n\n"
+            "## Who This Person Is\n"
+            "Tim, runs two businesses. Prefers concise communication.\n\n"
+            "## Life Domains\n"
+            "Work: Sunday Carpenter, SLVR. Family: two kids, wife.\n\n"
+            "## Key People\n"
+            "Sarah → wife, manages family calendar\n\n"
+            "## Active Plans\n"
+            "Goal: grow SLVR subscription revenue. Next step: email campaign.\n\n"
+            "## Open Threads\n"
+            "Permit renewal due Friday.\n\n"
+            "## Observations\n"
+            "Responds quickly to business email, ignores newsletters.\n"
+        )
+        assert _detect_agent_phase(content) == "management"
+
+    def test_partially_populated_below_threshold(self):
+        content = (
+            "# Agent Memory\n\n"
+            "## Who This Person Is\n"
+            "Tim, software engineer.\n\n"
+            "## Life Domains\n"
+            "*(Work, family, health)*\n\n"
+            "## Key People\n"
+            "*(Name → relationship)*\n\n"
+            "## Active Plans\n"
+            "*(Goals)*\n\n"
+            "## Open Threads\n"
+            "Waiting on contractor reply.\n\n"
+            "## Observations\n"
+            "Prefers prose over bullets.\n"
+        )
+        # 3 populated (Who, Open Threads, Observations), 3 placeholders
+        assert _detect_agent_phase(content) == "orientation"
+
+    def test_at_threshold_is_management(self):
+        content = (
+            "# Agent Memory\n\n"
+            "## Who This Person Is\n"
+            "Tim, two businesses.\n\n"
+            "## Life Domains\n"
+            "Work and family are main domains.\n\n"
+            "## Key People\n"
+            "*(Name → relationship)*\n\n"
+            "## Active Plans\n"
+            "Launch email campaign.\n\n"
+            "## Open Threads\n"
+            "Permit renewal.\n\n"
+            "## Observations\n"
+            "*(Patterns)*\n"
+        )
+        # 4 populated (Who, Life Domains, Active Plans, Open Threads)
+        assert _detect_agent_phase(content) == "management"
+
+    def test_empty_string_is_orientation(self):
+        assert _detect_agent_phase("") == "orientation"
+
+    def test_no_headers_is_orientation(self):
+        assert _detect_agent_phase("Some random text") == "orientation"
+
+    def test_old_format_populated_is_management(self):
+        """Old-format AGENTS.md with different headers but real content → management."""
+        content = (
+            "# Agent Memory\n\n"
+            "## User Profile\n"
+            "Email: user@example.com\n"
+            "Active and checking in regularly.\n\n"
+            "## Preferences\n"
+            "- Prefers prose over bullet points\n"
+            "- Wants concise responses\n"
+            "- Likes morning check-ins\n\n"
+            "## Key Context\n"
+            "- Morning routine: 6:45 AM\n"
+            "- No active tasks\n"
+            "- Wife: Sarah, manages family calendar\n"
+            "- Two kids, school pickup at 3pm\n"
+            "- Runs Sunday Carpenter and SLVR\n"
+            "- Permit renewal due Friday\n"
+        )
+        assert _detect_agent_phase(content) == "management"
+
+    def test_old_format_sparse_is_orientation(self):
+        """Old-format AGENTS.md with very little content → orientation."""
+        content = (
+            "# Agent Memory\n\n"
+            "## User Profile\n"
+            "Name unknown.\n\n"
+            "## Preferences\n\n"
+            "## Key Context\n"
+        )
+        assert _detect_agent_phase(content) == "orientation"

@@ -73,11 +73,13 @@ class ChatHistoryService:
             List of message dicts, or empty list if session not owned by user.
         """
         try:
-            # Verify the session belongs to the user
+            # Verify the session belongs to the user.
+            # Web sessions store the conversation identifier in chat_id
+            # (session_id column is used by Telegram/scheduled channels).
             session_check = (
                 await self.db.table("chat_sessions")
                 .select("id")
-                .eq("session_id", session_id)
+                .eq("chat_id", session_id)
                 .eq("user_id", user_id)
                 .execute()
             )

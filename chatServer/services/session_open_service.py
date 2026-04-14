@@ -1,7 +1,10 @@
 """Session open service — handles proactive agent greeting on app return."""
 
+from __future__ import annotations
+
 import asyncio
 import logging
+from datetime import datetime
 from typing import Any, Dict
 
 from .bootstrap_context_service import BootstrapContextService
@@ -79,7 +82,9 @@ class SessionOpenService:
                     "session_id": session_id,
                 }
 
-        # 2c. Deterministic silence: returning user seen < 5 min ago → skip agent entirely
+        # 2c. Deterministic silence: returning user seen < 5 min ago → skip agent entirely.
+        # Exception: skip silence if user is in orientation phase (needs bootstrapping
+        # even if they have old chat history).
         if not is_new_user and last_message_at is not None:
             from datetime import datetime
             from datetime import timezone as tz
@@ -90,23 +95,30 @@ class SessionOpenService:
                 else last_message_at.replace(tzinfo=tz.utc)
             )
             if elapsed.total_seconds() < 300:  # 5 minutes
+                # Check if user still needs bootstrapping before going silent
+                in_orientation = self._is_orientation_phase(user_id)
+                if not in_orientation:
+                    logger.info(
+                        "session_open: returning user seen %.0fs ago — silent (deterministic)",
+                        elapsed.total_seconds(),
+                    )
+                    return {
+                        "response": "WAKEUP_SILENT",
+                        "is_new_user": False,
+                        "silent": True,
+                        "session_id": session_id,
+                    }
                 logger.info(
-                    "session_open: returning user seen %.0fs ago — silent (deterministic)",
+                    "session_open: returning user seen %.0fs ago but in orientation — proceeding",
                     elapsed.total_seconds(),
                 )
-                return {
-                    "response": "WAKEUP_SILENT",
-                    "is_new_user": False,
-                    "silent": True,
-                    "session_id": session_id,
-                }
 
         # 3. Pre-compute context for returning users (non-LLM, direct DB)
         bootstrap_context = None
         if not is_new_user:
             ctx_service = BootstrapContextService(supabase_client)
             ctx = await ctx_service.gather(user_id)
-            bootstrap_context = ctx.render()  # noqa: F841  # TODO: wire into trigger_prompt
+            bootstrap_context = ctx.render()
 
         # 4. Build trigger prompt
         if is_new_user:
@@ -116,7 +128,9 @@ class SessionOpenService:
 
         try:
             output = await self._invoke_agent(
-                user_id, agent_name, session_id, trigger_prompt
+                user_id, agent_name, session_id, trigger_prompt,
+                bootstrap_context=bootstrap_context,
+                last_message_at=last_message_at,
             )
         except Exception as e:
             error_name = type(e).__name__
@@ -164,6 +178,9 @@ class SessionOpenService:
         agent_name: str,
         session_id: str,
         trigger_prompt: str,
+        *,
+        bootstrap_context: str | None = None,
+        last_message_at: datetime | None = None,
     ) -> str:
         """Invoke the Deep Agent runtime for session_open."""
         from ..services.deep_agent_builder import build_deep_agent, extract_agent_response
@@ -173,6 +190,8 @@ class SessionOpenService:
             agent_name=agent_name,
             session_id=session_id,
             channel="session_open",
+            bootstrap_context=bootstrap_context,
+            last_message_at=last_message_at,
         )
 
         # AC-32: empty history for session_open
@@ -261,4 +280,18 @@ class SessionOpenService:
         except Exception as e:
             logger.warning(f"Failed to get last message time for session {session_id}: {e}")
             return None
+
+    def _is_orientation_phase(self, user_id: str) -> bool:
+        """Check if user is in orientation phase (AGENTS.md empty or freshly seeded)."""
+        import os
+        from pathlib import Path
+
+        from .deep_agent_builder import _detect_agent_phase
+
+        data_dir = Path(os.getenv("SANDBOX_DATA_DIR", "/data"))
+        agents_md_path = data_dir / "sandboxes" / user_id / "memory" / "AGENTS.md"
+        if not agents_md_path.exists():
+            return True
+        content = agents_md_path.read_text(encoding="utf-8")
+        return _detect_agent_phase(content) == "orientation"
 
