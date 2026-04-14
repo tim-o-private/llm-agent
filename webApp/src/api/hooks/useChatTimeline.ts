@@ -17,7 +17,8 @@ import { useNotifications } from '@/api/hooks/useNotificationHooks';
 export function useChatTimeline(): ChatMessage[] {
   const messages = useChatStore((s) => s.messages);
   const activeChatId = useChatStore((s) => s.activeChatId);
-  const { data: notifications } = useNotifications(false, 100, activeChatId);
+  const hasMessages = messages.length > 0;
+  const { data: notifications } = useNotifications(false, 100, activeChatId, hasMessages);
 
   const notificationMessages: ChatMessage[] = useMemo(() => {
     return (notifications ?? [])

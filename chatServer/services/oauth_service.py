@@ -214,9 +214,6 @@ class OAuthService:
 
             logger.info(f"Successfully connected Gmail account {google_email} for user {user_id}")
 
-            # Enqueue email onboarding job
-            self._enqueue_email_onboarding(user_id, str(connection_id))
-
             return OAuthResult(
                 status="success",
                 connection_id=str(connection_id),
@@ -273,9 +270,6 @@ class OAuthService:
         if not result or not result.get("success"):
             error = result.get("error", "Unknown error") if result else "No response"
             raise RuntimeError(f"Failed to store tokens: {error}")
-
-        connection_id = result.get("connection_id")
-        self._enqueue_email_onboarding(user_id, str(connection_id))
 
         return result
 

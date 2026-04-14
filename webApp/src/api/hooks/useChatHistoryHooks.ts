@@ -5,9 +5,11 @@
  * for the unified session registry.
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/features/auth/useAuthStore';
 import { supabase } from '@/lib/supabaseClient';
+import { loadHistoricalMessages, PARSED_MESSAGES_QUERY_KEY } from '@/stores/useChatStore';
 
 const CHAT_HISTORY_QUERY_KEY = 'chat-history';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -106,4 +108,35 @@ export function useChatMessages(sessionId: string | null, limit = 50) {
     enabled: !!user && !!sessionId,
     refetchInterval: 5000,
   });
+}
+
+/**
+ * Prefetches parsed messages for all conversations once the session list loads.
+ * Populates React Query cache so switchToConversationAsync finds data instantly.
+ */
+export function usePrefetchConversationMessages(sessions: ChatSession[] | undefined) {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!sessions || sessions.length === 0) return;
+
+    // Deduplicate by chat_id, keep most recent per chat_id
+    const seen = new Set<string>();
+    const uniqueChatIds: string[] = [];
+    for (const session of sessions) {
+      if (session.chat_id && !seen.has(session.chat_id)) {
+        seen.add(session.chat_id);
+        uniqueChatIds.push(session.chat_id);
+      }
+    }
+
+    // Prefetch messages for each conversation (React Query deduplicates concurrent calls)
+    for (const chatId of uniqueChatIds) {
+      queryClient.prefetchQuery({
+        queryKey: [PARSED_MESSAGES_QUERY_KEY, chatId],
+        queryFn: () => loadHistoricalMessages(chatId),
+        staleTime: 1000 * 60 * 5, // 5 minutes — match default
+      });
+    }
+  }, [sessions, queryClient]);
 }

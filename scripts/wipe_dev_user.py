@@ -82,12 +82,18 @@ TABLES_IN_ORDER = [
     "agent_sessions",
     "audit_logs",
     "email_digests",
-    "external_api_connections",
+    # "external_api_connections",
     "user_channels",
-    "channel_linking_tokens",
+    # "channel_linking_tokens",
     "user_tool_preferences",
     "user_agent_prompt_customizations",
+    "recent_conversation_history",
     "chat_sessions",           # after chat_message_history is cleared
+    "deferred_observations",
+    "workflow_runs",
+    "sandbox_instances",
+    "config_change_proposals",
+    "jobs",
 ]
 
 
@@ -99,8 +105,11 @@ def get_supabase():
 
 
 def count_rows(sb, table: str, user_id: str) -> int:
-    resp = sb.table(table).select("*", count="exact", head=True).eq("user_id", user_id).execute()
-    return resp.count or 0
+    try:
+        resp = sb.table(table).select("*", count="exact", head=True).eq("user_id", user_id).execute()
+        return resp.count or 0
+    except Exception:
+        return -1  # table doesn't exist remotely
 
 
 def count_chat_messages(sb, user_id: str) -> int:
@@ -153,8 +162,11 @@ def delete_chat_messages(sb, session_ids: list[str]) -> int:
 
 
 def delete_table_rows(sb, table: str, user_id: str) -> int:
-    resp = sb.table(table).delete().eq("user_id", user_id).execute()
-    return len(resp.data or [])
+    try:
+        resp = sb.table(table).delete().eq("user_id", user_id).execute()
+        return len(resp.data or [])
+    except Exception:
+        return 0  # table doesn't exist remotely
 
 
 async def call_memory_tool(user_id: str, tool_name: str, arguments: dict) -> dict | list:
@@ -239,13 +251,16 @@ def main():
     for table in TABLES_IN_ORDER:
         summary[table] = count_rows(sb, table, user_id)
 
-    total = sum(summary.values())
+    missing_tables = [t for t, c in summary.items() if c == -1]
+    total = sum(c for c in summary.values() if c > 0)
     print()
     print(f"{'Table':<40} {'Rows':>6}")
     print("-" * 48)
     for table, count in summary.items():
         if count > 0:
             print(f"  {table:<38} {count:>6}")
+    if missing_tables:
+        print(f"  {'(tables not yet migrated)':<38} {', '.join(missing_tables)}")
     print("-" * 48)
     print(f"  {'Total (Supabase)':<38} {total:>6}")
     print(f"  {'Memories (min-memory)':<38} {'(scan at wipe time)':>6}")

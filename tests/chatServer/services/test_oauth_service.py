@@ -200,8 +200,8 @@ async def test_nonce_single_use(oauth_service, mock_supabase):
 
 
 @pytest.mark.asyncio
-async def test_store_tokens_calls_rpc_and_enqueues_job(mock_supabase):
-    """store_tokens() calls store_oauth_tokens RPC then inserts email_processing job."""
+async def test_store_tokens_calls_rpc(mock_supabase):
+    """store_tokens() calls store_oauth_tokens RPC and returns result."""
     mock_supabase.rpc.return_value.execute.return_value = MagicMock(
         data={"success": True, "connection_id": "conn-abc"}
     )
@@ -232,13 +232,6 @@ async def test_store_tokens_calls_rpc_and_enqueues_job(mock_supabase):
         "p_service_user_email": "user@gmail.com",
     })
 
-    # Verify job was enqueued
-    mock_supabase.table.assert_called_with("jobs")
-    insert_call = mock_supabase.table.return_value.insert.call_args[0][0]
-    assert insert_call["user_id"] == "user-123"
-    assert insert_call["job_type"] == "email_processing"
-    assert insert_call["input"]["connection_id"] == "conn-abc"
-
 
 @pytest.mark.asyncio
 async def test_store_tokens_raises_on_rpc_failure(mock_supabase):
@@ -256,14 +249,13 @@ async def test_store_tokens_raises_on_rpc_failure(mock_supabase):
 
 
 @pytest.mark.asyncio
-async def test_handle_callback_enqueues_email_job(oauth_service, mock_supabase):
-    """handle_gmail_callback() enqueues email_processing job on success."""
+async def test_handle_callback_succeeds_without_email_onboarding(oauth_service, mock_supabase):
+    """handle_gmail_callback() succeeds and does not auto-enqueue email processing."""
     state = _encode_state("user-123", "valid-nonce")
     valid_time = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
 
     nonce_result = MagicMock(data=[{"nonce": "valid-nonce", "user_id": "user-123", "expires_at": valid_time}])
     no_connections = MagicMock(data=[])
-    jobs_insert_mock = MagicMock()
 
     def table_side_effect(name):
         mock_table = MagicMock()
@@ -272,8 +264,6 @@ async def test_handle_callback_enqueues_email_job(oauth_service, mock_supabase):
             mock_table.delete.return_value.eq.return_value.execute.return_value = MagicMock()
         elif name == "external_api_connections":
             mock_table.select.return_value.eq.return_value.eq.return_value.eq.return_value.execute.return_value = no_connections  # noqa: E501
-        elif name == "jobs":
-            mock_table.insert.return_value.execute.return_value = jobs_insert_mock
         return mock_table
 
     mock_supabase.table.side_effect = table_side_effect
@@ -291,9 +281,9 @@ async def test_handle_callback_enqueues_email_job(oauth_service, mock_supabase):
 
     assert result.status == "success"
 
-    # Verify jobs table was accessed for insert
+    # Verify no email_processing job was enqueued
     jobs_calls = [c for c in mock_supabase.table.call_args_list if c[0][0] == "jobs"]
-    assert jobs_calls, "Should have inserted into jobs table"
+    assert not jobs_calls, "Should NOT insert into jobs table (auto-enqueue removed)"
 
 
 def test_encode_decode_state():
