@@ -41,7 +41,9 @@ class WorkflowRunManager:
         self._builder = GraphBuilder()
 
         # Service node handlers for templates that use Python service steps
-        # are registered here. Introspection nodes were removed in SPEC-044.
+        from .nodes.deliver_briefing import deliver_briefing
+
+        self._builder.register_service("deliver", deliver_briefing)
 
     async def start_run(
         self,

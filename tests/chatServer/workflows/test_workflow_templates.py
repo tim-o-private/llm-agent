@@ -197,3 +197,33 @@ class TestServiceNodeInBuilder:
         compiled, interrupt_nodes = builder.build(tpl, engine)
         assert compiled is not None
         assert interrupt_nodes == []
+
+    def test_run_manager_registers_all_service_nodes(self):
+        """WorkflowRunManager must register services for every template that uses service-type steps.
+
+        This is an integration test that catches regressions like SPEC-044
+        removing service registrations. It builds every template that contains
+        a service node through the RunManager's builder — if any service step
+        is unregistered, the build raises ValueError.
+        """
+        from unittest.mock import MagicMock
+
+        from chatServer.workflows.run_manager import WorkflowRunManager
+
+        manager = WorkflowRunManager(
+            db_client=MagicMock(),
+            anthropic_client=MagicMock(),
+            tool_schemas=[],
+            tool_executors={},
+        )
+        engine = MagicMock()
+
+        service_templates = [
+            (MORNING_BRIEFING, "morning-briefing"),
+            (EVENING_BRIEFING, "evening-briefing"),
+        ]
+        for template_md, name in service_templates:
+            tpl = parse_template(template_md, name)
+            # Raises ValueError if a service step is unregistered
+            compiled, _ = manager._builder.build(tpl, engine)
+            assert compiled is not None, f"{name} failed to build"
