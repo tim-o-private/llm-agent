@@ -98,7 +98,10 @@ export async function loadHistoricalMessages(chatId: string): Promise<ChatMessag
           return {
             id: String(msg.id),
             text: textContent,
-            sender: msgData?.type === 'human' ? ('user' as const) : ('ai' as const),
+            sender:
+              msgData?.type === 'human' || msgData?.role === 'user'
+                ? ('user' as const)
+                : ('ai' as const),
             timestamp: new Date(msg.created_at),
           };
         },

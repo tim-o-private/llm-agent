@@ -180,9 +180,12 @@ async def lifespan(app: FastAPI):
         from .channels.telegram_bot import initialize_telegram_bot
 
         telegram_bot = initialize_telegram_bot(settings.telegram_bot_token)
-        # Give the bot access to the database for channel lookups
+        # Give the bot access to the database for channel lookups (SystemClient
+        # bypasses RLS — needed because the bot has no user context)
         try:
-            telegram_bot.set_db_client(supabase_manager.get_client())
+            from chatServer.database.supabase_client import create_system_client
+
+            telegram_bot.set_db_client(await create_system_client())
         except Exception:
             logger.warning("Supabase client not ready for Telegram bot — linking will fail until reconnected")
         # Set up webhook if URL is configured
