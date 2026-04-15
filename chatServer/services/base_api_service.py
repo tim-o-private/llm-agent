@@ -215,6 +215,22 @@ class BaseAPIService(ABC):
         """Set data in cache with TTL."""
         expires_at = time.time() + ttl_seconds
         self.cache[cache_key] = CacheEntry(data=data, expires_at=expires_at)
+        self._sweep_expired_cache()
+
+    def _sweep_expired_cache(self) -> None:
+        """Remove all expired entries from cache and stale rate-limit entries."""
+        expired = [k for k, entry in self.cache.items() if entry.is_expired()]
+        for k in expired:
+            del self.cache[k]
+
+        # Rate-limit entries older than 24h are stale (day counter has reset)
+        now = time.time()
+        stale = [
+            uid for uid, rl in self.rate_limits.items()
+            if (now - rl.day_reset_time) >= 86400
+        ]
+        for uid in stale:
+            del self.rate_limits[uid]
 
     async def make_request(self, user_id: str, method: str, url: str,
                           headers: Optional[Dict[str, str]] = None,
