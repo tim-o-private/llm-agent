@@ -118,10 +118,16 @@ async def handle_workflow(job: dict) -> dict:
     return {"status": "started", "message": result_msg}
 
 
+_workflow_anthropic_client = None
+
+
 def _get_anthropic_client_for_workflow():
-    """Get or create an Anthropic client for workflow execution."""
-    import anthropic
-    return anthropic.AsyncAnthropic()
+    """Get or create a shared Anthropic client for workflow execution."""
+    global _workflow_anthropic_client
+    if _workflow_anthropic_client is None:
+        import anthropic
+        _workflow_anthropic_client = anthropic.AsyncAnthropic()
+    return _workflow_anthropic_client
 
 
 async def handle_morning_briefing(job: dict) -> dict:

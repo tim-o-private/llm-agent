@@ -227,6 +227,7 @@ class TTLCacheService(Generic[T]):
                 now = time.time()
                 if (now - self._last_refresh_check) >= self.refresh_interval:
                     await self._check_for_updates()
+                    await self._evict_expired()
                     self._last_refresh_check = now
 
             except asyncio.CancelledError:
@@ -236,6 +237,28 @@ class TTLCacheService(Generic[T]):
                 logger.error(f"Error in periodic refresh for {self.cache_type} cache: {e}", exc_info=True)
                 # Continue running despite errors
                 await asyncio.sleep(5)  # Brief pause before retrying
+
+    async def _evict_expired(self) -> None:
+        """Remove entries that have been expired for longer than the TTL.
+
+        This is the only path that frees memory for caches without a
+        fetch_all_callback (e.g. UserInstructionsCacheService), where
+        _check_for_updates is a no-op.
+        """
+        now = time.time()
+        # Evict entries expired for at least 2x TTL to avoid removing entries
+        # that are about to be refreshed by a concurrent read.
+        eviction_threshold = self.ttl_seconds * 2
+        async with self._lock:
+            expired = [
+                k for k, ts in self._timestamps.items()
+                if (now - ts) >= eviction_threshold
+            ]
+            for k in expired:
+                del self._cache[k]
+                del self._timestamps[k]
+            if expired:
+                logger.info(f"Evicted {len(expired)} expired entries from {self.cache_type} cache")
 
     async def _check_for_updates(self) -> None:
         """Check for updates and refresh cache if needed."""

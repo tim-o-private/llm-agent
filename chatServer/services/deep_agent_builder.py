@@ -441,7 +441,13 @@ async def build_deep_agent(
         )
         if not skip_cache:
             _agent_cache[cache_key] = agent
-        return agent
+
+    # Prune locks for cache keys that have expired from TTLCache
+    stale = [k for k in _agent_locks if k not in _agent_cache]
+    for k in stale:
+        _agent_locks.pop(k, None)
+
+    return agent
 
 
 async def _build_agent(
