@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -12,6 +13,7 @@ from chatServer.services.deep_agent_builder import (
     _agent_cache,
     _agent_locks,
     _build_system_prompt,
+    _collect_tool_guidance,
     _detect_agent_phase,
 )
 
@@ -294,6 +296,125 @@ def test_system_prompt_telegram_channel():
     prompt = _build_system_prompt(channel="telegram")
     assert "Telegram" in prompt
     assert "4096" in prompt
+
+
+def test_system_prompt_includes_tool_guidance_when_provided():
+    """When tool_guidance is passed in, it appears in the prompt under its own heading."""
+    guidance = "## Tool Guidance\nTasks: act on them."
+    prompt = _build_system_prompt(channel="web", tool_guidance=guidance)
+    assert "## Tool Guidance" in prompt
+    assert "Tasks: act on them." in prompt
+
+
+def test_system_prompt_omits_tool_guidance_when_empty():
+    """Empty/None tool_guidance means no Tool Guidance section."""
+    prompt = _build_system_prompt(channel="web", tool_guidance=None)
+    assert "## Tool Guidance" not in prompt
+    prompt2 = _build_system_prompt(channel="web", tool_guidance="")
+    assert "## Tool Guidance" not in prompt2
+
+
+def test_system_prompt_session_open_returning_user_forbids_narration():
+    """Returning-user session_open instructions must tell the agent not to narrate."""
+    from datetime import timedelta
+    lm = datetime.now(timezone.utc) - timedelta(hours=2)
+    prompt = _build_system_prompt(
+        channel="session_open",
+        user_instructions=None,
+        last_message_at=lm,
+        bootstrap_context="- 1 overdue task: Follow up with Mike",
+    )
+    assert "Session Open" in prompt
+    # Must not hand the model a "Decision rules:" checklist to narrate.
+    assert "Decision rules:" not in prompt
+    # Must explicitly forbid narrated reasoning.
+    assert "Do not narrate" in prompt
+    assert "Based on..." in prompt or "Based on" in prompt
+
+
+def test_system_prompt_web_channel_forbids_menu_behavior():
+    """Web channel header must push against chatbot menu behavior."""
+    prompt = _build_system_prompt(channel="web")
+    assert "Don't list capabilities" in prompt
+    assert "Don't narrate" in prompt.lower() or "don't narrate" in prompt.lower()
+
+
+# ---------------------------------------------------------------------------
+# _collect_tool_guidance
+# ---------------------------------------------------------------------------
+
+
+class _ToolWithWebSection:
+    @classmethod
+    def prompt_section(cls, channel):
+        if channel == "web":
+            return "Tasks: create them when actionable."
+        return None
+
+
+class _ToolWithNoneSection:
+    @classmethod
+    def prompt_section(cls, channel):
+        return None
+
+
+class _ToolNoPromptSection:
+    pass
+
+
+class _ToolRaises:
+    @classmethod
+    def prompt_section(cls, channel):
+        raise RuntimeError("boom")
+
+
+class _DupeTool:
+    @classmethod
+    def prompt_section(cls, channel):
+        return "Tasks: create them when actionable."
+
+
+class TestCollectToolGuidance:
+    def test_empty_list_returns_empty_string(self):
+        assert _collect_tool_guidance([], "web") == ""
+
+    def test_collects_non_none_strings(self):
+        result = _collect_tool_guidance([_ToolWithWebSection()], "web")
+        assert "## Tool Guidance" in result
+        assert "Tasks: create them when actionable." in result
+
+    def test_skips_tools_without_prompt_section(self):
+        result = _collect_tool_guidance([_ToolNoPromptSection(), _ToolWithWebSection()], "web")
+        assert "Tasks: create them when actionable." in result
+
+    def test_skips_none_returns(self):
+        result = _collect_tool_guidance([_ToolWithNoneSection()], "web")
+        assert result == ""
+
+    def test_swallows_exceptions(self):
+        result = _collect_tool_guidance([_ToolRaises(), _ToolWithWebSection()], "web")
+        assert "Tasks: create them when actionable." in result
+
+    def test_dedupes_identical_strings(self):
+        result = _collect_tool_guidance(
+            [_ToolWithWebSection(), _DupeTool(), _ToolWithWebSection()],
+            "web",
+        )
+        # The guidance text should appear exactly once in the output.
+        assert result.count("Tasks: create them when actionable.") == 1
+
+    def test_honors_channel_routing(self):
+        """Tool returns guidance only for 'web' — 'scheduled' yields empty."""
+        assert _collect_tool_guidance([_ToolWithWebSection()], "scheduled") == ""
+
+    def test_real_task_tool_guidance_surfaces_executive_function_mandate(self):
+        """Regression: the executive-function text in GetTasksTool must reach the prompt."""
+        from chatServer.tools.task_tools import GetTasksTool
+        # Instantiate with minimum required fields; we never call _arun.
+        tool = GetTasksTool(user_id="u1")
+        result = _collect_tool_guidance([tool], "web")
+        assert "executive function" in result.lower()
+        assert "break down" in result.lower() or "concrete steps" in result.lower()
 
 
 # ---------------------------------------------------------------------------
