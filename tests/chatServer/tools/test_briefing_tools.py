@@ -188,7 +188,7 @@ async def test_ac_20_disable_cancels_jobs(tool):
     assert "disabled" in result.lower()
     assert "3" in result
     mock_job_service.fail_by_type.assert_awaited_once_with(
-        "user-1", "morning_briefing", "Briefing disabled by user"
+        "user-1", "morning_briefing", "Morning briefing disabled by user"
     )
 
 

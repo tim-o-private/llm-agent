@@ -220,7 +220,23 @@ class BriefingService:
                     raise ValueError(f"Invalid time value for {time_field}: {time_val}")
                 validated[time_field] = f"{time_val}:00"
 
-        for bool_field in ("morning_briefing_enabled", "evening_briefing_enabled"):
+        # SPEC-045: today_regeneration_time is stored as plain HH:MM (TEXT).
+        if "today_regeneration_time" in updates:
+            time_val = updates["today_regeneration_time"]
+            if not isinstance(time_val, str) or not re.match(r'^\d{2}:\d{2}$', time_val):
+                raise ValueError(
+                    f"Invalid time format for today_regeneration_time: {time_val}. Use HH:MM"
+                )
+            h, m = int(time_val[:2]), int(time_val[3:5])
+            if h > 23 or m > 59:
+                raise ValueError(f"Invalid time value for today_regeneration_time: {time_val}")
+            validated["today_regeneration_time"] = time_val
+
+        for bool_field in (
+            "morning_briefing_enabled",
+            "evening_briefing_enabled",
+            "today_regeneration_enabled",
+        ):
             if bool_field in updates:
                 val = updates[bool_field]
                 if not isinstance(val, bool):
