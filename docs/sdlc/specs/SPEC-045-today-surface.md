@@ -29,7 +29,7 @@ This spec composes primitives that are already in the codebase. Nothing in this 
 | Per-user vault dir | `/data/sandboxes/{user_id}/` (from SPEC-044) | Physical home for `today.md` and all vault files |
 | bwrap sandbox backend | `chatServer/sandbox/bwrap.py`, `bwrap_backend.py` | How the agent writes vault files; the web write path does not run under bwrap but targets the same directory |
 | Storage durability | `chatServer/services/storage_sync.py` — `StorageSync.hydrate_user`, `pull_system`, `sync_file` | Hydrate on first login; fire-and-forget sync on every vault write |
-| System config seed dir | `/data/config/system/` populated by `StorageSync.pull_system()` | Where `templates/today.md` and `workflows/regenerate-today.md` live |
+| System config seed dir | `data/config/system/` (git-tracked, copied into the runtime at `/data/config/system/` at deploy time, same as existing `agents/skills/workflows/` subdirs) | Where `templates/today.md` and `workflows/regenerate-today.md` live. **Note:** `StorageSync.pull_system()` exists but is not wired in `chatServer/main.py` (see comment at `main.py:130`). FU-1 puts seed files in git at `data/config/system/` directly; no bucket upload, no pull_system wiring in this spec. |
 | Workflow engine (SPEC-036) | `chatServer/workflows/run_manager.py`, `registry.py`, `builder.py`, `engine.py` | Real dispatch of the regenerate-today workflow |
 | `workflow_runs` table (SPEC-036 AC-16) | existing migration | Source of run-status for the regenerate button; no duplicate regeneration table needed |
 | `workflow_events` table (SPEC-036 AC-21) | existing migration | Available for future push-based completion; Stage 1 uses polling |
@@ -115,13 +115,13 @@ Each AC has a stable ID. UAT and Playwright scripts reference these directly. Us
 ### Regeneration via workflow engine (not a stub)
 
 - [ ] **AC-17:** The header includes a "Regenerate Today" button. Clicking it calls `POST /today/regenerate`, which invokes `WorkflowRunManager.start_run(user_id, 'regenerate-today', {})` from SPEC-036. The endpoint returns 202 with the `run_id`. The workflow writes the regenerated `today.md` via the agent's normal bwrap file-write path; no separate write surface is introduced.
-- [ ] **AC-18:** A seed workflow file `regenerate-today.md` ships under `/data/config/system/workflows/` (populated via `StorageSync.pull_system()` on startup). The template registry (SPEC-036 AC-04) merges it with any user-provided override at `/data/sandboxes/{user_id}/_workflows/regenerate-today.md`, following the existing shadow pattern.
+- [ ] **AC-18:** A seed workflow file `regenerate-today.md` ships under `/data/config/system/workflows/` (git-tracked at repo path `data/config/system/workflows/regenerate-today.md`, copied into runtime at deploy time). The template registry (SPEC-036 AC-04) merges it with any user-provided override at `/data/sandboxes/{user_id}/_workflows/regenerate-today.md`, following the existing shadow pattern.
 - [ ] **AC-19:** The scheduled morning regeneration uses the existing job queue — a row is created in the `jobs` table with `job_type='workflow'` and `input={'template_name': 'regenerate-today'}`, handled by the existing `handle_workflow` job handler (SPEC-036 AC-27). A new boolean `today_regeneration_enabled` column on `user_preferences` (default `false`) gates it; when set to `true`, the preferences update creates the first job (same pattern as SPEC-037 AC-31 email-triage). A TEXT column `today_regeneration_time` (default `'06:30'`, user-local) controls the daily time.
 - [ ] **AC-20:** The Today UI detects completed regenerations by polling `GET /workflows/runs?template_name=regenerate-today&limit=1` on an interval (30s) and after the user clicks "Regenerate Today". When a newer `status='completed'` run is observed, the UI invalidates `useToday` and refetches. No SSE/websocket in Stage 1.
 
 ### Seeding (first-time user)
 
-- [ ] **AC-21:** The first `GET /today` for a user whose sandbox has no `today.md` causes `VaultService` to seed the file from `/data/config/system/templates/today.md` (populated via `StorageSync.pull_system()`). The seed contains all seven section headings with gentle empty-state prose. The user sees a populated template, not an empty screen.
+- [ ] **AC-21:** The first `GET /today` for a user whose sandbox has no `today.md` causes `VaultService` to seed the file from `/data/config/system/templates/today.md` (git-tracked at repo path `data/config/system/templates/today.md`, copied into runtime at deploy time). The seed contains all seven section headings with gentle empty-state prose. The user sees a populated template, not an empty screen.
 
 ### Path traversal protection
 
@@ -155,8 +155,8 @@ Each AC has a stable ID. UAT and Playwright scripts reference these directly. Us
 | `chatServer/services/markdown_sections.py` | Pure functions: parse markdown-with-H2-sections into a dict, and patch a section back into the body without mangling other sections. Used by `today_service`. |
 | `chatServer/routers/today_router.py` | `GET /today`, `POST /today/notes`, `POST /today/todo/toggle`, `POST /today/regenerate`, `GET /today/source`. Thin routers delegating to services. [A1] |
 | `chatServer/routers/approvals_router.py` | `GET /approvals`, `GET /approvals/count`, `POST /approvals/{id}/approve`, `POST /approvals/{id}/reject`, `POST /approvals/{id}/edit`. [A1] |
-| `supabase/storage/system/templates/today.md` (seed) | Populated template with all seven section headings + empty-state prose. Landed to `/data/config/system/templates/today.md` via `StorageSync.pull_system()`. |
-| `supabase/storage/system/workflows/regenerate-today.md` (seed) | `.flow.md` workflow template matching SPEC-036 format. Steps: gather context (calendar + inbox signals + recent activity), compose Today body, write to `today.md` via agent file-write tool. |
+| `data/config/system/templates/today.md` (seed, git-tracked) | Populated template with all seven section headings + empty-state prose. Copied into runtime at `/data/config/system/templates/today.md` at deploy time, same convention as existing `data/config/system/{agents,skills,workflows}` subdirs. |
+| `data/config/system/workflows/regenerate-today.md` (seed, git-tracked) | `.flow.md` workflow template matching SPEC-036 format. Steps: gather context (calendar + inbox signals + recent activity), compose Today body, write to `today.md` via agent file-write tool. |
 | `webApp/src/pages/Today.tsx` | New Today surface. Composes seven section components. |
 | `webApp/src/components/today/HeaderSection.tsx` | Date + framing + Regenerate button |
 | `webApp/src/components/today/YourDaySection.tsx` | Calendar/meeting items list |
@@ -515,7 +515,7 @@ Script: `tests/uat/playwright/test_spec_045_today_surface.py`. One function per 
 - `approval_cards` + enums + RLS
 - `activity_log` + RLS
 - `user_preferences` columns for regeneration enable/time
-- Seed files (`today.md` template, `regenerate-today.md` workflow) committed under `supabase/storage/system/` so `StorageSync.pull_system()` lands them
+- Seed files (`today.md` template, `regenerate-today.md` workflow) committed under `data/config/system/{templates,workflows}/` — git-tracked; copied into runtime `/data/config/system/` at deploy time (matching existing `data/config/system/{agents,skills,workflows}` convention). No bucket upload, no `StorageSync.pull_system()` wiring in this spec.
 
 ### FU-2: Backend services + API + workflow coupling (backend-dev)
 **Branch:** `feat/SPEC-045-api`
