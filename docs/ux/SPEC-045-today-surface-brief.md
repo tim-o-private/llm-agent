@@ -75,7 +75,7 @@ Order is fixed by AC-03: **Header → Your day → To do → Notes → Agent →
 | 1 | Header (`header`, not a section per se — uses `h1`) | `Heading` (Radix) for date, prose for framing, `Button` for Regenerate | "No framing yet — run today's briefing." (AC-04) |
 | 2 | Your day (`your-day`) | Plain `<ul>` with `<li>` for items; wikilinks become Radix `Link` | "Nothing on your calendar today." |
 | 3 | To do (`to-do`) | `Checkbox` per item + `Label`; list rendered as markdown-native `- [ ]` semantics | "No to-dos — the agent hasn't surfaced anything yet." |
-| 4 | Notes (`notes`) | `Input` with submit `IconButton`; below, a `<ul>` of captured notes | "No notes yet — capture one above." |
+| 4 | Notes (`notes`) | `Textarea` (multi-line, auto-growing) with submit `Button`; below, a `<ul>` of captured notes | "No notes yet — capture one above." |
 | 5 | Agent (`agent`) | Four `<h3>` sub-groups (Running / Watching / Recently done / Blocked) each with a `<ul>` of links | "Agent is idle." (per group: `"Nothing running."` / `"Nothing to watch."` / `"Nothing recent."` / `"Nothing blocked."`) |
 | 6 | Approvals (`approvals`) | Stack of approval cards, one per row | "Nothing awaiting approval." (AC-09) |
 | 7 | Recent (`recent`) | `<ul>` of links; filename in JetBrains Mono, relative time in muted Mono | "No recent activity." (AC-10) |
@@ -94,18 +94,33 @@ Order is fixed by AC-03: **Header → Your day → To do → Notes → Agent →
 
 **To do.** Markdown task-list rendered semantically: each `<li>` contains a `Checkbox` (`srLabel={item.text}`) followed by the text. Checking the box optimistically toggles + calls `useToggleTodo`; revert on failure. Completed items get `line-through text-text-muted`. No re-ordering in Stage 1 — the file order wins.
 
-**Notes.** The capture pattern is the spiciest interaction on the page. Design:
+**Notes.** Multi-line by default — notes are paragraphs, not one-liners. Design:
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│  [ Capture a note                              ] ↵  │   ← Input + IconButton (submit)
+│  Capture a note                                     │
+│                                                     │   ← Textarea (auto-growing)
+│                                                     │     min rows=3, grows to ~10
+│                                              [ Save ]│
 └─────────────────────────────────────────────────────┘
 
-    · 2026-04-20 09:14  Think about the onboarding copy
+    · 2026-04-20 09:14  Think about the onboarding copy —
+                        the current flow assumes people know
+                        what a "vault" is, which they don't.
     · 2026-04-20 08:47  Reminder: call Meredith re: invoice
 ```
 
-Input spans full column width. `Enter` submits; `Shift+Enter` inserts newline (via `Textarea` upgrade if we later allow multi-line — Stage 1 is single-line). Submit clears the input optimistically; on failure, restore input text and `toast.error("Couldn't save note. Try again.")`. Existing notes render below with timestamp in Mono + muted, text in Inter.
+Textarea spans full column width, starts at `rows=3`, auto-grows as content is entered (cap around 10 rows; scroll beyond that). Save button is a visible `Button variant="soft"` in the bottom-right corner of the textarea's row — not an `IconButton`, because a visible "Save" affordance matches the more substantial input surface.
+
+**Submit semantics:**
+- **Cmd/Ctrl+Enter** submits (standard multi-line-input convention).
+- **Enter alone inserts a newline** — it must, because notes are multi-line.
+- Clicking the Save button also submits.
+- Submit clears the textarea optimistically; on failure, restore the text and `toast.error("Couldn't save note. Try again.")`.
+
+Existing notes render below as a `<ul>` with timestamp in Mono + muted (`text-xs`), note text in Inter (`text-sm`) preserving user-entered newlines (`whitespace-pre-wrap`).
+
+**ARIA:** the textarea carries `aria-label="Capture a note"` (implicit `role="textbox"` with `aria-multiline="true"` via native `<textarea>`). The Save button carries `aria-label="Save note"`. The hint that Cmd/Ctrl+Enter submits is visible as `text-xs text-text-muted` helper text below the textarea (`"Cmd+Enter to save"`) so the keyboard shortcut is discoverable without a tooltip.
 
 **Agent.** Four sub-groupings, each an `<h3>` + `<ul>`. Use a single column, not a 2×2 grid — reading flow beats symmetry here. Stage 1 items link to placeholder `/vault/…` / `/workflows/…` routes (AC-08); those routes 404 today, that's fine.
 
@@ -280,7 +295,7 @@ Per-section behavior for the four interaction states. References interaction-pat
 | Header | "No framing yet — run today's briefing." | `Skeleton variant="text"` for date + framing line | "Couldn't load Today. Try refreshing." + `[Refresh]` button | Regenerate button → `Spinner` + `"Regenerating…"`, `aria-busy="true"` |
 | Your day | "Nothing on your calendar today." | `Skeleton variant="list"` (3 rows) | — (inherits page-level error) | N/A (read-only) |
 | To do | "No to-dos — the agent hasn't surfaced anything yet." | `Skeleton variant="list"` (3 rows) | — | Checkbox is optimistic (§3 loading rules #4); revert + `toast.error("Couldn't update. Try again.")` on failure |
-| Notes | "No notes yet — capture one above." | `Skeleton variant="list"` (2 rows) for existing notes; input always interactive | Input stays; `ErrorMessage` below input on save failure + `toast.error` | Input shows submit `Spinner` on pending; clear on success |
+| Notes | "No notes yet — capture one above." | `Skeleton variant="list"` (2 rows) for existing notes; Textarea always interactive | Textarea stays populated with user's draft; `ErrorMessage` below textarea on save failure + `toast.error` | Save button shows `Spinner` + `"Saving…"` on pending; textarea disabled mid-submit; clears on success |
 | Agent | Four sub-group emptys (see §2) | `Skeleton variant="list"` per sub-group (1 row each) | — | N/A (read-only, links) |
 | Approvals | "Nothing awaiting approval." | `Skeleton variant="card"` (2 cards) | Per-card error via `toast.error` on approve/reject failure; card stays pending | Approve/Reject optimistic per §7 of interaction-patterns; card fades out over ~200ms on success (respecting `prefers-reduced-motion`) |
 | Recent | "No recent activity." | `Skeleton variant="list"` (4 rows) | — | N/A (read-only) |
@@ -349,7 +364,7 @@ Each section: `<section aria-labelledby="today-<slug>-heading">` with `<h2 id="t
 ### Interactive elements per section
 
 - **To do (AC-06):** each `<li>` has `<input type="checkbox" aria-label="<item text>">`. Checked state reflects file state.
-- **Notes (AC-07):** input has `aria-label="Capture a note"`; submit is `<button aria-label="Save note">`. Existing notes are a `<ul aria-label="Captured notes">`.
+- **Notes (AC-07):** capture control is a `<textarea aria-label="Capture a note">` (native `<textarea>` provides `role="textbox"` + `aria-multiline="true"` implicitly; no override needed). Submit is `<button aria-label="Save note">`. Existing notes are a `<ul aria-label="Captured notes">`. Playwright should locate the input via `role="textbox"` with name `"Capture a note"` — NOT `role="combobox"` or `role="searchbox"`. Cmd/Ctrl+Enter triggers submit; plain Enter inserts a newline.
 - **Agent (AC-08):** each sub-group is `<div role="group" aria-labelledby="today-agent-<status>-heading">` with `<h3 id="today-agent-<status>-heading">`. Statuses: `running`, `watching`, `recent`, `blocked`.
 - **Approvals (AC-12):** each card is `<div role="region" aria-label="<Type label> approval: <title>">`. Action buttons: `aria-label="<Primary action>"` (e.g., `"Send"`, `"Confirm"`, `"Accept"`, `"Approve"`), `aria-label="Edit"`, `aria-label="Reject"`.
 - **Recent (AC-10):** `<ul aria-label="Recently touched files">` with each `<li>` containing a `<a>` (filename) + `<time>` element.
@@ -362,39 +377,31 @@ Each section: `<section aria-labelledby="today-<slug>-heading">` with `<h2 id="t
 
 ---
 
-## 7. Open questions for Tim
+## 7. Open questions — resolved
 
-These are the design calls I want your sign-off on before freezing Playwright. My recommendation is listed with each.
+Tim's decisions (2026-04-20):
 
-### OQ-1. Reject button styling — gray soft vs. destructive red
+### OQ-1. Reject button styling — gray soft vs. destructive red — **RESOLVED: gray-soft**
 
-Interaction-patterns §4 reserves red for "cannot be undone" actions. Rejecting an approval is reversible (the agent can re-propose), so red would be miscalibrated. I've specified **gray soft** for all Reject buttons across all six shapes.
+Interaction-patterns §4 reserves red for "cannot be undone" actions. Rejecting an approval is reversible, so red would be miscalibrated. All Reject buttons across all six shapes are `variant="soft" color="gray"`.
 
-**Recommendation:** accept gray-soft Reject. (Alternative would be to use red for Reject on the two destructive-family shapes, `config_change` and `file_operation`, but I think that over-signals — the destructiveness lives in Approve for those, not Reject.)
+### OQ-2. `file_operation` delete — inline approve vs. ConfirmDialog gate — **RESOLVED: ConfirmDialog**
 
-### OQ-2. `file_operation` delete — inline approve vs. ConfirmDialog gate
+Delete operations gate through `ConfirmDialog` per interaction-patterns §4, even in Stage 1 where execution is a no-op. Trains the habit before Stage 3 wires real execution. Move and rename approve inline.
 
-The spec allows Stage 1 to approve a delete inline (since nothing actually deletes). I've specified an extra `ConfirmDialog` for `delete` operations only, to train the habit before Stage 3 wires real execution.
+### OQ-3. Note capture surface — **RESOLVED: multi-line `Textarea` by default**
 
-**Recommendation:** keep the ConfirmDialog. The friction cost is ~1 click; the habit cost of approving real deletes without confirmation later is much higher.
+Tim's model: notes are multi-line paragraphs, not one-liners. The capture control is a `Textarea` (starts `rows=3`, auto-grows to ~10 rows). Cmd/Ctrl+Enter submits; plain Enter inserts a newline. Save button is a visible `Button variant="soft"`, not an `IconButton`, to match the weight of the input. See §2 Notes for the full pattern and §6 for the ARIA contract.
 
-### OQ-3. Inline note capture — single-line `Input` vs. multi-line `Textarea`
+### OQ-4. Approvals section card chrome — **RESOLVED: `Card` primitive**
 
-The spec says "an input with `aria-label="Capture a note"`" — ambiguous on single vs. multi-line. Notes in practice will range from "call Meredith" (single-line) to half-paragraph thoughts.
+Approvals use the existing `Card` primitive with a 4px left accent border. This is the one section that should pop visually — approvals are the section users must drain.
 
-**Recommendation:** start with a **single-line `Input`** that grows to a `Textarea` on focus-with-content-above-X-chars (or on Shift+Enter). Keeps the default state quiet; upgrades on demand. Stage 2 could introduce real rich capture. If you want to punt complexity, single-line only is fine for Stage 1.
+> Tim flagged this as "not clear how material" — it isn't. Either chrome choice works. Going with `Card` because the primitive already exists, so there's no implementation cost to the heavier treatment, and swapping to bare-article later is a one-line change if UAT shows it's too loud.
 
-### OQ-4. Approvals section card chrome — `Card` primitive vs. bare `<article>` with border
+### OQ-5. "View source" toggle — **RESOLVED: non-sticky**
 
-I've specified the existing `Card` primitive (with left accent border). The alternative is a minimal `<article>` with just a left border, no shadow, no background fill — closer to the "single column reading document" posture of the rest of the page. `Card` is heavier visually and makes the lane pop more.
-
-**Recommendation:** `Card` primitive. Approvals are the one place Today *should* pop — they're the section users must drain. Use visual weight where attention is warranted.
-
-### OQ-5. "View source" toggle — sticky vs. inline
-
-If users toggle to source to check something mid-page, scrolling back to find the toggle is annoying. The toggle could be sticky (fixed to top-right of the content column on scroll).
-
-**Recommendation:** **non-sticky** for Stage 1. Keep the page frame minimal. If this becomes a real pain point in UAT, promote to sticky in a follow-up. (Sticky elements are a common source of a11y zoom-safety issues and I don't want to land one speculatively.)
+Toggle lives in the top-right of the content column, above the Header section. Non-sticky for Stage 1. If UAT shows mid-page toggle-back is a pain point, promote to sticky in a follow-up.
 
 ### OQ-6. TopBar Approvals badge when count = 0 — show or hide?
 
@@ -402,11 +409,15 @@ The spec says "topbar shows a single live badge `Approvals` with aria-label='<N>
 
 **Recommendation:** keep it always-visible at reduced opacity. If you'd rather hide it entirely at 0 for a cleaner bar, I'll adjust — but the page is calmer than the chrome, and a tiny muted bell is not noisy.
 
+### OQ-6 outcome — **RESOLVED: reduced-opacity badge at count=0**
+
+Per Tim, the badge stays visible at count=0 rendered at `opacity-60` with `aria-label="No pending approvals"`. Cleared.
+
 ---
 
-## 8. Riskiest design calls (for your awareness)
+## 8. Riskiest design calls — approved, noted for follow-up
 
-If any of these turn out wrong, Playwright tests written against them will need rewriting. Flagging explicitly:
+Tim did not push back on these when reviewing the brief; they stand as specified. Flagging explicitly so that if UAT surfaces pain, the follow-up path is clear:
 
 1. **Card accent color palette (§3).** I've mapped six shapes to four colors. If you want all six visually distinct, we'd need two more. I think four is correct — the pairs (email_draft / outreach both outbound-comms; workflow_proposal / config_change both system-structure) are semantically linked and should share visual family.
 
