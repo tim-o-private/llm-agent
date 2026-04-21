@@ -9,13 +9,16 @@ See SPEC-045 §"Technical Approach" §2.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import re
 from datetime import date, datetime, timezone
 from typing import Any, Optional
 
 from fastapi import HTTPException
 from fastapi import status as http_status
 
+from ..workflows.dispatch import dispatch_workflow
 from . import markdown_sections as md
 from .approval_service import ApprovalService
 from .vault_service import VaultService
@@ -55,22 +58,17 @@ class TodayService:
         body, mtime = await self._load_body(user_id)
         doc = md.parse(body)
 
-        framing = md.extract_framing(body)
-        your_day = md.extract_your_day(body)
-        to_do = md.extract_todos(body)
-        notes = md.extract_notes(body)
-
-        approvals = await self._approvals.list_pending(user_id)
-        recent = await self._vault.list_recent(user_id, limit=10)
+        approvals, recent = await asyncio.gather(
+            self._approvals.list_pending(user_id),
+            self._vault.list_recent(user_id, limit=10),
+        )
 
         return {
             "date": date.today().isoformat(),
-            "header": {"framing": framing},
-            "your_day": your_day,
-            "to_do": to_do,
-            "notes": notes,
-            # Stage 1: agent section is a placeholder — future specs hydrate
-            # running / watching / blocked from agent_sessions / workflow_runs.
+            "header": {"framing": md.extract_framing(body, doc)},
+            "your_day": md.extract_your_day(body, doc),
+            "to_do": md.extract_todos(body, doc),
+            "notes": md.extract_notes(body, doc),
             "agent": {
                 "running": [],
                 "watching": [],
@@ -82,8 +80,6 @@ class TodayService:
                 {"path": r.path, "updated_at": r.updated_at} for r in recent
             ],
             "source_mtime": mtime,
-            # Preserve unknown sections' names for debugging; rendered UI uses
-            # the seven known sections only.
             "unknown_sections": [
                 s.name for s in doc.sections if s.key not in md.KNOWN_SECTIONS
             ],
@@ -135,13 +131,26 @@ class TodayService:
             "source_mtime": new_mtime,
         }
 
-    async def regenerate(self, user_id: str, run_manager: Any) -> str:
-        """Dispatch a ``regenerate-today`` workflow run. Returns run_id."""
+    async def regenerate(
+        self,
+        user_id: str,
+        db_client: Any,
+        anthropic_client: Any,
+    ) -> str:
+        """Dispatch a ``regenerate-today`` workflow run. Returns run_id.
+
+        Routes through the canonical ``dispatch_workflow`` entry point —
+        the same path used by every scheduled briefing handler — rather
+        than hand-rolling a ``WorkflowRunManager``.
+        """
         try:
-            run_id = await run_manager.start_run(
+            result_msg = await dispatch_workflow(
+                args={"workflow_name": "regenerate-today", "parameters": {}},
                 user_id=user_id,
-                template_name="regenerate-today",
-                parameters={},
+                db_client=db_client,
+                anthropic_client=anthropic_client,
+                tool_schemas=[],
+                tool_executors={},
             )
         except Exception as exc:
             logger.error("regenerate-today dispatch failed: %s", exc, exc_info=True)
@@ -149,4 +158,12 @@ class TodayService:
                 status_code=http_status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Regeneration temporarily unavailable",
             ) from exc
-        return run_id
+
+        match = re.search(r"\(run_id:\s*([^)]+)\)", result_msg)
+        if not match:
+            logger.error("regenerate-today dispatch failed: %s", result_msg)
+            raise HTTPException(
+                status_code=http_status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Regeneration temporarily unavailable",
+            )
+        return match.group(1).strip()

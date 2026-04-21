@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { UserMenu } from '@/components/UserMenu';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import { useChatStore } from '@/stores/useChatStore';
@@ -14,6 +15,8 @@ const TopBar: React.FC = () => {
   });
 
   const toggleChatPanel = useChatStore((state) => state.toggleChatPanel);
+  const navigate = useNavigate();
+  const jumpToApprovals = () => navigate('/today#today-approvals');
 
   return (
     <div className="flex-1 px-2 sm:px-4 flex justify-between items-center h-full min-w-0">
@@ -34,7 +37,7 @@ const TopBar: React.FC = () => {
         <div className="hidden sm:block">
           <span className="text-sm font-medium text-text-secondary whitespace-nowrap">Streak: N/A</span>
         </div>
-        <ApprovalsBadge />
+        <ApprovalsBadge onJump={jumpToApprovals} />
         <ThemeToggle />
         {/* Mobile chat toggle - visible only on mobile (desktop uses AppShell sidebar button) */}
         <button

@@ -150,17 +150,20 @@ async def test_regenerate_returns_run_id():
     app = _build_app(TEST_USER_A)
     service = MagicMock()
     service.regenerate = AsyncMock(return_value="run-123")
-    run_mgr = MagicMock()
+    anthropic_client = MagicMock()
     with patch(
         "chatServer.routers.today_router._build_today_service",
         new=AsyncMock(return_value=service),
     ), patch(
-        "chatServer.routers.today_router._build_run_manager",
-        new=AsyncMock(return_value=run_mgr),
+        "chatServer.routers.today_router._build_anthropic_client",
+        return_value=anthropic_client,
     ):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as c:
             r = await c.post("/api/today/regenerate")
-    assert r.status_code == 200
+    assert r.status_code == 202
     assert r.json() == {"run_id": "run-123"}
-    service.regenerate.assert_awaited_with(TEST_USER_A, run_mgr)
+    service.regenerate.assert_awaited_once()
+    call_args = service.regenerate.await_args.args
+    assert call_args[0] == TEST_USER_A
+    assert call_args[2] is anthropic_client

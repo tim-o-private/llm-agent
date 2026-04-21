@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -152,20 +152,43 @@ async def test_toggle_todo_missing_line_raises_409(service):
 
 @pytest.mark.asyncio
 async def test_regenerate_dispatches_and_returns_run_id(service):
-    run_mgr = MagicMock()
-    run_mgr.start_run = AsyncMock(return_value="run-123")
-    run_id = await service.regenerate(USER_A, run_mgr)
+    db = MagicMock()
+    anthropic = MagicMock()
+    with patch(
+        "chatServer.services.today_service.dispatch_workflow",
+        new=AsyncMock(
+            return_value="Started workflow 'regenerate-today' (run_id: run-123). I'll keep you updated on progress.",
+        ),
+    ) as mock_dispatch:
+        run_id = await service.regenerate(USER_A, db, anthropic)
+
     assert run_id == "run-123"
-    run_mgr.start_run.assert_awaited_once()
-    kwargs = run_mgr.start_run.await_args.kwargs
-    assert kwargs["template_name"] == "regenerate-today"
+    mock_dispatch.assert_awaited_once()
+    kwargs = mock_dispatch.await_args.kwargs
+    assert kwargs["args"] == {"workflow_name": "regenerate-today", "parameters": {}}
     assert kwargs["user_id"] == USER_A
+    assert kwargs["db_client"] is db
+    assert kwargs["anthropic_client"] is anthropic
 
 
 @pytest.mark.asyncio
 async def test_regenerate_failure_raises_503(service):
-    run_mgr = MagicMock()
-    run_mgr.start_run = AsyncMock(side_effect=RuntimeError("boom"))
-    with pytest.raises(HTTPException) as exc:
-        await service.regenerate(USER_A, run_mgr)
+    with patch(
+        "chatServer.services.today_service.dispatch_workflow",
+        new=AsyncMock(side_effect=RuntimeError("boom")),
+    ):
+        with pytest.raises(HTTPException) as exc:
+            await service.regenerate(USER_A, MagicMock(), MagicMock())
+    assert exc.value.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_regenerate_failure_message_raises_503(service):
+    """Dispatch returned an error-shaped string (no run_id parseable)."""
+    with patch(
+        "chatServer.services.today_service.dispatch_workflow",
+        new=AsyncMock(return_value="Failed to start workflow: boom"),
+    ):
+        with pytest.raises(HTTPException) as exc:
+            await service.regenerate(USER_A, MagicMock(), MagicMock())
     assert exc.value.status_code == 503

@@ -62,9 +62,17 @@ import threading
 from typing import Any
 
 import pytest
-from playwright.sync_api import Page, expect, sync_playwright
 
-from tests.uat.playwright.conftest_pw import WEBAPP_URL, get_authenticated_page
+pytest.importorskip(
+    "playwright", reason="Playwright not installed — UAT tests skipped"
+)
+
+from playwright.sync_api import Page, expect, sync_playwright  # noqa: E402
+
+from tests.uat.playwright.conftest_pw import (  # noqa: E402
+    WEBAPP_URL,
+    get_authenticated_page,
+)
 
 # --- Test constants (mirrors spec payload shapes) -----------------------------
 

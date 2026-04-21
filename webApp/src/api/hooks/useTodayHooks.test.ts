@@ -107,18 +107,6 @@ describe('useTodaySource', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('returns raw markdown when response is plain text', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      text: () => Promise.resolve('# Today\n## Notes\n'),
-    });
-    const { Wrapper } = createWrapper();
-    const { result } = renderHook(() => useTodaySource(true), { wrapper: Wrapper });
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toBe('# Today\n## Notes\n');
-  });
-
   it('returns error on 401', async () => {
     global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 401, text: () => Promise.resolve('') });
     const { Wrapper } = createWrapper();
@@ -242,12 +230,12 @@ describe('useRegenerationStatus', () => {
     return jsonResponse({ runs });
   }
 
-  it('polls /api/workflows/runs at 30s interval', async () => {
+  it('polls /api/workflows/runs at 30s interval when enabled', async () => {
     const fetchMock = vi.fn().mockResolvedValue(runsResponse([]));
     global.fetch = fetchMock;
 
     const { Wrapper } = createWrapper();
-    renderHook(() => useRegenerationStatus(), { wrapper: Wrapper });
+    renderHook(() => useRegenerationStatus(true), { wrapper: Wrapper });
 
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(fetchMock).toHaveBeenCalledWith(
@@ -261,16 +249,57 @@ describe('useRegenerationStatus', () => {
     expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 
+  it('does not poll past one-shot fetch when disabled and run is terminal', async () => {
+    const completedRun: WorkflowRun = {
+      id: 'run-1',
+      template_name: 'regenerate-today',
+      status: 'completed',
+      completed_at: '2026-04-21T09:00:00Z',
+    };
+    const fetchMock = vi.fn().mockResolvedValue(runsResponse([completedRun]));
+    global.fetch = fetchMock;
+
+    const { Wrapper } = createWrapper();
+    renderHook(() => useRegenerationStatus(false), { wrapper: Wrapper });
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const initialCalls = fetchMock.mock.calls.length;
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(fetchMock.mock.calls.length).toBe(initialCalls);
+  });
+
+  it('auto-starts polling once a non-terminal run is observed', async () => {
+    const runningRun: WorkflowRun = {
+      id: 'run-1',
+      template_name: 'regenerate-today',
+      status: 'running',
+    };
+    const fetchMock = vi.fn().mockResolvedValue(runsResponse([runningRun]));
+    global.fetch = fetchMock;
+
+    const { Wrapper } = createWrapper();
+    renderHook(() => useRegenerationStatus(false), { wrapper: Wrapper });
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
   it('invalidates today query when a newer completed run appears', async () => {
     const firstRun: WorkflowRun = {
-      run_id: 'run-1',
+      id: 'run-1',
       template_name: 'regenerate-today',
       status: 'completed',
       completed_at: '2026-04-21T09:00:00Z',
     };
     const secondRun: WorkflowRun = {
       ...firstRun,
-      run_id: 'run-2',
+      id: 'run-2',
       completed_at: '2026-04-21T09:30:00Z',
     };
 
@@ -283,7 +312,8 @@ describe('useRegenerationStatus', () => {
     const { Wrapper, queryClient } = createWrapper();
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
 
-    renderHook(() => useRegenerationStatus(), { wrapper: Wrapper });
+    // enabled=true so the hook keeps polling across terminal runs.
+    renderHook(() => useRegenerationStatus(true), { wrapper: Wrapper });
 
     // First observation seeds the ref — must NOT invalidate.
     await vi.waitFor(() =>
@@ -318,7 +348,7 @@ describe('useRegenerationStatus', () => {
 
   it('does not re-invalidate on repeated observation of the same run', async () => {
     const run: WorkflowRun = {
-      run_id: 'run-1',
+      id: 'run-1',
       template_name: 'regenerate-today',
       status: 'completed',
       completed_at: '2026-04-21T09:00:00Z',
@@ -328,7 +358,8 @@ describe('useRegenerationStatus', () => {
     const { Wrapper, queryClient } = createWrapper();
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
 
-    renderHook(() => useRegenerationStatus(), { wrapper: Wrapper });
+    // enabled=true so the hook keeps polling even though run is terminal.
+    renderHook(() => useRegenerationStatus(true), { wrapper: Wrapper });
 
     // Seed + two more polls, all same run.
     await vi.waitFor(() =>
@@ -357,7 +388,7 @@ describe('useRegenerationStatus', () => {
     global.fetch = fetchMock;
 
     const { Wrapper } = createWrapper();
-    const { unmount } = renderHook(() => useRegenerationStatus(), { wrapper: Wrapper });
+    const { unmount } = renderHook(() => useRegenerationStatus(true), { wrapper: Wrapper });
 
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     unmount();

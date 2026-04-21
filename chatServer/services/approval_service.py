@@ -241,12 +241,3 @@ def _subject_path(card: dict) -> Optional[str]:
         if isinstance(value, str) and value:
             return value
     return None
-
-
-def validate_card_type(card_type: str) -> None:
-    """Raise ``HTTPException(400)`` if ``card_type`` is not a recognized shape."""
-    if card_type not in _VALID_CARD_TYPES:
-        raise HTTPException(
-            status_code=http_status.HTTP_400_BAD_REQUEST,
-            detail=f"Unknown card_type: {card_type}",
-        )

@@ -1,6 +1,8 @@
 """Job handler functions for each job type in the universal queue."""
 
 import logging
+from datetime import datetime, timedelta, timezone
+from typing import Callable, Tuple
 
 from ..database.supabase_client import create_system_client
 
@@ -92,6 +94,8 @@ async def handle_workflow(job: dict) -> dict:
     job["input"] contains: {user_id, template_name, parameters}.
     Returns {"run_id": str, "status": "started"}.
     """
+    # Lazy re-import so tests patching ``supabase_client.create_system_client``
+    # intercept the call (module-level binding is captured at import time).
     from ..database.supabase_client import create_system_client
     from ..workflows.dispatch import dispatch_workflow
 
@@ -130,182 +134,26 @@ def _get_anthropic_client_for_workflow():
     return _workflow_anthropic_client
 
 
-async def handle_morning_briefing(job: dict) -> dict:
-    """Execute morning briefing as a workflow and self-schedule next occurrence.
+async def _run_scheduled_workflow(
+    job: dict,
+    *,
+    job_type: str,
+    workflow_name: str,
+    enabled_pref: str,
+    default_enabled: bool,
+    build_parameters: Callable[[str, dict], dict],
+    compute_schedule: Callable[[dict], Tuple[datetime, datetime]],
+    next_job_input: Callable[[str], dict] | None = None,
+    failure_keywords: Tuple[str, ...] = ("Failed", "Error"),
+) -> dict:
+    """Shared skeleton for recurring workflow handlers.
 
-    Schedule next FIRST, then dispatch workflow — so workflow failure
-    doesn't break the scheduling chain.
+    Schedule next occurrence FIRST so workflow failures don't break the
+    chain, then dispatch and raise if the result matches a failure keyword.
+
+    Uses the module-level ``create_system_client`` binding so tests patching
+    ``chatServer.services.job_handlers.create_system_client`` intercept it.
     """
-    from datetime import timedelta
-
-    from ..database.connection import get_database_manager
-    from ..services.briefing_service import BriefingService, compute_next_briefing_time
-    from ..services.job_service import JobService
-    from ..workflows.dispatch import dispatch_workflow
-
-    user_id = str(job["input"]["user_id"])
-    db_client = await create_system_client()
-    briefing_service = BriefingService(db_client)
-
-    prefs = await briefing_service.get_user_preferences(user_id)
-
-    # 1. Self-schedule next occurrence FIRST
-    if prefs.get("morning_briefing_enabled", True):
-        next_scheduled = compute_next_briefing_time(
-            prefs["timezone"], prefs["morning_briefing_time"], "morning"
-        )
-        db_manager = get_database_manager()
-        job_service = JobService(db_manager.pool)
-        await job_service.create(
-            job_type="morning_briefing",
-            input={"user_id": user_id},
-            user_id=user_id,
-            scheduled_for=next_scheduled,
-            expires_at=next_scheduled + timedelta(hours=4),
-            max_retries=2,
-        )
-
-    # 2. Dispatch morning-briefing workflow
-    result_msg = await dispatch_workflow(
-        args={
-            "workflow_name": "morning-briefing",
-            "parameters": {
-                "user_id": user_id,
-                "timezone": prefs.get("timezone", "UTC"),
-                "briefing_sections": prefs.get("briefing_sections", {}),
-            },
-        },
-        user_id=user_id,
-        db_client=db_client,
-        anthropic_client=_get_anthropic_client_for_workflow(),
-        tool_schemas=[],
-        tool_executors={},
-    )
-
-    if "Failed" in result_msg or "Error" in result_msg:
-        raise RuntimeError(result_msg)
-
-    return {"status": "workflow_dispatched", "message": result_msg}
-
-
-async def handle_evening_briefing(job: dict) -> dict:
-    """Execute evening briefing as a workflow and self-schedule next occurrence.
-
-    Same pattern as morning: schedule next first, then dispatch workflow.
-    """
-    from datetime import timedelta
-
-    from ..database.connection import get_database_manager
-    from ..services.briefing_service import BriefingService, compute_next_briefing_time
-    from ..services.job_service import JobService
-    from ..workflows.dispatch import dispatch_workflow
-
-    user_id = str(job["input"]["user_id"])
-    db_client = await create_system_client()
-    briefing_service = BriefingService(db_client)
-
-    prefs = await briefing_service.get_user_preferences(user_id)
-
-    # 1. Self-schedule next occurrence FIRST
-    if prefs.get("evening_briefing_enabled", False):
-        next_scheduled = compute_next_briefing_time(
-            prefs["timezone"], prefs["evening_briefing_time"], "evening"
-        )
-        db_manager = get_database_manager()
-        job_service = JobService(db_manager.pool)
-        await job_service.create(
-            job_type="evening_briefing",
-            input={"user_id": user_id},
-            user_id=user_id,
-            scheduled_for=next_scheduled,
-            expires_at=next_scheduled + timedelta(hours=4),
-            max_retries=2,
-        )
-
-    # 2. Dispatch evening-briefing workflow
-    result_msg = await dispatch_workflow(
-        args={
-            "workflow_name": "evening-briefing",
-            "parameters": {
-                "user_id": user_id,
-                "timezone": prefs.get("timezone", "UTC"),
-                "briefing_sections": prefs.get("briefing_sections", {}),
-            },
-        },
-        user_id=user_id,
-        db_client=db_client,
-        anthropic_client=_get_anthropic_client_for_workflow(),
-        tool_schemas=[],
-        tool_executors={},
-    )
-
-    if "Failed" in result_msg or "Error" in result_msg:
-        raise RuntimeError(result_msg)
-
-    return {"status": "workflow_dispatched", "message": result_msg}
-
-
-async def handle_regenerate_today(job: dict) -> dict:
-    """Execute the regenerate-today workflow and self-schedule next occurrence.
-
-    Same resilience pattern as briefings: schedule next FIRST, then dispatch.
-    Reads `today_regeneration_enabled` / `today_regeneration_time` from
-    user_preferences to decide whether to schedule the next day.
-    """
-    from datetime import timedelta
-
-    from ..database.connection import get_database_manager
-    from ..services.briefing_service import BriefingService, compute_next_briefing_time
-    from ..services.job_service import JobService
-    from ..workflows.dispatch import dispatch_workflow
-
-    user_id = str(job["input"]["user_id"])
-    db_client = await create_system_client()
-    briefing_service = BriefingService(db_client)
-
-    prefs = await briefing_service.get_user_preferences(user_id)
-
-    # 1. Self-schedule next occurrence FIRST
-    if prefs.get("today_regeneration_enabled", False):
-        next_scheduled = compute_next_briefing_time(
-            prefs.get("timezone", "America/New_York"),
-            prefs.get("today_regeneration_time", "06:30"),
-            "today_regen",
-        )
-        db_manager = get_database_manager()
-        job_service = JobService(db_manager.pool)
-        await job_service.create(
-            job_type="regenerate_today",
-            input={"user_id": user_id, "template_name": "regenerate-today"},
-            user_id=user_id,
-            scheduled_for=next_scheduled,
-            expires_at=next_scheduled + timedelta(hours=4),
-            max_retries=2,
-        )
-
-    # 2. Dispatch regenerate-today workflow
-    result_msg = await dispatch_workflow(
-        args={"workflow_name": "regenerate-today", "parameters": {}},
-        user_id=user_id,
-        db_client=db_client,
-        anthropic_client=_get_anthropic_client_for_workflow(),
-        tool_schemas=[],
-        tool_executors={},
-    )
-
-    if "Failed" in result_msg or "Error" in result_msg or "Unknown" in result_msg:
-        raise RuntimeError(result_msg)
-
-    return {"status": "workflow_dispatched", "message": result_msg}
-
-
-async def handle_email_triage(job: dict) -> dict:
-    """Execute email triage workflow and self-schedule next occurrence.
-
-    Schedule next FIRST, then dispatch — same resilience pattern as briefings.
-    """
-    from datetime import timedelta
-
     from ..database.connection import get_database_manager
     from ..services.briefing_service import BriefingService
     from ..services.job_service import JobService
@@ -314,39 +162,24 @@ async def handle_email_triage(job: dict) -> dict:
     user_id = str(job["input"]["user_id"])
     db_client = await create_system_client()
     briefing_service = BriefingService(db_client)
-
     prefs = await briefing_service.get_user_preferences(user_id)
 
-    # 1. Self-schedule next occurrence FIRST
-    interval_hours = prefs.get("email_triage_interval_hours", 6)
-    if prefs.get("email_triage_enabled", False):
-        from datetime import datetime, timezone
-
-        next_scheduled = datetime.now(timezone.utc) + timedelta(hours=interval_hours)
+    if prefs.get(enabled_pref, default_enabled):
+        scheduled_for, expires_at = compute_schedule(prefs)
         db_manager = get_database_manager()
         job_service = JobService(db_manager.pool)
+        payload = next_job_input(user_id) if next_job_input else {"user_id": user_id}
         await job_service.create(
-            job_type="email_triage",
-            input={"user_id": user_id},
+            job_type=job_type,
+            input=payload,
             user_id=user_id,
-            scheduled_for=next_scheduled,
-            expires_at=next_scheduled + timedelta(hours=interval_hours),
+            scheduled_for=scheduled_for,
+            expires_at=expires_at,
             max_retries=2,
         )
 
-    # 2. Dispatch email-triage workflow
-    hours_back = prefs.get("email_triage_hours_back", 12)
-    max_emails = prefs.get("email_triage_max_emails", 20)
-
     result_msg = await dispatch_workflow(
-        args={
-            "workflow_name": "email-triage",
-            "parameters": {
-                "user_id": user_id,
-                "hours_back": hours_back,
-                "max_emails": max_emails,
-            },
-        },
+        args={"workflow_name": workflow_name, "parameters": build_parameters(user_id, prefs)},
         user_id=user_id,
         db_client=db_client,
         anthropic_client=_get_anthropic_client_for_workflow(),
@@ -354,9 +187,106 @@ async def handle_email_triage(job: dict) -> dict:
         tool_executors={},
     )
 
-    if "Failed" in result_msg or "Error" in result_msg:
+    if any(keyword in result_msg for keyword in failure_keywords):
         raise RuntimeError(result_msg)
 
     return {"status": "workflow_dispatched", "message": result_msg}
 
 
+def _briefing_schedule(variant: str, default_tz: str | None = None, default_time: str | None = None):
+    """Build a compute_schedule fn that uses compute_next_briefing_time."""
+    from ..services.briefing_service import compute_next_briefing_time
+
+    def _compute(prefs: dict) -> Tuple[datetime, datetime]:
+        tz = prefs.get("timezone", default_tz) if default_tz else prefs["timezone"]
+        time_key = f"{variant}_briefing_time" if variant in ("morning", "evening") else "today_regeneration_time"
+        btime = prefs.get(time_key, default_time) if default_time else prefs[time_key]
+        scheduled = compute_next_briefing_time(tz, btime, variant)
+        return scheduled, scheduled + timedelta(hours=4)
+
+    return _compute
+
+
+async def handle_morning_briefing(job: dict) -> dict:
+    """Execute morning briefing as a workflow and self-schedule next occurrence."""
+    return await _run_scheduled_workflow(
+        job,
+        job_type="morning_briefing",
+        workflow_name="morning-briefing",
+        enabled_pref="morning_briefing_enabled",
+        default_enabled=True,
+        compute_schedule=_briefing_schedule("morning"),
+        build_parameters=lambda user_id, prefs: {
+            "user_id": user_id,
+            "timezone": prefs.get("timezone", "UTC"),
+            "briefing_sections": prefs.get("briefing_sections", {}),
+        },
+    )
+
+
+async def handle_evening_briefing(job: dict) -> dict:
+    """Execute evening briefing as a workflow and self-schedule next occurrence."""
+    return await _run_scheduled_workflow(
+        job,
+        job_type="evening_briefing",
+        workflow_name="evening-briefing",
+        enabled_pref="evening_briefing_enabled",
+        default_enabled=False,
+        compute_schedule=_briefing_schedule("evening"),
+        build_parameters=lambda user_id, prefs: {
+            "user_id": user_id,
+            "timezone": prefs.get("timezone", "UTC"),
+            "briefing_sections": prefs.get("briefing_sections", {}),
+        },
+    )
+
+
+async def handle_regenerate_today(job: dict) -> dict:
+    """Execute regenerate-today workflow and self-schedule next occurrence.
+
+    Reads `today_regeneration_enabled` / `today_regeneration_time` from
+    user_preferences. Uses the dedicated `regenerate_today` job_type (AC-19)
+    so `fail_by_type` can cancel precisely.
+    """
+    return await _run_scheduled_workflow(
+        job,
+        job_type="regenerate_today",
+        workflow_name="regenerate-today",
+        enabled_pref="today_regeneration_enabled",
+        default_enabled=False,
+        compute_schedule=_briefing_schedule(
+            "today_regen", default_tz="America/New_York", default_time="06:30"
+        ),
+        next_job_input=lambda user_id: {
+            "user_id": user_id,
+            "template_name": "regenerate-today",
+        },
+        build_parameters=lambda user_id, prefs: {},
+        failure_keywords=("Failed", "Error", "Unknown"),
+    )
+
+
+async def handle_email_triage(job: dict) -> dict:
+    """Execute email triage workflow and self-schedule next occurrence.
+
+    Unlike briefings, this uses `email_triage_interval_hours` rather than a
+    wall-clock time — the next run is simply now + interval.
+    """
+    def _compute(prefs: dict) -> Tuple[datetime, datetime]:
+        interval_hours = prefs.get("email_triage_interval_hours", 6)
+        scheduled = datetime.now(timezone.utc) + timedelta(hours=interval_hours)
+        return scheduled, scheduled + timedelta(hours=interval_hours)
+
+    return await _run_scheduled_workflow(
+        job,
+        job_type="email_triage",
+        workflow_name="email-triage",
+        enabled_pref="email_triage_enabled",
+        default_enabled=False,
+        compute_schedule=_compute,
+        build_parameters=lambda user_id, prefs: {
+            "user_id": user_id,
+            "hours_back": prefs.get("email_triage_hours_back", 12),
+            "max_emails": prefs.get("email_triage_max_emails", 20),
+        },
+    )

@@ -1,8 +1,15 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useIsMutating } from '@tanstack/react-query';
+import { useLocation } from 'react-router-dom';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import { Spinner } from '@/components/ui/Spinner';
 import { Button } from '@/components/ui/Button';
-import { useToday, useTodaySource, useRegenerationStatus } from '@/api/hooks/useTodayHooks';
+import {
+  REGEN_MUTATION_KEY,
+  useToday,
+  useTodaySource,
+  useRegenerationStatus,
+} from '@/api/hooks/useTodayHooks';
 import { HeaderSection } from '@/components/today/HeaderSection';
 import { YourDaySection } from '@/components/today/YourDaySection';
 import { ToDoSection } from '@/components/today/ToDoSection';
@@ -16,9 +23,21 @@ const Today: React.FC = () => {
   const [sourceMode, setSourceMode] = useState(false);
   const { data: today, isLoading, error, refetch } = useToday();
   const { data: sourceText } = useTodaySource(sourceMode);
-  const regenStatus = useRegenerationStatus();
+  const regenMutating = useIsMutating({ mutationKey: REGEN_MUTATION_KEY }) > 0;
+  const regenStatus = useRegenerationStatus(regenMutating);
   const regenerating =
-    regenStatus.data?.status === 'running' || regenStatus.data?.status === 'pending';
+    regenMutating ||
+    regenStatus.data?.status === 'running' ||
+    regenStatus.data?.status === 'pending';
+
+  const location = useLocation();
+  useEffect(() => {
+    if (isLoading || !today || sourceMode) return;
+    const id = location.hash.replace(/^#/, '');
+    if (!id) return;
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [location.hash, isLoading, today, sourceMode]);
 
   if (isLoading) {
     return (

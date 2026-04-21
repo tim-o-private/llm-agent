@@ -1,5 +1,5 @@
 import { useMutation, UseMutationOptions } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabaseClient';
+import { authHeaders } from '@/lib/apiClient';
 
 interface SendMessagePayload {
   message: string;
@@ -34,14 +34,7 @@ export async function sendMessageApi(payload: SendMessagePayload): Promise<strin
   }
 
   const apiUrl = `${import.meta.env.VITE_API_BASE_URL || ''}/api/chat`;
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const accessToken = session?.access_token;
-
-  if (!accessToken) {
-    throw new Error('User not authenticated. Cannot send message.');
-  }
+  const headers = await authHeaders();
 
   const agentName = import.meta.env.VITE_DEFAULT_CHAT_AGENT_ID || 'assistant';
 
@@ -54,10 +47,7 @@ export async function sendMessageApi(payload: SendMessagePayload): Promise<strin
 
   const httpResponse = await fetch(apiUrl, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-    },
+    headers,
     body: JSON.stringify(requestBody),
   });
   console.log('sendMessageApi: Raw HTTP response:', httpResponse);

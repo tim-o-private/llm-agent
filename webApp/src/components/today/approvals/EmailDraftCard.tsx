@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Textarea } from '@/components/ui/Textarea';
 import { CardShell } from './CardShell';
-import type { ApprovalCard, EmailDraftPayload } from '@/api/types/today';
-import { useApproveCard, useEditCard } from '@/api/hooks/useApprovalsHooks';
+import { useCardEdit } from './useCardEdit';
+import type { ApprovalCard } from '@/api/types/today';
+import { useApproveCard } from '@/api/hooks/useApprovalsHooks';
 
 interface Props {
   card: Extract<ApprovalCard, { card_type: 'email_draft' }>;
@@ -10,38 +13,7 @@ interface Props {
 
 export const EmailDraftCard: React.FC<Props> = ({ card }) => {
   const approve = useApproveCard();
-  const edit = useEditCard();
-  const [editing, setEditing] = useState(false);
-  const [subject, setSubject] = useState(card.payload.subject);
-  const [body, setBody] = useState(card.payload.body);
-
-  const save = () => {
-    const patch: Partial<EmailDraftPayload> = { subject, body };
-    edit.mutate(
-      { id: card.id, payload_patch: patch },
-      { onSuccess: () => setEditing(false) },
-    );
-  };
-
-  const editActionRow = (
-    <div className="flex flex-wrap items-center justify-end gap-2">
-      <Button variant="solid" size="2" onClick={save} disabled={edit.isPending} aria-label="Save">
-        Save
-      </Button>
-      <Button
-        variant="soft"
-        size="2"
-        onClick={() => {
-          setEditing(false);
-          setSubject(card.payload.subject);
-          setBody(card.payload.body);
-        }}
-        aria-label="Cancel edit"
-      >
-        Cancel
-      </Button>
-    </div>
-  );
+  const { editing, startEdit, draft, updateDraft, editActionRow } = useCardEdit(card);
 
   return (
     <CardShell
@@ -58,7 +30,7 @@ export const EmailDraftCard: React.FC<Props> = ({ card }) => {
           >
             Send
           </Button>
-          <Button variant="soft" size="2" onClick={() => setEditing(true)} aria-label="Edit">
+          <Button variant="soft" size="2" onClick={startEdit} aria-label="Edit">
             Edit
           </Button>
         </>
@@ -68,20 +40,18 @@ export const EmailDraftCard: React.FC<Props> = ({ card }) => {
       {editing ? (
         <div className="space-y-2">
           <label className="block text-xs text-text-muted">Subject</label>
-          <input
+          <Input
             type="text"
             aria-label="Subject"
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            className="w-full rounded-md border border-ui-border bg-ui-element-bg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary"
+            value={draft.subject}
+            onChange={(e) => updateDraft({ subject: e.target.value })}
           />
           <label className="block text-xs text-text-muted mt-2">Body</label>
-          <textarea
+          <Textarea
             aria-label="Body"
             rows={8}
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            className="w-full rounded-md border border-ui-border bg-ui-element-bg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary"
+            value={draft.body}
+            onChange={(e) => updateDraft({ body: e.target.value })}
           />
         </div>
       ) : (

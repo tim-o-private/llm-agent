@@ -63,6 +63,15 @@ export type ApprovalCard =
 
 export type ApprovalCardType = ApprovalCard['card_type'];
 
+export const APPROVAL_CARD_TYPES = [
+  'email_draft',
+  'calendar_hold',
+  'outreach',
+  'workflow_proposal',
+  'config_change',
+  'file_operation',
+] as const satisfies readonly ApprovalCardType[];
+
 export const APPROVAL_TYPE_LABEL: Record<ApprovalCardType, string> = {
   email_draft: 'Email draft',
   calendar_hold: 'Calendar hold',
@@ -112,7 +121,7 @@ export interface TodayResponse {
   };
   approvals: ApprovalCard[];
   recent: RecentEntry[];
-  source_mtime?: string | number | null;
+  source_mtime?: number | null;
   unknown_sections?: string[];
 }
 
@@ -121,7 +130,7 @@ export interface ApprovalsCount {
 }
 
 export interface WorkflowRun {
-  run_id: string;
+  id: string;
   template_name: string;
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
   completed_at?: string | null;

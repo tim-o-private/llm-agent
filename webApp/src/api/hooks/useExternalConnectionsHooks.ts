@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
+import { authHeaders } from '@/lib/apiClient';
 import { toast } from '@/components/ui/toast';
 import type { ExternalConnection } from '@/stores/useExternalConnectionsStore';
 
@@ -56,14 +57,11 @@ export function useStoreTokens() {
 
   return useMutation<unknown, Error, StoreTokensParams>({
     mutationFn: async (params) => {
-      const session = await getSession();
+      const headers = await authHeaders();
 
       const response = await fetch(`${API_BASE_URL}/oauth/gmail/store-tokens`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           access_token: params.accessToken,
           refresh_token: params.refreshToken || null,

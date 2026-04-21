@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { clsx } from 'clsx';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { APPROVAL_TYPE_LABEL, type ApprovalCard, type ApprovalCardType } from '@/api/types/today';
 import { useRejectCard } from '@/api/hooks/useApprovalsHooks';
 
@@ -57,13 +58,13 @@ export const CardShell: React.FC<CardShellProps> = ({
     actionRowOverride
   ) : rejecting ? (
     <div className="flex flex-wrap items-center gap-2">
-      <input
+      <Input
         type="text"
         aria-label="Optional reason for rejection"
         placeholder="Optional reason for rejection"
         value={reason}
         onChange={(e) => setReason(e.target.value)}
-        className="flex-1 min-w-[12rem] rounded-md border border-ui-border bg-ui-element-bg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary"
+        className="flex-1 min-w-[12rem]"
       />
       <Button
         variant="soft"

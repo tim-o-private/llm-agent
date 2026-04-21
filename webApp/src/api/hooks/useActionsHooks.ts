@@ -5,6 +5,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
+import { authHeaders } from '@/lib/apiClient';
 import { toast } from '@/components/ui/toast';
 import { sendMessageApi } from './useChatApiHooks';
 
@@ -37,23 +38,9 @@ export interface ToolPreference {
   user_preference?: string;
 }
 
-// Helper to get auth headers
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.access_token) {
-    throw new Error('User not authenticated');
-  }
-  return {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${session.access_token}`,
-  };
-}
-
 // API functions
 async function approveAction(actionId: string): Promise<ActionResult> {
-  const headers = await getAuthHeaders();
+  const headers = await authHeaders();
   const response = await fetch(`${API_BASE_URL}/api/actions/${actionId}/approve`, {
     method: 'POST',
     headers,
@@ -66,7 +53,7 @@ async function approveAction(actionId: string): Promise<ActionResult> {
 }
 
 async function rejectAction(actionId: string, reason?: string): Promise<ActionResult> {
-  const headers = await getAuthHeaders();
+  const headers = await authHeaders();
   const response = await fetch(`${API_BASE_URL}/api/actions/${actionId}/reject`, {
     method: 'POST',
     headers,
@@ -85,7 +72,7 @@ async function fetchAuditHistory(
   toolName?: string,
   approvalStatus?: string,
 ): Promise<AuditLogEntry[]> {
-  const headers = await getAuthHeaders();
+  const headers = await authHeaders();
   const params = new URLSearchParams({
     limit: limit.toString(),
     offset: offset.toString(),

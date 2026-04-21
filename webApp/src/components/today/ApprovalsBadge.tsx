@@ -4,30 +4,20 @@ import { clsx } from 'clsx';
 import { Badge } from '@/components/ui/Badge';
 import { useApprovalsCount } from '@/api/hooks/useApprovalsHooks';
 
-export const ApprovalsBadge: React.FC = () => {
+export interface ApprovalsBadgeProps {
+  onJump?: () => void;
+}
+
+export const ApprovalsBadge: React.FC<ApprovalsBadgeProps> = ({ onJump }) => {
   const { data: count = 0 } = useApprovalsCount();
   const display = count >= 10 ? '9+' : count > 0 ? String(count) : '';
   const label = count === 0 ? 'No pending approvals' : `${count} pending approvals`;
-
-  const handleClick = () => {
-    const section = window.document.getElementById('today-approvals-heading');
-    const region = section?.closest('section');
-    (region ?? section)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    // Set hash without scrolling jump; smooth scroll handled above.
-    if (window.history?.replaceState) {
-      const url = new window.URL(window.location.href);
-      url.hash = 'today-approvals';
-      window.history.replaceState(null, '', url.toString());
-    } else {
-      window.location.hash = 'today-approvals';
-    }
-  };
 
   return (
     <div aria-live="polite">
       <button
         type="button"
-        onClick={handleClick}
+        onClick={onJump}
         aria-label={label}
         className={clsx(
           'inline-flex items-center gap-1.5 rounded-md px-2 py-1 transition-colors',

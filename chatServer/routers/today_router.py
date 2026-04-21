@@ -114,21 +114,14 @@ async def _build_today_service(db: UserScopedClient):
     return TodayService(vault=vault, approvals=approvals)
 
 
-async def _build_run_manager(db: UserScopedClient):
-    """Build a WorkflowRunManager for regenerate dispatch."""
+def _build_anthropic_client():
+    """Return an AsyncAnthropic client — ANTHROPIC_API_KEY is read from env.
+
+    Extracted so tests can patch it without constructing a real client.
+    """
     from anthropic import AsyncAnthropic
 
-    from ..config.settings import get_settings
-    from ..workflows.run_manager import WorkflowRunManager
-
-    settings = get_settings()
-    anthropic = AsyncAnthropic(api_key=settings.anthropic_api_key)
-    return WorkflowRunManager(
-        db_client=db,
-        anthropic_client=anthropic,
-        tool_schemas=[],
-        tool_executors={},
-    )
+    return AsyncAnthropic()
 
 
 # --- Endpoints --------------------------------------------------------------
@@ -195,6 +188,6 @@ async def regenerate_today(
     db: UserScopedClient = Depends(get_user_scoped_client),
 ):
     service = await _build_today_service(db)
-    run_manager = await _build_run_manager(db)
-    run_id = await service.regenerate(user_id, run_manager)
+    anthropic_client = _build_anthropic_client()
+    run_id = await service.regenerate(user_id, db, anthropic_client)
     return RegenerateResponse(run_id=run_id)

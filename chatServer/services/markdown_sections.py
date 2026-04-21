@@ -210,9 +210,10 @@ def replace_todo_line(body: str, line_id: str, *, checked: bool) -> tuple[str, b
     return render(doc), True
 
 
-def extract_todos(body: str) -> list[dict]:
+def extract_todos(body: str, doc: Optional[ParsedDocument] = None) -> list[dict]:
     """Extract todo items as ``[{line_id, text, checked}]``."""
-    doc = parse(body)
+    if doc is None:
+        doc = parse(body)
     sec = doc.get("to do")
     if not sec:
         return []
@@ -230,9 +231,10 @@ def extract_todos(body: str) -> list[dict]:
     return results
 
 
-def extract_notes(body: str) -> list[dict]:
+def extract_notes(body: str, doc: Optional[ParsedDocument] = None) -> list[dict]:
     """Extract captured notes (ISO-timestamp bullets)."""
-    doc = parse(body)
+    if doc is None:
+        doc = parse(body)
     sec = doc.get("notes")
     if not sec:
         return []
@@ -248,10 +250,11 @@ def extract_notes(body: str) -> list[dict]:
     return results
 
 
-def extract_your_day(body: str) -> list[dict]:
+def extract_your_day(body: str, doc: Optional[ParsedDocument] = None) -> list[dict]:
     """Extract your_day items (bullets). Simple: strip leading ``- `` from
     each non-empty line in the section."""
-    doc = parse(body)
+    if doc is None:
+        doc = parse(body)
     sec = doc.get("your day")
     if not sec:
         return []
@@ -271,9 +274,10 @@ def extract_your_day(body: str) -> list[dict]:
     return items
 
 
-def extract_framing(body: str) -> Optional[str]:
+def extract_framing(body: str, doc: Optional[ParsedDocument] = None) -> Optional[str]:
     """Return the first non-empty line of the Header section, if any."""
-    doc = parse(body)
+    if doc is None:
+        doc = parse(body)
     sec = doc.get("header")
     if not sec:
         return None
@@ -311,12 +315,6 @@ _EMPTY_STATE_MARKERS = (
 def _looks_like_empty_state(text: str) -> bool:
     low = text.lower()
     return any(marker in low for marker in _EMPTY_STATE_MARKERS)
-
-
-def _ensure_trailing_newline(s: str) -> str:
-    if not s:
-        return "\n"
-    return s if s.endswith("\n") else s + "\n"
 
 
 def compute_todo_line_id(section: str, line_index: int, raw_text: str) -> str:

@@ -12,7 +12,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabaseClient';
+import { authHeaders } from '@/lib/apiClient';
 import { toast } from '@/components/ui/toast';
 import type { NoteItem, TodayResponse, WorkflowRun } from '@/api/types/today';
 
@@ -21,17 +21,9 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 const TODAY_KEY = ['today'] as const;
 const TODAY_SOURCE_KEY = ['today', 'source'] as const;
 const REGEN_STATUS_KEY = ['today', 'regeneration-status'] as const;
+const REGEN_MUTATION_KEY = ['today', 'regenerate'] as const;
 
-async function authHeaders(): Promise<Record<string, string>> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.access_token) throw new Error('Not authenticated');
-  return {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${session.access_token}`,
-  };
-}
+export { REGEN_MUTATION_KEY };
 
 async function fetchToday(): Promise<TodayResponse> {
   const headers = await authHeaders();
@@ -44,16 +36,8 @@ async function fetchTodaySource(): Promise<string> {
   const headers = await authHeaders();
   const res = await fetch(`${API_BASE_URL}/api/today/source`, { headers });
   if (!res.ok) throw new Error(`GET /today/source failed: ${res.status}`);
-  const text = await res.text();
-  // Accept either `{ body: "..." }` JSON or raw text/markdown.
-  try {
-    const parsed = JSON.parse(text);
-    if (typeof parsed === 'string') return parsed;
-    if (parsed && typeof parsed.body === 'string') return parsed.body;
-    return text;
-  } catch {
-    return text;
-  }
+  const data = await res.json();
+  return data.body ?? '';
 }
 
 async function postNote(text: string): Promise<NoteItem> {
@@ -171,6 +155,7 @@ export function useToggleTodo() {
 export function useRegenerateToday() {
   const qc = useQueryClient();
   return useMutation<{ run_id: string }, Error, void>({
+    mutationKey: REGEN_MUTATION_KEY,
     mutationFn: () => postRegenerate(),
     onSuccess: () => {
       toast.default('Regenerating — Today will refresh within ~30s.');
@@ -183,18 +168,26 @@ export function useRegenerateToday() {
 }
 
 /**
- * Polls /api/workflows/runs?template_name=regenerate-today&limit=1 every 30s.
+ * Polls /api/workflows/runs?template_name=regenerate-today&limit=1 while a
+ * regeneration is actually in flight. On mount we do a one-shot fetch; the
+ * interval only starts once a non-terminal run is observed, or while the caller
+ * signals that a regenerate mutation is pending.
+ *
  * When a newer `completed` run is observed (newer than last seen), invalidates
  * the Today query so the UI refetches.
  */
-export function useRegenerationStatus() {
+export function useRegenerationStatus(enabled: boolean = false) {
   const qc = useQueryClient();
   const lastCompletedRef = useRef<string | null>(null);
 
   const query = useQuery<WorkflowRun | null, Error>({
     queryKey: REGEN_STATUS_KEY,
     queryFn: fetchLatestRegenRun,
-    refetchInterval: 30_000,
+    refetchInterval: (q) => {
+      const data = q.state.data as WorkflowRun | null | undefined;
+      const nonTerminal = data?.status === 'pending' || data?.status === 'running';
+      return enabled || nonTerminal ? 30_000 : false;
+    },
     refetchIntervalInBackground: false,
   });
 

@@ -10,7 +10,7 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabaseClient';
+import { authHeaders } from '@/lib/apiClient';
 import { toast } from '@/components/ui/toast';
 import type { ApprovalCard, ApprovalsCount, TodayResponse } from '@/api/types/today';
 
@@ -19,17 +19,6 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 const APPROVALS_KEY = ['approvals'] as const;
 const APPROVALS_COUNT_KEY = ['approvals', 'count'] as const;
 const TODAY_KEY = ['today'] as const;
-
-async function authHeaders(): Promise<Record<string, string>> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.access_token) throw new Error('Not authenticated');
-  return {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${session.access_token}`,
-  };
-}
 
 async function fetchApprovals(): Promise<ApprovalCard[]> {
   const headers = await authHeaders();

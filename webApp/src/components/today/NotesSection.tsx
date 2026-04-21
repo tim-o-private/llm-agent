@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import { Textarea } from '@/components/ui/Textarea';
 import { useAppendNote } from '@/api/hooks/useTodayHooks';
 import type { NoteItem } from '@/api/types/today';
 
@@ -42,7 +43,7 @@ export const NotesSection: React.FC<{ notes: NoteItem[] }> = ({ notes }) => {
       </h2>
 
       <div className="space-y-1">
-        <textarea
+        <Textarea
           aria-label="Capture a note"
           aria-multiline="true"
           rows={3}
@@ -51,7 +52,7 @@ export const NotesSection: React.FC<{ notes: NoteItem[] }> = ({ notes }) => {
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Capture a note"
-          className="w-full rounded-md border border-ui-border bg-ui-element-bg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-primary resize-y"
+          resize="vertical"
         />
         <div className="flex items-center justify-between">
           <span className="text-xs text-text-muted">Cmd+Enter to save</span>

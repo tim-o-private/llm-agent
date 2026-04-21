@@ -199,10 +199,14 @@ class VaultService:
             return []
 
         excludes = set(exclude) if exclude is not None else set(_DEFAULT_RECENT_EXCLUDES)
+        return await asyncio.to_thread(self._walk_recent, user_root, excludes, limit)
 
+    @staticmethod
+    def _walk_recent(
+        user_root: Path, excludes: set[str], limit: int
+    ) -> list[RecentEntry]:
         results: list[tuple[float, str]] = []
         for dirpath, dirnames, filenames in os.walk(user_root, followlinks=False):
-            # Skip excluded subtrees (top-level prefix match).
             try:
                 rel_dir = Path(dirpath).relative_to(user_root)
             except ValueError:
@@ -211,7 +215,6 @@ class VaultService:
             if rel_dir_parts and rel_dir_parts[0] in excludes:
                 dirnames[:] = []
                 continue
-            # Prune hidden dirs and excluded top-level dirs from descent.
             dirnames[:] = [
                 d for d in dirnames
                 if not d.startswith(".")
@@ -233,14 +236,12 @@ class VaultService:
                 results.append((mtime, rel))
 
         results.sort(key=lambda item: item[0], reverse=True)
-        entries: list[RecentEntry] = []
-        for mtime, rel in results[:limit]:
-            entries.append(
-                RecentEntry(
-                    path=rel,
-                    updated_at=datetime.fromtimestamp(mtime, tz=timezone.utc)
-                    .isoformat()
-                    .replace("+00:00", "Z"),
-                )
+        return [
+            RecentEntry(
+                path=rel,
+                updated_at=datetime.fromtimestamp(mtime, tz=timezone.utc)
+                .isoformat()
+                .replace("+00:00", "Z"),
             )
-        return entries
+            for mtime, rel in results[:limit]
+        ]

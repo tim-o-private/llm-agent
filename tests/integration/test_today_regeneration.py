@@ -30,39 +30,31 @@ def _build_app(user_id: str = USER_A):
 
 
 @pytest.mark.asyncio
-async def test_regenerate_endpoint_returns_run_id_from_manager():
+async def test_regenerate_endpoint_returns_run_id_from_dispatch():
     app = _build_app()
 
-    # Real TodayService, but with a fake vault/approvals and a fake run_manager.
-    run_mgr = MagicMock()
-    run_mgr.start_run = AsyncMock(return_value="run-abc")
-
     service = MagicMock()
-
-    async def _regen(uid, rm):
-        return await rm.start_run(
-            user_id=uid, template_name="regenerate-today", parameters={}
-        )
-
-    service.regenerate = AsyncMock(side_effect=_regen)
+    service.regenerate = AsyncMock(return_value="run-abc")
+    anthropic_client = MagicMock()
 
     with patch(
         "chatServer.routers.today_router._build_today_service",
         new=AsyncMock(return_value=service),
     ), patch(
-        "chatServer.routers.today_router._build_run_manager",
-        new=AsyncMock(return_value=run_mgr),
+        "chatServer.routers.today_router._build_anthropic_client",
+        return_value=anthropic_client,
     ):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as c:
             r = await c.post("/api/today/regenerate")
 
-    assert r.status_code == 200
+    assert r.status_code == 202
     assert r.json() == {"run_id": "run-abc"}
-    run_mgr.start_run.assert_awaited_once()
-    kwargs = run_mgr.start_run.await_args.kwargs
-    assert kwargs["template_name"] == "regenerate-today"
-    assert kwargs["user_id"] == USER_A
+    service.regenerate.assert_awaited_once()
+    call_args = service.regenerate.await_args.args
+    assert call_args[0] == USER_A
+    # db_client and anthropic_client are forwarded to the service.
+    assert call_args[2] is anthropic_client
 
 
 # ---------------------------------------------------------------------------
