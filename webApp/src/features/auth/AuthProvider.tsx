@@ -27,10 +27,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [setUser, setLoading]);
 
-  // Redirect to today view after login if on root or login page
+  // Redirect to root (Today) after login
   useEffect(() => {
-    if (user && (location.pathname === '/' || location.pathname === '/login')) {
-      navigate('/today', { replace: true });
+    if (user && location.pathname === '/login') {
+      navigate('/', { replace: true });
     }
   }, [user, location.pathname, navigate]);
 

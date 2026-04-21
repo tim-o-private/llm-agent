@@ -3,6 +3,7 @@ import { UserMenu } from '@/components/UserMenu';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import { useChatStore } from '@/stores/useChatStore';
 import { ChatBubbleIcon } from '@radix-ui/react-icons';
+import { ApprovalsBadge } from '@/components/today/ApprovalsBadge';
 
 const TopBar: React.FC = () => {
   const currentDate = new Date().toLocaleDateString(undefined, {
@@ -33,6 +34,7 @@ const TopBar: React.FC = () => {
         <div className="hidden sm:block">
           <span className="text-sm font-medium text-text-secondary whitespace-nowrap">Streak: N/A</span>
         </div>
+        <ApprovalsBadge />
         <ThemeToggle />
         {/* Mobile chat toggle - visible only on mobile (desktop uses AppShell sidebar button) */}
         <button
