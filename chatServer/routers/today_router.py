@@ -73,19 +73,23 @@ class RegenerateResponse(BaseModel):
     run_id: str
 
 
-# --- Service factory --------------------------------------------------------
+# --- Dependencies -----------------------------------------------------------
 
 
 def _data_dir() -> Path:
     return Path(os.getenv("SANDBOX_DATA_DIR", "/data"))
 
 
-async def _build_today_service(db: UserScopedClient):
-    """Assemble TodayService + its dependencies.
+async def get_today_service(
+    db: UserScopedClient = Depends(get_user_scoped_client),
+):
+    """FastAPI dependency that assembles a TodayService for the caller.
 
     VaultService needs a StorageSync for fire-and-forget upload on writes.
     ApprovalService needs an ActivityLogService with a system client (RLS
     INSERT policy is service-role only).
+
+    Tests override with ``app.dependency_overrides[get_today_service]``.
     """
     from ..config.settings import get_settings
     from ..services.activity_log_service import ActivityLogService
@@ -114,10 +118,11 @@ async def _build_today_service(db: UserScopedClient):
     return TodayService(vault=vault, approvals=approvals)
 
 
-def _build_anthropic_client():
-    """Return an AsyncAnthropic client — ANTHROPIC_API_KEY is read from env.
+def get_anthropic_client():
+    """FastAPI dependency that returns an AsyncAnthropic client.
 
-    Extracted so tests can patch it without constructing a real client.
+    ``ANTHROPIC_API_KEY`` is read from the environment. Tests override with
+    ``app.dependency_overrides[get_anthropic_client]``.
     """
     from anthropic import AsyncAnthropic
 
@@ -130,9 +135,8 @@ def _build_anthropic_client():
 @router.get("", response_model=TodayResponse)
 async def get_today(
     user_id: str = Depends(get_current_user),
-    db: UserScopedClient = Depends(get_user_scoped_client),
+    service=Depends(get_today_service),
 ):
-    service = await _build_today_service(db)
     try:
         return await service.get_today(user_id)
     except HTTPException:
@@ -145,9 +149,8 @@ async def get_today(
 @router.get("/source", response_model=SourceResponse)
 async def get_today_source(
     user_id: str = Depends(get_current_user),
-    db: UserScopedClient = Depends(get_user_scoped_client),
+    service=Depends(get_today_service),
 ):
-    service = await _build_today_service(db)
     try:
         return await service.get_source(user_id)
     except HTTPException:
@@ -161,9 +164,8 @@ async def get_today_source(
 async def append_note(
     payload: AppendNoteRequest,
     user_id: str = Depends(get_current_user),
-    db: UserScopedClient = Depends(get_user_scoped_client),
+    service=Depends(get_today_service),
 ):
-    service = await _build_today_service(db)
     return await service.append_note(user_id, payload.text)
 
 
@@ -171,9 +173,8 @@ async def append_note(
 async def toggle_todo(
     payload: ToggleTodoRequest,
     user_id: str = Depends(get_current_user),
-    db: UserScopedClient = Depends(get_user_scoped_client),
+    service=Depends(get_today_service),
 ):
-    service = await _build_today_service(db)
     return await service.toggle_todo(
         user_id,
         payload.line_id,
@@ -186,8 +187,8 @@ async def toggle_todo(
 async def regenerate_today(
     user_id: str = Depends(get_current_user),
     db: UserScopedClient = Depends(get_user_scoped_client),
+    service=Depends(get_today_service),
+    anthropic_client=Depends(get_anthropic_client),
 ):
-    service = await _build_today_service(db)
-    anthropic_client = _build_anthropic_client()
     run_id = await service.regenerate(user_id, db, anthropic_client)
     return RegenerateResponse(run_id=run_id)

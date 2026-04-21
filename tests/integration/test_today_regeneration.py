@@ -16,7 +16,11 @@ from httpx import ASGITransport, AsyncClient
 
 from chatServer.database.supabase_client import get_user_scoped_client
 from chatServer.dependencies.auth import get_current_user
-from chatServer.routers.today_router import router
+from chatServer.routers.today_router import (
+    get_anthropic_client,
+    get_today_service,
+    router,
+)
 
 USER_A = "user-a"
 
@@ -37,16 +41,12 @@ async def test_regenerate_endpoint_returns_run_id_from_dispatch():
     service.regenerate = AsyncMock(return_value="run-abc")
     anthropic_client = MagicMock()
 
-    with patch(
-        "chatServer.routers.today_router._build_today_service",
-        new=AsyncMock(return_value=service),
-    ), patch(
-        "chatServer.routers.today_router._build_anthropic_client",
-        return_value=anthropic_client,
-    ):
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as c:
-            r = await c.post("/api/today/regenerate")
+    app.dependency_overrides[get_today_service] = lambda: service
+    app.dependency_overrides[get_anthropic_client] = lambda: anthropic_client
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as c:
+        r = await c.post("/api/today/regenerate")
 
     assert r.status_code == 202
     assert r.json() == {"run_id": "run-abc"}
