@@ -85,7 +85,7 @@ Each AC has a stable ID. UAT and Playwright scripts reference these directly. Us
 
 ### Today sections (S1)
 
-- [ ] **AC-03:** The Today page renders seven labelled sections in order — `Header`, `Your day`, `To do`, `Notes`, `Agent`, `Approvals`, `Recent` — each as a `<section aria-labelledby="today-<name>">` with a heading of the same name. Empty sections render an empty state message; they do not disappear. [F2]
+- [ ] **AC-03:** The Today page renders seven labelled regions in order — `Header`, `Your day`, `To do`, `Notes`, `Agent`, `Approvals`, `Recent`. The Header region uses `<header>` (landmark role `banner`); the remaining six use `<section aria-labelledby="today-<name>">` with a heading of the same name. Each has a heading of the same name. Empty sections render an empty state message; they do not disappear. [F2]
 - [ ] **AC-04:** The header section shows the date and a one-line framing sentence parsed from `today.md`. When the underlying file has no framing, an empty state "No framing yet — run today's briefing" is shown.
 - [ ] **AC-05:** The `Your day` section lists calendar/meeting items parsed from the markdown. Each item is an `<li>` with item text and (if linked) a wikilink target rendered as a link. Empty state: "Nothing on your calendar today."
 - [ ] **AC-06:** The `To do` section lists todo items as markdown task list items (`- [ ]` / `- [x]`). Each has an accessible checkbox with `aria-label` containing the item text. Checking/unchecking round-trips to `today.md` on disk via `VaultService.update_body`. Empty state: "No to-dos — the agent hasn't surfaced anything yet."
