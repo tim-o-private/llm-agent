@@ -33,7 +33,7 @@ This spec composes primitives that are already in the codebase. Nothing in this 
 | Workflow engine (SPEC-036) | `chatServer/workflows/run_manager.py`, `registry.py`, `builder.py`, `engine.py` | Real dispatch of the regenerate-today workflow |
 | `workflow_runs` table (SPEC-036 AC-16) | existing migration | Source of run-status for the regenerate button; no duplicate regeneration table needed |
 | `workflow_events` table (SPEC-036 AC-21) | existing migration | Available for future push-based completion; Stage 1 uses polling |
-| Scheduled workflow pattern (SPEC-036 AC-27/28, SPEC-037 AC-31) | `chatServer/services/job_handlers.py` + `JobService` | Morning cron-like regeneration uses the same `job_type='workflow'` handler as email-triage; user_preferences gains an enable flag + time-of-day |
+| Scheduled workflow pattern (SPEC-036 AC-27/28, SPEC-037 AC-31) | `chatServer/services/job_handlers.py` + `JobService` | Morning cron-like regeneration uses a dedicated `handle_regenerate_today` handler (mirrors briefing pattern) which delegates to `dispatch_workflow`; user_preferences gains an enable flag + time-of-day |
 | Auth dependency | `chatServer/dependencies/auth.py` (ES256 JWT) | Every Today/Approvals endpoint resolves `user_id` from the JWT — this is the access-control spine for the filesystem-backed vault |
 | Scoped DB client | `chatServer/database/scoped_client.py` — `get_user_scoped_client`, `get_system_client` | Used for `approval_cards` and `activity_log` writes/reads per A8 |
 | Existing ChatPanel | `webApp/src/components/ChatPanel.tsx` → `ChatPanelV2.tsx` | Consolidated in housekeeping (AC-26) |
@@ -116,7 +116,7 @@ Each AC has a stable ID. UAT and Playwright scripts reference these directly. Us
 
 - [ ] **AC-17:** The header includes a "Regenerate Today" button. Clicking it calls `POST /today/regenerate`, which invokes `WorkflowRunManager.start_run(user_id, 'regenerate-today', {})` from SPEC-036. The endpoint returns 202 with the `run_id`. The workflow writes the regenerated `today.md` via the agent's normal bwrap file-write path; no separate write surface is introduced.
 - [ ] **AC-18:** A seed workflow file `regenerate-today.md` ships under `/data/config/system/workflows/` (git-tracked at repo path `data/config/system/workflows/regenerate-today.md`, copied into runtime at deploy time). The template registry (SPEC-036 AC-04) merges it with any user-provided override at `/data/sandboxes/{user_id}/_workflows/regenerate-today.md`, following the existing shadow pattern.
-- [ ] **AC-19:** The scheduled morning regeneration uses the existing job queue — a row is created in the `jobs` table with `job_type='workflow'` and `input={'template_name': 'regenerate-today'}`, handled by the existing `handle_workflow` job handler (SPEC-036 AC-27). A new boolean `today_regeneration_enabled` column on `user_preferences` (default `false`) gates it; when set to `true`, the preferences update creates the first job (same pattern as SPEC-037 AC-31 email-triage). A TEXT column `today_regeneration_time` (default `'06:30'`, user-local) controls the daily time.
+- [ ] **AC-19:** The scheduled morning regeneration uses the existing job queue — a row is created in the `jobs` table with `job_type='regenerate_today'` (dedicated type so `fail_by_type` can cancel precisely without affecting unrelated workflow jobs) and `input={'template_name': 'regenerate-today'}`, handled by a new `handle_regenerate_today` job handler that delegates to `dispatch_workflow('regenerate-today', ...)` (mirrors the morning/evening briefing pattern). A new boolean `today_regeneration_enabled` column on `user_preferences` (default `false`) gates it; when set to `true`, the preferences update creates the first job (same pattern as SPEC-037 AC-31 email-triage). A TEXT column `today_regeneration_time` (default `'06:30'`, user-local) controls the daily time.
 - [ ] **AC-20:** The Today UI detects completed regenerations by polling `GET /workflows/runs?template_name=regenerate-today&limit=1` on an interval (30s) and after the user clicks "Regenerate Today". When a newer `status='completed'` run is observed, the UI invalidates `useToday` and refetches. No SSE/websocket in Stage 1.
 
 ### Seeding (first-time user)
@@ -403,7 +403,7 @@ default_gate_policy: none
 
 Final step uses the agent's normal bwrap `write_file` tool → writes `/user/today.md` inside the sandbox → which is `/data/sandboxes/{user_id}/today.md` on the host. No new write path.
 
-**Morning schedule:** `user_preferences.today_regeneration_enabled` + `today_regeneration_time`. A preferences-update handler (existing pattern from SPEC-037 AC-31) creates the first job in `jobs` table with `job_type='workflow'` and `input={template_name: 'regenerate-today'}`. The existing `handle_workflow` (SPEC-036 AC-27) dispatches and self-schedules. No new handler.
+**Morning schedule:** `user_preferences.today_regeneration_enabled` + `today_regeneration_time`. A preferences-update handler (existing pattern from SPEC-037 AC-31) creates the first job in `jobs` table with `job_type='regenerate_today'` and `input={template_name: 'regenerate-today'}`. A new `handle_regenerate_today` handler is registered in `background_tasks.py`; it delegates to `dispatch_workflow('regenerate-today', ...)` and self-schedules. Dedicated type (vs bare `workflow`) so `fail_by_type` can cancel precisely when the user toggles the feature off.
 
 **UI completion signal:** `useRegenerationStatus` polls `GET /workflows/runs?template_name=regenerate-today&limit=1` every 30s. When the latest run's `completed_at` is newer than what the UI rendered, it invalidates the `useToday` query. Accepted latency: up to 30s after workflow completion. (SSE via `workflow_events` is available from SPEC-036 but requires wiring a client-side EventSource — deferred to a later spec where other surfaces also need push updates.)
 
@@ -481,7 +481,7 @@ Script: `tests/uat/playwright/test_spec_045_today_surface.py`. One function per 
 6. Approve one card → verify activity_log row + count badge decrement + card disappears.
 7. Reject one card with reason → verify rejection persists.
 8. Click "Regenerate Today" → verify `workflow_runs` row appears, runs to completion, and `today.md` on disk is rewritten. UI refetches within 30s.
-9. Enable `today_regeneration_enabled` in preferences → verify a `jobs` row is created with `job_type='workflow'`.
+9. Enable `today_regeneration_enabled` in preferences → verify a `jobs` row is created with `job_type='regenerate_today'`.
 10. Sign in as second dev user — verify no cross-user leakage via any endpoint.
 11. `curl` a vault-source endpoint with a path like `../../../etc/passwd` with a valid JWT → expect 403.
 12. `grep -r "@mui" webApp/src` → expect nothing.
