@@ -13,8 +13,7 @@ const Home = lazy(() => import('@/pages/Home'));
 const Login = lazy(() => import('@/pages/Login'));
 const AuthCallback = lazy(() => import('@/pages/AuthCallback').then((module) => ({ default: module.AuthCallback })));
 
-const TodayView = lazy(() => import('@/pages/TodayView.tsx'));
-const TodayViewMockup = lazy(() => import('@/pages/TodayViewMockup'));
+const Today = lazy(() => import('@/pages/Today'));
 const CoachPage = lazy(() => import('@/pages/CoachPage'));
 const CoachPageV2 = lazy(() => import('@/pages/CoachPageV2'));
 const ColorSwatchPage = lazy(() => import('@/pages/ColorSwatchPage'));
@@ -63,8 +62,6 @@ function App() {
               <Route path="/design-demo" element={<DesignDemo />} />
               {/* Temporary: Layout mockups as public route */}
               <Route path="/layout-mockups" element={<LayoutMockups />} />
-              {/* Temporary: TodayView mockup as public route for testing */}
-              <Route path="/today-mockup" element={<TodayViewMockup />} />
               {/* Color swatch page for design reference */}
               <Route path="/colors" element={<ColorSwatchPage />} />
               {/* Design system page for component patterns */}
@@ -81,11 +78,11 @@ function App() {
                     </AppShell>
                   }
                 >
-                  <Route path="/today" element={<TodayView />} />
+                  <Route path="/today" element={<Today />} />
                   <Route path="/coach" element={<CoachPage />} />
                   <Route path="/settings" element={<IntegrationsPage />} />
                   {/* Default protected route */}
-                  <Route index element={<TodayView />} />
+                  <Route index element={<Today />} />
                 </Route>
               </Route>
             </Routes>

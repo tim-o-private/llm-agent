@@ -691,10 +691,11 @@ def test_ac_20_today_refetches_on_completion(authed_page):
         route.fulfill(status=200, content_type="application/json",
                       body=json.dumps({"runs": runs}))
 
+    # Install default stubs FIRST so later-registered overrides win
+    # (Playwright resolves conflicting page.route handlers LIFO).
+    _install_default_mocks(page, request_log=log)
     page.route(re.compile(r".*/today(\?.*)?$"), today_route)
     page.route(re.compile(r".*/workflows/runs(\?.*)?$"), runs_route)
-    # Generic stubs for everything else so the page renders.
-    _install_default_mocks(page, request_log=log)
 
     page.goto(WEBAPP_URL + "/")
     page.wait_for_load_state("networkidle")
