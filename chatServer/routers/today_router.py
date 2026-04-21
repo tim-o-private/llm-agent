@@ -189,7 +189,7 @@ async def toggle_todo(
     )
 
 
-@router.post("/regenerate", response_model=RegenerateResponse)
+@router.post("/regenerate", response_model=RegenerateResponse, status_code=202)
 async def regenerate_today(
     user_id: str = Depends(get_current_user),
     db: UserScopedClient = Depends(get_user_scoped_client),

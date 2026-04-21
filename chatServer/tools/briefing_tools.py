@@ -143,10 +143,11 @@ class ManageBriefingPreferencesTool(BaseTool):
         job_service = JobService(db_manager.pool)
 
         # SPEC-045 mirrors the email-triage/briefing pattern: enabling
-        # `today_regeneration` creates a `workflow` job scheduled for the
-        # user's local time-of-day; disabling cancels pending ones.
-        # Uses `workflow` job_type so `handle_workflow` dispatches the
-        # `regenerate-today` template via WorkflowRunManager.
+        # `today_regeneration` creates a `regenerate_today` job scheduled for
+        # the user's local time-of-day; disabling cancels pending ones.
+        # Uses the dedicated `regenerate_today` job_type (AC-19) so
+        # `fail_by_type` can cancel precisely without affecting unrelated
+        # workflow jobs; its handler delegates to `dispatch_workflow('regenerate-today', ...)`.
         for briefing_type in ("morning", "evening", "today_regen"):
             if briefing_type == "today_regen":
                 enabled_key = "today_regeneration_enabled"
