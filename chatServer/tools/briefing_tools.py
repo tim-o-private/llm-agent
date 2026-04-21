@@ -142,26 +142,47 @@ class ManageBriefingPreferencesTool(BaseTool):
         db_manager = get_database_manager()
         job_service = JobService(db_manager.pool)
 
-        for briefing_type in ("morning", "evening"):
-            enabled_key = f"{briefing_type}_briefing_enabled"
-            time_key = f"{briefing_type}_briefing_time"
-            job_type = f"{briefing_type}_briefing"
+        # SPEC-045 mirrors the email-triage/briefing pattern: enabling
+        # `today_regeneration` creates a `workflow` job scheduled for the
+        # user's local time-of-day; disabling cancels pending ones.
+        # Uses `workflow` job_type so `handle_workflow` dispatches the
+        # `regenerate-today` template via WorkflowRunManager.
+        for briefing_type in ("morning", "evening", "today_regen"):
+            if briefing_type == "today_regen":
+                enabled_key = "today_regeneration_enabled"
+                time_key = "today_regeneration_time"
+                job_type = "regenerate_today"
+                default_time = "06:30"
+                default_enabled = False
+                job_input = {
+                    "user_id": self.user_id,
+                    "template_name": "regenerate-today",
+                }
+                label = "Today regeneration"
+            else:
+                enabled_key = f"{briefing_type}_briefing_enabled"
+                time_key = f"{briefing_type}_briefing_time"
+                job_type = f"{briefing_type}_briefing"
+                default_time = "07:30:00" if briefing_type == "morning" else "20:00:00"
+                default_enabled = briefing_type == "morning"
+                job_input = {"user_id": self.user_id}
+                label = f"{briefing_type.title()} briefing"
 
-            was_enabled = old_prefs.get(enabled_key, briefing_type == "morning")
+            was_enabled = old_prefs.get(enabled_key, default_enabled)
             is_enabled = new_prefs.get(enabled_key, was_enabled)
             time_changed = time_key in updates or "timezone" in updates
 
             # Disable: cancel pending jobs
             if was_enabled and not is_enabled:
                 count = await job_service.fail_by_type(
-                    self.user_id, job_type, "Briefing disabled by user"
+                    self.user_id, job_type, f"{label} disabled by user"
                 )
-                messages.append(f"{briefing_type.title()} briefing disabled, {count} pending job(s) cancelled.")
+                messages.append(f"{label} disabled, {count} pending job(s) cancelled.")
 
             # Enable: create first job
             elif not was_enabled and is_enabled:
                 tz = new_prefs.get("timezone", "America/New_York")
-                btime = new_prefs.get(time_key, "07:30:00" if briefing_type == "morning" else "20:00:00")
+                btime = new_prefs.get(time_key, default_time)
                 # Strip seconds for computation
                 if isinstance(btime, str) and len(btime) == 8 and btime.endswith(":00"):
                     btime_short = btime[:5]
@@ -170,21 +191,21 @@ class ManageBriefingPreferencesTool(BaseTool):
                 scheduled_for = compute_first_briefing_time(tz, btime_short)
                 await job_service.create(
                     job_type=job_type,
-                    input={"user_id": self.user_id},
+                    input=job_input,
                     user_id=self.user_id,
                     scheduled_for=scheduled_for,
                     expires_at=scheduled_for + timedelta(hours=4),
                     max_retries=2,
                 )
-                messages.append(f"{briefing_type.title()} briefing enabled, first one scheduled.")
+                messages.append(f"{label} enabled, first run scheduled.")
 
             # Time/timezone changed while enabled: cancel old, create new
             elif is_enabled and time_changed:
                 await job_service.fail_by_type(
-                    self.user_id, job_type, "Briefing time changed"
+                    self.user_id, job_type, f"{label} time changed"
                 )
                 tz = new_prefs.get("timezone", "America/New_York")
-                btime = new_prefs.get(time_key, "07:30:00" if briefing_type == "morning" else "20:00:00")
+                btime = new_prefs.get(time_key, default_time)
                 if isinstance(btime, str) and len(btime) == 8 and btime.endswith(":00"):
                     btime_short = btime[:5]
                 else:
@@ -192,10 +213,10 @@ class ManageBriefingPreferencesTool(BaseTool):
                 scheduled_for = compute_first_briefing_time(tz, btime_short)
                 await job_service.create(
                     job_type=job_type,
-                    input={"user_id": self.user_id},
+                    input=job_input,
                     user_id=self.user_id,
                     scheduled_for=scheduled_for,
                     expires_at=scheduled_for + timedelta(hours=4),
                     max_retries=2,
                 )
-                messages.append(f"{briefing_type.title()} briefing rescheduled with new time.")
+                messages.append(f"{label} rescheduled with new time.")

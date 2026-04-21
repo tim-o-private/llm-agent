@@ -245,6 +245,60 @@ async def handle_evening_briefing(job: dict) -> dict:
     return {"status": "workflow_dispatched", "message": result_msg}
 
 
+async def handle_regenerate_today(job: dict) -> dict:
+    """Execute the regenerate-today workflow and self-schedule next occurrence.
+
+    Same resilience pattern as briefings: schedule next FIRST, then dispatch.
+    Reads `today_regeneration_enabled` / `today_regeneration_time` from
+    user_preferences to decide whether to schedule the next day.
+    """
+    from datetime import timedelta
+
+    from ..database.connection import get_database_manager
+    from ..services.briefing_service import BriefingService, compute_next_briefing_time
+    from ..services.job_service import JobService
+    from ..workflows.dispatch import dispatch_workflow
+
+    user_id = str(job["input"]["user_id"])
+    db_client = await create_system_client()
+    briefing_service = BriefingService(db_client)
+
+    prefs = await briefing_service.get_user_preferences(user_id)
+
+    # 1. Self-schedule next occurrence FIRST
+    if prefs.get("today_regeneration_enabled", False):
+        next_scheduled = compute_next_briefing_time(
+            prefs.get("timezone", "America/New_York"),
+            prefs.get("today_regeneration_time", "06:30"),
+            "today_regen",
+        )
+        db_manager = get_database_manager()
+        job_service = JobService(db_manager.pool)
+        await job_service.create(
+            job_type="regenerate_today",
+            input={"user_id": user_id, "template_name": "regenerate-today"},
+            user_id=user_id,
+            scheduled_for=next_scheduled,
+            expires_at=next_scheduled + timedelta(hours=4),
+            max_retries=2,
+        )
+
+    # 2. Dispatch regenerate-today workflow
+    result_msg = await dispatch_workflow(
+        args={"workflow_name": "regenerate-today", "parameters": {}},
+        user_id=user_id,
+        db_client=db_client,
+        anthropic_client=_get_anthropic_client_for_workflow(),
+        tool_schemas=[],
+        tool_executors={},
+    )
+
+    if "Failed" in result_msg or "Error" in result_msg or "Unknown" in result_msg:
+        raise RuntimeError(result_msg)
+
+    return {"status": "workflow_dispatched", "message": result_msg}
+
+
 async def handle_email_triage(job: dict) -> dict:
     """Execute email triage workflow and self-schedule next occurrence.
 
