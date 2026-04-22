@@ -60,30 +60,35 @@ _agent_locks: Dict[Tuple[str, str, str], asyncio.Lock] = {}
 # ---------------------------------------------------------------------------
 
 _CHANNEL_HEADERS = {
-    "web": "User is on the web app. Markdown formatting is supported.",
+    "web": (
+        "User is on the web app. Markdown formatting is supported.\n"
+        "You are mid-conversation with a human who chose to come here. Respond like a person "
+        "with context, not a menu. Don't list capabilities. Don't narrate your reasoning. "
+        "Lead with the answer, the signal, or the action."
+    ),
     "telegram": (
-        "User is on Telegram. Keep responses concise — under 4096 characters. "
-        "Use simple markdown (bold, italic, code). No tables or complex formatting."
+        "User is on Telegram. Keep responses under 4096 characters. Use simple markdown "
+        "(bold, italic, code). No tables.\n"
+        "Lead with the answer. Don't list capabilities. Don't narrate reasoning."
     ),
     "scheduled": (
-        "This is an automated scheduled run. No one is waiting for a response.\n"
-        "- Do the work described thoroughly.\n"
-        "- Use all available tools to gather information before composing your response.\n"
-        "- Don't ask follow-up questions — make reasonable assumptions.\n"
-        "- Your response will be delivered as a notification, so make it self-contained."
+        "Automated scheduled run. No one is waiting.\n"
+        "Do the work thoroughly. Use your tools. Don't ask follow-up questions — make "
+        "reasonable assumptions and note them. The response delivers as a notification, "
+        "so make it self-contained."
     ),
     "heartbeat": (
-        "This is an automated heartbeat check. No one is waiting.\n\n"
-        "Review your working memory for active plans and open threads.\n"
-        "Then check signals: calendar (next 4 hours), email (unread from key people), overdue tasks.\n\n"
-        "- If nothing needs the user's attention: respond exactly HEARTBEAT_OK\n"
-        "- If something does: report what and why, in 2-3 sentences max. Be specific.\n"
-        "- Target 3-5 proactive messages per day total. Silence is usually correct.\n"
+        "Automated heartbeat check. No one is waiting.\n"
+        "Review working memory for active plans and open threads. Then check signals: "
+        "calendar (next 4 hours), email (unread from key people), overdue tasks.\n"
+        "- Nothing needs attention → respond exactly HEARTBEAT_OK\n"
+        "- Something does → state the thing and what you'd do, in 2-3 sentences. Be specific.\n"
+        "- Target 3-5 proactive messages per day. Silence is usually correct.\n"
         "- Never fabricate. If a tool fails, skip that check and note it."
     ),
     "session_open": (
-        "The user just returned to the app. You are deciding whether to initiate — "
-        "no user message has been sent yet."
+        "The user just returned to the app. No message typed yet — you're deciding whether "
+        "to open. Use the pre-fetched signals below."
     ),
 }
 
@@ -115,6 +120,36 @@ def _read_system_file(path: Path) -> str:
     return text
 
 
+def _collect_tool_guidance(tools: list, channel: str) -> str:
+    """Gather per-tool behavioral guidance via classmethod prompt_section(channel).
+
+    Walks the tools, calls prompt_section(channel) on each class that defines it,
+    deduplicates, and returns a single "## Tool Guidance" block. Tools without
+    prompt_section or returning None/empty for this channel are skipped.
+    """
+    seen: set[str] = set()
+    sections: list[str] = []
+    for tool in tools:
+        fn = getattr(type(tool), "prompt_section", None)
+        if fn is None:
+            continue
+        try:
+            text = fn(channel)
+        except Exception as exc:
+            logger.debug("prompt_section failed for %s: %s", type(tool).__name__, exc)
+            continue
+        if not text:
+            continue
+        text = text.strip()
+        if text in seen:
+            continue
+        seen.add(text)
+        sections.append(text)
+    if not sections:
+        return ""
+    return "## Tool Guidance\n" + "\n\n".join(sections)
+
+
 def _build_system_prompt(
     soul: str | None = None,
     identity: dict | None = None,
@@ -124,16 +159,19 @@ def _build_system_prompt(
     bootstrap_context: str | None = None,
     phase: str = "management",
     system_dir: Path | None = None,
+    tool_guidance: str | None = None,
 ) -> str:
     """Assemble the full system prompt with always-present identity + runtime context.
 
     Includes:
-    - Soul (personality, values — includes operating model and safety guidelines)
+    - Soul (personality, values, operating model)
     - Identity (name, description, vibe)
     - Orientation guidance (auto-injected when phase="orientation")
     - Channel-specific guidance
     - Current time
     - User custom instructions
+    - Tool guidance (per-tool prompt_section content, collected from instantiated tools)
+    - Workflow creation mandate
     - Session/onboarding flow
 
     Memory (AGENTS.md) is handled separately by MemoryMiddleware.
@@ -141,56 +179,49 @@ def _build_system_prompt(
     """
     sections: list[str] = []
 
-    # Soul — core personality (now includes operating model + safety guidelines)
     if soul:
         sections.append(f"## Soul\n{soul}")
 
-    # Orientation guidance — auto-injected during bootstrapping phase
     if phase == "orientation" and system_dir:
         skill_path = system_dir / "skills" / "bootstrapping" / "SKILL.md"
         orientation_text = _read_system_file(skill_path)
         if orientation_text:
             sections.append(f"## Orientation\n{orientation_text}")
 
-    # Identity — name and metadata
     identity_text = _format_identity(identity)
     if identity_text:
         sections.append(f"## Identity\n{identity_text}")
 
-    # Channel mode
     channel_text = _CHANNEL_HEADERS.get(channel, _CHANNEL_HEADERS["web"])
     sections.append(f"## Channel\n{channel_text}")
 
-    # Current time
     now = datetime.now(timezone.utc)
     time_str = now.strftime("%A, %B %d, %Y %I:%M %p (UTC)")
     sections.append(f"## Current Time\n{time_str}")
 
-    # User instructions
     if user_instructions:
         instr = user_instructions[:2000]
         sections.append(f"## User Instructions\n{instr}")
 
-    # Workflow creation capabilities
+    # Per-tool behavioral guidance (operational mandate, not API docs)
+    if tool_guidance:
+        sections.append(tool_guidance)
+
+    # Workflow + skill creation — you build your own capabilities
     sections.append(
-        "## Workflows\n"
-        "Pre-built workflows are available at `/system/workflows/` (email-triage, morning-briefing, evening-briefing, draft-reply).\n"  # noqa: E501
-        "These run automatically via scheduled tasks.\n\n"
-        "You can create custom workflows by writing Markdown template files to `/user/workflows/`.\n"
-        "Templates use YAML frontmatter + step definitions. Use `ls /system/workflows/` and "
-        "`read_file` on any template to see the format."
+        "## Extending Yourself\n"
+        "You can create skills at `/user/skills/{name}/SKILL.md` and workflow templates at "
+        "`/user/workflows/{name}.md`. When you catch yourself following the same multi-step "
+        "pattern twice, write it down — that's how you get better at this job over time. "
+        "Pre-built workflows at `/system/workflows/` (email-triage, morning-briefing, "
+        "evening-briefing, draft-reply) run automatically on schedule; read any of them "
+        "with `read_file` to see the format. You have standing to do this without asking."
     )
 
-    # Session/onboarding sections (only for interactive channels)
     if channel == "session_open":
         _add_session_open_section(
             sections, user_instructions, last_message_at, bootstrap_context
         )
-    elif channel in ("web", "telegram") and not user_instructions:
-        # Onboarding hint — MemoryMiddleware handles the "has memory" check
-        # via AGENTS.md content. If AGENTS.md is empty/new, agent will see
-        # "(No memory loaded)" and know to introduce itself.
-        pass
 
     return "\n\n".join(sections)
 
@@ -201,47 +232,43 @@ def _add_session_open_section(
     last_message_at: datetime | None = None,
     bootstrap_context: str | None = None,
 ) -> None:
-    """Append the session_open decision block to sections."""
+    """Append the session_open opening block to sections."""
     is_new_user = not user_instructions and last_message_at is None
     if is_new_user:
         sections.append(
             "## Session Open\n"
-            "This is the first time meeting this user. No message typed yet — you are initiating.\n\n"
-            "Introduce yourself briefly — you're their chief of staff, starting from zero.\n"
-            "Then start learning about their life. Show genuine curiosity.\n"
-            "Do NOT present a menu of capabilities. Do NOT ask 'how can I help?'\n"
-            "Your job right now is understanding — that IS the help."
+            "First time meeting this user. You're opening the conversation.\n"
+            "Introduce yourself in one or two sentences — you're their chief of staff, "
+            "starting from zero. Then ask one real question about their life. No menus. "
+            "No 'how can I help.' Lead with curiosity."
         )
         return
 
-    # Returning user — format time context
     if last_message_at:
-        elapsed = datetime.now(timezone.utc) - last_message_at.replace(  # noqa: E501
-            tzinfo=timezone.utc
-        ) if not last_message_at.tzinfo else datetime.now(timezone.utc) - last_message_at
-        minutes = int(elapsed.total_seconds() / 60)
-        if minutes < 2:
-            time_ctx = "Your last interaction was less than 2 minutes ago."
-        elif minutes < 60:
-            time_ctx = f"Your last interaction was {minutes} minutes ago."
+        lm = last_message_at if last_message_at.tzinfo else last_message_at.replace(tzinfo=timezone.utc)
+        elapsed_min = int((datetime.now(timezone.utc) - lm).total_seconds() / 60)
+        if elapsed_min < 2:
+            time_ctx = "Last interaction <2 min ago."
+        elif elapsed_min < 60:
+            time_ctx = f"Last interaction {elapsed_min} min ago."
         else:
-            hours = minutes // 60
-            time_ctx = f"Your last interaction was {hours} hour{'s' if hours > 1 else ''} ago."
+            hrs = elapsed_min // 60
+            time_ctx = f"Last interaction {hrs} hour{'s' if hrs > 1 else ''} ago."
     else:
-        time_ctx = "This is the first time opening this session."
+        time_ctx = "First session opening."
 
     ctx = bootstrap_context or "(no bootstrap context)"
     sections.append(
-        f"## Session Open\n{time_ctx}\n"
-        "No message typed yet — decide whether to initiate.\n\n"
-        f"Context from your tools (pre-fetched):\n{ctx}\n\n"
-        "Decision rules:\n"
-        "- Reference your working memory for active plans and open threads.\n"
-        "- If your working memory still has empty sections, your priority is learning more —\n"
-        "  reference what you know and what you'd like to understand this session.\n"
-        "- If nothing needs attention and <30 min since last message: respond WAKEUP_SILENT\n"
-        "- Otherwise: lead with what matters — active plans, upcoming deadlines, things needing follow-up.\n"
-        "Don't re-call tools to fetch what's already in the context above."
+        f"## Session Open\n{time_ctx} No message typed — you're opening.\n\n"
+        f"Pre-fetched signals:\n{ctx}\n\n"
+        "Open with the single most load-bearing thing in the signals — an overdue task, a "
+        "meeting starting soon, an unread email from a key person, a deadline you know about "
+        "the user hasn't referenced. One sentence of signal, one sentence of what you'd do. "
+        "If nothing qualifies and it's been <30 min since last message, respond exactly "
+        "WAKEUP_SILENT.\n"
+        "Do not narrate the decision. Do not list the checks you ran. Do not preface with "
+        "'Based on...' or 'I notice...'. Lead with the thing. Don't re-call tools to fetch "
+        "what's already above."
     )
 
 
@@ -568,6 +595,8 @@ async def _build_agent(
     soul = agent_config.get("soul") or ""
     identity = agent_config.get("identity")
 
+    tool_guidance = _collect_tool_guidance(instantiated_tools, channel)
+
     system_prompt = _build_system_prompt(
         soul=soul,
         identity=identity,
@@ -577,6 +606,7 @@ async def _build_agent(
         bootstrap_context=bootstrap_context,
         phase=phase,
         system_dir=system_dir,
+        tool_guidance=tool_guidance,
     )
 
     # 7. Resolve model — Deep Agents uses "provider:model" format

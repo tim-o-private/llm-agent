@@ -5,11 +5,27 @@
  * for the unified session registry.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useAuthStore } from '@/features/auth/useAuthStore';
 import { supabase } from '@/lib/supabaseClient';
+import { authHeaders } from '@/lib/apiClient';
 import { loadHistoricalMessages, PARSED_MESSAGES_QUERY_KEY } from '@/stores/useChatStore';
+
+function useAuthUserId(): string | null {
+  const [userId, setUserId] = useState<string | null>(null);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUserId(session?.user?.id ?? null);
+    });
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUserId(session?.user?.id ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+  return userId;
+}
 
 const CHAT_HISTORY_QUERY_KEY = 'chat-history';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -35,20 +51,6 @@ export interface ChatHistoryMessage {
   created_at: string;
 }
 
-// Helper to get auth headers
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.access_token) {
-    throw new Error('User not authenticated');
-  }
-  return {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${session.access_token}`,
-  };
-}
-
 // API functions
 
 async function fetchChatSessions(
@@ -56,7 +58,7 @@ async function fetchChatSessions(
   limit = 50,
   offset = 0,
 ): Promise<ChatSession[]> {
-  const headers = await getAuthHeaders();
+  const headers = await authHeaders();
   const params = new window.URLSearchParams({
     limit: limit.toString(),
     offset: offset.toString(),
@@ -73,7 +75,7 @@ async function fetchChatMessages(
   limit = 50,
   beforeId?: number,
 ): Promise<ChatHistoryMessage[]> {
-  const headers = await getAuthHeaders();
+  const headers = await authHeaders();
   const params = new window.URLSearchParams({
     limit: limit.toString(),
   });
@@ -90,22 +92,22 @@ async function fetchChatMessages(
 // Hooks
 
 export function useChatSessions(channel?: string, limit = 50) {
-  const user = useAuthStore((state) => state.user);
+  const userId = useAuthUserId();
 
   return useQuery<ChatSession[], Error>({
-    queryKey: [CHAT_HISTORY_QUERY_KEY, 'sessions', user?.id, channel, limit],
+    queryKey: [CHAT_HISTORY_QUERY_KEY, 'sessions', userId, channel, limit],
     queryFn: () => fetchChatSessions(channel, limit),
-    enabled: !!user,
+    enabled: !!userId,
   });
 }
 
 export function useChatMessages(sessionId: string | null, limit = 50) {
-  const user = useAuthStore((state) => state.user);
+  const userId = useAuthUserId();
 
   return useQuery<ChatHistoryMessage[], Error>({
-    queryKey: [CHAT_HISTORY_QUERY_KEY, 'messages', sessionId, user?.id, limit],
+    queryKey: [CHAT_HISTORY_QUERY_KEY, 'messages', sessionId, userId, limit],
     queryFn: () => fetchChatMessages(sessionId!, limit),
-    enabled: !!user && !!sessionId,
+    enabled: !!userId && !!sessionId,
     refetchInterval: 5000,
   });
 }

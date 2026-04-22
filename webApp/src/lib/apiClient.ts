@@ -2,7 +2,24 @@
 // This client handles all communication with our FastAPI router
 // which proxies PostgREST calls and provides the chat gateway
 
+import { supabase } from './supabaseClient';
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+
+/**
+ * Shared auth headers helper for hook-based `fetch` calls.
+ * Throws if no Supabase session is present.
+ */
+export async function authHeaders(): Promise<Record<string, string>> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error('Not authenticated');
+  return {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${session.access_token}`,
+  };
+}
 
 interface RequestOptions {
   method?: string;

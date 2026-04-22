@@ -3,7 +3,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabaseClient';
+import { authHeaders } from '@/lib/apiClient';
 
 const NOTIFICATIONS_QUERY_KEY = 'notifications';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -30,23 +30,9 @@ export interface UnreadCount {
   count: number;
 }
 
-// Helper to get auth headers
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.access_token) {
-    throw new Error('User not authenticated');
-  }
-  return {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${session.access_token}`,
-  };
-}
-
 // API functions
 async function fetchNotifications(unreadOnly = false, limit = 50, offset = 0, sessionId?: string | null): Promise<Notification[]> {
-  const headers = await getAuthHeaders();
+  const headers = await authHeaders();
   const params = new window.URLSearchParams({
     limit: limit.toString(),
     offset: offset.toString(),
@@ -60,14 +46,14 @@ async function fetchNotifications(unreadOnly = false, limit = 50, offset = 0, se
 }
 
 async function fetchUnreadCount(): Promise<UnreadCount> {
-  const headers = await getAuthHeaders();
+  const headers = await authHeaders();
   const response = await fetch(`${API_BASE_URL}/api/notifications/unread/count`, { headers });
   if (!response.ok) throw new Error('Failed to fetch unread count');
   return response.json();
 }
 
 async function markNotificationRead(notificationId: string): Promise<{ success: boolean }> {
-  const headers = await getAuthHeaders();
+  const headers = await authHeaders();
   const response = await fetch(`${API_BASE_URL}/api/notifications/${notificationId}/read`, {
     method: 'POST',
     headers,
@@ -77,7 +63,7 @@ async function markNotificationRead(notificationId: string): Promise<{ success: 
 }
 
 async function markAllNotificationsRead(): Promise<{ success: boolean; count: number }> {
-  const headers = await getAuthHeaders();
+  const headers = await authHeaders();
   const response = await fetch(`${API_BASE_URL}/api/notifications/read-all`, {
     method: 'POST',
     headers,
@@ -90,7 +76,7 @@ async function submitNotificationFeedback(
   notificationId: string,
   feedback: 'useful' | 'not_useful',
 ): Promise<{ success: boolean }> {
-  const headers = await getAuthHeaders();
+  const headers = await authHeaders();
   const response = await fetch(`${API_BASE_URL}/api/notifications/${notificationId}/feedback`, {
     method: 'POST',
     headers,

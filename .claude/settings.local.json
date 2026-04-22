@@ -4,6 +4,14 @@
       "Bash",
       "Write",
       "Edit",
+      "Read",
+      "Grep",
+      "Glob",
+      "TaskList",
+      "TaskGet",
+      "TaskUpdate",
+      "SendMessage",
+      "Monitor",
       "WebFetch(domain:developers.google.com)",
       "WebFetch(domain:googleapis.dev)",
       "WebFetch(domain:supabase.com)",
@@ -61,7 +69,8 @@
       "WebFetch(domain:www.plastic-labs.com)",
       "WebFetch(domain:blog.langchain.com)",
       "WebFetch(domain:plasticlabs.ai)",
-      "WebFetch(domain:community.frame.work)"
+      "WebFetch(domain:community.frame.work)",
+      "WebFetch(domain:api.anthropic.com)"
     ]
   },
   "prefersReducedMotion": true
