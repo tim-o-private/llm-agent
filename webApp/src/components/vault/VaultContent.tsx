@@ -4,6 +4,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { FolderGrid } from './FolderGrid';
 import { FilePreview } from './FilePreview';
 import { FileDetailView } from './FileDetailView';
+import { WorkflowEditorView } from './WorkflowEditorView';
 
 const Today = lazy(() => import('@/pages/Today'));
 
@@ -39,6 +40,14 @@ export const VaultContent: React.FC = () => {
   const isFolder = vaultPath.endsWith('/');
   const isMarkdown = vaultPath.endsWith('.md');
   const hasExtension = /\.[a-zA-Z0-9]+$/.test(vaultPath);
+
+  // SPEC-048: .flow.md files under _workflows/ render the workflow editor
+  const isWorkflowFile =
+    vaultPath.startsWith('_workflows/') && vaultPath.endsWith('.flow.md');
+
+  if (isWorkflowFile) {
+    return <WorkflowEditorView path={vaultPath} />;
+  }
 
   // SPEC-047: .md files render in the full-height FileDetailView (CodeMirror editor)
   if (isMarkdown) {
