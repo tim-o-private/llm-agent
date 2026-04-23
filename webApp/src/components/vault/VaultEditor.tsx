@@ -207,6 +207,20 @@ export const VaultEditor = forwardRef<VaultEditorHandle, VaultEditorProps>(
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [language, readOnly, buildLangExtension]);
 
+    // Sync editor content when the prop changes externally (e.g., initial API load).
+    // The editor is uncontrolled — we only push content in when it differs from what
+    // the editor already has, to avoid disrupting the user's cursor/selection.
+    useEffect(() => {
+      const view = viewRef.current;
+      if (!view) return;
+      const currentDoc = view.state.doc.toString();
+      if (content !== currentDoc) {
+        view.dispatch({
+          changes: { from: 0, to: view.state.doc.length, insert: content },
+        });
+      }
+    }, [content]);
+
     // Scroll listener for scroll sync
     useEffect(() => {
       const scrollDOM = viewRef.current?.scrollDOM;
