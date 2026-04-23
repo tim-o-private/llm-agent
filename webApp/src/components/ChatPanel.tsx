@@ -275,6 +275,19 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ agentId: agentIdProp, scop
     };
   }, [setInputFocusState]);
 
+  // SPEC-049: consume pendingPrompt from store (set by AskChip or Cmd+K).
+  // Programmatically submit through the runtime's composer, then clear the store field.
+  const pendingPrompt = useChatStore((s) => s.pendingPrompt);
+  useEffect(() => {
+    if (!pendingPrompt || !activeChatId || isRunning) return;
+    useChatStore.getState().setPendingPrompt(null);
+    // Use the runtime's thread composer to send — this goes through the same
+    // onNew callback that the <Composer /> UI uses, keeping the message flow consistent.
+    const composer = runtime.thread.composer;
+    composer.setText(pendingPrompt);
+    composer.send();
+  }, [pendingPrompt, activeChatId, isRunning, runtime]);
+
   // Scroll to bottom when messages first load for a session (initial hydration or session switch).
   // Uses MutationObserver instead of fixed timeouts because assistant-ui Thread renders
   // messages asynchronously — fixed delays are a race condition.
