@@ -1,12 +1,14 @@
 /**
- * SPEC-047 AC-01: Top-level file detail view for viewing/editing a single file.
+ * SPEC-047 AC-01 / AC-13: Top-level file detail view for viewing/editing
+ * a single file.
  *
- * Composes EditorPreviewSplit within the center pane. Gets `path` from the
- * vault route param. FU-4 will add the ContextRail as a companion panel here.
+ * Composes EditorPreviewSplit (center pane) + ContextRail (right sub-panel
+ * within the center pane). Gets `path` from the vault route param.
  */
 
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { EditorPreviewSplit } from './EditorPreviewSplit';
+import { ContextRail } from './ContextRail';
 
 interface FileDetailViewProps {
   /** Vault-relative file path, e.g. "projects/readme.md" */
@@ -14,14 +16,31 @@ interface FileDetailViewProps {
 }
 
 export const FileDetailView: React.FC<FileDetailViewProps> = ({ path }) => {
+  const filename = path.split('/').pop() ?? path;
+
+  // Shared editor content state for ContextRail reactive citations
+  const [editorContent, setEditorContent] = useState('');
+
+  const handleContentChange = useCallback((content: string) => {
+    setEditorContent(content);
+  }, []);
+
   return (
     <div className="h-full flex">
-      {/* Main editor area — takes full width until FU-4 adds ContextRail */}
+      {/* Main editor area */}
       <div className="flex-1 min-w-0 h-full">
-        <EditorPreviewSplit path={path} />
+        <EditorPreviewSplit
+          path={path}
+          onContentChange={handleContentChange}
+        />
       </div>
 
-      {/* FU-4 slot: ContextRail will be added here as a right sub-panel */}
+      {/* AI Context Rail — sub-panel within the center pane */}
+      <ContextRail
+        path={path}
+        editorContent={editorContent}
+        filename={filename}
+      />
     </div>
   );
 };

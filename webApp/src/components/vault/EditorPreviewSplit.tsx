@@ -13,24 +13,34 @@ import {
   PanelResizeHandle,
 } from 'react-resizable-panels';
 import { useVaultFile } from '@/api/hooks/useVaultHooks';
-import { useSaveFile } from '@/api/hooks/useFileDetailHooks';
+import {
+  useSaveFile,
+  useFileContext,
+  useSuggestCardAccept,
+  useSuggestCardDismiss,
+} from '@/api/hooks/useFileDetailHooks';
 import { VaultEditor, type VaultEditorHandle } from './VaultEditor';
 import { MarkdownPreview } from './MarkdownPreview';
 import { FileHeaderBar } from './FileHeaderBar';
 import { LayoutToggle, type LayoutMode } from './LayoutToggle';
 import type { SaveState } from './SaveStatus';
+import type { SuggestCard as SuggestCardType } from '@/api/types/fileDetail';
 import { Spinner } from '@/components/ui/Spinner';
+import { toast } from '@/components/ui/toast';
 import { useBlocker } from 'react-router-dom';
 
 interface EditorPreviewSplitProps {
   /** Vault-relative path, e.g. "projects/readme.md" */
   path: string;
   defaultLayout?: LayoutMode;
+  /** Callback to expose current editor content to parent (for ContextRail) */
+  onContentChange?: (content: string) => void;
 }
 
 export const EditorPreviewSplit: React.FC<EditorPreviewSplitProps> = ({
   path,
   defaultLayout,
+  onContentChange,
 }) => {
   const isFlowFile = path.endsWith('.flow.md');
   const initialLayout = defaultLayout ?? (isFlowFile ? 'source' : 'split');
@@ -50,6 +60,13 @@ export const EditorPreviewSplit: React.FC<EditorPreviewSplitProps> = ({
   // Fetch file content
   const { data, isLoading, error } = useVaultFile(path);
   const saveMutation = useSaveFile();
+
+  // Suggest cards: fetch file context + mutations
+  const { data: fileContext } = useFileContext(path);
+  const acceptMutation = useSuggestCardAccept();
+  const dismissMutation = useSuggestCardDismiss();
+  const [acceptingCardId, setAcceptingCardId] = useState<string | null>(null);
+  const [dismissingCardId, setDismissingCardId] = useState<string | null>(null);
 
   // Initialize content when data loads
   useEffect(() => {
@@ -90,9 +107,82 @@ export const EditorPreviewSplit: React.FC<EditorPreviewSplitProps> = ({
   const blocker = useBlocker(isDirty);
 
   // Handle content change from editor
-  const handleEditorChange = useCallback((newContent: string) => {
-    setEditorContent(newContent);
-  }, []);
+  const handleEditorChange = useCallback(
+    (newContent: string) => {
+      setEditorContent(newContent);
+      onContentChange?.(newContent);
+    },
+    [onContentChange],
+  );
+
+  // Propagate initial content load to parent
+  useEffect(() => {
+    if (contentLoaded) {
+      onContentChange?.(editorContent);
+    }
+    // Only on load, not every change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contentLoaded]);
+
+  // Suggest card accept handler (AC-17)
+  const handleSuggestAccept = useCallback(
+    (card: SuggestCardType) => {
+      setAcceptingCardId(card.id);
+      acceptMutation.mutate(
+        { id: card.id, filePath: path },
+        {
+          onSuccess: (response) => {
+            setAcceptingCardId(null);
+            // Insert text at the target line
+            const editor = editorRef.current;
+            if (editor && response.text) {
+              const currentContent = editor.getValue();
+              const lines = currentContent.split('\n');
+              const insertLine = Math.min(
+                response.target_line,
+                lines.length,
+              );
+
+              if (response.target_line > lines.length) {
+                toast.default(
+                  'Original position changed — text inserted at end.',
+                );
+              }
+
+              lines.splice(insertLine, 0, response.text);
+              const newContent = lines.join('\n');
+              editor.setValue(newContent);
+              setEditorContent(newContent);
+              onContentChange?.(newContent);
+            }
+          },
+          onError: () => {
+            setAcceptingCardId(null);
+          },
+        },
+      );
+    },
+    [acceptMutation, path, onContentChange],
+  );
+
+  // Suggest card dismiss handler (AC-17)
+  const handleSuggestDismiss = useCallback(
+    (card: SuggestCardType) => {
+      setDismissingCardId(card.id);
+      dismissMutation.mutate(
+        { id: card.id, filePath: path },
+        {
+          onSuccess: () => {
+            setDismissingCardId(null);
+          },
+          onError: () => {
+            setDismissingCardId(null);
+          },
+        },
+      );
+    },
+    [dismissMutation, path],
+  );
 
   // Save handler
   const handleSave = useCallback(() => {
@@ -212,7 +302,15 @@ export const EditorPreviewSplit: React.FC<EditorPreviewSplitProps> = ({
           )}
           {showPreview && (
             <Panel defaultSize={layoutMode === 'split' ? 50 : 100} minSize={25}>
-              <MarkdownPreview ref={previewRef} content={editorContent} />
+              <MarkdownPreview
+                ref={previewRef}
+                content={editorContent}
+                suggestCards={fileContext?.suggest_cards}
+                onSuggestAccept={handleSuggestAccept}
+                onSuggestDismiss={handleSuggestDismiss}
+                acceptingCardId={acceptingCardId}
+                dismissingCardId={dismissingCardId}
+              />
             </Panel>
           )}
         </PanelGroup>
