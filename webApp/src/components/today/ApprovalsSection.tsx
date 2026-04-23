@@ -1,5 +1,6 @@
 import React from 'react';
 import type { ApprovalCard } from '@/api/types/today';
+import { AskChip } from '@/components/chat/AskChip';
 import { EmailDraftCard } from './approvals/EmailDraftCard';
 import { CalendarHoldCard } from './approvals/CalendarHoldCard';
 import { OutreachCard } from './approvals/OutreachCard';
@@ -30,9 +31,12 @@ const CardRenderer: React.FC<{ card: ApprovalCard }> = ({ card }) => {
 
 export const ApprovalsSection: React.FC<{ cards: ApprovalCard[] }> = ({ cards }) => (
   <section aria-labelledby={HEADING_ID} id="today-approvals" className="py-6">
-    <h2 id={HEADING_ID} className="text-lg font-medium text-text-secondary tracking-tight mb-3">
-      Approvals
-    </h2>
+    <div className="flex items-center justify-between mb-3">
+      <h2 id={HEADING_ID} className="text-lg font-medium text-text-secondary tracking-tight">
+        Approvals
+      </h2>
+      <AskChip scope={{ type: 'today' }} label="Ask about approvals" />
+    </div>
     {cards.length === 0 ? (
       <p className="text-sm text-text-muted italic">Nothing awaiting approval.</p>
     ) : (

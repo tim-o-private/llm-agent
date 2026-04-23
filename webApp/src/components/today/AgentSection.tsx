@@ -1,6 +1,7 @@
 import React from 'react';
 import type { AgentItem, TodayResponse } from '@/api/types/today';
 import { useActivityStore } from '@/stores/useActivityStore';
+import { AskChip } from '@/components/chat/AskChip';
 
 const HEADING_ID = 'today-agent-heading';
 
@@ -34,9 +35,12 @@ export const AgentSection: React.FC<{ agent: TodayResponse['agent'] }> = ({ agen
 
   return (
     <section aria-labelledby={HEADING_ID} className="py-6">
-      <h2 id={HEADING_ID} className="text-lg font-medium text-text-secondary tracking-tight mb-3">
-        Agent
-      </h2>
+      <div className="flex items-center justify-between mb-3">
+        <h2 id={HEADING_ID} className="text-lg font-medium text-text-secondary tracking-tight">
+          Agent
+        </h2>
+        <AskChip scope={{ type: 'today' }} label="Ask about agents" />
+      </div>
       <div className="space-y-4">
         {GROUPS.map((g) => {
           const items = agent[g.key] ?? [];
@@ -64,7 +68,6 @@ export const AgentSection: React.FC<{ agent: TodayResponse['agent'] }> = ({ agen
         })}
       </div>
 
-      {/* AC-18: "View activity log" link at bottom of Agent section */}
       <button
         type="button"
         onClick={openActivityPanel}

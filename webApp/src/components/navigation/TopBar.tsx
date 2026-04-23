@@ -42,6 +42,13 @@ const TopBar: React.FC = () => {
       {/* Right section */}
       <div className="flex items-center space-x-2 sm:space-x-3 flex-shrink-0">
         <AmbientIndicator onJumpToApprovals={jumpToApprovals} />
+        {/* SPEC-049 AC-08: Cmd+K shortcut hint, desktop only */}
+        <kbd className="hidden lg:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-mono text-text-muted bg-ui-element-bg border border-ui-border rounded">
+          {typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform)
+            ? '⌘'
+            : 'Ctrl+'}
+          K
+        </kbd>
         <ThemeToggle />
         {/* Mobile chat toggle - visible only on mobile (desktop uses AppShell button) */}
         <button

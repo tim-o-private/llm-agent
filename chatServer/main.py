@@ -310,6 +310,7 @@ async def _handle_chat(
         agent_name=chat_input.agent_name,
         session_id=chat_input.session_id,
         channel="web",
+        scope=chat_input.scope,
     )
 
     from .services.agent_callbacks import tool_call_logger
@@ -364,6 +365,7 @@ async def _handle_chat_stream(
         agent_name=chat_input.agent_name,
         session_id=chat_input.session_id,
         channel="web",
+        scope=chat_input.scope,
     )
 
     from .services.agent_callbacks import tool_call_logger
