@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Outlet } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Suspense, lazy, useEffect } from 'react';
 import { AuthProvider } from '@/features/auth/AuthProvider';
 import AppShell from '@/layouts/AppShell';
@@ -14,8 +14,6 @@ const Login = lazy(() => import('@/pages/Login'));
 const AuthCallback = lazy(() => import('@/pages/AuthCallback').then((module) => ({ default: module.AuthCallback })));
 
 const Today = lazy(() => import('@/pages/Today'));
-const CoachPage = lazy(() => import('@/pages/CoachPage'));
-const CoachPageV2 = lazy(() => import('@/pages/CoachPageV2'));
 const ColorSwatchPage = lazy(() => import('@/pages/ColorSwatchPage'));
 const DesignSystemPage = lazy(() => import('@/pages/DesignSystemPage'));
 const SelectTestPage = lazy(() => import('@/pages/SelectTestPage'));
@@ -29,7 +27,10 @@ const LayoutMockups = lazy(() =>
   import('@/components/ui/LayoutMockups').then((module) => ({ default: () => <module.LayoutMockups /> })),
 );
 
-// AppLayout component is no longer needed as AppShell is the primary layout.
+// Vault browser component
+const VaultContent = lazy(() =>
+  import('@/components/vault/VaultContent').then((module) => ({ default: module.VaultContent })),
+);
 
 function App() {
   // Initialize and cleanup global keyboard listener
@@ -38,7 +39,7 @@ function App() {
     return () => {
       useTaskViewStore.getState().destroyListener();
     };
-  }, []); // Empty dependency array ensures this runs only once on mount and unmount
+  }, []);
 
   return (
     <Router>
@@ -53,11 +54,9 @@ function App() {
           >
             <Routes>
               {/* Public routes */}
-              <Route path="/" element={<Home />} />
+              <Route path="/home" element={<Home />} />
               <Route path="/login" element={<Login />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
-              {/* Temporary: CoachPageV2 as public route for testing */}
-              <Route path="/coach-v2" element={<CoachPageV2 />} />
               {/* Temporary: Design demo as public route */}
               <Route path="/design-demo" element={<DesignDemo />} />
               {/* Temporary: Layout mockups as public route */}
@@ -68,21 +67,21 @@ function App() {
               <Route path="/design-system" element={<DesignSystemPage />} />
               {/* Temporary: SelectTestPage as public route for testing the Select component */}
               <Route path="/select-test" element={<SelectTestPage />} />
-              {/* Protected routes wrapped by AppShell directly */}
+
+              {/* Protected routes — three-pane AppShell (AC-17) */}
               <Route element={<ProtectedRoute />}>
-                {/* Wrap child routes with AppShell and render them via Outlet */}
-                <Route
-                  element={
-                    <AppShell>
-                      <Outlet />
-                    </AppShell>
-                  }
-                >
-                  <Route path="/today" element={<Today />} />
-                  <Route path="/coach" element={<CoachPage />} />
-                  <Route path="/settings" element={<IntegrationsPage />} />
-                  {/* Default protected route */}
+                <Route element={<AppShell />}>
+                  {/* / -> Today (default landing) */}
                   <Route index element={<Today />} />
+                  {/* /vault/* -> vault browser (file tree + content) */}
+                  <Route path="vault/*" element={<VaultContent />} />
+                  {/* /settings -> settings page */}
+                  <Route path="settings" element={<IntegrationsPage />} />
+                  {/* Redirect old routes (AC-17) */}
+                  <Route path="today" element={<Navigate to="/" replace />} />
+                  <Route path="coach" element={<Navigate to="/" replace />} />
+                  <Route path="coach-v2" element={<Navigate to="/" replace />} />
+                  <Route path="today-mockup" element={<Navigate to="/" replace />} />
                 </Route>
               </Route>
             </Routes>
