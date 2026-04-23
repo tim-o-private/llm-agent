@@ -319,15 +319,15 @@ class WorkflowEditorService:
         try:
             result = await (
                 self._db.table("jobs")
-                .select("run_at")
+                .select("scheduled_for")
                 .eq("status", "pending")
                 .like("input->>template_name", template_name)
-                .order("run_at", desc=False)
+                .order("scheduled_for", desc=False)
                 .limit(1)
                 .execute()
             )
             if result.data:
-                return result.data[0].get("run_at")
+                return result.data[0].get("scheduled_for")
         except Exception:
             logger.debug(
                 "Failed to query jobs table for %s", template_name, exc_info=True
