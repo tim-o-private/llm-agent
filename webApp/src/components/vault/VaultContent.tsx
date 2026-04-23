@@ -41,12 +41,14 @@ export const VaultContent: React.FC = () => {
   const isMarkdown = vaultPath.endsWith('.md');
   const hasExtension = /\.[a-zA-Z0-9]+$/.test(vaultPath);
 
-  // SPEC-048: .flow.md files under _workflows/ render the workflow editor
+  // SPEC-048: _workflows/ paths render the workflow editor
   const isWorkflowFile =
     vaultPath.startsWith('_workflows/') && vaultPath.endsWith('.flow.md');
+  const isWorkflowFolder =
+    vaultPath === '_workflows/' || vaultPath === '_workflows';
 
-  if (isWorkflowFile) {
-    return <WorkflowEditorView path={vaultPath} />;
+  if (isWorkflowFile || isWorkflowFolder) {
+    return <WorkflowEditorView path={isWorkflowFolder ? '' : vaultPath} />;
   }
 
   // SPEC-047: .md files render in the full-height FileDetailView (CodeMirror editor)

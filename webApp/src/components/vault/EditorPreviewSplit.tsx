@@ -245,8 +245,10 @@ export const EditorPreviewSplit: React.FC<EditorPreviewSplitProps> = ({
   const showEditor = layoutMode === 'split' || layoutMode === 'source';
   const showPreview = layoutMode === 'split' || layoutMode === 'preview';
 
-  // Loading state
-  if (isLoading) {
+  // Loading state — don't render the editor until content is loaded.
+  // This avoids a race where CodeMirror mounts with empty doc and the
+  // content sync effect fires before/after the editor creation effect.
+  if (isLoading || !contentLoaded) {
     return (
       <div className="flex items-center justify-center h-full">
         <Spinner size={24} />

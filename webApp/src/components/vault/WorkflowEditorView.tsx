@@ -112,8 +112,10 @@ export const WorkflowEditorView: React.FC<WorkflowEditorViewProps> = ({
   const listPanelRef = useRef<import('react-resizable-panels').ImperativePanelHandle>(null);
   const historyPanelRef = useRef<import('react-resizable-panels').ImperativePanelHandle>(null);
 
-  // Fetch file content
-  const { data, isLoading, error } = useVaultFile(path);
+  const hasFile = path.length > 0;
+
+  // Fetch file content (skip when no file selected)
+  const { data, isLoading, error } = useVaultFile(path, hasFile);
   const saveMutation = useSaveFile();
   const dryRunMutation = useDryRun();
   const runWorkflowMutation = useRunWorkflow();
@@ -130,7 +132,7 @@ export const WorkflowEditorView: React.FC<WorkflowEditorViewProps> = ({
     if (data && !contentLoaded) {
       setEditorContent(data.content);
       setLastSavedContent(data.content);
-      setLocalMtime(parseFloat(data.mtime));
+      setLocalMtime(new Date(data.mtime).getTime() / 1000);
       setContentLoaded(true);
       setSaveState('saved');
     }
@@ -407,30 +409,30 @@ export const WorkflowEditorView: React.FC<WorkflowEditorViewProps> = ({
   const showEditor = layoutMode === 'split' || layoutMode === 'source';
   const showPreview = layoutMode === 'split' || layoutMode === 'preview';
 
-  // Loading state
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <Spinner size={24} />
-      </div>
-    );
-  }
-
-  // Error state
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-text-secondary">
-        <p className="text-lg font-medium">Workflow not found</p>
-        <p className="text-sm mt-1 text-text-muted">
-          The file{' '}
-          <code className="px-1 py-0.5 bg-ui-element-bg rounded text-xs">
-            {path}
-          </code>{' '}
-          could not be loaded.
-        </p>
-      </div>
-    );
-  }
+  // Determine center pane content
+  const centerContent = !hasFile ? (
+    <div className="flex flex-col items-center justify-center h-full text-text-secondary">
+      <p className="text-lg font-medium">Select a workflow</p>
+      <p className="text-sm mt-1 text-text-muted">
+        Pick a workflow from the list or create a new one.
+      </p>
+    </div>
+  ) : isLoading || !contentLoaded ? (
+    <div className="flex items-center justify-center h-full">
+      <Spinner size={24} />
+    </div>
+  ) : error ? (
+    <div className="flex flex-col items-center justify-center h-full text-text-secondary">
+      <p className="text-lg font-medium">Workflow not found</p>
+      <p className="text-sm mt-1 text-text-muted">
+        The file{' '}
+        <code className="px-1 py-0.5 bg-ui-element-bg rounded text-xs">
+          {path}
+        </code>{' '}
+        could not be loaded.
+      </p>
+    </div>
+  ) : null;
 
   return (
     <>
@@ -472,6 +474,9 @@ export const WorkflowEditorView: React.FC<WorkflowEditorViewProps> = ({
 
         {/* Center: Editor area */}
         <Panel defaultSize={55} minSize={30}>
+          {centerContent ? (
+            centerContent
+          ) : (
           <div className="flex flex-col h-full">
             {/* Header bar with workflow extension */}
             <FileHeaderBar
@@ -539,6 +544,7 @@ export const WorkflowEditorView: React.FC<WorkflowEditorViewProps> = ({
               </PanelGroup>
             </div>
           </div>
+          )}
         </Panel>
 
         {/* Resize handle + collapse toggle for history */}
