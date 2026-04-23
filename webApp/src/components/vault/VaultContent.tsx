@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { Spinner } from '@/components/ui/Spinner';
 import { FolderGrid } from './FolderGrid';
 import { FilePreview } from './FilePreview';
+import { FileDetailView } from './FileDetailView';
 
 const Today = lazy(() => import('@/pages/Today'));
 
@@ -36,7 +37,13 @@ export const VaultContent: React.FC = () => {
   }
 
   const isFolder = vaultPath.endsWith('/');
+  const isMarkdown = vaultPath.endsWith('.md');
   const hasExtension = /\.[a-zA-Z0-9]+$/.test(vaultPath);
+
+  // SPEC-047: .md files render in the full-height FileDetailView (CodeMirror editor)
+  if (isMarkdown) {
+    return <FileDetailView path={vaultPath} />;
+  }
 
   return (
     <div className="h-full overflow-y-auto">
