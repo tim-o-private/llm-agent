@@ -73,7 +73,7 @@ export const EditorPreviewSplit: React.FC<EditorPreviewSplitProps> = ({
     if (data && !contentLoaded) {
       setEditorContent(data.content);
       setLastSavedContent(data.content);
-      setLocalMtime(parseFloat(data.mtime));
+      setLocalMtime(new Date(data.mtime).getTime() / 1000);
       setContentLoaded(true);
       setSaveState('saved');
     }
