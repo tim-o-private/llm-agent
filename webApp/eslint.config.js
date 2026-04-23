@@ -43,6 +43,8 @@ export default [
         HTMLSpanElement: 'readonly',
         SVGSVGElement: 'readonly',
         AbortSignal: 'readonly',
+        IntersectionObserver: 'readonly',
+        IntersectionObserverEntry: 'readonly',
         RequestMode: 'readonly',
         RequestCredentials: 'readonly',
         RequestCache: 'readonly',

@@ -4,12 +4,12 @@ import { UserMenu } from '@/components/UserMenu';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import { useChatStore } from '@/stores/useChatStore';
 import { ChatBubbleIcon } from '@radix-ui/react-icons';
-import { ApprovalsBadge } from '@/components/today/ApprovalsBadge';
+import { AmbientIndicator } from '@/components/activity/AmbientIndicator';
 import { Breadcrumb } from '@/components/vault/Breadcrumb';
 
 /**
  * AC-04: TopBar spans the full width above all three panes.
- * Contains: breadcrumb (replaces "Clarity" logo text), ApprovalsBadge, ThemeToggle, UserMenu.
+ * Contains: breadcrumb (replaces "Clarity" logo text), AmbientIndicator (approvals + activity), ThemeToggle, UserMenu.
  */
 const TopBar: React.FC = () => {
   const toggleChatPanel = useChatStore((state) => state.toggleChatPanel);
@@ -41,7 +41,7 @@ const TopBar: React.FC = () => {
 
       {/* Right section */}
       <div className="flex items-center space-x-2 sm:space-x-3 flex-shrink-0">
-        <ApprovalsBadge onJump={jumpToApprovals} />
+        <AmbientIndicator onJumpToApprovals={jumpToApprovals} />
         <ThemeToggle />
         {/* Mobile chat toggle - visible only on mobile (desktop uses AppShell button) */}
         <button

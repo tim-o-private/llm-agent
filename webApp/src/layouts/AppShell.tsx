@@ -9,6 +9,7 @@ import TopBar from '@/components/navigation/TopBar';
 import { ChatPanel } from '@/components/ChatPanel';
 import { FileTree } from '@/components/vault/FileTree';
 import { useChatStore } from '@/stores/useChatStore';
+import { ActivityPanel } from '@/components/activity/ActivityPanel';
 import { OverlayManager } from '@/components/overlays/OverlayManager';
 import {
   ChatBubbleIcon,
@@ -117,6 +118,8 @@ const AppShell: React.FC = () => {
           </div>
         )}
       </div>
+      {/* SPEC-050: Activity log overlay panel */}
+      <ActivityPanel />
       <OverlayManager />
     </>
   );
