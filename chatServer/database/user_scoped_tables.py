@@ -28,4 +28,5 @@ USER_SCOPED_TABLES: set[str] = {
     "approval_cards",
     "activity_log",
     "suggest_cards",
+    "captures",
 }
