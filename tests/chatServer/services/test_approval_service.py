@@ -103,7 +103,8 @@ BASE_CARD = {
 @pytest.mark.asyncio
 async def test_approve_pending_sets_decided_fields_and_logs(service, db, log_svc):
     db.queue_rows([BASE_CARD])  # get()
-    db.queue_rows([{**BASE_CARD, "status": "approved", "decided_by": USER_A}])  # update
+    db.queue_rows([{**BASE_CARD, "status": "approved", "decided_by": USER_A}])  # update (status)
+    db.queue_rows([])  # update (execution columns from _record_execution)
 
     updated = await service.approve(USER_A, CARD_ID, decision_note="LGTM")
 
@@ -111,12 +112,14 @@ async def test_approve_pending_sets_decided_fields_and_logs(service, db, log_svc
     assert db.updates[0]["status"] == "approved"
     assert db.updates[0]["decided_by"] == USER_A
     assert db.updates[0]["decision_note"] == "LGTM"
-    log_svc.append.assert_awaited_once()
-    log_kwargs = log_svc.append.await_args.kwargs
-    assert log_kwargs["status"] == "done"
-    assert "Approved" in log_kwargs["action"]
-    # Email-draft approvals include the Stage-1 no-op marker.
-    assert "Stage 1 no-op" in log_kwargs["action"]
+    # Two log entries: approval + execution attempt (SPEC-052)
+    assert log_svc.append.await_count == 2
+    approval_kwargs = log_svc.append.await_args_list[0].kwargs
+    assert approval_kwargs["status"] == "done"
+    assert approval_kwargs["actor"] == "user"
+    assert "Approved" in approval_kwargs["action"]
+    # Stage 1 no-op suffix removed by SPEC-052.
+    assert "Stage 1 no-op" not in approval_kwargs["action"]
 
 
 @pytest.mark.asyncio
@@ -188,8 +191,9 @@ async def test_approve_config_change_has_no_stage1_noop_suffix(service, db, log_
     card = {**BASE_CARD, "card_type": "config_change", "payload": {"file_path": "agents/x.md"}}
     db.queue_rows([card])
     db.queue_rows([{**card, "status": "approved"}])
+    db.queue_rows([])  # execution update
     await service.approve(USER_A, CARD_ID)
-    # config_change isn't outbound — no marker.
-    log_kwargs = log_svc.append.await_args.kwargs
-    assert "Stage 1 no-op" not in log_kwargs["action"]
-    assert log_kwargs["subject_path"] == "agents/x.md"
+    # No outbound markers — SPEC-052 removed all Stage-1 no-op suffixes.
+    approval_kwargs = log_svc.append.await_args_list[0].kwargs
+    assert "Stage 1 no-op" not in approval_kwargs["action"]
+    assert approval_kwargs["subject_path"] == "agents/x.md"
