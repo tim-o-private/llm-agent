@@ -290,3 +290,32 @@ async def handle_email_triage(job: dict) -> dict:
             "max_emails": prefs.get("email_triage_max_emails", 20),
         },
     )
+
+
+async def handle_orchestration_check(job: dict) -> dict:
+    """Execute orchestration-check workflow and self-schedule next occurrence.
+
+    Reads ``orchestration_check_enabled`` / ``orchestration_check_time`` from
+    user_preferences. Uses the same ``_run_scheduled_workflow`` skeleton as
+    briefings and regenerate-today.
+
+    SPEC-054 AC-09.
+    """
+    return await _run_scheduled_workflow(
+        job,
+        job_type="orchestration_check",
+        workflow_name="orchestration-check",
+        enabled_pref="orchestration_check_enabled",
+        default_enabled=False,
+        compute_schedule=_briefing_schedule(
+            "orchestration_check",
+            default_tz="America/New_York",
+            default_time="07:00",
+        ),
+        next_job_input=lambda user_id: {
+            "user_id": user_id,
+            "template_name": "orchestration-check",
+        },
+        build_parameters=lambda user_id, prefs: {},
+        failure_keywords=("Failed", "Error", "Unknown"),
+    )

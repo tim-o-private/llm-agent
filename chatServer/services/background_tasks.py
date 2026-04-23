@@ -15,6 +15,7 @@ from .job_handlers import (
     handle_email_processing,
     handle_evening_briefing,
     handle_morning_briefing,
+    handle_orchestration_check,
     handle_regenerate_today,
     handle_reminder_delivery,
     handle_workflow,
@@ -285,6 +286,7 @@ class BackgroundTaskService:
         self._job_runner.register_handler('evening_briefing', handle_evening_briefing)
         self._job_runner.register_handler('workflow', handle_workflow)
         self._job_runner.register_handler('regenerate_today', handle_regenerate_today)
+        self._job_runner.register_handler('orchestration_check', handle_orchestration_check)
 
         # Bootstrap briefing jobs before starting the runner —
         # ensures all eligible users have pending briefing jobs
