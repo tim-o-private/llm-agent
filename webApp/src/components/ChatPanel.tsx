@@ -136,9 +136,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ agentId: agentIdProp, scop
             agent_name: agentId,
             message: userText,
             session_id: activeChatId,
-            ...(useChatStore.getState().scope.type !== 'global' && {
-              scope: useChatStore.getState().scope,
-            }),
+            ...(() => {
+              const currentScope = useChatStore.getState().scope;
+              return currentScope.type !== 'global' ? { scope: currentScope } : {};
+            })(),
           }),
         });
 

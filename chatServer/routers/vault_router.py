@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -27,7 +27,7 @@ router = APIRouter(prefix="/api/vault", tags=["vault"])
 class TreeNodeModel(BaseModel):
     name: str
     path: str
-    type: str  # "file" | "folder"
+    type: Literal["file", "folder"]
     mtime: str
     size: int
     children: Optional[list["TreeNodeModel"]] = None
@@ -46,7 +46,7 @@ class FileResponse(BaseModel):
 class FolderEntryModel(BaseModel):
     name: str
     path: str
-    type: str
+    type: Literal["file", "folder"]
     mtime: str
     size: int
 
@@ -130,16 +130,7 @@ async def get_vault_file(
 ):
     """Read a single file from the user's vault."""
     try:
-        content = await vault.read_file(user_id, path)
-        st = await vault.stat_file(user_id, path)
-        from datetime import datetime, timezone
-
-        mtime_iso = (
-            datetime.fromtimestamp(st.st_mtime, tz=timezone.utc)
-            .isoformat()
-            .replace("+00:00", "Z")
-        ) if st else ""
-        size = st.st_size if st else 0
+        content, mtime_iso, size = await vault.read_file_with_meta(user_id, path)
         return FileResponse(content=content, mtime=mtime_iso, size=size)
     except HTTPException:
         raise

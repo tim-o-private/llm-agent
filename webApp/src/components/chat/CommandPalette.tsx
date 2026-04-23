@@ -10,22 +10,7 @@ import { Command } from 'cmdk';
 import { useChatScope } from '@/hooks/useChatScope';
 import { useChatStore } from '@/stores/useChatStore';
 import type { ChatScope } from '@/api/types/chat';
-
-/** Derive a human-readable label for a scope value. */
-function scopeLabel(scope: ChatScope): string {
-  switch (scope.type) {
-    case 'today':
-      return 'Today';
-    case 'folder':
-      return `Folder: ${scope.path.replace(/\/$/, '').split('/').pop()}`;
-    case 'file':
-      return `File: ${scope.path.split('/').pop()}`;
-    case 'workflow':
-      return `Workflow: ${scope.path.split('/').pop()?.replace('.flow.md', '')}`;
-    default:
-      return 'this page';
-  }
-}
+import { scopeLabel } from '@/lib/scopeLabel';
 
 export const CommandPalette: React.FC = () => {
   const [open, setOpen] = useState(false);
@@ -67,7 +52,7 @@ export const CommandPalette: React.FC = () => {
 
   if (!open) return null;
 
-  const label = scopeLabel(scopeAtOpen.current);
+  const label = scopeLabel(scopeAtOpen.current) ?? 'this page';
 
   return (
     <Command.Dialog

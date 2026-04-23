@@ -12,6 +12,7 @@ import {
   HomeIcon,
   GearIcon,
 } from '@radix-ui/react-icons';
+import { FolderIcon } from '@/components/ui/icons/FolderIcon';
 
 /**
  * react-arborist expects { id, name, children? } — we adapt the API TreeNode.
@@ -115,14 +116,6 @@ function NodeRenderer({ node, style, dragHandle }: NodeRendererProps<ArboristNod
       )}
       <span className="truncate">{data.name}</span>
     </div>
-  );
-}
-
-function FolderIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 16 16" fill="currentColor">
-      <path d="M1.75 1A1.75 1.75 0 000 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0016 13.25v-8.5A1.75 1.75 0 0014.25 3H7.5a.25.25 0 01-.2-.1l-.9-1.2A1.75 1.75 0 004.65 1H1.75z" />
-    </svg>
   );
 }
 

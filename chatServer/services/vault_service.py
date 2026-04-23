@@ -132,6 +132,19 @@ class VaultService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
         return path.read_text()
 
+    async def read_file_with_meta(
+        self, user_id: str, rel_path: str
+    ) -> tuple[str, str, int]:
+        """Read a file and return ``(content, mtime_iso, size)`` in one pass."""
+        path = self._resolve(user_id, rel_path)
+        if not path.exists():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        if not path.is_file():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+        content = path.read_text()
+        mtime_iso, size = self._stat_info(path)
+        return content, mtime_iso, size
+
     async def stat_file(self, user_id: str, rel_path: str) -> Optional[os.stat_result]:
         path = self._resolve(user_id, rel_path)
         if not path.exists():
@@ -293,23 +306,26 @@ class VaultService:
         )
 
     @staticmethod
-    def _mtime_iso(path: Path) -> str:
+    def _stat_info(path: Path) -> tuple[str, int]:
+        """Return ``(mtime_iso, size)`` from a single ``stat()`` call."""
         try:
-            mtime = path.stat().st_mtime
+            st = path.stat()
+            mtime = st.st_mtime
+            size = st.st_size
         except OSError:
             mtime = 0.0
-        return (
+            size = 0
+        mtime_iso = (
             datetime.fromtimestamp(mtime, tz=timezone.utc)
             .isoformat()
             .replace("+00:00", "Z")
         )
+        return mtime_iso, size
 
     @staticmethod
-    def _file_size(path: Path) -> int:
-        try:
-            return path.stat().st_size
-        except OSError:
-            return 0
+    def _mtime_iso(path: Path) -> str:
+        mtime_iso, _ = VaultService._stat_info(path)
+        return mtime_iso
 
     @classmethod
     def _build_tree(
@@ -333,29 +349,30 @@ class VaultService:
             rel = entry.relative_to(user_root).as_posix()
 
             if entry.is_dir():
-                # Skip excluded top-level dirs
                 top_level_name = Path(rel).parts[0] if Path(rel).parts else ""
                 if top_level_name in _TREE_EXCLUDES:
                     continue
                 children = cls._build_tree(user_root, entry, depth + 1)
+                mtime, _ = cls._stat_info(entry)
                 nodes.append(
                     TreeNode(
                         name=entry.name,
                         path=rel,
                         type="folder",
-                        mtime=cls._mtime_iso(entry),
+                        mtime=mtime,
                         size=0,
                         children=children,
                     )
                 )
             elif entry.is_file():
+                mtime, size = cls._stat_info(entry)
                 nodes.append(
                     TreeNode(
                         name=entry.name,
                         path=rel,
                         type="file",
-                        mtime=cls._mtime_iso(entry),
-                        size=cls._file_size(entry),
+                        mtime=mtime,
+                        size=size,
                     )
                 )
         return nodes
@@ -370,7 +387,7 @@ class VaultService:
         """
         user_root = self._user_root(user_id)
 
-        if not rel_path or rel_path in ("", "."):
+        if not rel_path or rel_path == ".":
             target = user_root
         else:
             target = self._resolve(user_id, rel_path)
@@ -398,19 +415,19 @@ class VaultService:
 
             rel = item.relative_to(user_root).as_posix()
 
-            # Skip excluded top-level dirs
             top_level_name = Path(rel).parts[0] if Path(rel).parts else ""
             if item.is_dir() and top_level_name in _TREE_EXCLUDES:
                 continue
 
-            entry_type = "folder" if item.is_dir() else "file"
+            is_dir = item.is_dir()
+            mtime, size = cls._stat_info(item)
             entries.append(
                 FolderEntry(
                     name=item.name,
                     path=rel,
-                    type=entry_type,
-                    mtime=cls._mtime_iso(item),
-                    size=cls._file_size(item) if item.is_file() else 0,
+                    type="folder" if is_dir else "file",
+                    mtime=mtime,
+                    size=0 if is_dir else size,
                 )
             )
         return entries

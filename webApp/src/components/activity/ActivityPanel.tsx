@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Cross2Icon } from '@radix-ui/react-icons';
 import { useActivityLog, useMarkActivityViewed } from '@/api/hooks/useActivityHooks';
 import { useActivityStore } from '@/stores/useActivityStore';
+import { Spinner } from '@/components/ui/Spinner';
 import { ActivityEntryComponent } from './ActivityEntry';
 import { ActivityFiltersComponent } from './ActivityFilters';
 import type { ActivityFilters } from '@/api/types/activity';
@@ -17,7 +18,7 @@ export const ActivityPanel: React.FC = () => {
 
   const [filters, setFilters] = useState<ActivityFilters>({});
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
-    useActivityLog(filters);
+    useActivityLog(filters, isOpen);
   const markViewed = useMarkActivityViewed();
   const sentinelRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -112,7 +113,7 @@ export const ActivityPanel: React.FC = () => {
         >
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-primary border-t-transparent" />
+              <Spinner size={20} />
             </div>
           ) : allEntries.length === 0 ? (
             <div className="px-4 py-12 text-center text-sm text-text-muted">
@@ -136,7 +137,7 @@ export const ActivityPanel: React.FC = () => {
           {/* Loading indicator for next page */}
           {isFetchingNextPage && (
             <div className="flex items-center justify-center py-4">
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-brand-primary border-t-transparent" />
+              <Spinner size={16} />
               <span className="ml-2 text-xs text-text-muted">
                 Loading more...
               </span>

@@ -52,8 +52,10 @@ async def list_activity(
         status=status_list,
         q=q,
     )
-    total = await service.count(user_id)
-    return {"items": items, "total": total, "has_more": has_more}
+    result: dict = {"items": items, "has_more": has_more}
+    if not before:
+        result["total"] = await service.count(user_id)
+    return result
 
 
 @router.get("/count")

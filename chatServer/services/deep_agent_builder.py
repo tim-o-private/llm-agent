@@ -162,31 +162,40 @@ async def _build_scope_context(scope: dict | None, vault_service=None, user_id: 
     scope_type = scope.get("type", "global")
     scope_path = scope.get("path")
 
+    async def _read_and_truncate(label: str) -> str | None:
+        if not (vault_service and user_id and scope_path):
+            return None
+        try:
+            content = await vault_service.read_file(user_id, scope_path)
+            if len(content) > 4000:
+                content = content[:4000] + "\n... [truncated]"
+            return f"{label}:\n```\n{content}\n```"
+        except Exception:
+            return None
+
     parts: list[str] = []
     if scope_type == "today":
         parts.append("The user is on the Today dashboard.")
     elif scope_type == "file" and scope_path:
         parts.append(f"The user is viewing the file: {scope_path}")
-        if vault_service and user_id:
-            try:
-                content = await vault_service.read_file(user_id, scope_path)
-                if len(content) > 4000:
-                    content = content[:4000] + "\n... [truncated]"
-                parts.append(f"File content:\n```\n{content}\n```")
-            except Exception:
-                pass  # File read failure is non-fatal
+        snippet = await _read_and_truncate("File content")
+        if snippet:
+            parts.append(snippet)
     elif scope_type == "folder" and scope_path:
         parts.append(f"The user is browsing the folder: {scope_path}")
-    elif scope_type == "workflow" and scope_path:
-        parts.append(f"The user is editing the workflow: {scope_path}")
         if vault_service and user_id:
             try:
-                content = await vault_service.read_file(user_id, scope_path)
-                if len(content) > 4000:
-                    content = content[:4000] + "\n... [truncated]"
-                parts.append(f"Workflow definition:\n```\n{content}\n```")
+                entries = await vault_service.list_folder(user_id, scope_path)
+                listing = "\n".join(f"- {e.type}: {e.name}" for e in entries)
+                if listing:
+                    parts.append(f"Folder contents:\n{listing}")
             except Exception:
-                pass  # File read failure is non-fatal
+                pass
+    elif scope_type == "workflow" and scope_path:
+        parts.append(f"The user is editing the workflow: {scope_path}")
+        snippet = await _read_and_truncate("Workflow definition")
+        if snippet:
+            parts.append(snippet)
     else:
         return ""
 

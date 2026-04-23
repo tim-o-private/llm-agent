@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useMarkNotificationRead, useSubmitNotificationFeedback } from '@/api/hooks/useNotificationHooks';
 import type { ChatMessage } from '@/stores/useChatStore';
+import { relativeTimeFromDate } from '@/lib/formatRelativeTime';
 
 const categoryBorderClass: Record<string, string> = {
   heartbeat: 'border-l-brand-primary',
@@ -10,16 +11,6 @@ const categoryBorderClass: Record<string, string> = {
   error: 'border-l-destructive',
   info: 'border-l-ui-border',
 };
-
-function formatRelativeTime(timestamp: Date): string {
-  const diffMs = Date.now() - timestamp.getTime();
-  const diffMin = Math.floor(diffMs / 60000);
-  if (diffMin < 1) return 'just now';
-  if (diffMin < 60) return `${diffMin} min ago`;
-  const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  return timestamp.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
 
 interface NotificationInlineMessageProps {
   message: ChatMessage; // sender = 'notification'
@@ -69,7 +60,7 @@ export const NotificationInlineMessage: React.FC<NotificationInlineMessageProps>
             <p className="text-sm font-medium text-text-primary">{message.notification_title}</p>
           )}
           <p className="text-xs text-text-secondary mt-0.5">{message.text}</p>
-          <p className="text-xs text-text-secondary mt-1">{formatRelativeTime(message.timestamp)}</p>
+          <p className="text-xs text-text-secondary mt-1">{relativeTimeFromDate(message.timestamp)}</p>
           <div className="flex items-center gap-1 mt-1">
             <button
               onClick={() => {

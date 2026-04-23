@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { ActivityEntry } from '@/api/types/activity';
 import type { ActivityFilters as ActivityFiltersType } from '@/api/types/activity';
+import { useDebounce } from '@/hooks/useDebounce';
 
 interface ActivityFiltersProps {
   filters: ActivityFiltersType;
@@ -21,30 +22,17 @@ export const ActivityFiltersComponent: React.FC<ActivityFiltersProps> = ({
   onChange,
   entries,
 }) => {
-  // Debounced search
   const [localSearch, setLocalSearch] = useState(filters.q ?? '');
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debouncedSearch = useDebounce(localSearch, 300);
 
-  const handleSearchChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const value = e.target.value;
-      setLocalSearch(value);
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => {
-        onChange({ ...filters, q: value || undefined });
-      }, 300);
-    },
-    [filters, onChange],
-  );
-
-  // Clean up timeout on unmount
   useEffect(() => {
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, []);
+    const q = debouncedSearch || undefined;
+    if (q !== filters.q) {
+      onChange({ ...filters, q });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch]);
 
-  // Sync local search when filters.q changes externally
   useEffect(() => {
     setLocalSearch(filters.q ?? '');
   }, [filters.q]);
@@ -66,7 +54,7 @@ export const ActivityFiltersComponent: React.FC<ActivityFiltersProps> = ({
         aria-label="Search activity log"
         placeholder="Search activity..."
         value={localSearch}
-        onChange={handleSearchChange}
+        onChange={(e) => setLocalSearch(e.target.value)}
         className="w-full px-3 py-1.5 text-sm rounded-md bg-ui-element-bg border border-ui-border text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-brand-primary"
       />
 

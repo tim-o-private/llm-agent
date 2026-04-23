@@ -1,7 +1,6 @@
 import React, { Suspense, lazy } from 'react';
 import { useParams } from 'react-router-dom';
 import { Spinner } from '@/components/ui/Spinner';
-import { Breadcrumb } from './Breadcrumb';
 import { FolderGrid } from './FolderGrid';
 import { FilePreview } from './FilePreview';
 
@@ -20,7 +19,6 @@ export const VaultContent: React.FC = () => {
   const { '*': splat } = useParams<{ '*': string }>();
   const vaultPath = splat ?? '';
 
-  // today.md -> render Today
   if (vaultPath === '' || vaultPath === 'today.md') {
     return (
       <div className="h-full overflow-y-auto">
@@ -37,17 +35,12 @@ export const VaultContent: React.FC = () => {
     );
   }
 
-  // Determine if folder or file
   const isFolder = vaultPath.endsWith('/');
   const hasExtension = /\.[a-zA-Z0-9]+$/.test(vaultPath);
 
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-4xl px-4 md:px-6 py-4">
-        <div className="mb-4">
-          <Breadcrumb vaultPath={vaultPath} />
-        </div>
-
         {isFolder ? (
           <FolderGrid folderPath={vaultPath.replace(/\/$/, '')} />
         ) : hasExtension ? (

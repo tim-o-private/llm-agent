@@ -7,6 +7,7 @@ client so user isolation is enforced at the DB.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -170,15 +171,16 @@ class ActivityLogService:
         if self._user is None:
             raise RuntimeError("user_client required for get_counts_with_last_viewed")
 
-        total = await self.count(user_id)
-
-        prefs_resp = await (
+        total_coro = self.count(user_id)
+        prefs_coro = (
             self._user.table("user_preferences")
             .select("last_activity_viewed_at")
             .eq("user_id", user_id)
             .limit(1)
             .execute()
         )
+        total, prefs_resp = await asyncio.gather(total_coro, prefs_coro)
+
         prefs_data = getattr(prefs_resp, "data", None) or []
         prefs = prefs_data[0] if prefs_data else {}
         since = prefs.get("last_activity_viewed_at")

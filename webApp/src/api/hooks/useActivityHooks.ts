@@ -69,7 +69,7 @@ async function postMarkViewed(): Promise<{ marked_at: string }> {
 
 // --- Queries -----------------------------------------------------------------
 
-export function useActivityLog(filters: ActivityFilters = {}) {
+export function useActivityLog(filters: ActivityFilters = {}, enabled = true) {
   return useInfiniteQuery<ActivityListResponse, Error>({
     queryKey: [...ACTIVITY_KEY, 'list', filters],
     queryFn: ({ pageParam }) =>
@@ -77,10 +77,10 @@ export function useActivityLog(filters: ActivityFilters = {}) {
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => {
       if (!lastPage.has_more || lastPage.items.length === 0) return undefined;
-      // Use created_at of the last item as the cursor
       return lastPage.items[lastPage.items.length - 1].created_at;
     },
     staleTime: 30_000,
+    enabled,
   });
 }
 

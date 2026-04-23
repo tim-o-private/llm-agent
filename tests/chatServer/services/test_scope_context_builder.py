@@ -121,9 +121,46 @@ async def test_file_scope_missing_path():
 
 
 @pytest.mark.asyncio
-async def test_folder_scope():
+async def test_folder_scope_without_vault():
     result = await _build_scope_context({"type": "folder", "path": "projects/"})
     assert result == "The user is browsing the folder: projects/"
+
+
+@pytest.mark.asyncio
+async def test_folder_scope_with_vault_listing():
+    """AC-03: folder scope injects folder listing when vault_service is available."""
+    from dataclasses import dataclass
+
+    @dataclass
+    class FakeEntry:
+        name: str
+        type: str
+
+    mock_vault = AsyncMock()
+    mock_vault.list_folder = AsyncMock(return_value=[
+        FakeEntry(name="readme.md", type="file"),
+        FakeEntry(name="docs", type="folder"),
+    ])
+    result = await _build_scope_context(
+        {"type": "folder", "path": "projects/"},
+        vault_service=mock_vault,
+        user_id="u1",
+    )
+    assert "The user is browsing the folder: projects/" in result
+    assert "- file: readme.md" in result
+    assert "- folder: docs" in result
+
+
+@pytest.mark.asyncio
+async def test_folder_scope_vault_error_graceful():
+    mock_vault = AsyncMock()
+    mock_vault.list_folder = AsyncMock(side_effect=Exception("not found"))
+    result = await _build_scope_context(
+        {"type": "folder", "path": "gone/"},
+        vault_service=mock_vault,
+        user_id="u1",
+    )
+    assert result == "The user is browsing the folder: gone/"
 
 
 @pytest.mark.asyncio
