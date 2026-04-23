@@ -239,14 +239,14 @@ export const FileTree: React.FC = () => {
         )}
       </div>
 
-      {/* Pinned: _workflows section (AC-09) */}
-      {workflowsNode && filteredWorkflows.length > 0 && (
-        <div className="border-t border-ui-border">
-          <div className="px-3 py-1.5 text-xs font-medium text-text-muted uppercase tracking-wider">
-            Workflows
-          </div>
-          <div className="px-2 pb-2 space-y-0.5">
-            {filteredWorkflows.map((wf) => (
+      {/* Pinned: _workflows section (AC-09) — always visible */}
+      <div className="border-t border-ui-border">
+        <div className="px-3 py-1.5 text-xs font-medium text-text-muted uppercase tracking-wider">
+          Workflows
+        </div>
+        <div className="px-2 pb-2 space-y-0.5">
+          {filteredWorkflows.length > 0 ? (
+            filteredWorkflows.map((wf) => (
               <button
                 key={wf.id}
                 onClick={() => navigate(`/vault/${wf.vaultPath}`)}
@@ -259,10 +259,20 @@ export const FileTree: React.FC = () => {
                 <GearIcon className="h-3.5 w-3.5 flex-shrink-0" />
                 <span className="truncate">{wf.name}</span>
               </button>
-            ))}
-          </div>
+            ))
+          ) : (
+            <p className="px-2 py-1 text-xs text-text-muted italic">No workflows yet</p>
+          )}
+          <button
+            onClick={() => navigate('/vault/_workflows/')}
+            data-testid="tree-new-workflow"
+            className="flex items-center gap-1.5 w-full px-2 py-1 text-xs text-brand-primary hover:bg-ui-interactive-bg-hover rounded-md transition-colors"
+          >
+            <span className="text-sm leading-none">+</span>
+            <span>New workflow</span>
+          </button>
         </div>
-      )}
+      </div>
     </div>
   );
 };

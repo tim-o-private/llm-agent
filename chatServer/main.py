@@ -33,7 +33,9 @@ from .routers.oauth_router import router as oauth_router
 from .routers.session_open_router import router as session_open_router
 from .routers.telegram_router import router as telegram_router
 from .routers.today_router import router as today_router
+from .routers.vault_file_router import router as vault_file_router
 from .routers.vault_router import router as vault_router
+from .routers.workflow_editor_router import router as workflow_editor_router
 from .routers.workflows_router import router as workflows_router
 from .services.prompt_customization import get_prompt_customization_service
 
@@ -261,7 +263,9 @@ app.include_router(session_open_router)
 app.include_router(telegram_router)
 app.include_router(today_router)
 app.include_router(vault_router)
+app.include_router(vault_file_router)
 app.include_router(workflows_router)
+app.include_router(workflow_editor_router)
 app.include_router(activity_router)
 app.include_router(approvals_router)
 

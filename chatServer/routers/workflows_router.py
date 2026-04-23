@@ -34,6 +34,19 @@ class WorkflowRunResponse(BaseModel):
     created_at: Optional[str] = None
 
 
+class WorkflowRunDetailedResponse(BaseModel):
+    id: str
+    template_name: str
+    status: str
+    current_step: str = ""
+    error: Optional[str] = None
+    parameters: Optional[dict] = None
+    step_outputs: Optional[dict] = None
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+    created_at: Optional[str] = None
+
+
 @router.get("/runs", response_model=list[WorkflowRunResponse])
 async def list_workflow_runs(
     template_name: Optional[str] = Query(None),
@@ -54,3 +67,31 @@ async def list_workflow_runs(
         raise HTTPException(status_code=500, detail="Failed to list workflow runs")
 
     return [WorkflowRunResponse(**row) for row in rows]
+
+
+@router.get("/runs/detailed", response_model=list[WorkflowRunDetailedResponse])
+async def list_workflow_runs_detailed(
+    template_name: Optional[str] = Query(None),
+    limit: int = Query(25, ge=1, le=100),
+    user_id: str = Depends(get_current_user),
+    db: UserScopedClient = Depends(get_user_scoped_client),
+) -> list[WorkflowRunDetailedResponse]:
+    """List workflow runs with full detail including step_outputs and parameters.
+
+    Used by the workflow editor's run history panel (SPEC-048 AC-17/19).
+    """
+    service = WorkflowRunsService(db)
+    try:
+        rows = await service.list_runs_detailed(
+            template_name=template_name, limit=limit
+        )
+    except Exception as exc:
+        logger.error(
+            "list_workflow_runs_detailed failed for %s: %s",
+            user_id, exc, exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500, detail="Failed to list detailed workflow runs"
+        )
+
+    return [WorkflowRunDetailedResponse(**row) for row in rows]

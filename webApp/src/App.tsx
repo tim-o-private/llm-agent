@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Navigate, Outlet } from 'react-router-dom';
 import { Suspense, lazy, useEffect } from 'react';
 import { AuthProvider } from '@/features/auth/AuthProvider';
 import AppShell from '@/layouts/AppShell';
@@ -32,8 +32,67 @@ const VaultContent = lazy(() =>
   import('@/components/vault/VaultContent').then((module) => ({ default: module.VaultContent })),
 );
 
+/**
+ * Root layout: wraps all routes with AuthProvider (which needs router context
+ * for useNavigate/useLocation), ErrorBoundary, and Suspense.
+ */
+function RootLayout() {
+  return (
+    <AuthProvider>
+      <ErrorBoundary>
+        <Suspense
+          fallback={
+            <div className="w-full h-screen flex items-center justify-center">
+              <Spinner />
+            </div>
+          }
+        >
+          <Outlet />
+        </Suspense>
+        <Toaster />
+      </ErrorBoundary>
+    </AuthProvider>
+  );
+}
+
+const router = createBrowserRouter([
+  {
+    element: <RootLayout />,
+    children: [
+      // Public routes
+      { path: '/home', element: <Home /> },
+      { path: '/login', element: <Login /> },
+      { path: '/auth/callback', element: <AuthCallback /> },
+      { path: '/design-demo', element: <DesignDemo /> },
+      { path: '/layout-mockups', element: <LayoutMockups /> },
+      { path: '/colors', element: <ColorSwatchPage /> },
+      { path: '/design-system', element: <DesignSystemPage /> },
+      { path: '/select-test', element: <SelectTestPage /> },
+
+      // Protected routes — three-pane AppShell
+      {
+        element: <ProtectedRoute />,
+        children: [
+          {
+            element: <AppShell />,
+            children: [
+              { index: true, element: <Today /> },
+              { path: 'vault/*', element: <VaultContent /> },
+              { path: 'settings', element: <IntegrationsPage /> },
+              // Redirect old routes
+              { path: 'today', element: <Navigate to="/" replace /> },
+              { path: 'coach', element: <Navigate to="/" replace /> },
+              { path: 'coach-v2', element: <Navigate to="/" replace /> },
+              { path: 'today-mockup', element: <Navigate to="/" replace /> },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+]);
+
 function App() {
-  // Initialize and cleanup global keyboard listener
   useEffect(() => {
     useTaskViewStore.getState().initializeListener();
     return () => {
@@ -41,56 +100,7 @@ function App() {
     };
   }, []);
 
-  return (
-    <Router>
-      <AuthProvider>
-        <ErrorBoundary>
-          <Suspense
-            fallback={
-              <div className="w-full h-screen flex items-center justify-center">
-                <Spinner />
-              </div>
-            }
-          >
-            <Routes>
-              {/* Public routes */}
-              <Route path="/home" element={<Home />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/auth/callback" element={<AuthCallback />} />
-              {/* Temporary: Design demo as public route */}
-              <Route path="/design-demo" element={<DesignDemo />} />
-              {/* Temporary: Layout mockups as public route */}
-              <Route path="/layout-mockups" element={<LayoutMockups />} />
-              {/* Color swatch page for design reference */}
-              <Route path="/colors" element={<ColorSwatchPage />} />
-              {/* Design system page for component patterns */}
-              <Route path="/design-system" element={<DesignSystemPage />} />
-              {/* Temporary: SelectTestPage as public route for testing the Select component */}
-              <Route path="/select-test" element={<SelectTestPage />} />
-
-              {/* Protected routes — three-pane AppShell (AC-17) */}
-              <Route element={<ProtectedRoute />}>
-                <Route element={<AppShell />}>
-                  {/* / -> Today (default landing) */}
-                  <Route index element={<Today />} />
-                  {/* /vault/* -> vault browser (file tree + content) */}
-                  <Route path="vault/*" element={<VaultContent />} />
-                  {/* /settings -> settings page */}
-                  <Route path="settings" element={<IntegrationsPage />} />
-                  {/* Redirect old routes (AC-17) */}
-                  <Route path="today" element={<Navigate to="/" replace />} />
-                  <Route path="coach" element={<Navigate to="/" replace />} />
-                  <Route path="coach-v2" element={<Navigate to="/" replace />} />
-                  <Route path="today-mockup" element={<Navigate to="/" replace />} />
-                </Route>
-              </Route>
-            </Routes>
-          </Suspense>
-          <Toaster />
-        </ErrorBoundary>
-      </AuthProvider>
-    </Router>
-  );
+  return <RouterProvider router={router} />;
 }
 
 export default App;

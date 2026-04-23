@@ -56,13 +56,18 @@ class TemplateRegistry:
             if time.monotonic() - cached_at < _CACHE_TTL_SECONDS:
                 return template
 
-        # Try user dir first (user templates shadow system ones)
+        # Try user dir first (user templates shadow system ones).
+        # Check both vault convention (_workflows/*.flow.md) and legacy
+        # convention (workflows/*.md) so user-created workflows via the
+        # vault editor are discoverable by the engine.
         path = None
         if self._user_dir_resolver:
             user_dir = self._user_dir_resolver(user_id)
-            user_path = user_dir / _WORKFLOWS_PREFIX / f"{name}.md"
-            if user_path.is_file():
-                path = user_path
+            for prefix, ext in [("_workflows", ".flow.md"), (_WORKFLOWS_PREFIX, ".md")]:
+                candidate = user_dir / prefix / f"{name}{ext}"
+                if candidate.is_file():
+                    path = candidate
+                    break
 
         # Fall back to system dir
         if path is None:
@@ -93,14 +98,21 @@ class TemplateRegistry:
                 if path.stem:
                     names.add(path.stem)
 
-        # User templates (may shadow system)
+        # User templates (may shadow system) — check both conventions
         if self._user_dir_resolver:
             user_dir = self._user_dir_resolver(user_id)
-            user_workflows = user_dir / _WORKFLOWS_PREFIX
-            if user_workflows.is_dir():
-                for path in user_workflows.glob("*.md"):
-                    if path.stem:
-                        names.add(path.stem)
+            for prefix, pattern, strip_suffix in [
+                ("_workflows", "*.flow.md", ".flow"),
+                (_WORKFLOWS_PREFIX, "*.md", ""),
+            ]:
+                wf_dir = user_dir / prefix
+                if wf_dir.is_dir():
+                    for p in wf_dir.glob(pattern):
+                        stem = p.stem
+                        if strip_suffix and stem.endswith(strip_suffix):
+                            stem = stem[: -len(strip_suffix)]
+                        if stem:
+                            names.add(stem)
 
         return sorted(names)
 

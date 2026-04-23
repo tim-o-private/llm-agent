@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import shutil
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -431,3 +432,82 @@ class VaultService:
                 )
             )
         return entries
+
+    # ------------------------------------------------------------------
+    # Backlinks (SPEC-047 FU-2)
+    # ------------------------------------------------------------------
+
+    # Directories excluded from backlink scanning.
+    _BACKLINK_EXCLUDES = {"_activity", "_runs", "_workflows"}
+
+    async def find_backlinks(
+        self, user_id: str, rel_path: str
+    ) -> list[dict[str, str]]:
+        """Find all vault ``.md`` files containing a wikilink to *rel_path*.
+
+        Matches ``[[stem]]`` and ``[[stem|alias]]`` where *stem* is the
+        filename without extension (e.g. ``meeting`` from ``notes/meeting.md``).
+
+        Returns ``[{path, name}, ...]`` sorted alphabetically by path.
+        """
+        user_root = self._user_root(user_id)
+        if not user_root.exists():
+            return []
+        stem = Path(rel_path).stem
+        pattern = re.compile(r"\[\[" + re.escape(stem) + r"(?:\|[^\]]+)?\]\]")
+        return await asyncio.to_thread(
+            self._grep_backlinks, user_root, rel_path, pattern
+        )
+
+    @staticmethod
+    def _grep_backlinks(
+        user_root: Path,
+        rel_path: str,
+        pattern: re.Pattern,
+    ) -> list[dict[str, str]]:
+        """Walk the vault and grep each ``.md`` file for the wikilink pattern."""
+        rel_path_posix = Path(rel_path).as_posix()
+        results: list[dict[str, str]] = []
+
+        for dirpath, dirnames, filenames in os.walk(user_root, followlinks=False):
+            try:
+                rel_dir = Path(dirpath).relative_to(user_root)
+            except ValueError:
+                continue
+
+            rel_dir_parts = rel_dir.parts
+            if rel_dir_parts and rel_dir_parts[0] in VaultService._BACKLINK_EXCLUDES:
+                dirnames[:] = []
+                continue
+
+            dirnames[:] = [
+                d
+                for d in dirnames
+                if not d.startswith(".")
+                and not (not rel_dir_parts and d in VaultService._BACKLINK_EXCLUDES)
+            ]
+
+            for fname in filenames:
+                if fname.startswith("."):
+                    continue
+                if not fname.endswith(".md"):
+                    continue
+
+                full = Path(dirpath) / fname
+                if full.is_symlink():
+                    continue
+
+                rel = full.relative_to(user_root).as_posix()
+                if rel == rel_path_posix:
+                    continue
+
+                try:
+                    content = full.read_text(errors="replace")
+                except OSError:
+                    continue
+
+                if pattern.search(content):
+                    results.append({"path": rel, "name": fname})
+
+        results.sort(key=lambda r: r["path"])
+        return results
