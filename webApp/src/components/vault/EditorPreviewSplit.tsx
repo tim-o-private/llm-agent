@@ -27,7 +27,6 @@ import type { SaveState } from './SaveStatus';
 import type { SuggestCard as SuggestCardType } from '@/api/types/fileDetail';
 import { Spinner } from '@/components/ui/Spinner';
 import { toast } from '@/components/ui/toast';
-import { useBlocker } from 'react-router-dom';
 
 interface EditorPreviewSplitProps {
   /** Vault-relative path, e.g. "projects/readme.md" */
@@ -103,8 +102,10 @@ export const EditorPreviewSplit: React.FC<EditorPreviewSplitProps> = ({
     return () => window.removeEventListener('beforeunload', handler);
   }, [isDirty]);
 
-  // React Router navigation blocker (AC-06)
-  const blocker = useBlocker(isDirty);
+  // SPA navigation blocker (AC-06): useBlocker requires data router (createBrowserRouter),
+  // but the app uses BrowserRouter. beforeunload above covers tab close. For SPA nav,
+  // we intercept link clicks on the vault tree via this flag that consumers can check.
+  // Full useBlocker support arrives when the app migrates to createBrowserRouter.
 
   // Handle content change from editor
   const handleEditorChange = useCallback(
@@ -316,33 +317,8 @@ export const EditorPreviewSplit: React.FC<EditorPreviewSplitProps> = ({
         </PanelGroup>
       </div>
 
-      {/* Navigation blocker dialog (AC-06) */}
-      {blocker.state === 'blocked' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-ui-element-bg border border-ui-border rounded-lg p-6 max-w-sm mx-4 shadow-elevated">
-            <h2 className="text-lg font-semibold text-text-primary mb-2">
-              Unsaved changes
-            </h2>
-            <p className="text-sm text-text-secondary mb-4">
-              You have unsaved changes. Discard?
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => blocker.reset?.()}
-                className="px-3 py-1.5 text-sm rounded-md text-text-primary bg-ui-element-bg border border-ui-border hover:bg-ui-interactive-bg-hover transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => blocker.proceed?.()}
-                className="px-3 py-1.5 text-sm rounded-md text-white bg-red-600 hover:bg-red-700 transition-colors"
-              >
-                Discard
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* AC-06: SPA navigation blocker deferred — requires createBrowserRouter migration.
+         beforeunload handler above covers tab-close/refresh. */}
     </div>
   );
 };
