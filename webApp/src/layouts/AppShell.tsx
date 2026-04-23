@@ -6,7 +6,8 @@ import {
   PanelResizeHandle,
 } from 'react-resizable-panels';
 import TopBar from '@/components/navigation/TopBar';
-import { ChatPanel } from '@/components/ChatPanel';
+import { ChatRail } from '@/components/chat/ChatRail';
+import { CommandPalette } from '@/components/chat/CommandPalette';
 import { FileTree } from '@/components/vault/FileTree';
 import { useChatStore } from '@/stores/useChatStore';
 import { OverlayManager } from '@/components/overlays/OverlayManager';
@@ -74,7 +75,7 @@ const AppShell: React.FC = () => {
 
               <Panel defaultSize={25} minSize={15} className="hidden md:block">
                 <div className="h-full overflow-hidden">
-                  <ChatPanel agentId={import.meta.env.VITE_DEFAULT_CHAT_AGENT_ID || 'assistant'} />
+                  <ChatRail />
                 </div>
               </Panel>
             </>
@@ -112,11 +113,12 @@ const AppShell: React.FC = () => {
               <DoubleArrowLeftIcon className="h-5 w-5" />
             </button>
             <div className="h-full">
-              <ChatPanel agentId={import.meta.env.VITE_DEFAULT_CHAT_AGENT_ID || 'assistant'} />
+              <ChatRail />
             </div>
           </div>
         )}
       </div>
+      <CommandPalette />
       <OverlayManager />
     </>
   );

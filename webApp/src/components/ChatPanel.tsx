@@ -7,6 +7,7 @@ import { useChatStore, useInitializeChatStore, type ChatMessage } from '@/stores
 import { useChatTimeline } from '@/api/hooks/useChatTimeline';
 import { useTaskViewStore } from '@/stores/useTaskViewStore';
 import { MessageHeader } from '@/components/ui/chat/MessageHeader';
+import type { ChatScope } from '@/api/types/chat';
 import { NotificationInlineMessage } from '@/components/ui/chat/NotificationInlineMessage';
 import { ApprovalInlineMessage } from '@/components/ui/chat/ApprovalInlineMessage';
 import { ConversationList } from '@/components/features/Conversations';
@@ -51,9 +52,10 @@ class ThreadErrorBoundary extends Component<
 
 interface ChatPanelProps {
   agentId?: string;
+  scope?: ChatScope;
 }
 
-export const ChatPanel: React.FC<ChatPanelProps> = ({ agentId: agentIdProp }) => {
+export const ChatPanel: React.FC<ChatPanelProps> = ({ agentId: agentIdProp, scope }) => {
   const agentId = agentIdProp || import.meta.env.VITE_DEFAULT_CHAT_AGENT_ID || 'assistant';
 
   // Initialize the chat store for this agent
@@ -134,6 +136,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ agentId: agentIdProp }) =>
             agent_name: agentId,
             message: userText,
             session_id: activeChatId,
+            ...(useChatStore.getState().scope.type !== 'global' && {
+              scope: useChatStore.getState().scope,
+            }),
           }),
         });
 
@@ -310,11 +315,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ agentId: agentIdProp }) =>
   }, [activeChatId, messages.length]);
 
   return (
-    <div className="flex flex-col h-full bg-ui-bg shadow-lg border-l border-ui-border">
+    <div className="flex flex-col h-full bg-ui-bg">
       <MessageHeader
         chatTitle="AI Coach"
         status={isRunning ? 'Typing...' : 'Online'}
         statusColor={isRunning ? 'yellow' : 'green'}
+        scope={scope}
       />
 
       <ConversationList agentName={agentId} />

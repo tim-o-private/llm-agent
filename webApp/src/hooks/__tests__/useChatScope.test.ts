@@ -3,7 +3,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { useChatScope } from '../useChatScope';
 
 // Mock react-router-dom's useLocation
-const mockPathname = vi.fn<() => string>(() => '/');
+const mockPathname = vi.fn(() => '/');
 
 vi.mock('react-router-dom', () => ({
   useLocation: () => ({ pathname: mockPathname() }),

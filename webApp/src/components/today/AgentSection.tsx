@@ -1,5 +1,6 @@
 import React from 'react';
 import type { AgentItem, TodayResponse } from '@/api/types/today';
+import { AskChip } from '@/components/chat/AskChip';
 
 const HEADING_ID = 'today-agent-heading';
 
@@ -30,9 +31,12 @@ const AgentItemRow: React.FC<{ item: AgentItem }> = ({ item }) => (
 
 export const AgentSection: React.FC<{ agent: TodayResponse['agent'] }> = ({ agent }) => (
   <section aria-labelledby={HEADING_ID} className="py-6">
-    <h2 id={HEADING_ID} className="text-lg font-medium text-text-secondary tracking-tight mb-3">
-      Agent
-    </h2>
+    <div className="flex items-center justify-between mb-3">
+      <h2 id={HEADING_ID} className="text-lg font-medium text-text-secondary tracking-tight">
+        Agent
+      </h2>
+      <AskChip scope={{ type: 'today' }} label="Ask about agents" />
+    </div>
     <div className="space-y-4">
       {GROUPS.map((g) => {
         const items = agent[g.key] ?? [];
