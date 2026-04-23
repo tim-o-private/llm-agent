@@ -26,11 +26,40 @@ _MAX_WRITE_BYTES = 10 * 1024 * 1024
 # Directories excluded from list_recent by default.
 _DEFAULT_RECENT_EXCLUDES = ("_workflows", "_activity", "_runs")
 
+# Directories excluded from tree/folder listings (dot-files handled separately).
+_TREE_EXCLUDES = {"_activity", "_runs"}
+
+# Safety cap on recursive tree depth.
+_MAX_TREE_DEPTH = 10
+
 
 @dataclass
 class RecentEntry:
     path: str
     updated_at: str
+
+
+@dataclass
+class TreeNode:
+    """A file or folder in the vault tree."""
+
+    name: str
+    path: str  # relative to user root, posix separators
+    type: str  # "file" | "folder"
+    mtime: str  # ISO 8601
+    size: int
+    children: list["TreeNode"] | None = None
+
+
+@dataclass
+class FolderEntry:
+    """A single entry in a flat folder listing."""
+
+    name: str
+    path: str
+    type: str  # "file" | "folder"
+    mtime: str
+    size: int
 
 
 class VaultService:
@@ -102,6 +131,19 @@ class VaultService:
         if not path.is_file():
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
         return path.read_text()
+
+    async def read_file_with_meta(
+        self, user_id: str, rel_path: str
+    ) -> tuple[str, str, int]:
+        """Read a file and return ``(content, mtime_iso, size)`` in one pass."""
+        path = self._resolve(user_id, rel_path)
+        if not path.exists():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        if not path.is_file():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+        content = path.read_text()
+        mtime_iso, size = self._stat_info(path)
+        return content, mtime_iso, size
 
     async def stat_file(self, user_id: str, rel_path: str) -> Optional[os.stat_result]:
         path = self._resolve(user_id, rel_path)
@@ -245,3 +287,147 @@ class VaultService:
             )
             for mtime, rel in results[:limit]
         ]
+
+    # ------------------------------------------------------------------
+    # Tree / folder listing (SPEC-046 FU-1)
+    # ------------------------------------------------------------------
+
+    async def list_tree(self, user_id: str) -> list[TreeNode]:
+        """Return a recursive tree of the user's vault.
+
+        Excludes dot-files, ``_activity/``, and ``_runs/`` directories.
+        Delegates to a thread to avoid blocking the event loop on large vaults.
+        """
+        user_root = self._user_root(user_id)
+        if not user_root.exists():
+            return []
+        return await asyncio.to_thread(
+            self._build_tree, user_root, user_root, depth=0
+        )
+
+    @staticmethod
+    def _stat_info(path: Path) -> tuple[str, int]:
+        """Return ``(mtime_iso, size)`` from a single ``stat()`` call."""
+        try:
+            st = path.stat()
+            mtime = st.st_mtime
+            size = st.st_size
+        except OSError:
+            mtime = 0.0
+            size = 0
+        mtime_iso = (
+            datetime.fromtimestamp(mtime, tz=timezone.utc)
+            .isoformat()
+            .replace("+00:00", "Z")
+        )
+        return mtime_iso, size
+
+    @staticmethod
+    def _mtime_iso(path: Path) -> str:
+        mtime_iso, _ = VaultService._stat_info(path)
+        return mtime_iso
+
+    @classmethod
+    def _build_tree(
+        cls, user_root: Path, current: Path, depth: int
+    ) -> list[TreeNode]:
+        if depth > _MAX_TREE_DEPTH:
+            return []
+
+        nodes: list[TreeNode] = []
+        try:
+            entries = sorted(current.iterdir(), key=lambda p: p.name)
+        except OSError:
+            return []
+
+        for entry in entries:
+            if entry.name.startswith("."):
+                continue
+            if entry.is_symlink():
+                continue
+
+            rel = entry.relative_to(user_root).as_posix()
+
+            if entry.is_dir():
+                top_level_name = Path(rel).parts[0] if Path(rel).parts else ""
+                if top_level_name in _TREE_EXCLUDES:
+                    continue
+                children = cls._build_tree(user_root, entry, depth + 1)
+                mtime, _ = cls._stat_info(entry)
+                nodes.append(
+                    TreeNode(
+                        name=entry.name,
+                        path=rel,
+                        type="folder",
+                        mtime=mtime,
+                        size=0,
+                        children=children,
+                    )
+                )
+            elif entry.is_file():
+                mtime, size = cls._stat_info(entry)
+                nodes.append(
+                    TreeNode(
+                        name=entry.name,
+                        path=rel,
+                        type="file",
+                        mtime=mtime,
+                        size=size,
+                    )
+                )
+        return nodes
+
+    async def list_folder(
+        self, user_id: str, rel_path: str
+    ) -> list[FolderEntry]:
+        """Return a flat (one-level) listing of a vault folder.
+
+        ``rel_path`` can be empty or ``""`` for the root. Otherwise it goes
+        through ``_resolve`` for safety.
+        """
+        user_root = self._user_root(user_id)
+
+        if not rel_path or rel_path == ".":
+            target = user_root
+        else:
+            target = self._resolve(user_id, rel_path)
+
+        if not target.exists():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        if not target.is_dir():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+
+        return await asyncio.to_thread(self._list_dir, user_root, target)
+
+    @classmethod
+    def _list_dir(cls, user_root: Path, target: Path) -> list[FolderEntry]:
+        entries: list[FolderEntry] = []
+        try:
+            items = sorted(target.iterdir(), key=lambda p: p.name)
+        except OSError:
+            return []
+
+        for item in items:
+            if item.name.startswith("."):
+                continue
+            if item.is_symlink():
+                continue
+
+            rel = item.relative_to(user_root).as_posix()
+
+            top_level_name = Path(rel).parts[0] if Path(rel).parts else ""
+            if item.is_dir() and top_level_name in _TREE_EXCLUDES:
+                continue
+
+            is_dir = item.is_dir()
+            mtime, size = cls._stat_info(item)
+            entries.append(
+                FolderEntry(
+                    name=item.name,
+                    path=rel,
+                    type="folder" if is_dir else "file",
+                    mtime=mtime,
+                    size=0 if is_dir else size,
+                )
+            )
+        return entries

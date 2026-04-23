@@ -23,6 +23,7 @@ from .models.chat import ChatRequest, ChatResponse
 from .models.prompt_customization import PromptCustomization, PromptCustomizationCreate
 from .models.webhook import SupabasePayload
 from .routers.actions import router as actions_router
+from .routers.activity_router import router as activity_router
 from .routers.approvals_router import router as approvals_router
 from .routers.chat_history_router import router as chat_history_router
 from .routers.email_agent_router import router as email_agent_router
@@ -32,6 +33,7 @@ from .routers.oauth_router import router as oauth_router
 from .routers.session_open_router import router as session_open_router
 from .routers.telegram_router import router as telegram_router
 from .routers.today_router import router as today_router
+from .routers.vault_router import router as vault_router
 from .routers.workflows_router import router as workflows_router
 from .services.prompt_customization import get_prompt_customization_service
 
@@ -258,7 +260,9 @@ app.include_router(notifications_router)
 app.include_router(session_open_router)
 app.include_router(telegram_router)
 app.include_router(today_router)
+app.include_router(vault_router)
 app.include_router(workflows_router)
+app.include_router(activity_router)
 app.include_router(approvals_router)
 
 # --- Logger setup ---
@@ -306,6 +310,7 @@ async def _handle_chat(
         agent_name=chat_input.agent_name,
         session_id=chat_input.session_id,
         channel="web",
+        scope=chat_input.scope,
     )
 
     from .services.agent_callbacks import tool_call_logger
@@ -360,6 +365,7 @@ async def _handle_chat_stream(
         agent_name=chat_input.agent_name,
         session_id=chat_input.session_id,
         channel="web",
+        scope=chat_input.scope,
     )
 
     from .services.agent_callbacks import tool_call_logger

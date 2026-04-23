@@ -6,6 +6,7 @@ import { generateNewChatId } from '@/api/hooks/useChatSessionHooks';
 import { useEffect } from 'react';
 import { toast } from '@/components/ui/toast';
 import { v4 as uuidv4 } from 'uuid'; // For client-side message IDs
+import type { ChatScope } from '@/api/types/chat';
 
 // Keep existing ChatMessage interface if it matches what the UI uses
 export interface ChatMessage {
@@ -36,12 +37,16 @@ interface ChatStore {
   currentAgentName: string | null; // Renamed from currentAgentId
   isInitializingSession: boolean; // ADDED: Flag to prevent multiple initializations
   lastWakeupAt: number | null;
+  scope: ChatScope; // SPEC-049: current chat scope derived from route
+  pendingPrompt: string | null; // SPEC-049: pre-filled prompt from AskChip
   sendHeartbeatAsync: () => Promise<void>;
   triggerWakeup: () => Promise<void>;
 
   addMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>, senderType?: ChatMessage['sender']) => Promise<void>;
   toggleChatPanel: () => void;
   setChatPanelOpen: (isOpen: boolean) => void;
+  setScope: (scope: ChatScope) => void; // SPEC-049
+  setPendingPrompt: (prompt: string | null) => void; // SPEC-049
   initializeSessionAsync: (agentName: string) => Promise<void>; // Renamed and made async
   clearCurrentSessionAsync: () => Promise<void>;
   setCurrentAgentName: (agentName: string | null) => void; // Renamed
@@ -188,6 +193,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   currentAgentName: null,
   isInitializingSession: false, // ADDED: Initial state for the flag
   lastWakeupAt: null,
+  scope: { type: 'global' } as ChatScope, // SPEC-049
+  pendingPrompt: null, // SPEC-049
 
   addMessage: async (message, senderTypeFromParam) => {
     const senderType = senderTypeFromParam || message.sender || 'ai';
@@ -223,6 +230,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   toggleChatPanel: () => set((state) => ({ isChatPanelOpen: !state.isChatPanelOpen })),
   setChatPanelOpen: (isOpen) => set({ isChatPanelOpen: isOpen }),
+  setScope: (scope) => set({ scope }), // SPEC-049
+  setPendingPrompt: (prompt) => set({ pendingPrompt: prompt }), // SPEC-049
   setCurrentAgentName: (agentName) => set({ currentAgentName: agentName }),
 
   initializeSessionAsync: async (agentName: string) => {

@@ -1,31 +1,39 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useMemo } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { UserMenu } from '@/components/UserMenu';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import { useChatStore } from '@/stores/useChatStore';
 import { ChatBubbleIcon } from '@radix-ui/react-icons';
-import { ApprovalsBadge } from '@/components/today/ApprovalsBadge';
+import { AmbientIndicator } from '@/components/activity/AmbientIndicator';
+import { Breadcrumb } from '@/components/vault/Breadcrumb';
 
+/**
+ * AC-04: TopBar spans the full width above all three panes.
+ * Contains: breadcrumb (replaces "Clarity" logo text), AmbientIndicator (approvals + activity), ThemeToggle, UserMenu.
+ */
 const TopBar: React.FC = () => {
-  const currentDate = new Date().toLocaleDateString(undefined, {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-
   const toggleChatPanel = useChatStore((state) => state.toggleChatPanel);
   const navigate = useNavigate();
-  const jumpToApprovals = () => navigate('/today#today-approvals');
+  const location = useLocation();
+
+  const jumpToApprovals = () => navigate('/#today-approvals');
+
+  // Derive vault path from current route for breadcrumb
+  const vaultPath = useMemo(() => {
+    const path = location.pathname;
+    if (path === '/' || path === '/today') return '';
+    if (path.startsWith('/vault/')) return path.replace('/vault/', '');
+    if (path === '/settings') return 'settings';
+    return '';
+  }, [location.pathname]);
 
   return (
     <div className="flex-1 px-2 sm:px-4 flex justify-between items-center h-full min-w-0">
-      {/* Left section - Logo */}
+      {/* Left section - Breadcrumb replaces logo (AC-04, AC-05) */}
       <div className="flex items-center min-w-0">
-        <div className="flex items-center flex-shrink-0 px-2 sm:px-4 h-full">
-          <span className="text-xl font-semibold text-text-primary">Clarity</span>
+        <div className="px-2 sm:px-3">
+          <Breadcrumb vaultPath={vaultPath} />
         </div>
-        <span className="text-sm text-text-muted hidden md:block ml-4 truncate">{currentDate}</span>
       </div>
 
       {/* Spacer */}
@@ -33,13 +41,16 @@ const TopBar: React.FC = () => {
 
       {/* Right section */}
       <div className="flex items-center space-x-2 sm:space-x-3 flex-shrink-0">
-        {/* Streak - hidden on mobile */}
-        <div className="hidden sm:block">
-          <span className="text-sm font-medium text-text-secondary whitespace-nowrap">Streak: N/A</span>
-        </div>
-        <ApprovalsBadge onJump={jumpToApprovals} />
+        <AmbientIndicator onJumpToApprovals={jumpToApprovals} />
+        {/* SPEC-049 AC-08: Cmd+K shortcut hint, desktop only */}
+        <kbd className="hidden lg:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-mono text-text-muted bg-ui-element-bg border border-ui-border rounded">
+          {typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform)
+            ? '⌘'
+            : 'Ctrl+'}
+          K
+        </kbd>
         <ThemeToggle />
-        {/* Mobile chat toggle - visible only on mobile (desktop uses AppShell sidebar button) */}
+        {/* Mobile chat toggle - visible only on mobile (desktop uses AppShell button) */}
         <button
           onClick={toggleChatPanel}
           className="md:hidden p-2 rounded-md text-text-muted hover:text-text-primary hover:bg-ui-interactive-bg-hover transition-colors"

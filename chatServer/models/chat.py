@@ -9,6 +9,7 @@ class ChatRequest(BaseModel):
     agent_name: str
     message: str
     session_id: str  # Added: session_id is now required
+    scope: Optional[dict] = None  # SPEC-049: ChatScope serialized as dict
 
 
 class ChatResponse(BaseModel):

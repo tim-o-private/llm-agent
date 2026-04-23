@@ -7,6 +7,7 @@ import { useChatStore, useInitializeChatStore, type ChatMessage } from '@/stores
 import { useChatTimeline } from '@/api/hooks/useChatTimeline';
 import { useTaskViewStore } from '@/stores/useTaskViewStore';
 import { MessageHeader } from '@/components/ui/chat/MessageHeader';
+import type { ChatScope } from '@/api/types/chat';
 import { NotificationInlineMessage } from '@/components/ui/chat/NotificationInlineMessage';
 import { ApprovalInlineMessage } from '@/components/ui/chat/ApprovalInlineMessage';
 import { ConversationList } from '@/components/features/Conversations';
@@ -51,9 +52,10 @@ class ThreadErrorBoundary extends Component<
 
 interface ChatPanelProps {
   agentId?: string;
+  scope?: ChatScope;
 }
 
-export const ChatPanel: React.FC<ChatPanelProps> = ({ agentId: agentIdProp }) => {
+export const ChatPanel: React.FC<ChatPanelProps> = ({ agentId: agentIdProp, scope }) => {
   const agentId = agentIdProp || import.meta.env.VITE_DEFAULT_CHAT_AGENT_ID || 'assistant';
 
   // Initialize the chat store for this agent
@@ -134,6 +136,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ agentId: agentIdProp }) =>
             agent_name: agentId,
             message: userText,
             session_id: activeChatId,
+            ...(() => {
+              const currentScope = useChatStore.getState().scope;
+              return currentScope.type !== 'global' ? { scope: currentScope } : {};
+            })(),
           }),
         });
 
@@ -270,6 +276,19 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ agentId: agentIdProp }) =>
     };
   }, [setInputFocusState]);
 
+  // SPEC-049: consume pendingPrompt from store (set by AskChip or Cmd+K).
+  // Programmatically submit through the runtime's composer, then clear the store field.
+  const pendingPrompt = useChatStore((s) => s.pendingPrompt);
+  useEffect(() => {
+    if (!pendingPrompt || !activeChatId || isRunning) return;
+    useChatStore.getState().setPendingPrompt(null);
+    // Use the runtime's thread composer to send — this goes through the same
+    // onNew callback that the <Composer /> UI uses, keeping the message flow consistent.
+    const composer = runtime.thread.composer;
+    composer.setText(pendingPrompt);
+    composer.send();
+  }, [pendingPrompt, activeChatId, isRunning, runtime]);
+
   // Scroll to bottom when messages first load for a session (initial hydration or session switch).
   // Uses MutationObserver instead of fixed timeouts because assistant-ui Thread renders
   // messages asynchronously — fixed delays are a race condition.
@@ -310,11 +329,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ agentId: agentIdProp }) =>
   }, [activeChatId, messages.length]);
 
   return (
-    <div className="flex flex-col h-full bg-ui-bg shadow-lg border-l border-ui-border">
+    <div className="flex flex-col h-full bg-ui-bg">
       <MessageHeader
         chatTitle="AI Coach"
         status={isRunning ? 'Typing...' : 'Online'}
         statusColor={isRunning ? 'yellow' : 'green'}
+        scope={scope}
       />
 
       <ConversationList agentName={agentId} />

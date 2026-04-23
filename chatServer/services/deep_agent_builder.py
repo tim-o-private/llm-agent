@@ -150,6 +150,58 @@ def _collect_tool_guidance(tools: list, channel: str) -> str:
     return "## Tool Guidance\n" + "\n\n".join(sections)
 
 
+async def _build_scope_context(scope: dict | None, vault_service=None, user_id: str = "") -> str:
+    """Build a scope context string from the chat scope.
+
+    SPEC-049 §"Technical Approach" §9 — injected as a prefix to the system
+    prompt so the agent knows what the user is looking at.
+    """
+    if not scope:
+        return ""
+
+    scope_type = scope.get("type", "global")
+    scope_path = scope.get("path")
+
+    async def _read_and_truncate(label: str) -> str | None:
+        if not (vault_service and user_id and scope_path):
+            return None
+        try:
+            content = await vault_service.read_file(user_id, scope_path)
+            if len(content) > 4000:
+                content = content[:4000] + "\n... [truncated]"
+            return f"{label}:\n```\n{content}\n```"
+        except Exception:
+            return None
+
+    parts: list[str] = []
+    if scope_type == "today":
+        parts.append("The user is on the Today dashboard.")
+    elif scope_type == "file" and scope_path:
+        parts.append(f"The user is viewing the file: {scope_path}")
+        snippet = await _read_and_truncate("File content")
+        if snippet:
+            parts.append(snippet)
+    elif scope_type == "folder" and scope_path:
+        parts.append(f"The user is browsing the folder: {scope_path}")
+        if vault_service and user_id:
+            try:
+                entries = await vault_service.list_folder(user_id, scope_path)
+                listing = "\n".join(f"- {e.type}: {e.name}" for e in entries)
+                if listing:
+                    parts.append(f"Folder contents:\n{listing}")
+            except Exception:
+                pass
+    elif scope_type == "workflow" and scope_path:
+        parts.append(f"The user is editing the workflow: {scope_path}")
+        snippet = await _read_and_truncate("Workflow definition")
+        if snippet:
+            parts.append(snippet)
+    else:
+        return ""
+
+    return "\n".join(parts)
+
+
 def _build_system_prompt(
     soul: str | None = None,
     identity: dict | None = None,
@@ -160,6 +212,7 @@ def _build_system_prompt(
     phase: str = "management",
     system_dir: Path | None = None,
     tool_guidance: str | None = None,
+    scope_context: str | None = None,
 ) -> str:
     """Assemble the full system prompt with always-present identity + runtime context.
 
@@ -194,6 +247,10 @@ def _build_system_prompt(
 
     channel_text = _CHANNEL_HEADERS.get(channel, _CHANNEL_HEADERS["web"])
     sections.append(f"## Channel\n{channel_text}")
+
+    # SPEC-049: scope context — what the user is currently looking at
+    if scope_context:
+        sections.append(f"## Current Context\n{scope_context}")
 
     now = datetime.now(timezone.utc)
     time_str = now.strftime("%A, %B %d, %Y %I:%M %p (UTC)")
@@ -437,6 +494,7 @@ async def build_deep_agent(
     channel: str = "web",
     bootstrap_context: str | None = None,
     last_message_at: datetime | None = None,
+    scope: dict | None = None,
 ) -> Any:
     """Build or retrieve a cached CompiledStateGraph.
 
@@ -465,6 +523,7 @@ async def build_deep_agent(
             user_id, agent_name, session_id, channel,
             bootstrap_context=bootstrap_context,
             last_message_at=last_message_at,
+            scope=scope,
         )
         if not skip_cache:
             _agent_cache[cache_key] = agent
@@ -485,6 +544,7 @@ async def _build_agent(
     *,
     bootstrap_context: str | None = None,
     last_message_at: datetime | None = None,
+    scope: dict | None = None,
 ) -> Any:
     """Load config from files and construct a CompiledStateGraph via create_deep_agent()."""
     from deepagents import create_deep_agent
@@ -597,6 +657,20 @@ async def _build_agent(
 
     tool_guidance = _collect_tool_guidance(instantiated_tools, channel)
 
+    # SPEC-049: build scope context for injection into system prompt.
+    # VaultService needs a StorageSync, but for scope context we only read
+    # files from the local sandbox. We construct a lightweight VaultService
+    # pointing at the same data_dir used by the sandbox backend.
+    scope_context = ""
+    if scope:
+        try:
+            from chatServer.services.vault_service import VaultService
+
+            vault_svc = VaultService(storage_sync=None, data_dir=data_dir)
+            scope_context = await _build_scope_context(scope, vault_service=vault_svc, user_id=user_id)
+        except Exception as exc:
+            logger.debug("Scope context build failed (non-fatal): %s", exc)
+
     system_prompt = _build_system_prompt(
         soul=soul,
         identity=identity,
@@ -607,6 +681,7 @@ async def _build_agent(
         phase=phase,
         system_dir=system_dir,
         tool_guidance=tool_guidance,
+        scope_context=scope_context,
     )
 
     # 7. Resolve model — Deep Agents uses "provider:model" format

@@ -117,8 +117,9 @@ export default {
         'gradient-shift': 'gradientShift 3s ease-in-out infinite',
         'float': 'float 3s ease-in-out infinite',
         'shimmer': 'shimmer 2s linear infinite',
+        'slide-in-right': 'slideInRight 0.25s ease-out',
       },
-      
+
       keyframes: {
         fadeIn: {
           '0%': { opacity: '0' },
@@ -151,6 +152,10 @@ export default {
         shimmer: {
           '0%': { backgroundPosition: '-200% 0' },
           '100%': { backgroundPosition: '200% 0' },
+        },
+        slideInRight: {
+          '0%': { transform: 'translateX(100%)' },
+          '100%': { transform: 'translateX(0)' },
         },
       },
       

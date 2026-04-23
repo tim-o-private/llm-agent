@@ -1,10 +1,13 @@
 import React from 'react';
 import clsx from 'clsx';
+import type { ChatScope } from '@/api/types/chat';
+import { ScopeIndicator } from '@/components/chat/ScopeIndicator';
 
 export interface MessageHeaderProps {
   chatTitle: string;
   status?: string;
   statusColor?: 'green' | 'yellow' | 'gray'; // For status indicator dot
+  scope?: ChatScope;
   // onClearChat?: () => void; // Example for a future action button
 }
 
@@ -12,6 +15,7 @@ export const MessageHeader: React.FC<MessageHeaderProps> = ({
   chatTitle,
   status,
   statusColor = 'gray',
+  scope,
   // onClearChat
 }) => {
   const statusDotColorClasses: Record<string, string> = {
@@ -37,6 +41,11 @@ export const MessageHeader: React.FC<MessageHeaderProps> = ({
                 )}
               ></span>
               <p className="text-xs text-text-muted">{status}</p>
+            </div>
+          )}
+          {scope && scope.type !== 'global' && (
+            <div className="mt-0.5">
+              <ScopeIndicator scope={scope} />
             </div>
           )}
         </div>
