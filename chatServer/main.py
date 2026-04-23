@@ -23,6 +23,7 @@ from .models.chat import ChatRequest, ChatResponse
 from .models.prompt_customization import PromptCustomization, PromptCustomizationCreate
 from .models.webhook import SupabasePayload
 from .routers.actions import router as actions_router
+from .routers.activity_router import router as activity_router
 from .routers.approvals_router import router as approvals_router
 from .routers.chat_history_router import router as chat_history_router
 from .routers.email_agent_router import router as email_agent_router
@@ -259,6 +260,7 @@ app.include_router(session_open_router)
 app.include_router(telegram_router)
 app.include_router(today_router)
 app.include_router(workflows_router)
+app.include_router(activity_router)
 app.include_router(approvals_router)
 
 # --- Logger setup ---
