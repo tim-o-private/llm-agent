@@ -15,6 +15,11 @@ logger = logging.getLogger(__name__)
 
 _RUN_COLUMNS = "id,template_name,status,current_step,error,started_at,completed_at,created_at"
 
+_DETAILED_COLUMNS = (
+    "id,template_name,status,current_step,error,"
+    "parameters,step_outputs,started_at,completed_at,created_at"
+)
+
 
 class WorkflowRunsService:
     def __init__(self, db: UserScopedClient):
@@ -29,6 +34,27 @@ class WorkflowRunsService:
         query = (
             self._db.table("workflow_runs")
             .select(_RUN_COLUMNS)
+            .order("created_at", desc=True)
+            .limit(limit)
+        )
+        if template_name is not None:
+            query = query.eq("template_name", template_name)
+
+        result = await query.execute()
+        return list(result.data or [])
+
+    async def list_runs_detailed(
+        self,
+        *,
+        template_name: Optional[str] = None,
+        limit: int = 25,
+    ) -> list[dict[str, Any]]:
+        """Like ``list_runs`` but selects all columns including
+        ``step_outputs`` and ``parameters`` for the run detail view.
+        """
+        query = (
+            self._db.table("workflow_runs")
+            .select(_DETAILED_COLUMNS)
             .order("created_at", desc=True)
             .limit(limit)
         )
