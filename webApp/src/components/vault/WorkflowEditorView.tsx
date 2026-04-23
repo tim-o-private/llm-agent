@@ -1,5 +1,5 @@
 /**
- * SPEC-048 AC-01/AC-02/AC-03/AC-09: Top-level workflow editor view.
+ * SPEC-048 AC-01/AC-02/AC-03/AC-09/AC-13: Top-level workflow editor view.
  *
  * Three sub-panes using react-resizable-panels:
  *   Left (18%, collapsible): WorkflowListPanel
@@ -8,6 +8,8 @@
  *
  * Composes SPEC-047 components (VaultEditor, FileHeaderBar, MarkdownPreview)
  * with workflow-specific panels and controls. Does NOT duplicate the editor.
+ *
+ * AC-13: auto-save before dry-run/run-now. AC-14/AC-16: dialog wiring.
  */
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
@@ -34,8 +36,11 @@ import { LayoutToggle, type LayoutMode } from './LayoutToggle';
 import { WorkflowListPanel } from './WorkflowListPanel';
 import { RunHistoryPanel } from './RunHistoryPanel';
 import { WorkflowHeaderExtension } from './WorkflowHeaderExtension';
+import { DryRunResultsDialog } from './DryRunResultsDialog';
+import { ParameterInputDialog } from './ParameterInputDialog';
 import type { SaveState } from './SaveStatus';
 import type { SuggestCard as SuggestCardType } from '@/api/types/fileDetail';
+import type { DryRunResult, DryRunParameter } from '@/api/types/workflowEditor';
 import { Spinner } from '@/components/ui/Spinner';
 import { toast } from '@/components/ui/toast';
 import { useBlocker } from 'react-router-dom';
@@ -96,6 +101,12 @@ export const WorkflowEditorView: React.FC<WorkflowEditorViewProps> = ({
   const [historyCollapsed, setHistoryCollapsed] = useState(() =>
     getCollapsed('workflow-editor-history-collapsed'),
   );
+
+  // Dialog state (AC-14, AC-16)
+  const [dryRunDialogOpen, setDryRunDialogOpen] = useState(false);
+  const [dryRunResult, setDryRunResult] = useState<DryRunResult | null>(null);
+  const [paramDialogOpen, setParamDialogOpen] = useState(false);
+  const [paramList, setParamList] = useState<DryRunParameter[]>([]);
 
   // Panel refs for imperative collapse
   const listPanelRef = useRef<import('react-resizable-panels').ImperativePanelHandle>(null);
@@ -221,14 +232,101 @@ export const WorkflowEditorView: React.FC<WorkflowEditorViewProps> = ({
     );
   }, [isDirty, path, editorContent, localMtime, saveMutation]);
 
-  // Placeholder handlers for dry run and run now (wired to dialogs in FU-3)
-  const handleDryRun = useCallback(() => {
-    dryRunMutation.mutate(templateName);
-  }, [dryRunMutation, templateName]);
+  /**
+   * AC-13: Auto-save before run. Returns a promise that resolves on success
+   * or rejects on failure (409/network error). If not dirty, resolves immediately.
+   */
+  const autoSaveAsync = useCallback((): Promise<void> => {
+    if (!isDirty) return Promise.resolve();
 
-  const handleRunNow = useCallback(() => {
-    runWorkflowMutation.mutate({ template_name: templateName });
-  }, [runWorkflowMutation, templateName]);
+    return new Promise((resolve, reject) => {
+      setSaveState('saving');
+      saveMutation.mutate(
+        { path, content: editorContent, mtime: localMtime },
+        {
+          onSuccess: (response) => {
+            setLocalMtime(response.mtime);
+            setLastSavedContent(editorContent);
+            setSaveState('saved');
+            resolve();
+          },
+          onError: (err) => {
+            setSaveState('unsaved');
+            toast.error('Save failed — fix conflicts before running.');
+            reject(err);
+          },
+        },
+      );
+    });
+  }, [isDirty, path, editorContent, localMtime, saveMutation]);
+
+  /**
+   * AC-13 + AC-14: Dry run handler.
+   * Auto-saves first, then dispatches dry run and shows results dialog.
+   */
+  const handleDryRun = useCallback(async () => {
+    try {
+      await autoSaveAsync();
+    } catch {
+      return; // Save failed, abort
+    }
+
+    dryRunMutation.mutate(templateName, {
+      onSuccess: (result) => {
+        setDryRunResult(result);
+        setDryRunDialogOpen(true);
+      },
+    });
+  }, [autoSaveAsync, dryRunMutation, templateName]);
+
+  /**
+   * AC-13 + AC-15 + AC-16: Run now handler.
+   * Auto-saves, validates via dry run, shows parameter dialog if needed.
+   */
+  const handleRunNow = useCallback(async () => {
+    try {
+      await autoSaveAsync();
+    } catch {
+      return; // Save failed, abort
+    }
+
+    // Dry run to check for parameters and validity
+    dryRunMutation.mutate(templateName, {
+      onSuccess: (result) => {
+        if (!result.valid) {
+          toast.error('Workflow validation failed — check dry run for details');
+          setDryRunResult(result);
+          setDryRunDialogOpen(true);
+          return;
+        }
+
+        const requiredParams = result.parameters.filter((p) => p.required);
+        if (requiredParams.length > 0) {
+          // AC-16: Show parameter dialog before dispatch
+          setParamList(result.parameters);
+          setParamDialogOpen(true);
+        } else {
+          // No parameters needed, run directly
+          runWorkflowMutation.mutate({ template_name: templateName });
+        }
+      },
+    });
+  }, [autoSaveAsync, dryRunMutation, runWorkflowMutation, templateName]);
+
+  /** AC-16: Run with user-provided parameters from the dialog. */
+  const handleRunWithParams = useCallback(
+    (values: Record<string, string>) => {
+      runWorkflowMutation.mutate(
+        { template_name: templateName, parameters: values },
+        {
+          onSuccess: () => {
+            setParamDialogOpen(false);
+          },
+        },
+      );
+    },
+    [runWorkflowMutation, templateName],
+  );
 
   // Collapse handlers
   const handleListCollapseToggle = useCallback(() => {
@@ -502,6 +600,22 @@ export const WorkflowEditorView: React.FC<WorkflowEditorViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Dry run results dialog (AC-14) */}
+      <DryRunResultsDialog
+        open={dryRunDialogOpen}
+        onOpenChange={setDryRunDialogOpen}
+        result={dryRunResult}
+      />
+
+      {/* Parameter input dialog (AC-16) */}
+      <ParameterInputDialog
+        open={paramDialogOpen}
+        onOpenChange={setParamDialogOpen}
+        parameters={paramList}
+        onRun={handleRunWithParams}
+        isRunning={runWorkflowMutation.isPending}
+      />
     </>
   );
 };
