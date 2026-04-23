@@ -18,8 +18,9 @@ CREATE TABLE suggest_cards (
 CREATE INDEX ON suggest_cards(user_id, file_path, status);
 ALTER TABLE suggest_cards ENABLE ROW LEVEL SECURITY;
 CREATE POLICY suggest_cards_select ON suggest_cards
-    FOR SELECT USING (auth.uid() = user_id);
+    FOR SELECT USING (public.is_record_owner(user_id));
 CREATE POLICY suggest_cards_update ON suggest_cards
-    FOR UPDATE USING (auth.uid() = user_id);
+    FOR UPDATE USING (public.is_record_owner(user_id))
+    WITH CHECK (public.is_record_owner(user_id));
 CREATE POLICY suggest_cards_insert ON suggest_cards
     FOR INSERT WITH CHECK (auth.role() = 'service_role');
