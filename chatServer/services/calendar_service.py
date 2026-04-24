@@ -65,6 +65,41 @@ class CalendarService:
         ).execute()
         return self._normalize_event(event, full=True)
 
+    def create_event(
+        self,
+        title: str,
+        start_at: str,
+        end_at: str,
+        description: str = "",
+    ) -> dict:
+        """Create a calendar event.
+
+        Args:
+            title: Event summary/title.
+            start_at: Start time in ISO format.
+            end_at: End time in ISO format.
+            description: Optional event description.
+
+        Returns:
+            Dict with ``event_id`` and ``html_link``.
+        """
+        event_body = {
+            "summary": title,
+            "start": {"dateTime": start_at},
+            "end": {"dateTime": end_at},
+        }
+        if description:
+            event_body["description"] = description
+
+        result = self.service.events().insert(
+            calendarId="primary", body=event_body
+        ).execute()
+
+        return {
+            "event_id": result.get("id"),
+            "html_link": result.get("htmlLink"),
+        }
+
     def _normalize_event(self, event: dict, full: bool = False) -> dict:
         """Normalize a Google Calendar event to a consistent format.
 

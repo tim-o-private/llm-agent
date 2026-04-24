@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { APPROVAL_TYPE_LABEL, type ApprovalCard, type ApprovalCardType } from '@/api/types/today';
 import { useRejectCard } from '@/api/hooks/useApprovalsHooks';
+import { ExecutionStatus } from './ExecutionStatus';
 
 type AccentColor = 'blue' | 'violet' | 'amber' | 'red';
 
@@ -122,6 +123,7 @@ export const CardShell: React.FC<CardShellProps> = ({
       <h3 className="text-base font-medium text-text-primary mb-3">{card.title}</h3>
       <div className="mb-4 text-sm text-text-primary space-y-2">{children}</div>
       {actionRow}
+      <ExecutionStatus card={card} />
     </div>
   );
 };

@@ -290,6 +290,58 @@ class VaultService:
         ]
 
     # ------------------------------------------------------------------
+    # File operations (SPEC-052)
+    # ------------------------------------------------------------------
+
+    async def delete_file(self, user_id: str, rel_path: str) -> None:
+        """Delete a file within the user's vault.
+
+        Raises 404 if the file does not exist, 400 if it's not a file,
+        403 on path escape.
+        """
+        path = self._resolve(user_id, rel_path)
+        if not path.exists():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        if not path.is_file():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+        path.unlink()
+        if self._sync is not None:
+            try:
+                asyncio.create_task(self._sync.sync_file(user_id, rel_path))
+            except Exception:
+                logger.warning("Failed to schedule sync_file for %s", rel_path)
+
+    async def move_file(
+        self, user_id: str, source_rel: str, target_rel: str
+    ) -> None:
+        """Move/rename a file within the user's vault.
+
+        Both paths go through ``_resolve`` for containment safety.
+        Raises 404 if source is missing, 409 if target exists.
+        """
+        source = self._resolve(user_id, source_rel)
+        target = self._resolve(user_id, target_rel)
+        if not source.exists():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        if target.exists():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Target file already exists",
+            )
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(source), str(target))
+        if self._sync is not None:
+            try:
+                asyncio.create_task(self._sync.sync_file(user_id, source_rel))
+                asyncio.create_task(self._sync.sync_file(user_id, target_rel))
+            except Exception:
+                logger.warning(
+                    "Failed to schedule sync for move %s -> %s",
+                    source_rel,
+                    target_rel,
+                )
+
+    # ------------------------------------------------------------------
     # Tree / folder listing (SPEC-046 FU-1)
     # ------------------------------------------------------------------
 
