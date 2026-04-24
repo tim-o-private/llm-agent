@@ -1,7 +1,6 @@
 """Shared VaultService factory for approval executors."""
 
-import os
-from pathlib import Path
+from chatServer.config.paths import get_data_dir
 
 
 def create_vault_service():
@@ -12,5 +11,4 @@ def create_vault_service():
     """
     from chatServer.services.vault_service import VaultService
 
-    data_dir = Path(os.getenv("SANDBOX_DATA_DIR", "/data"))
-    return VaultService(storage_sync=None, data_dir=data_dir)
+    return VaultService(storage_sync=None, data_dir=get_data_dir())
