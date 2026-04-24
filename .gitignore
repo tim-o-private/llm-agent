@@ -20,6 +20,8 @@ eggs/
 .eggs/
 lib/
 !webApp/src/lib/
+!chatServer/lib/
+!tests/chatServer/lib/
 lib64/
 parts/
 sdist/

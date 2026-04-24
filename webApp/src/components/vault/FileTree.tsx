@@ -3,7 +3,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Tree } from 'react-arborist';
 import type { NodeRendererProps } from 'react-arborist';
 import { useVaultTree } from '@/api/hooks/useVaultHooks';
+import { useEntityIndex } from '@/api/hooks/useEntityHooks';
 import type { TreeNode } from '@/api/types/vault';
+import type { EntityIndex } from '@/api/types/entity';
 import {
   FileTextIcon,
   ChevronRightIcon,
@@ -15,24 +17,89 @@ import {
 import { FolderIcon } from '@/components/ui/icons/FolderIcon';
 
 /**
+ * Entity type folder icons: person / project / company (AC-21).
+ */
+const EntityPersonIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+    <path d="M10.5 5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0ZM3 13c0-2.76 2.24-5 5-5s5 2.24 5 5H3Z" />
+  </svg>
+);
+
+const EntityProjectIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+    <path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2A1.75 1.75 0 0 0 4.65 1H1.75Z" />
+  </svg>
+);
+
+const EntityCompanyIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+    <path d="M3 1a1 1 0 0 0-1 1v12h3v-3h6v3h3V2a1 1 0 0 0-1-1H3Zm1 3h2v2H4V4Zm5 0H7v2h2V4ZM4 7h2v2H4V7Zm5 0H7v2h2V7Z" />
+  </svg>
+);
+
+const entityFolderIcons: Record<string, React.FC<{ className?: string }>> = {
+  people: EntityPersonIcon,
+  projects: EntityProjectIcon,
+  companies: EntityCompanyIcon,
+};
+
+/**
  * react-arborist expects { id, name, children? } — we adapt the API TreeNode.
  */
 interface ArboristNode {
   id: string;
   name: string;
+  /** Display name shown in the tree (may differ from filename for entities) */
+  displayName: string;
   isFolder: boolean;
   vaultPath: string;
+  /** Entity type folder name (people/projects/companies) if under entities/ */
+  entityFolder?: string;
   children?: ArboristNode[];
 }
 
-function toArboristNodes(nodes: TreeNode[]): ArboristNode[] {
-  return nodes.map((n) => ({
-    id: n.path,
-    name: n.name,
-    isFolder: n.type === 'folder',
-    vaultPath: n.path,
-    children: n.children ? toArboristNodes(n.children) : undefined,
-  }));
+function toArboristNodes(
+  nodes: TreeNode[],
+  entityIndex?: EntityIndex,
+): ArboristNode[] {
+  return nodes.map((n) => {
+    const parts = n.path.split('/');
+    const isEntitySubfolder = parts[0] === 'entities' && parts.length >= 2;
+    const entityFolder = isEntitySubfolder ? parts[1] : undefined;
+
+    // For entity files: look up display name from entity index
+    let displayName = n.name;
+    if (
+      entityIndex &&
+      !n.children &&
+      n.type === 'file' &&
+      parts[0] === 'entities' &&
+      parts.length === 3
+    ) {
+      const slug = n.name.replace(/\.md$/, '');
+      const entity = entityIndex.find((e) => e.slug === slug);
+      if (entity) {
+        displayName = entity.name;
+      }
+    }
+
+    // For the entities/ folder itself
+    if (n.name === 'entities' && n.type === 'folder') {
+      displayName = 'Entities';
+    }
+
+    return {
+      id: n.path,
+      name: n.name,
+      displayName,
+      isFolder: n.type === 'folder',
+      vaultPath: n.path,
+      entityFolder,
+      children: n.children
+        ? toArboristNodes(n.children, entityIndex)
+        : undefined,
+    };
+  });
 }
 
 /**
@@ -77,10 +144,24 @@ function partitionTree(nodes: ArboristNode[]) {
 
 /**
  * Custom node renderer for the tree.
+ * SPEC-053 AC-21: Entity-specific icons and display names.
  */
 function NodeRenderer({ node, style, dragHandle }: NodeRendererProps<ArboristNode>) {
   const data = node.data;
   const indent = node.level * 16;
+
+  // Pick icon: entity type folders get their type icon; entity files
+  // get a type-specific icon; everything else uses default file/folder icons.
+  let FolderIconComponent: React.FC<{ className?: string }> = FolderIcon;
+  let FileIconComponent: React.FC<{ className?: string }> = FileTextIcon;
+
+  if (data.entityFolder && entityFolderIcons[data.entityFolder]) {
+    if (data.isFolder) {
+      FolderIconComponent = entityFolderIcons[data.entityFolder];
+    } else {
+      FileIconComponent = entityFolderIcons[data.entityFolder];
+    }
+  }
 
   return (
     <div
@@ -106,15 +187,15 @@ function NodeRenderer({ node, style, dragHandle }: NodeRendererProps<ArboristNod
               <ChevronRightIcon className="h-3.5 w-3.5" />
             )}
           </button>
-          <FolderIcon className="h-4 w-4 flex-shrink-0 text-text-muted" />
+          <FolderIconComponent className="h-4 w-4 flex-shrink-0 text-text-muted" />
         </>
       ) : (
         <>
           <span className="w-[18px] flex-shrink-0" />
-          <FileTextIcon className="h-4 w-4 flex-shrink-0 text-text-muted" />
+          <FileIconComponent className="h-4 w-4 flex-shrink-0 text-text-muted" />
         </>
       )}
-      <span className="truncate">{data.name}</span>
+      <span className="truncate">{data.displayName}</span>
     </div>
   );
 }
@@ -124,14 +205,15 @@ function NodeRenderer({ node, style, dragHandle }: NodeRendererProps<ArboristNod
  */
 export const FileTree: React.FC = () => {
   const { data, isLoading, error } = useVaultTree();
+  const { data: entityIndex } = useEntityIndex();
   const navigate = useNavigate();
   const location = useLocation();
   const [search, setSearch] = useState('');
 
   const treeData = useMemo(() => {
     if (!data?.tree) return [];
-    return toArboristNodes(data.tree);
-  }, [data]);
+    return toArboristNodes(data.tree, entityIndex);
+  }, [data, entityIndex]);
 
   const { todayNode, workflowsNode, rest } = useMemo(
     () => partitionTree(treeData),
