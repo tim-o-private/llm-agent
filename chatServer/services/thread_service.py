@@ -15,15 +15,14 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
-import yaml
 from fastapi import HTTPException
 
+from ..lib.frontmatter import parse_frontmatter as _parse_frontmatter
+from ..lib.frontmatter import serialize_frontmatter as _serialize_frontmatter_doc
 from ..lib.slugify import slugify
 from .vault_service import VaultService
 
 logger = logging.getLogger(__name__)
-
-_FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
 
 # Status lifecycle (SPEC-054 §1):
 #   active  --> watching / paused / completed / archived
@@ -218,29 +217,6 @@ class ThreadService:
             user_id, rel_path, _serialize_frontmatter_doc(fm, body)
         )
 
-
-# ---- Frontmatter helpers ------------------------------------------------
-
-
-def _parse_frontmatter(content: str) -> tuple[dict, str]:
-    """Split a markdown document into (frontmatter_dict, body_str)."""
-    match = _FRONTMATTER_RE.match(content)
-    if not match:
-        return {}, content
-    try:
-        fm = yaml.safe_load(match.group(1))
-        if not isinstance(fm, dict):
-            fm = {}
-    except yaml.YAMLError:
-        fm = {}
-    body = content[match.end():].lstrip("\n")
-    return fm, body
-
-
-def _serialize_frontmatter_doc(fm: dict, body: str) -> str:
-    """Render frontmatter dict + body back to a markdown document."""
-    fm_str = yaml.dump(fm, default_flow_style=False, allow_unicode=True, sort_keys=False)
-    return f"---\n{fm_str}---\n\n{body}"
 
 
 def _prepend_to_section(body: str, section_name: str, line: str) -> str:

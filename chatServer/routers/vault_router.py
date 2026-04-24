@@ -7,13 +7,12 @@ by ``get_current_user``; no DB access needed (filesystem-only endpoints).
 from __future__ import annotations
 
 import logging
-import os
-from pathlib import Path
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+from ..config.paths import get_data_dir
 from ..dependencies.auth import get_current_user
 
 logger = logging.getLogger(__name__)
@@ -58,10 +57,6 @@ class FolderResponse(BaseModel):
 # --- VaultService dependency ------------------------------------------------
 
 
-def _data_dir() -> Path:
-    return Path(os.getenv("SANDBOX_DATA_DIR", "/data"))
-
-
 def get_vault_service():
     """FastAPI dependency that assembles a VaultService.
 
@@ -72,7 +67,7 @@ def get_vault_service():
     from ..services.vault_service import VaultService
 
     settings = get_settings()
-    data_dir = _data_dir()
+    data_dir = get_data_dir()
 
     sync = None
     if settings.supabase_url and settings.supabase_service_key:

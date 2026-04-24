@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 
 from . import ExecutionResult
+from ._vault_factory import create_vault_service
 from .registry import register_executor
 
 logger = logging.getLogger(__name__)
@@ -40,9 +41,7 @@ class WorkflowProposalExecutor:
         rel_path = f"_workflows/{filename}"
 
         try:
-            from chatServer.services.vault_service import VaultService
-
-            vault = self._get_vault_service()
+            vault = create_vault_service()
 
             # Check if file already exists — refuse to overwrite
             stat = await vault.stat_file(user_id, rel_path)
@@ -71,12 +70,3 @@ class WorkflowProposalExecutor:
                 error=f"Failed to write workflow file: {exc}",
             )
 
-    def _get_vault_service(self):
-        """Create a VaultService instance. Factored out for testability."""
-        import os
-        from pathlib import Path
-
-        from chatServer.services.vault_service import VaultService
-
-        data_dir = Path(os.getenv("SANDBOX_DATA_DIR", "/data"))
-        return VaultService(storage_sync=None, data_dir=data_dir)

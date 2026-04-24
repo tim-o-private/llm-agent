@@ -8,13 +8,12 @@ VaultService.
 from __future__ import annotations
 
 import logging
-import os
-from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from ..config.paths import get_data_dir
 from ..database.scoped_client import UserScopedClient
 from ..database.supabase_client import get_user_scoped_client
 from ..dependencies.auth import get_current_user
@@ -83,10 +82,6 @@ class RunWorkflowResponse(BaseModel):
 # --- Dependencies -------------------------------------------------------------
 
 
-def _data_dir() -> Path:
-    return Path(os.getenv("SANDBOX_DATA_DIR", "/data"))
-
-
 def get_workflow_editor_service(
     db: UserScopedClient = Depends(get_user_scoped_client),
 ):
@@ -100,7 +95,7 @@ def get_workflow_editor_service(
     from ..services.workflow_editor_service import WorkflowEditorService
 
     settings = get_settings()
-    data_dir = _data_dir()
+    data_dir = get_data_dir()
 
     sync = None
     if settings.supabase_url and settings.supabase_service_key:
