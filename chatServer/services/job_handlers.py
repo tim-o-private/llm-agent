@@ -199,7 +199,12 @@ def _briefing_schedule(variant: str, default_tz: str | None = None, default_time
 
     def _compute(prefs: dict) -> Tuple[datetime, datetime]:
         tz = prefs.get("timezone", default_tz) if default_tz else prefs["timezone"]
-        time_key = f"{variant}_briefing_time" if variant in ("morning", "evening") else "today_regeneration_time"
+        if variant in ("morning", "evening"):
+            time_key = f"{variant}_briefing_time"
+        elif variant == "orchestration_check":
+            time_key = "orchestration_check_time"
+        else:
+            time_key = "today_regeneration_time"
         btime = prefs.get(time_key, default_time) if default_time else prefs[time_key]
         scheduled = compute_next_briefing_time(tz, btime, variant)
         return scheduled, scheduled + timedelta(hours=4)
