@@ -73,6 +73,10 @@ class WorkflowProposalExecutor:
 
     def _get_vault_service(self):
         """Create a VaultService instance. Factored out for testability."""
+        import os
+        from pathlib import Path
+
         from chatServer.services.vault_service import VaultService
 
-        return VaultService(storage_sync=None)
+        data_dir = Path(os.getenv("SANDBOX_DATA_DIR", "/data"))
+        return VaultService(storage_sync=None, data_dir=data_dir)
