@@ -26,6 +26,12 @@ router = APIRouter(prefix="/api/vault/threads", tags=["threads"])
 # --- Request / Response models ----------------------------------------------
 
 
+class CreateThreadRequest(BaseModel):
+    title: str = Field(..., min_length=1)
+    trigger: str = Field(default="user request")
+    goal: str = Field(default="")
+
+
 class ChangeStatusRequest(BaseModel):
     status: str = Field(
         ...,
@@ -48,6 +54,24 @@ class ThreadListResponse(BaseModel):
 
 
 # --- Endpoints ---------------------------------------------------------------
+
+
+@router.post("", status_code=201)
+async def create_thread(
+    payload: CreateThreadRequest,
+    user_id: str = Depends(get_current_user),
+    vault=Depends(get_vault_service),
+):
+    """Create a new thread-doc."""
+    service = ThreadService(vault)
+    rel_path = await service.create_thread(
+        user_id=user_id,
+        title=payload.title,
+        trigger=payload.trigger,
+        initiated_by="user",
+        goal=payload.goal,
+    )
+    return {"path": rel_path}
 
 
 @router.get("", response_model=ThreadListResponse)
