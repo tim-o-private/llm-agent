@@ -1,11 +1,9 @@
 """ApprovalService — state machine + edit path for approval_cards.
 
-Stage 1 (per SPEC-045) contract:
-
 - approve / reject flip ``status`` and record ``decided_at`` / ``decided_by``.
 - Edit mutates the JSONB ``payload`` and leaves status=pending.
 - Every transition emits an ``activity_log`` row via ``ActivityLogService``.
-- No outbound effects — no email send, no calendar insert, no workflow write.
+- After approval, dispatches execution via the executor pattern (SPEC-052).
 
 INSERT is out of scope for this spec (agent-side work lands later).
 """
@@ -205,7 +203,160 @@ class ApprovalService:
             subject_path=_subject_path(updated),
             reasoning=decision_note,
         )
+
+        # --- SPEC-052: execution dispatch for approvals ---
+        if new_status == "approved":
+            await self._execute_after_approve(updated, user_id)
+
         return updated
+
+    # ------------------------------------------------------------------
+    # Execution dispatch (SPEC-052)
+    # ------------------------------------------------------------------
+
+    async def _execute_after_approve(
+        self, card: dict, user_id: str
+    ) -> None:
+        """Called after status='approved' is committed.
+
+        Looks up the executor for the card type, runs it, and records the
+        result. Idempotency guard: skips if ``executed_at`` is already set.
+        """
+        # Idempotency guard
+        if card.get("executed_at") is not None:
+            logger.warning(
+                "Skipping execution for card %s — already executed at %s",
+                card.get("id"),
+                card["executed_at"],
+            )
+            return
+
+        from .approval_executors.registry import EXECUTOR_REGISTRY
+        from .approval_executors import ExecutionResult
+
+        card_type = card.get("card_type", "")
+        executor_cls = EXECUTOR_REGISTRY.get(card_type)
+
+        if executor_cls is None:
+            # No executor registered — approve as record only.
+            await self._record_execution(
+                card,
+                user_id,
+                ExecutionResult(
+                    success=True,
+                    activity_action=(
+                        f"Approved {card_type}: {card.get('title', 'card')} "
+                        f"— no executor registered"
+                    ),
+                ),
+            )
+            return
+
+        try:
+            executor = executor_cls()
+            result = await executor.execute(card, user_id)
+        except Exception as exc:
+            logger.error(
+                "Executor %s raised for card %s: %s",
+                card_type,
+                card.get("id"),
+                exc,
+            )
+            result = ExecutionResult(
+                success=False,
+                error=f"Executor error: {exc}",
+            )
+
+        await self._record_execution(card, user_id, result)
+
+    async def _record_execution(
+        self, card: dict, user_id: str, result
+    ) -> None:
+        """Write ``executed_at`` + result/error to the card and emit activity_log."""
+        from .approval_executors import ExecutionResult
+
+        now = datetime.now(timezone.utc).isoformat()
+        patch: dict[str, Any] = {"executed_at": now}
+        if result.result:
+            patch["execution_result"] = result.result
+        if result.error:
+            patch["execution_error"] = result.error
+
+        await (
+            self._db.table("approval_cards")
+            .update(patch)
+            .eq("id", card["id"])
+            .execute()
+        )
+
+        action_text = result.activity_action or self._describe_execution(
+            card, result
+        )
+        await self._log.append(
+            user_id=user_id,
+            actor="approval-executor",
+            action=action_text,
+            status="done" if result.success else "failed",
+            subject_path=_subject_path(card),
+            reasoning=result.error,
+        )
+
+    def _describe_execution(self, card: dict, result) -> str:
+        """Fallback description for execution activity_log entries."""
+        card_type = card.get("card_type", "card")
+        title = card.get("title", "")
+        if result.success:
+            return f"Executed {card_type}: {title}"
+        return f"Failed to execute {card_type}: {title}"
+
+    # ------------------------------------------------------------------
+    # Retry (SPEC-052)
+    # ------------------------------------------------------------------
+
+    async def retry(self, user_id: str, card_id: str) -> dict:
+        """Retry execution of a failed card.
+
+        Pre-conditions: status=approved, executed_at set, execution_error set.
+        Clears execution columns and re-dispatches.
+        """
+        card = await self.get(user_id, card_id)
+
+        if card.get("status") != "approved":
+            raise HTTPException(
+                status_code=http_status.HTTP_409_CONFLICT,
+                detail=f"Card is {card.get('status')}, not approved",
+            )
+        if not card.get("executed_at"):
+            raise HTTPException(
+                status_code=http_status.HTTP_409_CONFLICT,
+                detail="Card has not been executed yet",
+            )
+        if not card.get("execution_error"):
+            raise HTTPException(
+                status_code=http_status.HTTP_409_CONFLICT,
+                detail="Card execution did not fail — no retry needed",
+            )
+
+        # Clear execution columns
+        patch: dict[str, Any] = {
+            "executed_at": None,
+            "execution_result": None,
+            "execution_error": None,
+        }
+        resp = await (
+            self._db.table("approval_cards")
+            .update(patch)
+            .eq("id", card_id)
+            .execute()
+        )
+        rows = getattr(resp, "data", None) or []
+        updated = rows[0] if rows else {**card, **patch}
+
+        # Re-dispatch execution
+        await self._execute_after_approve(updated, user_id)
+
+        # Re-fetch to get the execution results
+        return await self.get(user_id, card_id)
 
     def _describe_action(
         self,
@@ -214,18 +365,9 @@ class ApprovalService:
         verb: str,
         decision_note: Optional[str] = None,
     ) -> str:
-        """Human-readable line for the activity log.
-
-        Always ends with "Stage 1 no-op, not sent" for approvals of card
-        types that would trigger an outbound effect in later stages — this
-        makes the S7 log screen reflect the contract explicitly.
-        """
+        """Human-readable line for the activity log."""
         title = card.get("title") or card.get("card_type", "approval")
-        outbound_types = {"email_draft", "outreach", "calendar_hold"}
-        suffix = ""
-        if verb == "approved" and card.get("card_type") in outbound_types:
-            suffix = " — Stage 1 no-op, not sent"
-        line = f"{verb.title()} {card.get('card_type', 'card')}: {title}{suffix}"
+        line = f"{verb.title()} {card.get('card_type', 'card')}: {title}"
         return line
 
 

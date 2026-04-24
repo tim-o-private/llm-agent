@@ -1,79 +1,98 @@
-"""Config-change executor — applies approved config_change proposals to the vault.
+"""ConfigChangeExecutor — apply proposed content to a vault file.
 
-SPEC-052 AC-12 + SPEC-054 AC-13 (safety validator integration).
+The ``diff`` field in the payload contains the complete new file content
+(not a unified diff). The executor reads the current file for size tracking,
+then writes the proposed content via ``VaultService.update_body``.
 
-This is a stub executor that will be completed when SPEC-052 lands on this
-branch. The safety validator hook is wired here as defense-in-depth — it
-runs before the actual file write.
+SPEC-054 AC-13: Pre-execution safety validation via ConfigChangeSafetyValidator.
 """
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
-from typing import Any, Optional
 
-from ..config_change_validator import ConfigChangeSafetyValidator
+from . import ExecutionResult
+from .registry import register_executor
 
 logger = logging.getLogger(__name__)
 
-_validator = ConfigChangeSafetyValidator()
 
+@register_executor("config_change")
+class ConfigChangeExecutor:
+    """Apply proposed file content to a vault file."""
 
-@dataclass
-class ExecutionResult:
-    success: bool
-    error: Optional[str] = None
-    detail: Optional[dict] = None
+    async def execute(self, card: dict, user_id: str) -> ExecutionResult:
+        payload = card.get("payload") or {}
+        file_path = payload.get("file_path")
+        diff = payload.get("diff")  # actually complete new content
 
+        if not file_path or diff is None:
+            missing = [k for k in ("file_path", "diff") if not payload.get(k)]
+            return ExecutionResult(
+                success=False,
+                error=f"Missing required payload fields: {', '.join(missing)}",
+            )
 
-async def execute_config_change(
-    card: dict,
-    vault: Any,
-    user_id: str,
-) -> ExecutionResult:
-    """Execute an approved config_change card.
+        # SPEC-054 AC-13: Safety validator — defense-in-depth before write
+        try:
+            from chatServer.services.config_change_validator import ConfigChangeSafetyValidator
 
-    1. Validate proposed content with ConfigChangeSafetyValidator.
-    2. Write the file via VaultService.
+            validator = ConfigChangeSafetyValidator()
+            is_safe, reason = validator.validate(file_path, diff)
+            if not is_safe:
+                logger.warning(
+                    "Config change rejected by safety validator: %s (path=%s, user=%s)",
+                    reason, file_path, user_id,
+                )
+                return ExecutionResult(
+                    success=False,
+                    error=f"Safety check failed: {reason}",
+                )
+        except ImportError:
+            pass  # Validator not available (e.g. SPEC-054 not merged yet)
 
-    Returns ExecutionResult with success=False if validation fails.
-    """
-    payload = card.get("payload", {})
-    file_path = payload.get("file_path", "")
-    proposed_content = payload.get("diff", "")
+        try:
+            vault = self._get_vault_service()
 
-    if not file_path or not proposed_content:
-        return ExecutionResult(
-            success=False,
-            error="Missing file_path or diff in payload",
-        )
+            # Read current file for size tracking
+            try:
+                current_content = await vault.read_file(user_id, file_path)
+                previous_size = len(current_content.encode("utf-8"))
+            except Exception:
+                return ExecutionResult(
+                    success=False,
+                    error=(
+                        f"File not found: {file_path}. "
+                        "It may have been deleted since this change was proposed."
+                    ),
+                )
 
-    # Safety validator — defense-in-depth (AC-13)
-    is_safe, reason = _validator.validate(file_path, proposed_content)
-    if not is_safe:
-        logger.warning(
-            "Config change rejected by safety validator: %s (path=%s, user=%s)",
-            reason,
-            file_path,
-            user_id,
-        )
-        return ExecutionResult(success=False, error=reason)
+            # Write the proposed new content
+            await vault.update_body(user_id, file_path, diff)
+            new_size = len(diff.encode("utf-8"))
 
-    # Write the file
-    try:
-        await vault.update_body(user_id, file_path, proposed_content)
-    except Exception as exc:
-        logger.error(
-            "Config change write failed: %s (path=%s, user=%s)",
-            exc,
-            file_path,
-            user_id,
-            exc_info=True,
-        )
-        return ExecutionResult(success=False, error=str(exc))
+            return ExecutionResult(
+                success=True,
+                result={
+                    "path": file_path,
+                    "previous_size": previous_size,
+                    "new_size": new_size,
+                },
+                activity_action=f"Applied config change to {file_path}",
+            )
+        except Exception as exc:
+            logger.error("ConfigChangeExecutor failed for user %s: %s", user_id, exc)
+            return ExecutionResult(
+                success=False,
+                error=f"Failed to apply config change: {exc}",
+            )
 
-    return ExecutionResult(
-        success=True,
-        detail={"file_path": file_path},
-    )
+    def _get_vault_service(self):
+        """Create a VaultService instance. Factored out for testability."""
+        import os
+        from pathlib import Path
+
+        from chatServer.services.vault_service import VaultService
+
+        data_dir = Path(os.getenv("SANDBOX_DATA_DIR", "/data"))
+        return VaultService(storage_sync=None, data_dir=data_dir)

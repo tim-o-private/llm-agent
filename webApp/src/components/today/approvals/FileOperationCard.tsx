@@ -59,7 +59,7 @@ export const FileOperationCard: React.FC<Props> = ({ card }) => {
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         title="Delete this file?"
-        description={`This will remove ${card.payload.source}. Stage 1 records the approval; the file isn't actually deleted yet.`}
+        description={`This will permanently delete ${card.payload.source} from your vault.`}
       >
         <div className="flex justify-end gap-2">
           <Button variant="soft" size="2" onClick={() => setConfirmOpen(false)}>

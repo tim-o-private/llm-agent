@@ -113,3 +113,18 @@ async def edit_card(
 ):
     service = await _build_approval_service(db)
     return await service.edit(user_id, card_id, payload.payload_patch)
+
+
+@router.post("/{card_id}/retry", response_model=dict)
+async def retry_card(
+    card_id: str,
+    user_id: str = Depends(get_current_user),
+    db: UserScopedClient = Depends(get_user_scoped_client),
+):
+    """Retry execution of a failed approval card.
+
+    Pre-conditions: card is approved, executed_at is set, execution_error is
+    set. Returns 409 if pre-conditions fail.
+    """
+    service = await _build_approval_service(db)
+    return await service.retry(user_id, card_id)
