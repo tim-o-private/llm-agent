@@ -28,6 +28,14 @@
   }
 }
 
-@layer components {
-  /* Button styles are now defined in web/packages/ui/src/styles/index.css */
+/*
+ * Wireframe palette overrides.
+ * The Radix lime+olive theme gets us close; these nudge specific
+ * values toward the exact wireframe colors (#161618 bg, #ede7d9 text,
+ * #b4c662 accent).
+ */
+.dark {
+  --color-background: #161618;
+  --color-panel-solid: #1c1c1f;
+  --color-surface: #222225;
 }

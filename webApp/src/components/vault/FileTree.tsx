@@ -282,13 +282,16 @@ export const FileTree: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full bg-ui-element-bg/50">
-      {/* Search input (AC-07) */}
-      <div className="p-2 border-b border-ui-border">
+      {/* Header + search (AC-07) */}
+      <div className="p-2 border-b border-ui-border space-y-2">
+        <div className="flex items-center justify-between px-1">
+          <span className="text-xs font-medium text-text-muted uppercase tracking-wider">Vault</span>
+        </div>
         <div className="relative">
           <MagnifyingGlassIcon className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted" />
           <input
             type="text"
-            placeholder="Search files..."
+            placeholder="search files & content"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-7 pr-2 py-1.5 text-xs rounded-md bg-ui-bg border border-ui-border text-text-primary placeholder:text-text-muted focus:outline-none focus:border-brand-primary transition-colors"
@@ -333,7 +336,7 @@ export const FileTree: React.FC = () => {
       {/* Pinned: _workflows section (AC-09) — always visible */}
       <div className="border-t border-ui-border">
         <div className="px-3 py-1.5 text-xs font-medium text-text-muted uppercase tracking-wider">
-          Workflows
+          Pinned Workflows
         </div>
         <div className="px-2 pb-2 space-y-0.5">
           {filteredWorkflows.length > 0 ? (

@@ -116,7 +116,7 @@ export const getStatusOverlayStyles = (options: StatusStyleOptions): string => {
     // Animated background gradient for active states - only for non-completed
     (status === 'in_progress' || isFocused) &&
       !completed &&
-      'bg-gradient-to-r from-brand-primary/5 via-brand-secondary/5 to-brand-primary/5 animate-gradient-shift opacity-50',
+      'bg-brand-primary/5 opacity-50',
   );
 };
 
