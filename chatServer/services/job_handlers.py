@@ -199,7 +199,12 @@ def _briefing_schedule(variant: str, default_tz: str | None = None, default_time
 
     def _compute(prefs: dict) -> Tuple[datetime, datetime]:
         tz = prefs.get("timezone", default_tz) if default_tz else prefs["timezone"]
-        time_key = f"{variant}_briefing_time" if variant in ("morning", "evening") else "today_regeneration_time"
+        if variant in ("morning", "evening"):
+            time_key = f"{variant}_briefing_time"
+        elif variant == "orchestration_check":
+            time_key = "orchestration_check_time"
+        else:
+            time_key = "today_regeneration_time"
         btime = prefs.get(time_key, default_time) if default_time else prefs[time_key]
         scheduled = compute_next_briefing_time(tz, btime, variant)
         return scheduled, scheduled + timedelta(hours=4)
@@ -289,4 +294,33 @@ async def handle_email_triage(job: dict) -> dict:
             "hours_back": prefs.get("email_triage_hours_back", 12),
             "max_emails": prefs.get("email_triage_max_emails", 20),
         },
+    )
+
+
+async def handle_orchestration_check(job: dict) -> dict:
+    """Execute orchestration-check workflow and self-schedule next occurrence.
+
+    Reads ``orchestration_check_enabled`` / ``orchestration_check_time`` from
+    user_preferences. Uses the same ``_run_scheduled_workflow`` skeleton as
+    briefings and regenerate-today.
+
+    SPEC-054 AC-09.
+    """
+    return await _run_scheduled_workflow(
+        job,
+        job_type="orchestration_check",
+        workflow_name="orchestration-check",
+        enabled_pref="orchestration_check_enabled",
+        default_enabled=False,
+        compute_schedule=_briefing_schedule(
+            "orchestration_check",
+            default_tz="America/New_York",
+            default_time="07:00",
+        ),
+        next_job_input=lambda user_id: {
+            "user_id": user_id,
+            "template_name": "orchestration-check",
+        },
+        build_parameters=lambda user_id, prefs: {},
+        failure_keywords=("Failed", "Error", "Unknown"),
     )

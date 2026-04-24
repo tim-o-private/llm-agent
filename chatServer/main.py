@@ -27,6 +27,7 @@ from .routers.activity_router import router as activity_router
 from .routers.approvals_router import router as approvals_router
 from .routers.capture_router import router as capture_router
 from .routers.entity_router import router as entity_router
+from .routers.thread_router import router as thread_router
 from .routers.chat_history_router import router as chat_history_router
 from .routers.email_agent_router import router as email_agent_router
 from .routers.external_api_router import router as external_api_router
@@ -272,6 +273,7 @@ app.include_router(activity_router)
 app.include_router(approvals_router)
 app.include_router(capture_router)
 app.include_router(entity_router)
+app.include_router(thread_router)
 
 # --- Logger setup ---
 logger = get_logger(__name__)

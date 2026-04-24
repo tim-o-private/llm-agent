@@ -3,6 +3,8 @@
 The ``diff`` field in the payload contains the complete new file content
 (not a unified diff). The executor reads the current file for size tracking,
 then writes the proposed content via ``VaultService.update_body``.
+
+SPEC-054 AC-13: Pre-execution safety validation via ConfigChangeSafetyValidator.
 """
 
 from __future__ import annotations
@@ -31,6 +33,24 @@ class ConfigChangeExecutor:
                 error=f"Missing required payload fields: {', '.join(missing)}",
             )
 
+        # SPEC-054 AC-13: Safety validator — defense-in-depth before write
+        try:
+            from chatServer.services.config_change_validator import ConfigChangeSafetyValidator
+
+            validator = ConfigChangeSafetyValidator()
+            is_safe, reason = validator.validate(file_path, diff)
+            if not is_safe:
+                logger.warning(
+                    "Config change rejected by safety validator: %s (path=%s, user=%s)",
+                    reason, file_path, user_id,
+                )
+                return ExecutionResult(
+                    success=False,
+                    error=f"Safety check failed: {reason}",
+                )
+        except ImportError:
+            pass  # Validator not available (e.g. SPEC-054 not merged yet)
+
         try:
             vault = self._get_vault_service()
 
@@ -39,7 +59,6 @@ class ConfigChangeExecutor:
                 current_content = await vault.read_file(user_id, file_path)
                 previous_size = len(current_content.encode("utf-8"))
             except Exception:
-                # File may have been deleted since the card was created
                 return ExecutionResult(
                     success=False,
                     error=(
