@@ -8,6 +8,7 @@
 import React from 'react';
 import { ChevronDownIcon, ChevronRightIcon } from '@radix-ui/react-icons';
 import type { WorkflowRunEntry } from '@/api/types/workflowEditor';
+import { relativeTime } from '@/lib/formatRelativeTime';
 
 interface RunHistoryEntryProps {
   run: WorkflowRunEntry;
@@ -32,21 +33,6 @@ const STATUS_LABELS: Record<WorkflowRunEntry['status'], string> = {
   cancelled: 'cancelled',
   waiting_for_approval: 'waiting for approval',
 };
-
-function formatRelativeTime(isoString: string): string {
-  const date = new Date(isoString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffSec = Math.round(diffMs / 1000);
-
-  if (diffSec < 60) return 'just now';
-  const diffMin = Math.round(diffSec / 60);
-  if (diffMin < 60) return `${diffMin} min ago`;
-  const diffHrs = Math.round(diffMin / 60);
-  if (diffHrs < 24) return `${diffHrs}h ago`;
-  const diffDays = Math.round(diffHrs / 24);
-  return `${diffDays}d ago`;
-}
 
 function formatDuration(
   startedAt: string | null,
@@ -92,7 +78,7 @@ export const RunHistoryEntry: React.FC<RunHistoryEntryProps> = ({
             className="text-xs text-text-primary truncate flex-1"
             title={run.created_at}
           >
-            {formatRelativeTime(run.created_at)}
+            {relativeTime(run.created_at)}
           </span>
           <span className="text-xs font-mono text-text-muted flex-shrink-0">
             {formatDuration(run.started_at, run.completed_at, run.status)}

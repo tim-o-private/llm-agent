@@ -5,7 +5,7 @@ import type { NodeRendererProps } from 'react-arborist';
 import { useVaultTree } from '@/api/hooks/useVaultHooks';
 import { useEntityIndex } from '@/api/hooks/useEntityHooks';
 import type { TreeNode } from '@/api/types/vault';
-import type { EntityIndex } from '@/api/types/entity';
+import type { EntitySummary } from '@/api/types/entity';
 import {
   FileTextIcon,
   ChevronRightIcon,
@@ -60,24 +60,24 @@ interface ArboristNode {
 
 function toArboristNodes(
   nodes: TreeNode[],
-  entityIndex?: EntityIndex,
+  entitySlugMap?: Map<string, EntitySummary>,
 ): ArboristNode[] {
   return nodes.map((n) => {
     const parts = n.path.split('/');
     const isEntitySubfolder = parts[0] === 'entities' && parts.length >= 2;
     const entityFolder = isEntitySubfolder ? parts[1] : undefined;
 
-    // For entity files: look up display name from entity index
+    // For entity files: look up display name from entity slug map (O(1))
     let displayName = n.name;
     if (
-      entityIndex &&
+      entitySlugMap &&
       !n.children &&
       n.type === 'file' &&
       parts[0] === 'entities' &&
       parts.length === 3
     ) {
       const slug = n.name.replace(/\.md$/, '');
-      const entity = entityIndex.find((e) => e.slug === slug);
+      const entity = entitySlugMap.get(slug);
       if (entity) {
         displayName = entity.name;
       }
@@ -96,7 +96,7 @@ function toArboristNodes(
       vaultPath: n.path,
       entityFolder,
       children: n.children
-        ? toArboristNodes(n.children, entityIndex)
+        ? toArboristNodes(n.children, entitySlugMap)
         : undefined,
     };
   });
@@ -210,10 +210,19 @@ export const FileTree: React.FC = () => {
   const location = useLocation();
   const [search, setSearch] = useState('');
 
+  const entitySlugMap = useMemo(() => {
+    if (!entityIndex) return undefined;
+    const map = new Map<string, EntitySummary>();
+    for (const e of entityIndex) {
+      map.set(e.slug, e);
+    }
+    return map;
+  }, [entityIndex]);
+
   const treeData = useMemo(() => {
     if (!data?.tree) return [];
-    return toArboristNodes(data.tree, entityIndex);
-  }, [data, entityIndex]);
+    return toArboristNodes(data.tree, entitySlugMap);
+  }, [data, entitySlugMap]);
 
   const { todayNode, workflowsNode, rest } = useMemo(
     () => partitionTree(treeData),

@@ -6,13 +6,14 @@ WorkflowRunManager (execution). Routers delegate here per A1.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from typing import Any, Optional
 
-import yaml
 from fastapi import HTTPException, status
 
+from ..lib.frontmatter import parse_frontmatter
 from ..services.vault_service import VaultService
 from ..workflows.models import TemplateParseError
 from ..workflows.template_parser import parse_template
@@ -23,7 +24,6 @@ _WORKFLOWS_DIR = "_workflows"
 _FLOW_EXT = ".flow.md"
 _NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 _NAME_MAX_LEN = 60
-_FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
 
 
 def _seed_template(name: str) -> str:
@@ -81,33 +81,37 @@ class WorkflowEditorService:
             # _workflows/ doesn't exist — return empty list
             return []
 
-        result: list[dict[str, Any]] = []
-        for entry in entries:
-            if entry.type != "file":
-                continue
-            if not entry.name.endswith(_FLOW_EXT):
-                continue
+        flow_entries = [
+            e for e in entries
+            if e.type == "file" and e.name.endswith(_FLOW_EXT)
+        ]
+        if not flow_entries:
+            return []
 
-            template_name = entry.name[: -len(_FLOW_EXT)]
-
-            # Parse frontmatter only (fast — skip step parsing)
+        # Read all workflow files in parallel
+        async def _read_fm(entry):
             try:
                 content = await self._vault.read_file(user_id, entry.path)
-                fm = self._parse_frontmatter_only(content)
+                return self._parse_frontmatter_only(content)
             except Exception:
-                fm = {}
+                return {}
 
-            next_run = await self._get_next_scheduled_run(template_name)
+        template_names = [e.name[: -len(_FLOW_EXT)] for e in flow_entries]
+        frontmatters, next_runs = await asyncio.gather(
+            asyncio.gather(*[_read_fm(e) for e in flow_entries]),
+            asyncio.gather(*[self._get_next_scheduled_run(tn) for tn in template_names]),
+        )
 
-            result.append({
-                "name": fm.get("name", template_name),
+        return [
+            {
+                "name": fm.get("name", tn),
                 "filename": entry.name,
                 "description": fm.get("description", ""),
                 "trigger_summary": self._format_triggers(fm),
-                "next_run_at": next_run,
-            })
-
-        return result
+                "next_run_at": nr,
+            }
+            for entry, tn, fm, nr in zip(flow_entries, template_names, frontmatters, next_runs)
+        ]
 
     # ------------------------------------------------------------------
     # Create workflow
@@ -289,16 +293,8 @@ class WorkflowEditorService:
     @staticmethod
     def _parse_frontmatter_only(content: str) -> dict[str, Any]:
         """Extract YAML frontmatter without parsing steps (fast for listing)."""
-        match = _FRONTMATTER_RE.search(content)
-        if not match:
-            return {}
-        try:
-            parsed = yaml.safe_load(match.group(1))
-            if isinstance(parsed, dict):
-                return parsed
-        except yaml.YAMLError:
-            pass
-        return {}
+        fm, _ = parse_frontmatter(content)
+        return fm
 
     @staticmethod
     def _format_triggers(fm: dict) -> str:

@@ -10,6 +10,7 @@ import logging
 from pathlib import PurePosixPath
 
 from . import ExecutionResult
+from ._vault_factory import create_vault_service
 from .registry import register_executor
 
 logger = logging.getLogger(__name__)
@@ -72,7 +73,7 @@ class FileOperationExecutor:
             )
 
         try:
-            vault = self._get_vault_service()
+            vault = create_vault_service()
 
             if operation == "delete":
                 await vault.delete_file(user_id, source)
@@ -109,12 +110,3 @@ class FileOperationExecutor:
                 error=f"File operation failed: {error_str}",
             )
 
-    def _get_vault_service(self):
-        """Create a VaultService instance. Factored out for testability."""
-        import os
-        from pathlib import Path
-
-        from chatServer.services.vault_service import VaultService
-
-        data_dir = Path(os.getenv("SANDBOX_DATA_DIR", "/data"))
-        return VaultService(storage_sync=None, data_dir=data_dir)

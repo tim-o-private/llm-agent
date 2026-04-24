@@ -12,15 +12,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 import yaml
 from fastapi import HTTPException
 
+from ..lib.frontmatter import parse_frontmatter as _parse_frontmatter
 from .vault_service import VaultService
 
 logger = logging.getLogger(__name__)
@@ -51,34 +50,6 @@ class EntityDoc:
     body: str
     path: str  # vault-relative
 
-
-def _parse_frontmatter(content: str) -> tuple[dict, str]:
-    """Split YAML frontmatter from markdown body.
-
-    Returns ``(frontmatter_dict, body_str)``. If no valid frontmatter is
-    found, returns ``({}, content)``.
-    """
-    if not content.startswith("---"):
-        return {}, content
-
-    closing = content.find("\n---", 3)
-    if closing == -1:
-        return {}, content
-
-    fm_start = content.index("\n", 0)
-    fm_raw = content[fm_start + 1 : closing]
-
-    try:
-        fm = yaml.safe_load(fm_raw)
-    except yaml.YAMLError:
-        return {}, content
-
-    if not isinstance(fm, dict):
-        return {}, content
-
-    body_start = closing + 4  # len("\n---")
-    body = content[body_start:].lstrip("\n") if body_start < len(content) else ""
-    return fm, body
 
 
 def _serialize_entity_doc(frontmatter: dict, body: str) -> str:
@@ -131,38 +102,53 @@ class EntityService:
             except OSError:
                 return []
 
-        results: list[EntitySummary] = []
+        # Collect all valid entity file paths first
+        entity_files: list[Path] = []
         for type_dir in dirs_to_scan:
             type_path = entities_root / type_dir
             if not type_path.exists() or not type_path.is_dir():
                 continue
             try:
-                files = sorted(type_path.iterdir())
+                for f in sorted(type_path.iterdir()):
+                    if (
+                        f.name.endswith(".md")
+                        and not f.name.startswith(".")
+                        and not f.is_symlink()
+                    ):
+                        entity_files.append(f)
             except OSError:
                 continue
-            for f in files:
-                if not f.name.endswith(".md") or f.name.startswith("."):
-                    continue
-                if f.is_symlink():
-                    continue
-                try:
-                    content = f.read_text(errors="replace")
-                except OSError:
-                    continue
-                fm, _ = _parse_frontmatter(content)
-                if not fm.get("entity_type"):
-                    continue  # AC-15: must have entity_type
-                rel = f.relative_to(user_root).as_posix()
-                slug = f.stem
-                results.append(
-                    EntitySummary(
-                        slug=slug,
-                        name=fm.get("name", slug),
-                        entity_type=fm["entity_type"],
-                        path=rel,
-                        aliases=fm.get("aliases", []) or [],
-                    )
+
+        if not entity_files:
+            return []
+
+        # Read all files in parallel (filesystem I/O)
+        async def _read_file(path: Path) -> str | None:
+            try:
+                return await asyncio.to_thread(path.read_text, errors="replace")
+            except OSError:
+                return None
+
+        contents = await asyncio.gather(*[_read_file(f) for f in entity_files])
+
+        results: list[EntitySummary] = []
+        for f, content in zip(entity_files, contents):
+            if content is None:
+                continue
+            fm, _ = _parse_frontmatter(content)
+            if not fm.get("entity_type"):
+                continue  # AC-15: must have entity_type
+            rel = f.relative_to(user_root).as_posix()
+            slug = f.stem
+            results.append(
+                EntitySummary(
+                    slug=slug,
+                    name=fm.get("name", slug),
+                    entity_type=fm["entity_type"],
+                    path=rel,
+                    aliases=fm.get("aliases", []) or [],
                 )
+            )
         return results
 
     async def get_entity(

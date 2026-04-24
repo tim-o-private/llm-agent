@@ -9,13 +9,12 @@ See SPEC-051 §"API Contract".
 from __future__ import annotations
 
 import logging
-import os
-from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
+from ..config.paths import get_data_dir
 from ..database.scoped_client import UserScopedClient
 from ..database.supabase_client import (
     create_system_client,
@@ -59,10 +58,6 @@ class RedirectRequest(BaseModel):
 # --- Dependencies -----------------------------------------------------------
 
 
-def _data_dir() -> Path:
-    return Path(os.getenv("SANDBOX_DATA_DIR", "/data"))
-
-
 async def get_capture_service(
     db: UserScopedClient = Depends(get_user_scoped_client),
 ):
@@ -76,7 +71,7 @@ async def get_capture_service(
     from ..services.vault_service import VaultService
 
     settings = get_settings()
-    data_dir = _data_dir()
+    data_dir = get_data_dir()
 
     sync = None
     if settings.supabase_url and settings.supabase_service_key:

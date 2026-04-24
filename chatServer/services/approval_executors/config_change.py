@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 
 from . import ExecutionResult
+from ._vault_factory import create_vault_service
 from .registry import register_executor
 
 logger = logging.getLogger(__name__)
@@ -49,10 +50,10 @@ class ConfigChangeExecutor:
                     error=f"Safety check failed: {reason}",
                 )
         except ImportError:
-            pass  # Validator not available (e.g. SPEC-054 not merged yet)
+            pass
 
         try:
-            vault = self._get_vault_service()
+            vault = create_vault_service()
 
             # Read current file for size tracking
             try:
@@ -87,12 +88,3 @@ class ConfigChangeExecutor:
                 error=f"Failed to apply config change: {exc}",
             )
 
-    def _get_vault_service(self):
-        """Create a VaultService instance. Factored out for testability."""
-        import os
-        from pathlib import Path
-
-        from chatServer.services.vault_service import VaultService
-
-        data_dir = Path(os.getenv("SANDBOX_DATA_DIR", "/data"))
-        return VaultService(storage_sync=None, data_dir=data_dir)
