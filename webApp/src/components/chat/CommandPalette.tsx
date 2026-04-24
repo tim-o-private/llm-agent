@@ -1,5 +1,6 @@
 /**
  * SPEC-049 AC-08 through AC-15, AC-20, AC-23: Cmd+K command palette.
+ * SPEC-051 AC-12: "Capture" action for smart text routing.
  *
  * Built on the `cmdk` library. Opens with Cmd+K (Mac) / Ctrl+K (Windows/Linux).
  * Captures scope at open time. Free-form input with suggestion groups.
@@ -9,14 +10,19 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Command } from 'cmdk';
 import { useChatScope } from '@/hooks/useChatScope';
 import { useChatStore } from '@/stores/useChatStore';
+import { useCreateCapture } from '@/api/hooks/useCaptureHooks';
+import { CaptureConfirmation } from '@/components/capture/CaptureConfirmation';
 import type { ChatScope } from '@/api/types/chat';
+import type { CaptureResponse } from '@/api/types/capture';
 import { scopeLabel } from '@/lib/scopeLabel';
 
 export const CommandPalette: React.FC = () => {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [captureResult, setCaptureResult] = useState<CaptureResponse | null>(null);
   const scopeAtOpen = useRef<ChatScope>({ type: 'global' });
   const currentScope = useChatScope();
+  const createCapture = useCreateCapture();
 
   // Register global Cmd+K / Ctrl+K shortcut
   useEffect(() => {
@@ -30,6 +36,7 @@ export const CommandPalette: React.FC = () => {
         e.preventDefault();
         scopeAtOpen.current = currentScope;
         setSearch('');
+        setCaptureResult(null);
         setOpen(true);
       }
     };
@@ -50,6 +57,28 @@ export const CommandPalette: React.FC = () => {
     [],
   );
 
+  /** Capture the query text via the capture API. */
+  const captureText = useCallback(
+    (query: string) => {
+      if (!query.trim()) return;
+      const scope = scopeAtOpen.current;
+      const context: Record<string, string> = {};
+      if ('path' in scope && scope.path) {
+        context.current_path = scope.path;
+      }
+      createCapture.mutate(
+        { text: query.trim(), source: 'cmdk', context },
+        {
+          onSuccess: (capture) => {
+            setCaptureResult(capture);
+            setSearch('');
+          },
+        },
+      );
+    },
+    [createCapture],
+  );
+
   if (!open) return null;
 
   const label = scopeLabel(scopeAtOpen.current) ?? 'this page';
@@ -57,7 +86,10 @@ export const CommandPalette: React.FC = () => {
   return (
     <Command.Dialog
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={(isOpen) => {
+        setOpen(isOpen);
+        if (!isOpen) setCaptureResult(null);
+      }}
       label="Command palette"
       className="fixed inset-0 z-50"
       shouldFilter={true}
@@ -104,6 +136,13 @@ export const CommandPalette: React.FC = () => {
 
             <Command.Group heading="Actions">
               <Command.Item
+                value={`Capture ${search}`}
+                onSelect={() => captureText(search)}
+                className="px-3 py-2 text-sm text-text-primary rounded-md cursor-pointer data-[selected=true]:bg-ui-interactive-bg-hover"
+              >
+                Capture: {search || '...'}
+              </Command.Item>
+              <Command.Item
                 value={`Chat about ${label}`}
                 onSelect={() => sendAsChat(search || `Tell me about ${label}`)}
                 className="px-3 py-2 text-sm text-text-primary rounded-md cursor-pointer data-[selected=true]:bg-ui-interactive-bg-hover"
@@ -112,6 +151,19 @@ export const CommandPalette: React.FC = () => {
               </Command.Item>
             </Command.Group>
           </Command.List>
+
+          {/* Capture confirmation banner inside the palette */}
+          {captureResult && captureResult.status === 'placed' && (
+            <div className="border-t border-ui-border p-2">
+              <CaptureConfirmation
+                capture={captureResult}
+                onDismiss={() => {
+                  setCaptureResult(null);
+                  setOpen(false);
+                }}
+              />
+            </div>
+          )}
         </div>
       </div>
     </Command.Dialog>
