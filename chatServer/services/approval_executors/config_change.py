@@ -50,7 +50,7 @@ class ConfigChangeExecutor:
                     error=f"Safety check failed: {reason}",
                 )
         except ImportError:
-            pass  # Validator not available (e.g. SPEC-054 not merged yet)
+            pass
 
         try:
             vault = create_vault_service()

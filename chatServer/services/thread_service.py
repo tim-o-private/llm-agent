@@ -218,7 +218,6 @@ class ThreadService:
         )
 
 
-
 def _prepend_to_section(body: str, section_name: str, line: str) -> str:
     """Prepend a line after the ``## <section>`` heading (most-recent-first).
 
