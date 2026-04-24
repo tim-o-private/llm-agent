@@ -51,6 +51,10 @@ interface ApprovalCardBase {
   decided_by?: string | null;
   decision_note?: string | null;
   created_at?: string;
+  /** SPEC-052: execution tracking fields */
+  executed_at?: string | null;
+  execution_result?: Record<string, unknown> | null;
+  execution_error?: string | null;
 }
 
 export type ApprovalCard =

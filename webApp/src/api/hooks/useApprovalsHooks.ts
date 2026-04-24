@@ -132,6 +132,28 @@ export function useRejectCard() {
   });
 }
 
+async function postRetry(id: string): Promise<void> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_BASE_URL}/api/approvals/${encodeURIComponent(id)}/retry`, {
+    method: 'POST',
+    headers,
+  });
+  if (!res.ok) throw new Error(`retry failed: ${res.status}`);
+}
+
+export function useRetryCard() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, { id: string }>({
+    mutationFn: ({ id }) => postRetry(id),
+    onSuccess: () => {
+      invalidateAll(qc);
+    },
+    onError: (err) => {
+      toast.error('Retry failed', err.message);
+    },
+  });
+}
+
 export function useEditCard() {
   const qc = useQueryClient();
   return useMutation<void, Error, { id: string; payload_patch: Record<string, unknown> }>({

@@ -79,3 +79,39 @@ class GmailComposeService:
             "to": to,
             "subject": subject,
         }
+
+    def send_new(
+        self,
+        to: list[str],
+        subject: str,
+        body: str,
+    ) -> dict:
+        """Send a new email (not a reply).
+
+        Args:
+            to: List of recipient email addresses.
+            subject: Email subject line.
+            body: Plain text email body.
+
+        Returns:
+            Dict with sent message id, threadId, to, and subject.
+        """
+        mime_message = email.mime.text.MIMEText(body, "plain")
+        mime_message["To"] = ", ".join(to)
+        mime_message["Subject"] = subject
+
+        raw = base64.urlsafe_b64encode(
+            mime_message.as_bytes()
+        ).decode("ascii")
+
+        sent = self.service.users().messages().send(
+            userId="me",
+            body={"raw": raw},
+        ).execute()
+
+        return {
+            "message_id": sent.get("id"),
+            "thread_id": sent.get("threadId"),
+            "to": ", ".join(to),
+            "subject": subject,
+        }
