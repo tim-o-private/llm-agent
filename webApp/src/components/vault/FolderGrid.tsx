@@ -13,7 +13,7 @@ interface FolderGridProps {
 function typeChip(entry: { type: string; name: string }) {
   if (entry.type === 'folder') {
     return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-accent-subtle text-text-accent">
         folder
       </span>
     );
@@ -90,7 +90,7 @@ export const FolderGrid: React.FC<FolderGridProps> = ({ folderPath }) => {
             <Link
               key={entry.path}
               to={href}
-              className="group flex items-start gap-3 p-3 rounded-lg border border-ui-border bg-ui-element-bg/50 hover:bg-ui-interactive-bg-hover hover:border-ui-border-glow transition-colors"
+              className="group flex items-start gap-3 p-3 rounded-lg border border-ui-border bg-ui-element-bg/50 hover:bg-ui-interactive-bg-hover hover:border-ui-border-hover transition-colors"
             >
               {entry.type === 'folder' ? (
                 <FolderIcon className="h-5 w-5 text-text-muted flex-shrink-0 mt-0.5" />

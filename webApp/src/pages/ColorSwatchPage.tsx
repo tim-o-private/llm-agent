@@ -90,7 +90,7 @@ const EffectSwatch: React.FC<ColorSwatchProps> = ({ name, className, cssVariable
       <div className="relative w-20 h-20 flex items-center justify-center">
         {isBackdropBlur ? (
           // For backdrop blur, create a colorful background to blur against
-          <div className="absolute inset-0 bg-gradient-to-br from-brand-primary via-accent-electric to-accent-glow rounded-lg">
+          <div className="absolute inset-0 bg-gradient-to-br from-brand-primary via-brand-primary to-brand-primary rounded-lg">
             <div
               className={clsx(
                 'absolute inset-2 rounded-lg flex items-center justify-center text-xs font-bold text-white',
@@ -234,12 +234,12 @@ const ColorSwatchPage: React.FC = () => {
   const accentColors: ColorInfo[] = [
     {
       name: 'Electric',
-      className: 'bg-accent-electric',
+      className: 'bg-brand-primary',
       cssVariable: 'var(--violet-11)',
       description: 'Electric violet',
     },
-    { name: 'Neon', className: 'bg-accent-neon', cssVariable: 'var(--blue-11)', description: 'Neon blue' },
-    { name: 'Glow', className: 'bg-accent-glow', cssVariable: 'var(--purple-9)', description: 'Purple glow' },
+    { name: 'Neon', className: 'bg-brand-primary', cssVariable: 'var(--blue-11)', description: 'Neon blue' },
+    { name: 'Glow', className: 'bg-brand-primary', cssVariable: 'var(--purple-9)', description: 'Purple glow' },
     {
       name: 'Surface',
       className: 'bg-accent-surface',
@@ -263,7 +263,7 @@ const ColorSwatchPage: React.FC = () => {
       cssVariable: 'var(--red-10)',
       description: 'Danger hover',
     },
-    { name: 'Danger Glow', className: 'bg-danger-glow', cssVariable: 'var(--red-11)', description: 'Danger glow' },
+    { name: 'Danger Glow', className: 'bg-danger-bg', cssVariable: 'var(--red-11)', description: 'Danger glow' },
     {
       name: 'Destructive',
       className: 'bg-destructive',
@@ -294,7 +294,7 @@ const ColorSwatchPage: React.FC = () => {
     },
     {
       name: 'Info Electric',
-      className: 'bg-info-electric',
+      className: 'bg-bg-info-indicator',
       cssVariable: 'var(--cyan-11)',
       description: 'Electric info',
     },
@@ -320,7 +320,7 @@ const ColorSwatchPage: React.FC = () => {
     },
     {
       name: 'Warning Glow',
-      className: 'bg-warning-glow',
+      className: 'bg-bg-warning-indicator',
       cssVariable: 'var(--yellow-11)',
       description: 'Warning glow',
     },
@@ -346,7 +346,7 @@ const ColorSwatchPage: React.FC = () => {
     },
     {
       name: 'Success Electric',
-      className: 'bg-success-electric',
+      className: 'bg-bg-success-indicator',
       cssVariable: 'var(--mint-11)',
       description: 'Electric success',
     },
@@ -376,7 +376,7 @@ const ColorSwatchPage: React.FC = () => {
       description: 'Alternative background',
     },
     { name: 'UI BG Hover', className: 'bg-ui-bg-hover', cssVariable: 'var(--gray-3)', description: 'Hover background' },
-    { name: 'UI BG Glow', className: 'bg-ui-bg-glow', cssVariable: 'var(--violet-2)', description: 'Glow background' },
+    { name: 'UI BG Glow', className: 'bg-ui-bg-alt', cssVariable: 'var(--violet-2)', description: 'Glow background' },
     {
       name: 'Element BG',
       className: 'bg-ui-element-bg',
@@ -391,7 +391,7 @@ const ColorSwatchPage: React.FC = () => {
     },
     {
       name: 'Element Elevated',
-      className: 'bg-ui-element-bg-elevated',
+      className: 'bg-ui-element-bg',
       cssVariable: 'var(--gray-1)',
       description: 'Elevated element',
     },
@@ -424,7 +424,7 @@ const ColorSwatchPage: React.FC = () => {
     },
     {
       name: 'Interactive Glow',
-      className: 'bg-ui-interactive-bg-glow',
+      className: 'bg-ui-interactive-bg-active',
       cssVariable: 'var(--violet-4)',
       description: 'Interactive glow',
     },
@@ -439,13 +439,13 @@ const ColorSwatchPage: React.FC = () => {
     },
     {
       name: 'Surface Elevated',
-      className: 'bg-ui-surface-elevated',
+      className: 'bg-ui-surface',
       cssVariable: 'var(--gray-1)',
       description: 'Elevated surface',
     },
     {
       name: 'Surface Glow',
-      className: 'bg-ui-surface-glow',
+      className: 'bg-ui-surface',
       cssVariable: 'var(--violet-1)',
       description: 'Glowing surface',
     },
@@ -472,13 +472,13 @@ const ColorSwatchPage: React.FC = () => {
     },
     {
       name: 'Border Glow',
-      className: 'border-4 border-ui-border-glow bg-ui-bg',
+      className: 'border-4 border-ui-border-hover bg-ui-bg',
       cssVariable: 'var(--violet-7)',
       description: 'Glow border',
     },
     {
       name: 'Border Electric',
-      className: 'border-4 border-ui-border-electric bg-ui-bg',
+      className: 'border-4 border-ui-border-focus bg-ui-bg',
       cssVariable: 'var(--blue-8)',
       description: 'Electric border',
     },
@@ -523,13 +523,13 @@ const ColorSwatchPage: React.FC = () => {
     },
     {
       name: 'Electric',
-      className: 'bg-text-electric text-ui-bg flex items-center justify-center text-xs font-bold',
+      className: 'bg-text-accent text-ui-bg flex items-center justify-center text-xs font-bold',
       cssVariable: 'var(--violet-12)',
       description: 'Electric text',
     },
     {
       name: 'Glow',
-      className: 'bg-text-glow text-ui-bg flex items-center justify-center text-xs font-bold',
+      className: 'bg-text-accent text-ui-bg flex items-center justify-center text-xs font-bold',
       cssVariable: 'var(--blue-12)',
       description: 'Glow text',
     },
@@ -544,25 +544,25 @@ const ColorSwatchPage: React.FC = () => {
   const specialEffects: ColorInfo[] = [
     {
       name: 'Glow Shadow',
-      className: 'bg-brand-primary w-16 h-16 rounded-lg shadow-glow',
+      className: 'bg-brand-primary w-16 h-16 rounded-lg shadow-sm',
       cssVariable: 'rgba(139, 92, 246, 0.3)',
       description: 'Glow shadow effect',
     },
     {
       name: 'Glow Large',
-      className: 'bg-accent-electric w-16 h-16 rounded-lg shadow-glow-lg',
+      className: 'bg-brand-primary w-16 h-16 rounded-lg shadow-elevated',
       cssVariable: 'rgba(139, 92, 246, 0.4)',
       description: 'Large glow shadow',
     },
     {
       name: 'Electric Shadow',
-      className: 'bg-accent-neon w-16 h-16 rounded-lg shadow-electric',
+      className: 'bg-brand-primary w-16 h-16 rounded-lg shadow-md',
       cssVariable: 'rgba(59, 130, 246, 0.5)',
       description: 'Electric shadow',
     },
     {
       name: 'Neon Shadow',
-      className: 'bg-accent-glow w-16 h-16 rounded-lg shadow-neon',
+      className: 'bg-brand-primary w-16 h-16 rounded-lg shadow-md',
       cssVariable: 'rgba(168, 85, 247, 0.6)',
       description: 'Neon shadow',
     },
@@ -574,7 +574,7 @@ const ColorSwatchPage: React.FC = () => {
     },
     {
       name: 'Backdrop Blur',
-      className: 'bg-ui-element-bg/70 w-16 h-16 rounded-lg backdrop-blur-glass border border-ui-border relative',
+      className: 'bg-ui-element-bg/70 w-16 h-16 rounded-lg backdrop-blur-sm border border-ui-border relative',
       cssVariable: 'blur(12px)',
       description: 'Glass blur effect',
     },
@@ -826,31 +826,31 @@ const ColorSwatchPage: React.FC = () => {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
             <div className="flex flex-col items-center space-y-2 p-3 rounded-lg border border-ui-border bg-ui-element-bg">
-              <div className="w-16 h-16 rounded-lg bg-brand-primary animate-glow-pulse" />
+              <div className="w-16 h-16 rounded-lg bg-brand-primary animate-pulse" />
               <div className="text-center">
                 <div className="text-sm font-medium text-text-primary">Glow Pulse</div>
-                <div className="text-xs text-text-muted font-mono">animate-glow-pulse</div>
+                <div className="text-xs text-text-muted font-mono">animate-pulse</div>
               </div>
             </div>
             <div className="flex flex-col items-center space-y-2 p-3 rounded-lg border border-ui-border bg-ui-element-bg">
-              <div className="w-16 h-16 rounded-lg bg-gradient-to-r from-brand-primary to-accent-electric animate-gradient-shift bg-[length:200%_200%]" />
+              <div className="w-16 h-16 rounded-lg bg-gradient-to-r from-brand-primary to-brand-primary animate-pulse bg-[length:200%_200%]" />
               <div className="text-center">
                 <div className="text-sm font-medium text-text-primary">Gradient Shift</div>
-                <div className="text-xs text-text-muted font-mono">animate-gradient-shift</div>
+                <div className="text-xs text-text-muted font-mono">animate-pulse</div>
               </div>
             </div>
             <div className="flex flex-col items-center space-y-2 p-3 rounded-lg border border-ui-border bg-ui-element-bg">
-              <div className="w-16 h-16 rounded-lg bg-accent-glow animate-float" />
+              <div className="w-16 h-16 rounded-lg bg-brand-primary animate-pulse" />
               <div className="text-center">
                 <div className="text-sm font-medium text-text-primary">Float</div>
-                <div className="text-xs text-text-muted font-mono">animate-float</div>
+                <div className="text-xs text-text-muted font-mono">animate-pulse</div>
               </div>
             </div>
             <div className="flex flex-col items-center space-y-2 p-3 rounded-lg border border-ui-border bg-ui-element-bg">
-              <div className="w-16 h-16 rounded-lg bg-gradient-to-r from-transparent via-brand-primary to-transparent animate-shimmer bg-[length:200%_100%]" />
+              <div className="w-16 h-16 rounded-lg bg-gradient-to-r from-transparent via-brand-primary to-transparent animate-pulse bg-[length:200%_100%]" />
               <div className="text-center">
                 <div className="text-sm font-medium text-text-primary">Shimmer</div>
-                <div className="text-xs text-text-muted font-mono">animate-shimmer</div>
+                <div className="text-xs text-text-muted font-mono">animate-pulse</div>
               </div>
             </div>
           </div>

@@ -221,11 +221,11 @@ const DesignSystemPage: React.FC = () => {
               <h4 className="font-medium text-text-primary mb-2">Base Surface</h4>
               <p className="text-sm text-text-secondary">Standard component background</p>
             </div>
-            <div className="p-6 bg-ui-element-bg-elevated border border-ui-border rounded-xl shadow-elevated">
+            <div className="p-6 bg-ui-element-bg border border-ui-border rounded-xl shadow-elevated">
               <h4 className="font-medium text-text-primary mb-2">Elevated Surface</h4>
               <p className="text-sm text-text-secondary">Cards, modals, dropdowns</p>
             </div>
-            <div className="p-6 bg-ui-element-bg border border-ui-border-glow rounded-xl shadow-glow">
+            <div className="p-6 bg-ui-element-bg border border-ui-border-hover rounded-xl shadow-sm">
               <h4 className="font-medium text-text-primary mb-2">Glow Surface</h4>
               <p className="text-sm text-text-secondary">Highlighted or active elements</p>
             </div>

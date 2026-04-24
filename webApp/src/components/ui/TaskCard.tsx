@@ -162,7 +162,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 'w-2 h-2 rounded-full flex-shrink-0',
                 priority === 3 && 'bg-danger-bg',
                 priority === 2 && 'bg-warning-strong',
-                priority === 1 && 'bg-info-electric',
+                priority === 1 && 'bg-bg-info-indicator',
                 completed && 'bg-text-disabled opacity-50',
               )}
             />

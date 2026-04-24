@@ -24,7 +24,7 @@ function ThemedApp() {
   }, [effectiveAppearance]); // Rerun effect when effectiveAppearance changes
 
   return (
-    <Theme accentColor="violet" grayColor="slate" appearance={effectiveAppearance} radius="medium" scaling="100%">
+    <Theme accentColor="lime" grayColor="olive" appearance={effectiveAppearance} radius="medium" scaling="100%">
       <App />
     </Theme>
   );

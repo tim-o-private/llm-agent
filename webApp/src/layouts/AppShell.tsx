@@ -35,9 +35,9 @@ const AppShell: React.FC = () => {
 
   return (
     <>
-      <div className="h-screen flex flex-col bg-gradient-to-br from-ui-bg via-ui-bg-glow to-ui-bg">
+      <div className="h-screen flex flex-col bg-ui-bg">
         {/* AC-04: TopBar spans full width above all panes */}
-        <header className="relative z-20 flex-shrink-0 flex h-14 bg-ui-element-bg/80 backdrop-blur-glass shadow-elevated border-b border-ui-border-glow">
+        <header className="relative z-20 flex-shrink-0 flex h-14 bg-ui-element-bg border-b border-ui-border">
           <TopBar />
         </header>
 
@@ -86,7 +86,7 @@ const AppShell: React.FC = () => {
         {/* Chat toggle button — fixed on right edge */}
         <button
           onClick={toggleChatPanel}
-          className={`hidden md:flex fixed top-1/2 -translate-y-1/2 right-0 z-30 flex-col items-center justify-center w-8 py-3 rounded-l-lg text-text-muted hover:text-text-electric bg-ui-element-bg/90 backdrop-blur-glass border border-r-0 border-ui-border-glow shadow-glow hover:shadow-electric transition-all duration-300 ${
+          className={`hidden md:flex fixed top-1/2 -translate-y-1/2 right-0 z-30 flex-col items-center justify-center w-8 py-3 rounded-l-lg text-text-muted hover:text-text-accent bg-ui-element-bg border border-r-0 border-ui-border transition-colors ${
             isChatPanelOpen ? 'text-text-accent' : ''
           }`}
           aria-label={isChatPanelOpen ? 'Close chat panel' : 'Open chat panel'}
@@ -105,7 +105,7 @@ const AppShell: React.FC = () => {
 
         {/* Mobile chat overlay */}
         {isChatPanelOpen && (
-          <div className="md:hidden fixed inset-0 z-40 bg-ui-element-bg/95 backdrop-blur-glass">
+          <div className="md:hidden fixed inset-0 z-40 bg-ui-element-bg">
             <button
               onClick={toggleChatPanel}
               className="absolute top-3 right-3 z-10 p-2 rounded-md text-text-muted hover:text-text-primary hover:bg-ui-interactive-bg-hover transition-colors"

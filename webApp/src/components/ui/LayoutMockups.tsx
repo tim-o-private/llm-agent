@@ -155,10 +155,10 @@ export const LayoutMockups: React.FC = () => {
       'rounded-xl border transition-all duration-500 ease-out h-full relative',
       'shadow-elevated',
       // All cards are now opaque with solid backgrounds
-      'bg-ui-element-bg border-ui-border-glow/50',
+      'bg-ui-element-bg border-ui-border',
       // Focus indicators with glow
-      isFocused && 'ring-2 ring-brand-primary/30 shadow-glow-lg',
-      !isFocused && 'shadow-glow',
+      isFocused && 'ring-2 ring-brand-primary/30 shadow-elevated',
+      !isFocused && 'shadow-sm',
       // Stacked cards get progressively darker backgrounds for depth
       stackDepth > 0 && 'bg-ui-surface border-ui-border/40',
       stackDepth > 1 && 'bg-ui-surface/80 border-ui-border/30',
@@ -370,7 +370,7 @@ export const LayoutMockups: React.FC = () => {
     <div className="h-full relative overflow-hidden">
       {/* Keyboard Shortcuts Help */}
       <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-20">
-        <div className="bg-ui-element-bg/40 backdrop-blur-glass rounded-lg border border-ui-border-glow/30 px-4 py-2 shadow-glow">
+        <div className="bg-ui-element-bg/40 backdrop-blur-sm rounded-lg border border-ui-border/40 px-4 py-2 shadow-sm">
           <div className="text-xs text-text-muted text-center">
             <span className="font-medium text-brand-primary">Primary/Secondary Workspace</span> •
             <span className="ml-1">Tab: Switch focus • ⌘1-4: Quick switch • ←→: Navigate</span>
@@ -382,7 +382,7 @@ export const LayoutMockups: React.FC = () => {
       <div className="absolute top-16 left-1/2 transform -translate-x-1/2 z-20">
         <div className="flex space-x-4">
           {/* Primary Pane Selector */}
-          <div className="bg-ui-element-bg/50 backdrop-blur-glass rounded-lg border border-ui-border-glow/40 p-3 shadow-glow">
+          <div className="bg-ui-element-bg/50 backdrop-blur-sm rounded-lg border border-ui-border/60 p-3 shadow-sm">
             <div className="text-xs text-text-muted mb-2 text-center font-medium">Primary Focus</div>
             <div className="flex space-x-1">
               {paneOrder.map((pane) => (
@@ -393,7 +393,7 @@ export const LayoutMockups: React.FC = () => {
                     'px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-300',
                     'backdrop-blur-sm border',
                     primaryPane === pane
-                      ? 'bg-brand-primary/80 text-white shadow-glow border-brand-primary/50'
+                      ? 'bg-brand-primary/80 text-white shadow-sm border-brand-primary/50'
                       : 'bg-ui-element-bg/30 text-text-muted hover:text-text-primary hover:bg-ui-interactive-bg-hover/50 border-ui-border/30',
                   )}
                 >
@@ -404,7 +404,7 @@ export const LayoutMockups: React.FC = () => {
           </div>
 
           {/* Secondary Pane Selector */}
-          <div className="bg-ui-element-bg/40 backdrop-blur-glass rounded-lg border border-ui-border-glow/30 p-3 shadow-glow">
+          <div className="bg-ui-element-bg/40 backdrop-blur-sm rounded-lg border border-ui-border/40 p-3 shadow-sm">
             <div className="text-xs text-text-muted mb-2 text-center font-medium">Secondary Context</div>
             <div className="flex space-x-1">
               {paneOrder.map((pane) => (
@@ -415,7 +415,7 @@ export const LayoutMockups: React.FC = () => {
                     'px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-300',
                     'backdrop-blur-sm border',
                     secondaryPane === pane
-                      ? 'bg-ui-border/60 text-text-primary shadow-glow border-ui-border/50'
+                      ? 'bg-ui-border/60 text-text-primary shadow-sm border-ui-border/50'
                       : 'bg-ui-element-bg/20 text-text-muted hover:text-text-primary hover:bg-ui-interactive-bg-hover/30 border-ui-border/20',
                   )}
                 >
@@ -552,7 +552,7 @@ export const LayoutMockups: React.FC = () => {
 
       {/* Context Indicator */}
       <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-20">
-        <div className="bg-ui-element-bg/40 backdrop-blur-glass rounded-lg border border-ui-border-glow/30 px-4 py-2 shadow-glow">
+        <div className="bg-ui-element-bg/40 backdrop-blur-sm rounded-lg border border-ui-border/40 px-4 py-2 shadow-sm">
           <div className="text-xs text-text-muted flex items-center space-x-2">
             <span className="font-medium text-brand-primary">{primaryPane}</span>
             <span className="text-ui-border">+</span>
