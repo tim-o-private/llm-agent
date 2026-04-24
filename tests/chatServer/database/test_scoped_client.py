@@ -289,7 +289,7 @@ class TestUserScopedTables:
             "user_tool_preferences", "chat_sessions", "agent_execution_results",
             "deferred_observations", "user_preferences",
             "workflow_runs", "config_change_proposals",
-            "approval_cards", "activity_log", "suggest_cards",
+            "approval_cards", "activity_log", "suggest_cards", "captures",
         }
         assert USER_SCOPED_TABLES == expected
 
