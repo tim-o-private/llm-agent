@@ -98,6 +98,8 @@ These affect ALL domains. Domain-specific gotchas live in their respective skill
 4. **ES256 JWT tokens** — Supabase issues ES256, not HS256. Don't revert `auth.py` to HS256-only.
 5. **`os.getenv()` is scattered** — Env vars read in `settings.py`, `agent_loader_db.py`, `gmail_tools.py`, `memory_tools.py`, `email_digest_service.py`. Renaming requires full grep.
 6. **Never use raw `get_supabase_client` in services or routers** — Per A8/SPEC-017, routers use `get_user_scoped_client` (auto-filters by user_id), background services use `get_system_client`. `validate-patterns.sh` blocks violations. See `chatServer/database/scoped_client.py`.
+7. **LLM provider env vars** — `LLM_PROVIDER` (anthropic|openai), `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_DEFAULT_MODEL` control engine selection and model defaults. `LLM_API_KEY` falls back to `ANTHROPIC_API_KEY` then `OPENAI_API_KEY`. All read in `settings.py`.
+8. **Import-time model constants** — `DEFAULT_SCHEDULED_MODEL` (`scheduled_execution_service.py`) and `EmailOnboardingService.DEFAULT_MODEL` (`email_onboarding_service.py`) are evaluated at import time via `get_settings()`. Patching `get_settings()` in tests won't affect them — patch the constant directly.
 
 ## Resolving Bugs
 

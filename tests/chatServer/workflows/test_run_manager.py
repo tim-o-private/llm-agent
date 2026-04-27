@@ -74,7 +74,7 @@ def _make_run_manager(db=None):
         db = _mock_db_client()
     return WorkflowRunManager(
         db_client=db,
-        anthropic_client=MagicMock(),
+        llm_client=MagicMock(),
         tool_schemas=[],
         tool_executors={},
     )

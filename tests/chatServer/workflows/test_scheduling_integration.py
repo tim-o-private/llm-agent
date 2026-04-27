@@ -14,7 +14,7 @@ from chatServer.services.job_handlers import (
 # create_system_client is module-level import in job_handlers → patch at consumption site
 _DISPATCH = "chatServer.workflows.dispatch.dispatch_workflow"
 _SYSTEM_CLIENT = "chatServer.services.job_handlers.create_system_client"
-_ANTHROPIC = "chatServer.services.job_handlers._get_anthropic_client_for_workflow"
+_LLM_CLIENT = "chatServer.services.job_handlers._get_llm_client_for_workflow"
 _DB_MANAGER = "chatServer.database.connection.get_database_manager"
 _BRIEFING_SERVICE = "chatServer.services.briefing_service.BriefingService"
 _JOB_SERVICE = "chatServer.services.job_service.JobService"
@@ -42,7 +42,7 @@ def _mock_briefing_service(prefs=None):
 
 class TestHandleMorningBriefingWorkflow:
     @pytest.mark.asyncio
-    @patch(_ANTHROPIC)
+    @patch(_LLM_CLIENT)
     @patch(_JOB_SERVICE)
     @patch(_DB_MANAGER)
     @patch(_BRIEFING_SERVICE)
@@ -69,7 +69,7 @@ class TestHandleMorningBriefingWorkflow:
         assert call_args["args"]["workflow_name"] == "morning-briefing"
 
     @pytest.mark.asyncio
-    @patch(_ANTHROPIC)
+    @patch(_LLM_CLIENT)
     @patch(_JOB_SERVICE)
     @patch(_DB_MANAGER)
     @patch(_BRIEFING_SERVICE)
@@ -96,7 +96,7 @@ class TestHandleMorningBriefingWorkflow:
 
 class TestHandleEveningBriefingWorkflow:
     @pytest.mark.asyncio
-    @patch(_ANTHROPIC)
+    @patch(_LLM_CLIENT)
     @patch(_JOB_SERVICE)
     @patch(_DB_MANAGER)
     @patch(_BRIEFING_SERVICE)
@@ -124,7 +124,7 @@ class TestHandleEveningBriefingWorkflow:
 
 class TestHandleEmailTriage:
     @pytest.mark.asyncio
-    @patch(_ANTHROPIC)
+    @patch(_LLM_CLIENT)
     @patch(_JOB_SERVICE)
     @patch(_DB_MANAGER)
     @patch(_BRIEFING_SERVICE)
@@ -152,7 +152,7 @@ class TestHandleEmailTriage:
         assert call_args["args"]["parameters"]["max_emails"] == 20
 
     @pytest.mark.asyncio
-    @patch(_ANTHROPIC)
+    @patch(_LLM_CLIENT)
     @patch(_JOB_SERVICE)
     @patch(_DB_MANAGER)
     @patch(_BRIEFING_SERVICE)
@@ -177,7 +177,7 @@ class TestHandleEmailTriage:
         assert call_kwargs["job_type"] == "email_triage"
 
     @pytest.mark.asyncio
-    @patch(_ANTHROPIC)
+    @patch(_LLM_CLIENT)
     @patch(_JOB_SERVICE)
     @patch(_DB_MANAGER)
     @patch(_BRIEFING_SERVICE)
@@ -202,7 +202,7 @@ class TestHandleEmailTriage:
         mock_job_svc.create.assert_not_called()
 
     @pytest.mark.asyncio
-    @patch(_ANTHROPIC)
+    @patch(_LLM_CLIENT)
     @patch(_JOB_SERVICE)
     @patch(_DB_MANAGER)
     @patch(_BRIEFING_SERVICE)

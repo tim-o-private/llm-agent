@@ -16,7 +16,7 @@ def mock_deps():
     return {
         "user_id": "user-1",
         "db_client": MagicMock(),
-        "anthropic_client": MagicMock(),
+        "llm_client": MagicMock(),
         "tool_schemas": [],
         "tool_executors": {},
     }

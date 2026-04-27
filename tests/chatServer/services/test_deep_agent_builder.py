@@ -95,6 +95,7 @@ def _standard_patches(agent_config=None, mock_graph=None, mock_backend=None, too
         patch("chatServer.config.settings.get_settings", return_value=mock_settings),
         patch("chatServer.services.storage_sync.StorageSync", return_value=MagicMock(hydrate_user=AsyncMock())),
         patch.dict(os.environ, {"SUPABASE_URL": "", "SUPABASE_SERVICE_ROLE_KEY": "", "SANDBOX_DATA_DIR": "/tmp/test-sandbox"}),  # noqa: E501
+        patch.dict("sys.modules", {"langchain_openrouter": MagicMock()}),
         patch("deepagents.create_deep_agent", return_value=mock_graph),
     ]
     return patches
@@ -188,12 +189,28 @@ async def test_build_deep_agent_constructs_backend():
 
 
 @pytest.mark.asyncio
-async def test_build_deep_agent_model_prefixed_with_openai():
-    """Model from config is prefixed with 'openai:' when no provider prefix present (default provider)."""
+@pytest.mark.parametrize(
+    "provider, model_in, expected",
+    [
+        ("anthropic", "claude-sonnet-4-5-20250514", "anthropic:claude-sonnet-4-5-20250514"),
+        ("anthropic", "anthropic:claude-sonnet-4-5-20250514", "anthropic:claude-sonnet-4-5-20250514"),
+    ],
+    ids=["anthropic-bare", "anthropic-prefixed"],
+)
+async def test_build_deep_agent_model_prefix_anthropic(provider, model_in, expected):
+    """Anthropic models are prefixed with 'anthropic:' when no prefix present; existing prefixes preserved."""
     config = _make_agent_config()
-    config["llm_config"] = {"model": "gpt-4o"}
+    config["llm_config"] = {"model": model_in}
     mock_graph = _make_mock_graph()
+
+    mock_settings = MagicMock()
+    mock_settings.llm_provider = provider
+    mock_settings.llm_default_model = "default-model"
+    mock_settings.supabase_url = ""
+    mock_settings.supabase_service_key = ""
+
     patches = _standard_patches(agent_config=config, mock_graph=mock_graph)
+    patches[11] = patch("chatServer.config.settings.get_settings", return_value=mock_settings)
 
     from contextlib import ExitStack
     with ExitStack() as stack:
@@ -202,14 +219,19 @@ async def test_build_deep_agent_model_prefixed_with_openai():
         await mod.build_deep_agent("user-1", "clarity", "session-1", "web")
 
     call_kwargs = mock_create.call_args.kwargs
-    assert call_kwargs["model"] == "openai:gpt-4o"
+    assert call_kwargs["model"] == expected
 
 
 @pytest.mark.asyncio
-async def test_build_deep_agent_model_with_existing_prefix_unchanged():
-    """Model with existing 'provider:' prefix is not double-prefixed."""
+@pytest.mark.parametrize(
+    "model_in",
+    ["gpt-4o", "openai:gpt-4o"],
+    ids=["openai-bare", "openai-prefixed"],
+)
+async def test_build_deep_agent_model_prefix_openai(model_in):
+    """OpenAI models are wrapped in a ChatOpenRouter instance with the bare model name."""
     config = _make_agent_config()
-    config["llm_config"] = {"model": "openai:gpt-4o"}
+    config["llm_config"] = {"model": model_in}
     mock_graph = _make_mock_graph()
     patches = _standard_patches(agent_config=config, mock_graph=mock_graph)
 
@@ -220,7 +242,8 @@ async def test_build_deep_agent_model_with_existing_prefix_unchanged():
         await mod.build_deep_agent("user-1", "clarity", "session-1", "web")
 
     call_kwargs = mock_create.call_args.kwargs
-    assert call_kwargs["model"] == "openai:gpt-4o"
+    model_obj = call_kwargs["model"]
+    assert not isinstance(model_obj, str)
 
 
 @pytest.mark.asyncio

@@ -135,7 +135,7 @@ class TodayService:
         self,
         user_id: str,
         db_client: Any,
-        anthropic_client: Any,
+        llm_client: Any,
     ) -> str:
         """Dispatch a ``regenerate-today`` workflow run. Returns run_id.
 
@@ -148,7 +148,7 @@ class TodayService:
                 args={"workflow_name": "regenerate-today", "parameters": {}},
                 user_id=user_id,
                 db_client=db_client,
-                anthropic_client=anthropic_client,
+                llm_client=llm_client,
                 tool_schemas=[],
                 tool_executors={},
             )

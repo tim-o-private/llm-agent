@@ -19,7 +19,7 @@ async def dispatch_workflow(
     args: dict,
     user_id: str,
     db_client: Any,
-    anthropic_client: Any,
+    llm_client: Any,
     tool_schemas: list[dict],
     tool_executors: dict,
 ) -> str:
@@ -29,7 +29,7 @@ async def dispatch_workflow(
         args: Tool arguments with workflow_name and optional parameters.
         user_id: The user who invoked the tool.
         db_client: Supabase client for workflow_runs table.
-        anthropic_client: Anthropic client for engine.
+        llm_client: LLM client for engine (Anthropic or OpenAI).
         tool_schemas: Available tool schemas for the engine.
         tool_executors: Available tool executors for the engine.
 
@@ -44,7 +44,7 @@ async def dispatch_workflow(
 
     manager = WorkflowRunManager(
         db_client=db_client,
-        anthropic_client=anthropic_client,
+        llm_client=llm_client,
         tool_schemas=tool_schemas,
         tool_executors=tool_executors,
     )

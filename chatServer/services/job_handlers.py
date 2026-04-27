@@ -111,7 +111,7 @@ async def handle_workflow(job: dict) -> dict:
         args={"workflow_name": template_name, "parameters": parameters},
         user_id=user_id,
         db_client=db_client,
-        anthropic_client=_get_anthropic_client_for_workflow(),
+        llm_client=_get_llm_client_for_workflow(),
         tool_schemas=[],
         tool_executors={},
     )
@@ -125,7 +125,7 @@ async def handle_workflow(job: dict) -> dict:
 _workflow_llm_client = None
 
 
-def _get_anthropic_client_for_workflow():
+def _get_llm_client_for_workflow():
     """Get or create a shared LLM client for workflow execution."""
     global _workflow_llm_client
     if _workflow_llm_client is None:
@@ -182,7 +182,7 @@ async def _run_scheduled_workflow(
         args={"workflow_name": workflow_name, "parameters": build_parameters(user_id, prefs)},
         user_id=user_id,
         db_client=db_client,
-        anthropic_client=_get_anthropic_client_for_workflow(),
+        llm_client=_get_llm_client_for_workflow(),
         tool_schemas=[],
         tool_executors={},
     )
