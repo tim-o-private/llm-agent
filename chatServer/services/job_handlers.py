@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable, Tuple
 
 from ..database.supabase_client import create_system_client
+from ..services.tool_resolver_service import resolve_tools_for_agent
 from ..workflows.services import DEFAULT_SERVICE_REGISTRY
 
 logger = logging.getLogger(__name__)
@@ -107,14 +108,28 @@ async def handle_workflow(job: dict) -> dict:
 
     db_client = await create_system_client()
 
+    agent_name = "assistant"
+    try:
+        tool_schemas, tool_executors, _ = await resolve_tools_for_agent(
+            user_id, agent_name
+        )
+    except Exception as exc:
+        logger.error(
+            "Failed to resolve tools for workflow '%s': %s",
+            template_name,
+            exc,
+            exc_info=True,
+        )
+        tool_schemas, tool_executors = [], {}
+
     # Use dispatch_workflow which handles all the setup
     result_msg = await dispatch_workflow(
         args={"workflow_name": template_name, "parameters": parameters},
         user_id=user_id,
         db_client=db_client,
         llm_client=_get_llm_client_for_workflow(),
-        tool_schemas=[],
-        tool_executors={},
+        tool_schemas=tool_schemas,
+        tool_executors=tool_executors,
         service_registry=DEFAULT_SERVICE_REGISTRY,
     )
 
@@ -180,13 +195,27 @@ async def _run_scheduled_workflow(
             max_retries=2,
         )
 
+    agent_name = "assistant"
+    try:
+        tool_schemas, tool_executors, _ = await resolve_tools_for_agent(
+            user_id, agent_name
+        )
+    except Exception as exc:
+        logger.error(
+            "Failed to resolve tools for workflow '%s': %s",
+            workflow_name,
+            exc,
+            exc_info=True,
+        )
+        tool_schemas, tool_executors = [], {}
+
     result_msg = await dispatch_workflow(
         args={"workflow_name": workflow_name, "parameters": build_parameters(user_id, prefs)},
         user_id=user_id,
         db_client=db_client,
         llm_client=_get_llm_client_for_workflow(),
-        tool_schemas=[],
-        tool_executors={},
+        tool_schemas=tool_schemas,
+        tool_executors=tool_executors,
         service_registry=DEFAULT_SERVICE_REGISTRY,
     )
 

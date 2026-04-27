@@ -14,6 +14,7 @@ from typing import Any, Optional
 from fastapi import HTTPException, status
 
 from ..lib.frontmatter import parse_frontmatter
+from ..services.tool_resolver_service import resolve_tools_for_agent
 from ..services.vault_service import VaultService
 from ..workflows.models import TemplateParseError
 from ..workflows.services import DEFAULT_SERVICE_REGISTRY
@@ -242,6 +243,20 @@ class WorkflowEditorService:
                 detail="Workflow engine unavailable",
             )
 
+        agent_name = "assistant"
+        try:
+            tool_schemas, tool_executors, _ = await resolve_tools_for_agent(
+                user_id, agent_name
+            )
+        except Exception as exc:
+            logger.error(
+                "Failed to resolve tools for workflow '%s': %s",
+                template_name,
+                exc,
+                exc_info=True,
+            )
+            tool_schemas, tool_executors = [], {}
+
         try:
             result_msg = await dispatch_workflow(
                 args={
@@ -251,8 +266,8 @@ class WorkflowEditorService:
                 user_id=user_id,
                 db_client=effective_db,
                 llm_client=llm_client,
-                tool_schemas=[],
-                tool_executors={},
+                tool_schemas=tool_schemas,
+                tool_executors=tool_executors,
                 service_registry=DEFAULT_SERVICE_REGISTRY,
             )
         except Exception as exc:

@@ -21,6 +21,7 @@ from fastapi import status as http_status
 from ..workflows.dispatch import dispatch_workflow
 from . import markdown_sections as md
 from .approval_service import ApprovalService
+from .tool_resolver_service import resolve_tools_for_agent
 from .vault_service import VaultService
 
 logger = logging.getLogger(__name__)
@@ -143,14 +144,27 @@ class TodayService:
         the same path used by every scheduled briefing handler — rather
         than hand-rolling a ``WorkflowRunManager``.
         """
+        agent_name = "assistant"
+        try:
+            tool_schemas, tool_executors, _ = await resolve_tools_for_agent(
+                user_id, agent_name
+            )
+        except Exception as exc:
+            logger.error(
+                "Failed to resolve tools for regenerate-today: %s",
+                exc,
+                exc_info=True,
+            )
+            tool_schemas, tool_executors = [], {}
+
         try:
             result_msg = await dispatch_workflow(
                 args={"workflow_name": "regenerate-today", "parameters": {}},
                 user_id=user_id,
                 db_client=db_client,
                 llm_client=llm_client,
-                tool_schemas=[],
-                tool_executors={},
+                tool_schemas=tool_schemas,
+                tool_executors=tool_executors,
             )
         except Exception as exc:
             logger.error("regenerate-today dispatch failed: %s", exc, exc_info=True)
