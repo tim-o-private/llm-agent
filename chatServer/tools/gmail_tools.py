@@ -12,7 +12,9 @@ from typing import List, Optional, Type
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
+from ..exceptions import ReauthRequiredError
 from .gmail_rate_limiter import GmailRateLimiter
+from .registry import register_tool_type
 
 try:
     from google.oauth2.credentials import Credentials
@@ -187,9 +189,10 @@ class GmailToolProvider:
                 }).execute()
 
                 if not result.data:
-                    raise ValueError(
+                    raise ReauthRequiredError(
+                        "gmail",
                         f"Gmail connection not found (id={self.connection_id}). "
-                        "Please reconnect this account in Settings > Integrations."
+                        "Please reconnect this account in Settings > Integrations.",
                     )
                 self._token_data = result.data
             else:
@@ -210,9 +213,10 @@ class GmailToolProvider:
         self._account_email = token_data.get("service_user_email")
 
         if not access_token:
-            raise ValueError(
+            raise ReauthRequiredError(
+                "gmail",
                 f"Gmail connection expired for {self._account_email}. "
-                "Please reconnect this account in Settings > Integrations."
+                "Please reconnect this account in Settings > Integrations.",
             )
 
         client_id = os.getenv("GOOGLE_CLIENT_ID")
@@ -386,6 +390,7 @@ class GmailSearchInput(BaseModel):
     )
 
 
+@register_tool_type("SearchGmailTool")
 class SearchGmailTool(BaseGmailTool):
     """Search Gmail messages using Gmail search syntax."""
 
@@ -517,6 +522,7 @@ class GmailGetMessageInput(BaseModel):
     )
 
 
+@register_tool_type("GetGmailTool")
 class GetGmailTool(BaseGmailTool):
     """Get detailed Gmail message content by ID."""
 

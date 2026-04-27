@@ -11,6 +11,8 @@ from typing import Optional, Type
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
+from .registry import register_tool_type
+
 logger = logging.getLogger(__name__)
 
 
@@ -82,6 +84,7 @@ class ManageBriefingPreferencesInput(BaseModel):
     )
 
 
+@register_tool_type("ManageBriefingPreferencesTool")
 class ManageBriefingPreferencesTool(BaseTool):
     """View or update briefing preferences (morning/evening briefing time, timezone, enabled/disabled)."""
 

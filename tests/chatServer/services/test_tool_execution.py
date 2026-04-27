@@ -60,14 +60,14 @@ def _mock_settings():
 
 @pytest.mark.asyncio
 async def test_execute_tool_resolves_and_runs(service, db_client):
-    """AC-21: DB returns tool type, TOOL_REGISTRY maps to class, _arun() called, result returned."""
+    """AC-21: DB returns tool type, registry maps to class, _arun() called, result returned."""
     _setup_db_lookup(db_client, tool_type="CreateTasksTool")
     fake_class, fake_instance = _mock_tool_class("task created")
 
     registry = {"CreateTasksTool": fake_class}
 
     with patch("chatServer.config.settings.get_settings", return_value=_mock_settings()), \
-         patch("src.core.agent_loader_db.TOOL_REGISTRY", registry):
+         patch("chatServer.tools.registry._registry", registry):
         result = await service.execute_tool(
             tool_name="create_tasks",
             tool_args={"title": "Do stuff"},
@@ -94,7 +94,7 @@ async def test_execute_tool_no_wrapper(service, db_client):
     registry = {"CreateTasksTool": fake_class}
 
     with patch("chatServer.config.settings.get_settings", return_value=_mock_settings()), \
-         patch("src.core.agent_loader_db.TOOL_REGISTRY", registry):
+         patch("chatServer.tools.registry._registry", registry):
         await service.execute_tool(
             tool_name="create_tasks",
             tool_args={},
@@ -121,7 +121,7 @@ async def test_execute_tool_rejects_memory_tool(service, db_client):
         _setup_db_lookup(db_client, tool_type=mem_type)
 
         with patch("chatServer.config.settings.get_settings", return_value=_mock_settings()), \
-             patch("src.core.agent_loader_db.TOOL_REGISTRY", {mem_type: MagicMock()}):
+             patch("chatServer.tools.registry._registry", {mem_type: MagicMock()}):
             with pytest.raises(ToolExecutionError, match="memory tool"):
                 await service.execute_tool(
                     tool_name="some_memory_tool",
@@ -149,10 +149,10 @@ async def test_execute_tool_gmail_dynamic_import(service, db_client):
     mock_module = MagicMock()
     mock_module.SearchGmailTool = fake_class
 
-    registry = {"GmailTool": None}  # GmailTool maps to None in TOOL_REGISTRY
+    registry = {"GmailTool": None}  # GmailTool maps to None in registry
 
     with patch("chatServer.config.settings.get_settings", return_value=_mock_settings()), \
-         patch("src.core.agent_loader_db.TOOL_REGISTRY", registry), \
+         patch("chatServer.tools.registry._registry", registry), \
          patch("chatServer.services.tool_execution.importlib.import_module", return_value=mock_module) as mock_import:
         result = await service.execute_tool(
             tool_name="search_gmail",
@@ -179,7 +179,7 @@ async def test_execute_tool_gmail_missing_tool_class(service, db_client):
     registry = {"GmailTool": None}
 
     with patch("chatServer.config.settings.get_settings", return_value=_mock_settings()), \
-         patch("src.core.agent_loader_db.TOOL_REGISTRY", registry):
+         patch("chatServer.tools.registry._registry", registry):
         with pytest.raises(ToolExecutionError, match="no tool_class in config"):
             await service.execute_tool(
                 tool_name="send_email",
@@ -200,7 +200,7 @@ async def test_execute_tool_unknown_name(service, db_client):
     db_client.table.return_value.select.return_value.eq.return_value.single.return_value.execute = mock_execute
 
     with patch("chatServer.config.settings.get_settings", return_value=_mock_settings()), \
-         patch("src.core.agent_loader_db.TOOL_REGISTRY", {}):
+         patch("chatServer.tools.registry._registry", {}):
         with pytest.raises(ToolExecutionError, match="not found in tools table"):
             await service.execute_tool(
                 tool_name="nonexistent_tool",
@@ -216,14 +216,14 @@ async def test_execute_tool_unknown_name(service, db_client):
 
 @pytest.mark.asyncio
 async def test_execute_tool_unregistered_type(service, db_client):
-    """AC-22: tool type not in TOOL_REGISTRY raises ToolExecutionError."""
+    """AC-22: tool type not in registry raises ToolExecutionError."""
     _setup_db_lookup(db_client, tool_type="UnknownToolType")
 
     registry = {}  # Empty registry
 
     with patch("chatServer.config.settings.get_settings", return_value=_mock_settings()), \
-         patch("src.core.agent_loader_db.TOOL_REGISTRY", registry):
-        with pytest.raises(ToolExecutionError, match="not in TOOL_REGISTRY"):
+         patch("chatServer.tools.registry._registry", registry):
+        with pytest.raises(ToolExecutionError, match="not in tool registry"):
             await service.execute_tool(
                 tool_name="mystery_tool",
                 tool_args={},
@@ -248,7 +248,7 @@ async def test_execute_tool_arun_failure(service, db_client):
     registry = {"CreateTasksTool": fake_class}
 
     with patch("chatServer.config.settings.get_settings", return_value=_mock_settings()), \
-         patch("src.core.agent_loader_db.TOOL_REGISTRY", registry):
+         patch("chatServer.tools.registry._registry", registry):
         with pytest.raises(ToolExecutionError, match="execution failed") as exc_info:
             await service.execute_tool(
                 tool_name="create_tasks",
@@ -274,7 +274,7 @@ async def test_execute_tool_passes_config(service, db_client):
     registry = {"CRUDTool": fake_class}
 
     with patch("chatServer.config.settings.get_settings", return_value=_mock_settings()), \
-         patch("src.core.agent_loader_db.TOOL_REGISTRY", registry):
+         patch("chatServer.tools.registry._registry", registry):
         await service.execute_tool(
             tool_name="get_custom_items",
             tool_args={"id": "123"},
@@ -301,7 +301,7 @@ async def test_execute_tool_passes_agent_name(service, db_client):
     registry = {"CreateTasksTool": fake_class}
 
     with patch("chatServer.config.settings.get_settings", return_value=_mock_settings()), \
-         patch("src.core.agent_loader_db.TOOL_REGISTRY", registry):
+         patch("chatServer.tools.registry._registry", registry):
         await service.execute_tool(
             tool_name="create_tasks",
             tool_args={},

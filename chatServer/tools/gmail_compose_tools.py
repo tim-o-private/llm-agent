@@ -12,6 +12,8 @@ from typing import Optional, Type
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
+from .registry import register_tool_type
+
 logger = logging.getLogger(__name__)
 
 COMPOSE_SCOPE = "https://www.googleapis.com/auth/gmail.compose"
@@ -96,6 +98,7 @@ class BaseGmailComposeTool(BaseTool):
 # Draft Email Reply Tool
 # ---------------------------------------------------------------------------
 
+@register_tool_type("DraftEmailReplyTool")
 class DraftEmailReplyTool(BaseGmailComposeTool):
     """Fetch an email and the user's writing style to prepare a reply."""
 
@@ -206,6 +209,7 @@ class DraftEmailReplyTool(BaseGmailComposeTool):
 # Send Email Reply Tool
 # ---------------------------------------------------------------------------
 
+@register_tool_type("SendEmailReplyTool")
 class SendEmailReplyTool(BaseGmailComposeTool):
     """Send an approved email reply via Gmail. Requires user approval."""
 

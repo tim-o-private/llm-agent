@@ -12,6 +12,8 @@ from croniter import croniter
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
+from .registry import register_tool_type
+
 logger = logging.getLogger(__name__)
 
 # Day-of-week names for human-readable cron descriptions
@@ -58,6 +60,7 @@ class GetSchedulesInput(BaseModel):
     active_only: bool = Field(default=True, description="If true, only show active schedules")
 
 
+@register_tool_type("GetSchedulesTool")
 class GetSchedulesTool(BaseTool):
     """Get the user's agent schedules, optionally filtered by ID."""
 
@@ -157,6 +160,7 @@ class CreateSchedulesInput(BaseModel):
     )
 
 
+@register_tool_type("CreateSchedulesTool")
 class CreateSchedulesTool(BaseTool):
     """Create one or more recurring agent schedules."""
 
@@ -229,6 +233,7 @@ class DeleteSchedulesInput(BaseModel):
     ids: list[str] = Field(..., description="List of schedule UUIDs to delete")
 
 
+@register_tool_type("DeleteSchedulesTool")
 class DeleteSchedulesTool(BaseTool):
     """Delete one or more agent schedules."""
 

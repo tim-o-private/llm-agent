@@ -3,6 +3,7 @@ from typing import Any, ClassVar, Dict, Optional, Type
 from langchain_core.tools import BaseTool, ToolException
 from pydantic import BaseModel, ConfigDict, Field
 
+from chatServer.tools.registry import register_tool_type
 from supabase import create_client
 from utils.logging_utils import get_logger
 
@@ -29,6 +30,7 @@ class CRUDToolInput(BaseModel):
 # @docs memory-bank/patterns/agent-patterns.md#pattern-1-generic-crudtool-configuration
 # @rules memory-bank/rules/agent-rules.json#agent-001
 # @examples memory-bank/patterns/agent-patterns.md#pattern-8-abstraction-layers
+@register_tool_type("CRUDTool")
 class CRUDTool(BaseTool):
     """
     A generic, database-configurable tool for performing CRUD (Create, Read/Fetch, Update, Delete)

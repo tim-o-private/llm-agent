@@ -15,6 +15,9 @@ from google.oauth2.credentials import Credentials
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
+from ..exceptions import ReauthRequiredError
+from .registry import register_tool_type
+
 logger = logging.getLogger(__name__)
 
 
@@ -132,9 +135,10 @@ class CalendarToolProvider:
                 }).execute()
 
                 if not result.data:
-                    raise ValueError(
+                    raise ReauthRequiredError(
+                        "google_calendar",
                         f"Calendar connection not found (id={self.connection_id}). "
-                        "Please reconnect this account in Settings > Integrations."
+                        "Please reconnect this account in Settings > Integrations.",
                     )
                 self._token_data = result.data
             else:
@@ -152,9 +156,10 @@ class CalendarToolProvider:
         self._account_email = token_data.get("service_user_email")
 
         if not access_token:
-            raise ValueError(
+            raise ReauthRequiredError(
+                "google_calendar",
                 f"Calendar connection expired for {self._account_email}. "
-                "Please reconnect this account in Settings > Integrations."
+                "Please reconnect this account in Settings > Integrations.",
             )
 
         client_id = os.getenv("GOOGLE_CLIENT_ID")
@@ -304,6 +309,7 @@ class BaseCalendarTool(BaseTool):
 
 # --- Search Calendar Tool ---
 
+@register_tool_type("SearchCalendarTool")
 class SearchCalendarTool(BaseCalendarTool):
     """Search Google Calendar for events."""
 
@@ -473,6 +479,7 @@ class SearchCalendarTool(BaseCalendarTool):
 
 # --- Get Calendar Event Tool ---
 
+@register_tool_type("GetCalendarEventTool")
 class GetCalendarEventTool(BaseCalendarTool):
     """Get full details for a specific calendar event."""
 

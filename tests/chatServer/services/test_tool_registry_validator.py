@@ -9,7 +9,7 @@ Run in CI to catch drift before deploy.
 """
 
 from chatServer.security.approval_tiers import TOOL_APPROVAL_DEFAULTS, ApprovalTier  # noqa: I001
-from src.core.agent_loader_db import TOOL_REGISTRY
+from chatServer.tools.registry import _registry as TOOL_REGISTRY
 
 
 # All tool names that should be active after SPEC-019 canonical migration.

@@ -9,6 +9,8 @@ from typing import Optional, Type
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
+from .registry import register_tool_type
+
 logger = logging.getLogger(__name__)
 
 
@@ -19,6 +21,7 @@ class SearchWebInput(BaseModel):
     max_results: int = Field(5, ge=1, le=10, description="Number of results to return (1-10)")
 
 
+@register_tool_type("SearchWebTool")
 class SearchWebTool(BaseTool):
     """Search the web for current information."""
 

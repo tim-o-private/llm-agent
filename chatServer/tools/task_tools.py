@@ -10,6 +10,8 @@ from typing import Optional, Type
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
+from .registry import register_tool_type
+
 logger = logging.getLogger(__name__)
 
 PRIORITY_LABELS = {1: "LOW", 2: "MED", 3: "MED", 4: "HIGH", 5: "URGENT"}
@@ -108,6 +110,7 @@ class GetTasksInput(BaseModel):
     limit: int = Field(default=20, ge=1, le=50, description="Max tasks to return (1-50)")
 
 
+@register_tool_type("GetTasksTool")
 class GetTasksTool(BaseTool):
     """List user's tasks with optional filters, or get a single task by ID."""
 
@@ -213,6 +216,7 @@ class CreateTasksInput(BaseModel):
     )
 
 
+@register_tool_type("CreateTasksTool")
 class CreateTasksTool(BaseTool):
     """Create one or more tasks."""
 
@@ -279,6 +283,7 @@ class UpdateTasksInput(BaseModel):
     )
 
 
+@register_tool_type("UpdateTasksTool")
 class UpdateTasksTool(BaseTool):
     """Update one or more tasks."""
 
@@ -333,6 +338,7 @@ class DeleteTasksInput(BaseModel):
     )
 
 
+@register_tool_type("DeleteTasksTool")
 class DeleteTasksTool(BaseTool):
     """Soft-delete one or more tasks and their subtasks."""
 

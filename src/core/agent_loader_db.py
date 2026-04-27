@@ -7,11 +7,11 @@ from typing import Any, Dict, List, Optional, Type
 from pydantic import BaseModel, ConfigDict, Field, create_model
 
 from chatServer.database.connection import get_db_connection
-from chatServer.tools.briefing_tools import ManageBriefingPreferencesTool
-from chatServer.tools.calendar_tools import GetCalendarEventTool, SearchCalendarTool
-from chatServer.tools.gmail_compose_tools import DraftEmailReplyTool, SendEmailReplyTool
+from chatServer.tools.briefing_tools import ManageBriefingPreferencesTool  # noqa: F401
+from chatServer.tools.calendar_tools import GetCalendarEventTool, SearchCalendarTool  # noqa: F401
+from chatServer.tools.gmail_compose_tools import DraftEmailReplyTool, SendEmailReplyTool  # noqa: F401
 from chatServer.tools.gmail_tools import GetGmailTool, SearchGmailTool
-from chatServer.tools.memory_tools import (
+from chatServer.tools.memory_tools import (  # noqa: F401
     CreateMemoriesTool,
     DeleteMemoriesTool,
     GetContextTool,
@@ -23,60 +23,16 @@ from chatServer.tools.memory_tools import (
     SetProjectTool,
     UpdateMemoriesTool,
 )
-from chatServer.tools.reminder_tools import CreateRemindersTool, DeleteRemindersTool, GetRemindersTool
-from chatServer.tools.schedule_tools import CreateSchedulesTool, DeleteSchedulesTool, GetSchedulesTool
-from chatServer.tools.task_tools import CreateTasksTool, DeleteTasksTool, GetTasksTool, UpdateTasksTool
-from chatServer.tools.web_search_tool import SearchWebTool
+from chatServer.tools.registry import get_tool_class
+from chatServer.tools.reminder_tools import CreateRemindersTool, DeleteRemindersTool, GetRemindersTool  # noqa: F401
+from chatServer.tools.schedule_tools import CreateSchedulesTool, DeleteSchedulesTool, GetSchedulesTool  # noqa: F401
+from chatServer.tools.task_tools import CreateTasksTool, DeleteTasksTool, GetTasksTool, UpdateTasksTool  # noqa: F401
+from chatServer.tools.web_search_tool import SearchWebTool  # noqa: F401
 from core.tools.crud_tool import CRUDTool, CRUDToolInput
 from supabase import Client as SupabaseClient
 from utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
-
-# Tool registry: maps tools.type column value → Python class.
-# The canonical migration (SPEC-019) sets correct type values; legacy aliases
-# kept only for safety during migration rollback.
-TOOL_REGISTRY: Dict[str, Type] = {
-    "CRUDTool": CRUDTool,
-    # Gmail
-    "SearchGmailTool": SearchGmailTool,
-    "GetGmailTool": GetGmailTool,
-    "GmailTool": None,  # Special handling — uses config.tool_class
-    # Memory
-    "CreateMemoriesTool": CreateMemoriesTool,
-    "SearchMemoriesTool": SearchMemoriesTool,
-    "GetMemoriesTool": GetMemoriesTool,
-    "DeleteMemoriesTool": DeleteMemoriesTool,
-    "UpdateMemoriesTool": UpdateMemoriesTool,
-    "SetProjectTool": SetProjectTool,
-    "LinkMemoriesTool": LinkMemoriesTool,
-    "GetEntitiesTool": GetEntitiesTool,
-    "SearchEntitiesTool": SearchEntitiesTool,
-    "GetContextTool": GetContextTool,
-    # Tasks
-    "GetTasksTool": GetTasksTool,
-    "CreateTasksTool": CreateTasksTool,
-    "UpdateTasksTool": UpdateTasksTool,
-    "DeleteTasksTool": DeleteTasksTool,
-    # Reminders
-    "GetRemindersTool": GetRemindersTool,
-    "CreateRemindersTool": CreateRemindersTool,
-    "DeleteRemindersTool": DeleteRemindersTool,
-    # Schedules
-    "GetSchedulesTool": GetSchedulesTool,
-    "CreateSchedulesTool": CreateSchedulesTool,
-    "DeleteSchedulesTool": DeleteSchedulesTool,
-    # Web search
-    "SearchWebTool": SearchWebTool,
-    # Calendar
-    "SearchCalendarTool": SearchCalendarTool,
-    "GetCalendarEventTool": GetCalendarEventTool,
-    # Briefing preferences
-    "ManageBriefingPreferencesTool": ManageBriefingPreferencesTool,
-    # Gmail compose
-    "DraftEmailReplyTool": DraftEmailReplyTool,
-    "SendEmailReplyTool": SendEmailReplyTool,
-}
 
 # Gmail tool class registry for GmailTool type (config.tool_class → class)
 GMAIL_TOOL_CLASSES: Dict[str, Type] = {
@@ -240,7 +196,7 @@ def load_tools_from_db(
     Instantiates tool classes based on configuration data fetched from the database.
 
     For each tool defined in `tools_data`:
-    1. Looks up the base Python tool class in `TOOL_REGISTRY` using `tool_row["type"]`.
+    1. Looks up the base Python tool class in the decorator registry using `tool_row["type"]`.
     2. If the base class is `CRUDTool` and a `runtime_args_schema` is provided in the
        tool's DB `config` (JSONB column), it dynamically creates a subclass of `CRUDTool`
        with a custom `args_schema` generated from this runtime schema. This allows each
@@ -268,9 +224,9 @@ def load_tools_from_db(
         db_tool_name = tool_row.get("name")
         db_tool_description = tool_row.get("description")
 
-        original_python_tool_class = TOOL_REGISTRY.get(db_tool_type_str)
-        if db_tool_type_str not in TOOL_REGISTRY:
-            logger.warning(f"Tool type '{db_tool_type_str}' (for tool name '{db_tool_name}') not found in TOOL_REGISTRY. Skipping tool.")  # noqa: E501
+        original_python_tool_class = get_tool_class(db_tool_type_str)
+        if original_python_tool_class is None and db_tool_type_str != "GmailTool":
+            logger.warning(f"Tool type '{db_tool_type_str}' (for tool name '{db_tool_name}') not found in registry. Skipping tool.")  # noqa: E501
             continue
 
         # Fall back to class defaults for name/description when not provided (file-based config)
@@ -365,7 +321,7 @@ def load_tools_from_db(
             else:
                 logger.info(f"CRUDTool instance '{db_tool_name}': No 'runtime_args_schema' found or parsed in DB config. Will use default '{CRUDTool.__name__}' args_schema ('{CRUDToolInput.__name__}').")  # noqa: E501
 
-        else: # For non-CRUD tools registered in TOOL_REGISTRY
+        else: # For non-CRUD tools registered in the decorator registry
             # Merge their entire DB config JSON into constructor args.
             # These tools must handle these kwargs in their __init__ or have them as Pydantic fields.
             if db_tool_config_json:
