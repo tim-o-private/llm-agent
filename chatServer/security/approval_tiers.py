@@ -89,16 +89,38 @@ TOOL_APPROVAL_DEFAULTS: dict[str, tuple[ApprovalTier, ApprovalTier]] = {
 DEFAULT_UNKNOWN_TIER = ApprovalTier.REQUIRES_APPROVAL
 
 
-def get_tool_default_tier(tool_name: str) -> tuple[ApprovalTier, ApprovalTier]:
+async def get_tool_default_tier(
+    tool_name: str,
+    db_client=None,
+) -> tuple[ApprovalTier, ApprovalTier]:
     """
     Get the default approval tier for a tool.
+
+    Queries the database first, then falls back to the hardcoded dict.
 
     Returns:
         Tuple of (tier, default_for_user_configurable)
     """
+    if db_client is not None:
+        try:
+            result = await db_client.table("tools") \
+                .select("approval_tier") \
+                .eq("name", tool_name) \
+                .single() \
+                .execute()
+            if result.data and result.data.get("approval_tier") is not None:
+                parsed_tier = ApprovalTier(result.data["approval_tier"])
+                _, default = TOOL_APPROVAL_DEFAULTS.get(
+                    tool_name,
+                    (DEFAULT_UNKNOWN_TIER, DEFAULT_UNKNOWN_TIER),
+                )
+                return (parsed_tier, default)
+        except Exception as e:
+            logger.warning(f"Failed to fetch approval tier from DB for {tool_name}: {e}")
+
     return TOOL_APPROVAL_DEFAULTS.get(
         tool_name,
-        (DEFAULT_UNKNOWN_TIER, DEFAULT_UNKNOWN_TIER)
+        (DEFAULT_UNKNOWN_TIER, DEFAULT_UNKNOWN_TIER),
     )
 
 
@@ -115,7 +137,7 @@ async def get_effective_tier(
     - AUTO_APPROVE tools are always auto (no override needed)
     - USER_CONFIGURABLE tools check the database for user preference
     """
-    tier, default = get_tool_default_tier(tool_name)
+    tier, default = await get_tool_default_tier(tool_name, db_client)
 
     # REQUIRES_APPROVAL is absolute - cannot be overridden
     if tier == ApprovalTier.REQUIRES_APPROVAL:
@@ -182,7 +204,7 @@ async def set_user_preference(
 
     Only works for USER_CONFIGURABLE tools. Cannot override REQUIRES_APPROVAL.
     """
-    tier, _ = get_tool_default_tier(tool_name)
+    tier, _ = await get_tool_default_tier(tool_name, db_client)
     if tier == ApprovalTier.REQUIRES_APPROVAL:
         logger.warning(f"Cannot override REQUIRES_APPROVAL tool: {tool_name}")
         return False

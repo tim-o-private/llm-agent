@@ -318,7 +318,7 @@ async def get_tool_preference(
             get_tool_default_tier,
         )
 
-        tier, default = get_tool_default_tier(tool_name)
+        tier, default = await get_tool_default_tier(tool_name, db_client)
 
         user_preference = None
         if tier == ApprovalTier.USER_CONFIGURABLE:
