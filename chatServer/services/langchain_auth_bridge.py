@@ -13,6 +13,7 @@ import psycopg
 from google.oauth2.credentials import Credentials
 
 from ..database.connection import get_db_connection
+from ..exceptions import ReauthRequiredError
 
 logger = logging.getLogger(__name__)
 
@@ -179,9 +180,10 @@ class VaultToLangChainCredentialAdapter:
                 logger.info(f"Access token expired for user {user_id}, service {service_name}. Attempting refresh...")
                 await self._refresh_credentials(user_id, service_name, credentials)
             elif credentials.expired:
-                raise RuntimeError(
+                raise ReauthRequiredError(
+                    service_name,
                     f"Access token expired and no refresh token available. "
-                    f"Please reconnect your {service_name} account in Settings > Integrations."
+                    f"Please reconnect your {service_name} account in Settings > Integrations.",
                 )
 
             logger.info(f"Successfully created Google credentials for user {user_id}, service {service_name}")
@@ -222,9 +224,10 @@ class VaultToLangChainCredentialAdapter:
             await asyncio.get_event_loop().run_in_executor(None, refresh_sync)
 
             if not credentials.token:
-                raise RuntimeError(
+                raise ReauthRequiredError(
+                    service_name,
                     f"Token refresh failed - no new access token received. "
-                    f"Please reconnect your {service_name} account in Settings > Integrations."
+                    f"Please reconnect your {service_name} account in Settings > Integrations.",
                 )
 
             # Update the vault with the new access token
@@ -236,14 +239,16 @@ class VaultToLangChainCredentialAdapter:
             logger.error(f"Failed to refresh credentials for user {user_id}, service {service_name}: {e}")
             error_msg = str(e)
             if "invalid_grant" in error_msg.lower():
-                raise RuntimeError(
+                raise ReauthRequiredError(
+                    service_name,
                     f"Refresh token is invalid or expired. "
-                    f"Please reconnect your {service_name} account in Settings > Integrations."
+                    f"Please reconnect your {service_name} account in Settings > Integrations.",
                 )
             elif "unauthorized" in error_msg.lower():
-                raise RuntimeError(
+                raise ReauthRequiredError(
+                    service_name,
                     f"Authentication failed during token refresh. "
-                    f"Please reconnect your {service_name} account in Settings > Integrations."
+                    f"Please reconnect your {service_name} account in Settings > Integrations.",
                 )
             else:
                 raise RuntimeError(f"Token refresh failed: {error_msg}")

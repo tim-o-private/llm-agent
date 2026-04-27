@@ -4,7 +4,8 @@ import { queryClient } from '@/lib/queryClient';
 import { useAuthStore } from '@/features/auth/useAuthStore';
 import { generateNewChatId } from '@/api/hooks/useChatSessionHooks';
 import { useEffect } from 'react';
-import { toast } from '@/components/ui/toast';
+import { toast, ToastAction } from '@/components/ui/toast';
+import React from 'react';
 import { v4 as uuidv4 } from 'uuid'; // For client-side message IDs
 import type { ChatScope } from '@/api/types/chat';
 
@@ -55,6 +56,7 @@ interface ChatStore {
   startNewConversationAsync: (agentName: string) => Promise<void>;
   switchToConversationAsync: (chatId: string) => Promise<void>;
   refreshMessages: () => Promise<void>;
+  handleReauthError: (error: Error) => void;
 }
 
 const CHAT_ID_LOCAL_STORAGE_PREFIX = 'chatUI_activeChatId';
@@ -573,6 +575,39 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     } catch (error) {
       console.error('Error refreshing messages:', error);
     }
+  },
+
+  handleReauthError: (error: Error) => {
+    const reauthMatch = error.message.match(/^\[REAUTH_REQUIRED:([^\]]+)\]\s*(.*)$/);
+    if (!reauthMatch) return;
+
+    const service = reauthMatch[1];
+    const message = reauthMatch[2] || `Please reconnect your ${service} account in Settings > Integrations.`;
+    const displayService = service === 'google_calendar' ? 'Google Calendar' : service.charAt(0).toUpperCase() + service.slice(1);
+
+    // Show toast with action button
+    toast.error(
+      `Your ${displayService} connection expired.`,
+      message,
+      {
+        action: React.createElement(
+          ToastAction,
+          { altText: 'Go to Settings', onClick: () => { window.location.href = '/settings'; } },
+          'Go to Settings',
+        ) as unknown as React.ReactElement<typeof ToastAction>,
+        duration: 10000,
+      },
+    );
+
+    // Add a system notification message to the chat
+    const { messages } = get();
+    const notificationMessage: ChatMessage = {
+      id: uuidv4(),
+      text: `Your ${displayService} connection expired. [Reconnect in Settings](/settings)`,
+      sender: 'notification',
+      timestamp: new Date(),
+    };
+    set({ messages: [...messages, notificationMessage] });
   },
 }));
 

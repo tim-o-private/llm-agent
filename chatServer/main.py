@@ -19,6 +19,7 @@ from .config.settings import get_settings
 from .database.connection import get_db_connection
 from .database.supabase_client import get_user_scoped_client
 from .dependencies.auth import get_current_user
+from .exceptions import ReauthRequiredError
 from .models.chat import ChatRequest, ChatResponse
 from .models.prompt_customization import PromptCustomization, PromptCustomizationCreate
 from .models.webhook import SupabasePayload
@@ -26,15 +27,15 @@ from .routers.actions import router as actions_router
 from .routers.activity_router import router as activity_router
 from .routers.approvals_router import router as approvals_router
 from .routers.capture_router import router as capture_router
-from .routers.entity_router import router as entity_router
-from .routers.thread_router import router as thread_router
 from .routers.chat_history_router import router as chat_history_router
 from .routers.email_agent_router import router as email_agent_router
+from .routers.entity_router import router as entity_router
 from .routers.external_api_router import router as external_api_router
 from .routers.notifications_router import router as notifications_router
 from .routers.oauth_router import router as oauth_router
 from .routers.session_open_router import router as session_open_router
 from .routers.telegram_router import router as telegram_router
+from .routers.thread_router import router as thread_router
 from .routers.today_router import router as today_router
 from .routers.vault_file_router import router as vault_file_router
 from .routers.vault_router import router as vault_router
@@ -297,6 +298,13 @@ app.include_router(thread_router)
 # --- Logger setup ---
 logger = get_logger(__name__)
 
+@app.exception_handler(ReauthRequiredError)
+async def reauth_exception_handler(request: Request, exc: ReauthRequiredError):
+    raise HTTPException(
+        status_code=401,
+        detail={"error": "reauth_required", "service": exc.service_name},
+    )
+
 @app.post("/api/chat")
 async def chat_endpoint(
     chat_input: ChatRequest,
@@ -350,8 +358,16 @@ async def _handle_chat(
         "callbacks": [tool_call_logger],
     }
 
-    result = await agent.ainvoke({"messages": [user_msg]}, config=config)
-    response_text = extract_agent_response(result)
+    try:
+        result = await agent.ainvoke({"messages": [user_msg]}, config=config)
+        response_text = extract_agent_response(result)
+    except ReauthRequiredError as exc:
+        return ChatResponse(
+            session_id=chat_input.session_id,
+            response="",
+            error=str(exc),
+            error_type="reauth_required",
+        )
 
     # Fire-and-forget sync of user changes to durable storage
     asyncio.create_task(sync_user_files_after_invocation(user_id))
@@ -415,15 +431,25 @@ async def _handle_chat_stream(
     async def _stream_and_persist():
         """Wrap the SSE stream to accumulate and persist the AI response."""
         accumulated_text = []
-        async for sse_line in deep_agent_stream_to_sse(agent, {"messages": [user_msg]}, config=config):
-            if sse_line.startswith("data: "):
-                try:
-                    payload = json.loads(sse_line[6:])
-                    if payload.get("type") == "text_delta" and payload.get("text"):
-                        accumulated_text.append(payload["text"])
-                except (json.JSONDecodeError, KeyError):
-                    pass
-            yield sse_line
+        try:
+            async for sse_line in deep_agent_stream_to_sse(agent, {"messages": [user_msg]}, config=config):
+                if sse_line.startswith("data: "):
+                    try:
+                        payload = json.loads(sse_line[6:])
+                        if payload.get("type") == "text_delta" and payload.get("text"):
+                            accumulated_text.append(payload["text"])
+                    except (json.JSONDecodeError, KeyError):
+                        pass
+                yield sse_line
+        except ReauthRequiredError as exc:
+            error_payload = json.dumps({
+                "type": "error",
+                "message": str(exc),
+                "error_type": "reauth_required",
+                "service": exc.service_name,
+            })
+            yield f"data: {error_payload}\n\n"
+            return
 
         # Persist the AI response after streaming completes
         if accumulated_text:

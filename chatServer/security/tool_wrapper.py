@@ -11,6 +11,7 @@ from typing import Optional
 
 from langchain_core.tools import BaseTool
 
+from ..exceptions import ReauthRequiredError
 from ..security.approval_tiers import (
     ApprovalTier,
     get_effective_tier,
@@ -89,6 +90,8 @@ def with_approval(
                     )
 
                 return result
+            except ReauthRequiredError:
+                raise
             except Exception as e:
                 if context.audit_service:
                     await context.audit_service.log_action(

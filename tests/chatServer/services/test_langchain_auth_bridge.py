@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from chatServer.exceptions import ReauthRequiredError
 from chatServer.services.langchain_auth_bridge import VaultToLangChainCredentialAdapter
 
 
@@ -245,7 +246,7 @@ class TestVaultToLangChainCredentialAdapter:
                 mock_executor.side_effect = Exception("invalid_grant: Token has been expired or revoked")
                 mock_loop.return_value.run_in_executor = mock_executor
 
-                with pytest.raises(RuntimeError, match="Refresh token is invalid or expired"):
+                with pytest.raises(ReauthRequiredError, match="Refresh token is invalid or expired"):
                     await adapter._refresh_credentials('user123', 'gmail', mock_creds)
 
     @pytest.mark.asyncio
@@ -260,7 +261,7 @@ class TestVaultToLangChainCredentialAdapter:
                 mock_executor.side_effect = Exception("unauthorized: Invalid credentials")
                 mock_loop.return_value.run_in_executor = mock_executor
 
-                with pytest.raises(RuntimeError, match="Authentication failed during token refresh"):
+                with pytest.raises(ReauthRequiredError, match="Authentication failed during token refresh"):
                     await adapter._refresh_credentials('user123', 'gmail', mock_creds)
 
     @pytest.mark.asyncio

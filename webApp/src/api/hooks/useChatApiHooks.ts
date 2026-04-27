@@ -1,5 +1,6 @@
 import { useMutation, UseMutationOptions } from '@tanstack/react-query';
 import { authHeaders } from '@/lib/apiClient';
+import { useChatStore } from '@/stores/useChatStore';
 
 interface SendMessagePayload {
   message: string;
@@ -14,6 +15,7 @@ interface ChatApiResponse {
   tool_name?: string | null;
   tool_input?: Record<string, unknown> | null;
   error?: string | null; // Null if successful, error message string if an error occurred server-side
+  error_type?: string | null;
 }
 
 // This function contains the actual API call logic, similar to the original fetchAiResponse
@@ -57,6 +59,20 @@ export async function sendMessageApi(payload: SendMessagePayload): Promise<strin
     const errorData = await httpResponse.json().catch(() => ({
       detail: `HTTP error ${httpResponse.status} ${httpResponse.statusText}. No further details from API.`,
     }));
+
+    // Check for reauth_required in structured error responses (401/403)
+    const detail = errorData.detail;
+    if (
+      detail &&
+      typeof detail === 'object' &&
+      detail.error === 'reauth_required' &&
+      detail.service
+    ) {
+      throw new Error(
+        `[REAUTH_REQUIRED:${detail.service}] Please reconnect your ${detail.service} account in Settings > Integrations.`,
+      );
+    }
+
     // Prioritize 'detail' (FastAPI default), then 'error' (our ChatApiResponse field if it somehow leaks here), then generic message
     const errorMessage =
       errorData.detail || errorData.error || `API Error: ${httpResponse.status} ${httpResponse.statusText}`;
@@ -72,6 +88,10 @@ export async function sendMessageApi(payload: SendMessagePayload): Promise<strin
   if (apiData.error) {
     // The server processed the request but indicates a business logic error (e.g., ToolException, validation error)
     console.error('sendMessageApi: Business logic error from API:', apiData.error);
+    if (apiData.error_type === 'reauth_required') {
+      const service = apiData.error.match(/your (\w+) account/)?.[1] || 'account';
+      throw new Error(`[REAUTH_REQUIRED:${service}] ${apiData.error}`);
+    }
     throw new Error(apiData.error); // This error message will be available in mutation.error.message
   }
 
@@ -98,10 +118,7 @@ export const useSendMessageMutation = () => {
     },
     onError: (error: Error, variables) => {
       console.error('useSendMessageMutation encountered an error:', error.message, 'Variables:', variables);
-      // The 'error.message' will now be the specific error string from apiData.error
-      // or the HTTP error message.
-      // This is where you would trigger a toast notification to the user.
-      // e.g., toast.error(`Error: ${error.message}`);
+      useChatStore.getState().handleReauthError(error);
     },
   } as UseMutationOptions<string, Error, SendMessagePayload, unknown>);
 };

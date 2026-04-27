@@ -18,3 +18,4 @@ class ChatResponse(BaseModel):
     tool_name: Optional[str] = None
     tool_input: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
+    error_type: Optional[str] = None

@@ -217,6 +217,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ agentId: agentIdProp, scop
                   accumulated += `\n\n*Error: ${payload.message}*`;
                   textDirty = true;
                   flushText();
+                  if (payload.error_type === 'reauth_required') {
+                    useChatStore.getState().handleReauthError(
+                      new Error(`[REAUTH_REQUIRED:${payload.service}] ${payload.message}`),
+                    );
+                  }
                 }
               } catch { /* malformed SSE line */ }
             }
