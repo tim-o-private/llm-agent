@@ -7,15 +7,13 @@ Uses async SystemClient (A8/SPEC-017 compliant) for DB access.
 """
 
 import logging
-import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Optional, Type
 
 from google.oauth2.credentials import Credentials
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
-from ..exceptions import ReauthRequiredError
 from .registry import register_tool_type
 
 logger = logging.getLogger(__name__)
@@ -123,137 +121,16 @@ class CalendarToolProvider:
         if self._credentials is not None:
             return self._credentials
 
-        if self._token_data is None:
-            if self.connection_id:
-                from chatServer.database.supabase_client import create_system_client
-                system_client = await create_system_client()
+        from ..services.google_credential_service import get_google_credential_service
 
-                result = await system_client.rpc("get_oauth_tokens_for_scheduler", {
-                    "p_user_id": self.user_id,
-                    "p_service_name": "google_calendar",
-                    "p_connection_id": self.connection_id,
-                }).execute()
-
-                if not result.data:
-                    raise ReauthRequiredError(
-                        "google_calendar",
-                        f"Calendar connection not found (id={self.connection_id}). "
-                        "Please reconnect this account in Settings > Integrations.",
-                    )
-                self._token_data = result.data
-            else:
-                connections = await self._get_calendar_connections(self.user_id)
-                if not connections:
-                    raise ValueError(
-                        "Calendar not connected. Connect Google Calendar in "
-                        "Settings > Integrations to enable this."
-                    )
-                self._token_data = connections[0]
-
-        token_data = self._token_data
-        access_token = token_data.get("access_token")
-        refresh_token = token_data.get("refresh_token")
-        self._account_email = token_data.get("service_user_email")
-
-        if not access_token:
-            raise ReauthRequiredError(
-                "google_calendar",
-                f"Calendar connection expired for {self._account_email}. "
-                "Please reconnect this account in Settings > Integrations.",
-            )
-
-        client_id = os.getenv("GOOGLE_CLIENT_ID")
-        client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
-
-        if not client_id or not client_secret:
-            raise RuntimeError(
-                "Google OAuth configuration missing (GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET)"
-            )
-
-        self._credentials = Credentials(
-            token=access_token,
-            refresh_token=refresh_token,
-            token_uri="https://oauth2.googleapis.com/token",
-            client_id=client_id,
-            client_secret=client_secret,
+        service = get_google_credential_service()
+        self._credentials = await service.get_credentials(
+            user_id=self.user_id,
+            service_name="google_calendar",
+            connection_id=self.connection_id,
             scopes=["https://www.googleapis.com/auth/calendar.readonly"],
         )
-
-        # Check if token needs refresh
-        expires_at_str = token_data.get("expires_at")
-        needs_refresh = False
-
-        if expires_at_str:
-            try:
-                if isinstance(expires_at_str, str):
-                    expires_at = datetime.fromisoformat(expires_at_str.replace("Z", "+00:00"))
-                else:
-                    expires_at = expires_at_str
-                buffer = timedelta(minutes=5)
-                if datetime.now(timezone.utc) + buffer > expires_at:
-                    needs_refresh = True
-            except (ValueError, TypeError):
-                pass
-
-        if self._credentials.expired:
-            needs_refresh = True
-
-        if needs_refresh and refresh_token:
-            try:
-                from google.auth.transport.requests import Request as GoogleAuthRequest
-
-                self._credentials.refresh(GoogleAuthRequest())
-                await self._update_stored_token(
-                    self._credentials.token,
-                    self._credentials.expiry,
-                )
-                logger.info(f"Refreshed calendar token for {self._account_email}")
-            except Exception as e:
-                logger.warning(f"Token refresh failed for {self._account_email}: {e}")
-        elif needs_refresh and not refresh_token:
-            logger.warning(
-                f"Calendar token expired for {self._account_email} and no refresh token available. "
-                "User needs to reconnect."
-            )
-
         return self._credentials
-
-    async def _update_stored_token(self, new_token: str, new_expiry) -> None:
-        """Write a refreshed access token back to Vault."""
-        if not self.connection_id:
-            return
-
-        try:
-            from chatServer.database.supabase_client import create_system_client
-            system_client = await create_system_client()
-
-            conn = await system_client.table("external_api_connections").select(
-                "user_id, service_name, service_user_id"
-            ).eq("id", self.connection_id).execute()
-
-            if conn.data and conn.data[0]:
-                row = conn.data[0]
-                service_user_id = row.get("service_user_id") or "default"
-                secret_name = f"{row['user_id']}_{row['service_name']}_{service_user_id}_access"
-                await system_client.rpc("store_secret", {
-                    "p_secret": new_token,
-                    "p_name": secret_name,
-                    "p_description": f"Access token for {row['service_name']}",
-                }).execute()
-
-                update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
-                if new_expiry:
-                    if isinstance(new_expiry, datetime):
-                        update_data["token_expires_at"] = new_expiry.isoformat()
-                    else:
-                        update_data["token_expires_at"] = str(new_expiry)
-
-                await system_client.table("external_api_connections").update(
-                    update_data
-                ).eq("id", self.connection_id).execute()
-
-        except Exception as e:
-            logger.error(f"Failed to update stored token for connection {self.connection_id}: {e}")
 
 
 # --- Tool input schemas ---

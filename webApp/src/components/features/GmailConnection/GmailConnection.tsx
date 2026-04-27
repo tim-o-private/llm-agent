@@ -4,7 +4,6 @@ import { Card } from '../../ui/Card';
 import { Badge } from '../../ui/Badge';
 import { CheckCircle, Mail, AlertCircle, Loader2, Plus, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
-import { useAuthStore } from '@/features/auth/useAuthStore';
 import {
   useConnectionStatus,
   useGmailConnections,
@@ -24,7 +23,6 @@ interface GmailConnectionProps {
 
 export const GmailConnection: React.FC<GmailConnectionProps> = ({ onConnectionChange, className = '' }) => {
   const [isConnecting, setIsConnecting] = useState(false);
-  const { signInWithProvider } = useAuthStore();
 
   const {
     data: connectionStatus,
@@ -53,22 +51,12 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({ onConnectionCh
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connectionStatus?.connected, onConnectionChange]);
 
-  const connectFirstGmail = async () => {
-    setIsConnecting(true);
-    try {
-      await signInWithProvider('google', true);
-    } catch (error) {
-      console.error('Gmail connection failed:', error);
-      setIsConnecting(false);
-    }
-  };
-
-  const connectAdditionalGmail = async (loginHint?: string) => {
+  const connectGmail = async (loginHint?: string) => {
     setIsConnecting(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        console.error('No active session for standalone OAuth');
+        console.error('No active session for Gmail OAuth');
         setIsConnecting(false);
         return;
       }
@@ -90,7 +78,7 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({ onConnectionCh
       const { auth_url } = await response.json();
       window.location.href = auth_url;
     } catch (error) {
-      console.error('Failed to initiate additional Gmail OAuth:', error);
+      console.error('Failed to initiate Gmail OAuth:', error);
       setIsConnecting(false);
     }
   };
@@ -182,7 +170,7 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({ onConnectionCh
                       <Button
                         variant="outline"
                         size="1"
-                        onClick={() => connectAdditionalGmail(account.service_user_email || undefined)}
+                        onClick={() => connectGmail(account.service_user_email || undefined)}
                         disabled={isConnecting}
                         className="text-xs"
                       >
@@ -221,7 +209,7 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({ onConnectionCh
         {/* Actions */}
         <div className="flex flex-col gap-2">
           {!hasAccounts ? (
-            <Button onClick={connectFirstGmail} disabled={isConnecting || isCheckingStatus} className="w-full">
+            <Button onClick={() => connectGmail()} disabled={isConnecting || isCheckingStatus} className="w-full">
               {isConnecting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -239,7 +227,7 @@ export const GmailConnection: React.FC<GmailConnectionProps> = ({ onConnectionCh
               {canAddMore && (
                 <Button
                   variant="outline"
-                  onClick={() => connectAdditionalGmail()}
+                  onClick={() => connectGmail()}
                   disabled={isConnecting}
                   size="1"
                   className="flex-1"

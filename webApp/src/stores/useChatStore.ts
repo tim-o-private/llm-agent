@@ -330,33 +330,37 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         `Successfully created new session instance in DB. ID: ${newSessionInstanceId}, Chat ID: ${chatIdToUse}`,
       );
 
-      // 5. Load historical messages — prefer React Query cache (populated by prefetch)
+      // 5. Load historical messages — show immediately, don't wait for session_open
       const cached = chatIdToUse
         ? queryClient.getQueryData<ChatMessage[]>([PARSED_MESSAGES_QUERY_KEY, chatIdToUse])
         : undefined;
       const historicalMessages = chatIdToUse ? (cached ?? await loadHistoricalMessages(chatIdToUse)) : [];
 
-      // Session open wakeup — always fires on init; agent decides whether to respond
-      const sessionOpenResult = await callSessionOpen(agentName, chatIdToUse);
-      const messagesToShow = [...historicalMessages];
-      const hasWakeupGreeting = sessionOpenResult && !sessionOpenResult.silent;
-      if (hasWakeupGreeting) {
-        messagesToShow.push({
-          id: uuidv4(),
-          text: sessionOpenResult.response,
-          sender: 'ai' as const,
-          timestamp: new Date(),
-        });
-      }
-
+      // Render history immediately so the user sees their conversation
       set({
         activeChatId: chatIdToUse,
         currentSessionInstanceId: newSessionInstanceId,
         currentAgentName: agentName,
-        messages: messagesToShow,
+        messages: historicalMessages,
         lastWakeupAt: Date.now(),
-        // Always open panel on session init — show history + any new greeting
         isChatPanelOpen: true,
+      });
+
+      // 6. Session open wakeup — runs in background, appends greeting if any
+      callSessionOpen(agentName, chatIdToUse).then((sessionOpenResult) => {
+        if (sessionOpenResult && !sessionOpenResult.silent) {
+          const { messages: currentMessages } = get();
+          set({
+            messages: [...currentMessages, {
+              id: uuidv4(),
+              text: sessionOpenResult.response,
+              sender: 'ai' as const,
+              timestamp: new Date(),
+            }],
+          });
+        }
+      }).catch((err) => {
+        console.warn('session_open failed (non-fatal):', err);
       });
       console.log(
         `Chat store initialized. Agent: ${agentName}, Active Chat ID: ${chatIdToUse}, Session Instance ID: ${newSessionInstanceId}, Historical messages: ${historicalMessages.length}`,

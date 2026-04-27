@@ -23,19 +23,19 @@ and surfaces items needing attention.
 - **agent:** email-fetcher
 - **depends_on:** []
 - **tools:** [search_gmail, get_gmail]
-- **description:** Search all connected Gmail accounts for recent unread emails. Read the top messages by recency. Output structured data: sender, subject, snippet, date, message_id, account.
+- **description:** Search all connected Gmail accounts for recent unread emails. Read the top messages by recency. Output structured data: sender, subject, snippet, date, message_id, account.  # noqa: E501
 - **gate:** none
 
 ### step-2: Categorize
 - **agent:** email-classifier
 - **depends_on:** [fetch-emails]
 - **tools:** []
-- **description:** Classify each email into urgent/actionable/informational/ignorable. Provide one-sentence reasoning per email. Suggest concrete next actions for urgent items.
+- **description:** Classify each email into urgent/actionable/informational/ignorable. Provide one-sentence reasoning per email. Suggest concrete next actions for urgent items.  # noqa: E501
 - **gate:** none
 
 ### step-3: Summarize
 - **agent:** triage-composer
 - **depends_on:** [categorize]
 - **tools:** [create_memories]
-- **description:** Compose a triage summary. Urgent items first with suggested actions. Actionable items with context. Informational as one-liners. Store urgent/actionable items as memories for future reference.
+- **description:** Compose a triage summary. Urgent items first with suggested actions. Actionable items with context. Informational as one-liners. Store urgent/actionable items as memories for future reference.  # noqa: E501
 - **gate:** none

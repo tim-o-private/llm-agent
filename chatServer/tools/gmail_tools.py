@@ -6,13 +6,11 @@ Migrate to async UserScopedClient when sync wrapper is available.
 
 import logging
 import os
-from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Type
 
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
-from ..exceptions import ReauthRequiredError
 from .gmail_rate_limiter import GmailRateLimiter
 from .registry import register_tool_type
 
@@ -173,151 +171,16 @@ class GmailToolProvider:
         if self._credentials is not None:
             return self._credentials
 
-        # Get token data if not already loaded
-        if self._token_data is None:
-            if self.connection_id:
-                from supabase import create_client
+        from ..services.google_credential_service import get_google_credential_service
 
-                supabase_url = os.getenv("SUPABASE_URL")
-                supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-                supabase = create_client(supabase_url, supabase_key)
-
-                result = supabase.rpc("get_oauth_tokens_for_scheduler", {
-                    "p_user_id": self.user_id,
-                    "p_service_name": "gmail",
-                    "p_connection_id": self.connection_id,
-                }).execute()
-
-                if not result.data:
-                    raise ReauthRequiredError(
-                        "gmail",
-                        f"Gmail connection not found (id={self.connection_id}). "
-                        "Please reconnect this account in Settings > Integrations.",
-                    )
-                self._token_data = result.data
-            else:
-                # Legacy single-account mode
-                connections = await self._get_gmail_connections(self.user_id)
-                if not connections:
-                    raise ValueError(
-                        "Gmail not connected. Please connect your Gmail account:\n"
-                        "1. Go to Settings > Integrations\n"
-                        "2. Click 'Connect Gmail'\n"
-                        "3. Complete the OAuth authorization flow"
-                    )
-                self._token_data = connections[0]
-
-        token_data = self._token_data
-        access_token = token_data.get("access_token")
-        refresh_token = token_data.get("refresh_token")
-        self._account_email = token_data.get("service_user_email")
-
-        if not access_token:
-            raise ReauthRequiredError(
-                "gmail",
-                f"Gmail connection expired for {self._account_email}. "
-                "Please reconnect this account in Settings > Integrations.",
-            )
-
-        client_id = os.getenv("GOOGLE_CLIENT_ID")
-        client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
-
-        if not client_id or not client_secret:
-            raise RuntimeError(
-                "Google OAuth configuration missing (GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET)"
-            )
-
-        self._credentials = Credentials(
-            token=access_token,
-            refresh_token=refresh_token,
-            token_uri="https://oauth2.googleapis.com/token",
-            client_id=client_id,
-            client_secret=client_secret,
+        service = get_google_credential_service()
+        self._credentials = await service.get_credentials(
+            user_id=self.user_id,
+            service_name="gmail",
+            connection_id=self.connection_id,
             scopes=["https://www.googleapis.com/auth/gmail.readonly"],
         )
-
-        # Check if token needs refresh (expired or within 5-min buffer)
-        expires_at_str = token_data.get("expires_at")
-        needs_refresh = False
-
-        if expires_at_str:
-            try:
-                if isinstance(expires_at_str, str):
-                    expires_at = datetime.fromisoformat(expires_at_str.replace("Z", "+00:00"))
-                else:
-                    expires_at = expires_at_str
-                buffer = timedelta(minutes=5)
-                if datetime.now(timezone.utc) + buffer > expires_at:
-                    needs_refresh = True
-            except (ValueError, TypeError):
-                pass
-
-        if self._credentials.expired:
-            needs_refresh = True
-
-        if needs_refresh and refresh_token:
-            try:
-                from google.auth.transport.requests import Request as GoogleAuthRequest
-
-                self._credentials.refresh(GoogleAuthRequest())
-                await self._update_stored_token(
-                    self._credentials.token,
-                    self._credentials.expiry,
-                )
-                logger.info(f"Refreshed Gmail token for {self._account_email}")
-            except Exception as e:
-                logger.warning(f"Token refresh failed for {self._account_email}: {e}")
-                # Continue with existing token — it may still work
-        elif needs_refresh and not refresh_token:
-            logger.warning(
-                f"Gmail token expired for {self._account_email} and no refresh token available. "
-                "User needs to reconnect."
-            )
-
         return self._credentials
-
-    async def _update_stored_token(self, new_token: str, new_expiry) -> None:
-        """Write a refreshed access token back to Vault."""
-        if not self.connection_id:
-            return
-
-        try:
-            from supabase import create_client
-
-            supabase_url = os.getenv("SUPABASE_URL")
-            supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-            supabase = create_client(supabase_url, supabase_key)
-
-            # Get connection details to reconstruct the vault secret name
-            conn = supabase.table("external_api_connections").select(
-                "user_id, service_name, service_user_id"
-            ).eq("id", self.connection_id).execute()
-
-            if conn.data and conn.data[0]:
-                row = conn.data[0]
-                service_user_id = row.get("service_user_id") or "default"
-                secret_name = f"{row['user_id']}_{row['service_name']}_{service_user_id}_access"
-                # store_secret upserts by name — updates if exists, creates if not
-                supabase.rpc("store_secret", {
-                    "p_secret": new_token,
-                    "p_name": secret_name,
-                    "p_description": f"Access token for {row['service_name']}",
-                }).execute()
-
-                # Update expires_at on the connection record
-                update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
-                if new_expiry:
-                    if isinstance(new_expiry, datetime):
-                        update_data["token_expires_at"] = new_expiry.isoformat()
-                    else:
-                        update_data["token_expires_at"] = str(new_expiry)
-
-                supabase.table("external_api_connections").update(
-                    update_data
-                ).eq("id", self.connection_id).execute()
-
-        except Exception as e:
-            logger.error(f"Failed to update stored token for connection {self.connection_id}: {e}")
 
     async def get_gmail_tools(self) -> List[BaseTool]:
         """Get LangChain Gmail tools with Vault authentication."""
