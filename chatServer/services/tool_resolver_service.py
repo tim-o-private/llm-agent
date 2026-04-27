@@ -40,37 +40,41 @@ class ToolResolverService:
         db_manager = get_database_manager()
         tools_data: list[dict] = []
 
-        async for conn in db_manager.get_connection():
-            async with conn.cursor() as cur:
-                await cur.execute(
-                    """
-                    SELECT
-                        t.name,
-                        t.description,
-                        t.type,
-                        t.config,
-                        at.status
-                    FROM agent_tools at
-                    JOIN tools t ON at.tool_id = t.id
-                    JOIN agent_configurations ac ON at.agent_id = ac.id
-                    WHERE ac.agent_name = %s
-                    AND at.is_active = true
-                    AND at.is_deleted = false
-                    AND (at.status = 'granted' OR at.status IS NULL)
-                    AND t.is_active = true
-                    AND t.is_deleted = false
-                    """,
-                    (agent_name,),
-                )
-                rows = await cur.fetchall()
-                for row in rows:
-                    tools_data.append({
-                        "name": row[0],
-                        "description": row[1],
-                        "type": row[2],
-                        "config": row[3],
-                        "status": row[4],
-                    })
+        try:
+            async for conn in db_manager.get_connection():
+                async with conn.cursor() as cur:
+                    await cur.execute(
+                        """
+                        SELECT
+                            t.name,
+                            t.description,
+                            t.type,
+                            t.config,
+                            at.status
+                        FROM agent_tools at
+                        JOIN tools t ON at.tool_id = t.id
+                        JOIN agent_configurations ac ON at.agent_id = ac.id
+                        WHERE ac.agent_name = %s
+                        AND at.is_active = true
+                        AND at.is_deleted = false
+                        AND (at.status = 'granted' OR at.status IS NULL)
+                        AND t.is_active = true
+                        AND t.is_deleted = false
+                        """,
+                        (agent_name,),
+                    )
+                    rows = await cur.fetchall()
+                    for row in rows:
+                        tools_data.append({
+                            "name": row[0],
+                            "description": row[1],
+                            "type": row[2],
+                            "config": row[3],
+                            "status": row[4],
+                        })
+        except Exception as e:
+            logger.error("Failed to fetch tools for agent %s: %s", agent_name, e)
+            return [], {}, []
 
         if not tools_data:
             return [], {}, []
