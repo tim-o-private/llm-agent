@@ -13,6 +13,8 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from chatServer.dependencies.llm import get_llm_client_dep as get_llm_client
+
 from ..config.paths import get_data_dir
 from ..database.scoped_client import UserScopedClient
 from ..database.supabase_client import get_user_scoped_client
@@ -109,16 +111,6 @@ def get_workflow_editor_service(
     return WorkflowEditorService(vault=vault, db=db)
 
 
-def get_anthropic_client():
-    """FastAPI dependency that returns an AsyncAnthropic client.
-
-    Tests override with ``app.dependency_overrides[get_anthropic_client]``.
-    """
-    from anthropic import AsyncAnthropic
-
-    return AsyncAnthropic()
-
-
 # --- Endpoints ----------------------------------------------------------------
 
 
@@ -180,7 +172,7 @@ async def run_workflow(
     user_id: str = Depends(get_current_user),
     db: UserScopedClient = Depends(get_user_scoped_client),
     service=Depends(get_workflow_editor_service),
-    anthropic_client=Depends(get_anthropic_client),
+    llm_client=Depends(get_llm_client),
 ):
     """Start a workflow run. Returns 202 with the run_id."""
     try:
@@ -189,7 +181,7 @@ async def run_workflow(
             template_name=payload.template_name,
             parameters=payload.parameters,
             db_client=db,
-            anthropic_client=anthropic_client,
+            llm_client=llm_client,
         )
         return RunWorkflowResponse(run_id=run_id)
     except HTTPException:

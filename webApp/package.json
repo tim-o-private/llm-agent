@@ -16,7 +16,7 @@
     "validate:all": "npm run lint && npm run lint:css && npm run validate:colors && npm run validate:focus"
   },
   "dependencies": {
-    "@assistant-ui/react": "^0.12.14",
+    "@assistant-ui/react": "^0.12.26",
     "@assistant-ui/react-markdown": "^0.12.5",
     "@assistant-ui/react-ui": "^0.2.1",
     "@codemirror/autocomplete": "^6.20.1",

@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Clarity · Wireframes</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kalam:wght@300;400;700&family=JetBrains+Mono:wght@400;500&family=Caveat:wght@400;600&family=Architects+Daughter&family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Source+Serif+4:wght@400;600&family=Inter:wght@400;600&family=IBM+Plex+Sans:wght@400;600&family=Geist:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <filter id="roughen">
+      <feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="3"/>
+      <feDisplacementMap in="SourceGraphic" scale="2"/>
+    </filter>
+    <filter id="roughen-lg">
+      <feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="2" seed="7"/>
+      <feDisplacementMap in="SourceGraphic" scale="3"/>
+    </filter>
+  </defs>
+</svg>
+
+<div id="app"></div>
+
+<script>
+  const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+    "accent": "#e8a451",
+    "density": "compact",
+    "showAnnotations": true,
+    "scratchiness": "low",
+    "fontFamily": "source"
+  }/*EDITMODE-END*/;
+</script>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="components/primitives.jsx"></script>
+<script type="text/babel" src="components/scene-vault.jsx"></script>
+<script type="text/babel" src="components/scene-file-detail.jsx"></script>
+<script type="text/babel" src="components/scene-workflow.jsx"></script>
+<script type="text/babel" src="components/scene-chat.jsx"></script>
+<script type="text/babel" src="components/scene-layouts.jsx"></script>
+
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+const TABS = [
+  { id: 'vault', label: 'The Vault', comp: () => <SceneVault /> },
+  { id: 'file', label: 'File Detail', comp: () => <SceneFileDetail /> },
+  { id: 'workflow', label: 'Workflow', comp: () => <SceneWorkflow /> },
+  { id: 'chat', label: 'Chat, 4 ways', comp: () => <SceneChatVariants /> },
+  { id: 'layouts', label: 'Layouts', comp: () => <SceneLayouts /> },
+];
+
+const FONT_OPTIONS = [
+  { id: 'kalam',     label: 'Kalam',             stack: "'Kalam', cursive",                 weight: 700, group: 'handwritten', note: 'current · sketchy' },
+  { id: 'caveat',    label: 'Caveat',            stack: "'Caveat', cursive",                weight: 600, group: 'handwritten', note: 'most cursive' },
+  { id: 'architects',label: 'Architects Daughter',stack:"'Architects Daughter', cursive",   weight: 400, group: 'handwritten', note: 'architect print' },
+  { id: 'fraunces',  label: 'Fraunces',          stack: "'Fraunces', serif",                weight: 600, group: 'serif',       note: 'warm, editorial' },
+  { id: 'source',    label: 'Source Serif 4',    stack: "'Source Serif 4', serif",          weight: 600, group: 'serif',       note: 'clean, readable' },
+  { id: 'inter',     label: 'Inter',             stack: "'Inter', sans-serif",              weight: 600, group: 'sans',        note: 'neutral workhorse' },
+  { id: 'geist',     label: 'Geist',             stack: "'Geist', 'Inter', sans-serif",     weight: 600, group: 'sans',        note: 'modern geometric' },
+  { id: 'plex',      label: 'IBM Plex Sans',     stack: "'IBM Plex Sans', sans-serif",      weight: 600, group: 'sans',        note: 'technical, crisp' },
+];
+
+function FontPickerModal({ open, onClose, current, onPick }) {
+  if (!open) return null;
+  const groups = [
+    { key: 'handwritten', label: 'handwritten · sketchy' },
+    { key: 'serif',       label: 'serif · legible' },
+    { key: 'sans',        label: 'sans-serif · legible' },
+  ];
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Choose a wireframe font</h2>
+          <button className="modal-close" onClick={onClose}>esc</button>
+        </div>
+        <div className="modal-body">
+          {groups.map(g => (
+            <div key={g.key}>
+              <div className="font-group-label">{g.label}</div>
+              {FONT_OPTIONS.filter(f => f.group === g.key).map(f => (
+                <div
+                  key={f.id}
+                  className={`font-option ${current === f.id ? 'selected' : ''}`}
+                  onClick={() => { onPick(f); onClose(); }}
+                >
+                  <div>
+                    <div className="sample" style={{ fontFamily: f.stack, fontWeight: f.weight }}>
+                      The Vault · 05 · Overall layouts
+                    </div>
+                    <div style={{ fontFamily: f.stack, fontWeight: 400, fontSize: 13, color: 'var(--ink-dim)', marginTop: 4 }}>
+                      Workflows are markdown files — edit like a doc.
+                    </div>
+                  </div>
+                  <div className="meta">
+                    {f.label}<br/>
+                    <span style={{ opacity: 0.7 }}>{f.note}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TweaksPanel({ tweaks, setTweaks, visible, openFontPicker }) {
+  if (!visible) return null;
+  const apply = (k, v) => {
+    const next = { ...tweaks, [k]: v };
+    setTweaks(next);
+    document.documentElement.style.setProperty('--accent', next.accent);
+    window.parent.postMessage({ type: '__edit_mode_set_keys', edits: { [k]: v } }, '*');
+  };  const accentOptions = [
+    { name: 'amber', v: '#e8a451' },
+    { name: 'lime',  v: '#b4c662' },
+    { name: 'sky',   v: '#7cb0cf' },
+    { name: 'rose',  v: '#d67a8e' },
+    { name: 'white', v: '#ede7d9' },
+  ];
+
+  return (
+    <div className="tweaks-panel">
+      <h3>Tweaks</h3>
+      <div className="tweak-row">
+        <label>accent</label>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {accentOptions.map(o => (
+            <div key={o.v} onClick={() => apply('accent', o.v)} title={o.name}
+              style={{
+                width: 18, height: 18, borderRadius: '50%',
+                background: o.v, cursor: 'pointer',
+                border: tweaks.accent === o.v ? '2px solid var(--ink)' : '1px solid var(--stroke)'
+              }} />
+          ))}
+        </div>
+      </div>
+      <div className="tweak-row">
+        <label>density</label>
+        <select value={tweaks.density} onChange={e => apply('density', e.target.value)}>
+          <option value="compact">compact</option>
+          <option value="comfortable">comfortable</option>
+          <option value="spacious">spacious</option>
+        </select>
+      </div>
+      <div className="tweak-row">
+        <label>annotations</label>
+        <select value={tweaks.showAnnotations ? 'on' : 'off'} onChange={e => apply('showAnnotations', e.target.value === 'on')}>
+          <option value="on">on</option>
+          <option value="off">off</option>
+        </select>
+      </div>
+      <div className="tweak-row">
+        <label>scratchiness</label>
+        <select value={tweaks.scratchiness} onChange={e => apply('scratchiness', e.target.value)}>
+          <option value="low">low</option>
+          <option value="medium">medium</option>
+          <option value="high">high</option>
+        </select>
+      </div>
+      <div className="tweak-row">
+        <label>font</label>
+        <button className="sk-btn" onClick={openFontPicker} style={{ fontSize: 12, padding: '2px 8px' }}>
+          {(FONT_OPTIONS.find(f => f.id === tweaks.fontFamily) || FONT_OPTIONS[0]).label} ↗
+        </button>
+      </div>
+      <div style={{ marginTop: 10, fontSize: 11, color: 'var(--ink-faint)', fontFamily: 'JetBrains Mono, monospace' }}>
+        toggle via toolbar
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [tab, setTab] = useState(() => localStorage.getItem('clarity-tab') || 'vault');
+  const [tweaks, setTweaks] = useState(TWEAK_DEFAULTS);
+  const [editMode, setEditMode] = useState(false);
+  const [fontPickerOpen, setFontPickerOpen] = useState(false);
+
+  useEffect(() => { localStorage.setItem('clarity-tab', tab); }, [tab]);
+
+  useEffect(() => {
+    const map = { low: 1, medium: 2, high: 3.5 };
+    const s = map[tweaks.scratchiness] || 2;
+    const filter = document.querySelector('#roughen feDisplacementMap');
+    if (filter) filter.setAttribute('scale', s);
+    document.documentElement.style.setProperty('--accent', tweaks.accent);
+    const font = FONT_OPTIONS.find(f => f.id === tweaks.fontFamily) || FONT_OPTIONS[0];
+    document.documentElement.style.setProperty('--font-hand', font.stack);
+    document.documentElement.style.setProperty('--font-hand-weight', font.weight);
+    if (!tweaks.showAnnotations) document.body.classList.add('no-annots');
+    else document.body.classList.remove('no-annots');
+  }, [tweaks]);
+
+  const applyTweak = (k, v) => {
+    const next = { ...tweaks, [k]: v };
+    setTweaks(next);
+    window.parent.postMessage({ type: '__edit_mode_set_keys', edits: { [k]: v } }, '*');
+  };
+
+  useEffect(() => {
+    const onMsg = (e) => {
+      if (!e.data || !e.data.type) return;
+      if (e.data.type === '__activate_edit_mode') setEditMode(true);
+      if (e.data.type === '__deactivate_edit_mode') setEditMode(false);
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') setFontPickerOpen(false);
+      if ((e.metaKey || e.ctrlKey) && e.key === 'f' && e.shiftKey) { e.preventDefault(); setFontPickerOpen(true); }
+    };
+    window.addEventListener('message', onMsg);
+    window.addEventListener('keydown', onKey);
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+    return () => { window.removeEventListener('message', onMsg); window.removeEventListener('keydown', onKey); };
+  }, []);
+
+  const active = TABS.find(t => t.id === tab) || TABS[0];
+
+  return (
+    <div>
+      <div className="tabs">
+        <span className="hand" style={{ fontSize: 22, color: 'var(--accent)', marginRight: 18, letterSpacing: '0.02em' }}>
+          Clarity
+        </span>
+        <span className="mono" style={{ fontSize: 10, color: 'var(--ink-faint)', marginRight: 18, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+          wireframes · low-fi · v1
+        </span>
+        {TABS.map((t, i) => (
+          <div key={t.id}
+            className={`tab ${tab === t.id ? 'active' : ''}`}
+            onClick={() => setTab(t.id)}
+            data-screen-label={`0${i+1} ${t.label}`}
+          >
+            <span className="tab-num">0{i+1}</span>{t.label}
+          </div>
+        ))}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button className="sk-btn" onClick={() => setFontPickerOpen(true)} style={{ fontSize: 12, padding: '3px 10px' }}>
+            Aa change font
+          </button>
+          <span style={{ fontFamily: 'Kalam, cursive', fontSize: 13, color: 'var(--ink-faint)' }}>
+            dark · hand-drawn · clickable
+          </span>
+        </div>
+      </div>
+
+      <div data-screen-label={`0${TABS.findIndex(t=>t.id===tab)+1} ${active.label}`}>
+        {active.comp()}
+      </div>
+
+      <TweaksPanel tweaks={tweaks} setTweaks={setTweaks} visible={editMode} openFontPicker={() => setFontPickerOpen(true)} />
+      <FontPickerModal
+        open={fontPickerOpen}
+        onClose={() => setFontPickerOpen(false)}
+        current={tweaks.fontFamily}
+        onPick={(f) => applyTweak('fontFamily', f.id)}
+      />
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('app')).render(<App />);
+</script>
+
+<style>
+  body.no-annots .annot { display: none !important; }
+  body.no-annots .sticky { background: transparent; border-style: dashed; color: var(--ink-dim); }
+</style>
+
+</body>
+</html>

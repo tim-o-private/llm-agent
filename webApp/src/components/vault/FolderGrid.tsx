@@ -2,11 +2,11 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { useVaultFolder } from '@/api/hooks/useVaultHooks';
 import { Spinner } from '@/components/ui/Spinner';
-import { FileTextIcon } from '@radix-ui/react-icons';
+import { FileTextIcon, PlusIcon } from '@radix-ui/react-icons';
 import { FolderIcon } from '@/components/ui/icons/FolderIcon';
+import { NewItemDropdown } from './NewItemDropdown';
 
 interface FolderGridProps {
-  /** Relative folder path within the vault, e.g. "projects" or "" for root */
   folderPath: string;
 }
 
@@ -40,9 +40,15 @@ function formatDate(iso: string) {
   }
 }
 
-/**
- * AC-13: Grid of folder contents showing filename, type chip, last modified.
- */
+const newCardTrigger = (
+  <button
+    className="group flex items-center justify-center gap-2 p-3 rounded-lg border border-dashed border-ui-border bg-transparent hover:bg-ui-interactive-bg-hover hover:border-ui-border-hover transition-colors text-text-muted hover:text-text-accent min-h-[72px] w-full"
+  >
+    <PlusIcon className="h-5 w-5" />
+    <span className="text-sm font-medium">New</span>
+  </button>
+);
+
 export const FolderGrid: React.FC<FolderGridProps> = ({ folderPath }) => {
   const { data, isLoading, error } = useVaultFolder(folderPath);
 
@@ -66,11 +72,13 @@ export const FolderGrid: React.FC<FolderGridProps> = ({ folderPath }) => {
     return (
       <div className="flex flex-col items-center py-16 text-text-secondary">
         <p>This folder is empty.</p>
+        <div className="mt-4 w-48">
+          <NewItemDropdown parentPath={folderPath} trigger={newCardTrigger} align="start" />
+        </div>
       </div>
     );
   }
 
-  // Sort: folders first, then alphabetically
   const sorted = [...data.entries].sort((a, b) => {
     if (a.type === 'folder' && b.type !== 'folder') return -1;
     if (a.type !== 'folder' && b.type === 'folder') return 1;
@@ -80,6 +88,7 @@ export const FolderGrid: React.FC<FolderGridProps> = ({ folderPath }) => {
   return (
     <div className="w-full">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <NewItemDropdown parentPath={folderPath} trigger={newCardTrigger} align="start" />
         {sorted.map((entry) => {
           const href =
             entry.type === 'folder'
@@ -90,7 +99,7 @@ export const FolderGrid: React.FC<FolderGridProps> = ({ folderPath }) => {
             <Link
               key={entry.path}
               to={href}
-              className="group flex items-start gap-3 p-3 rounded-lg border border-ui-border bg-ui-element-bg/50 hover:bg-ui-interactive-bg-hover hover:border-ui-border-hover transition-colors"
+              className="group flex items-start gap-3 p-3 rounded-lg border border-dashed border-ui-border bg-ui-element-bg/50 hover:bg-ui-interactive-bg-hover hover:border-ui-border-hover transition-colors"
             >
               {entry.type === 'folder' ? (
                 <FolderIcon className="h-5 w-5 text-text-muted flex-shrink-0 mt-0.5" />
@@ -103,6 +112,11 @@ export const FolderGrid: React.FC<FolderGridProps> = ({ folderPath }) => {
                 </p>
                 <div className="flex items-center gap-2 mt-1">
                   {typeChip(entry)}
+                  {entry.type !== 'folder' && entry.name.split('.').pop()?.toLowerCase() === 'md' && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-accent-subtle text-text-accent border border-dashed border-accent-subtle">
+                      ✦ indexed
+                    </span>
+                  )}
                   <span className="text-xs text-text-muted">{formatDate(entry.mtime)}</span>
                 </div>
               </div>

@@ -10,12 +10,12 @@ from chatServer.services.job_handlers import handle_workflow
 # handle_workflow, so we patch at the source modules
 _DISPATCH_PATH = "chatServer.workflows.dispatch.dispatch_workflow"
 _SYSTEM_CLIENT_PATH = "chatServer.database.supabase_client.create_system_client"
-_ANTHROPIC_PATH = "chatServer.services.job_handlers._get_anthropic_client_for_workflow"
+_LLM_CLIENT_PATH = "chatServer.services.job_handlers._get_llm_client_for_workflow"
 
 
 class TestHandleWorkflow:
     @pytest.mark.asyncio
-    @patch(_ANTHROPIC_PATH)
+    @patch(_LLM_CLIENT_PATH)
     @patch(_SYSTEM_CLIENT_PATH, new_callable=AsyncMock)
     @patch(_DISPATCH_PATH, new_callable=AsyncMock)
     async def test_dispatches_workflow(
@@ -38,7 +38,7 @@ class TestHandleWorkflow:
         mock_dispatch.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch(_ANTHROPIC_PATH)
+    @patch(_LLM_CLIENT_PATH)
     @patch(_SYSTEM_CLIENT_PATH, new_callable=AsyncMock)
     @patch(_DISPATCH_PATH, new_callable=AsyncMock)
     async def test_raises_on_failure(
@@ -59,7 +59,7 @@ class TestHandleWorkflow:
             })
 
     @pytest.mark.asyncio
-    @patch(_ANTHROPIC_PATH)
+    @patch(_LLM_CLIENT_PATH)
     @patch(_SYSTEM_CLIENT_PATH, new_callable=AsyncMock)
     @patch(_DISPATCH_PATH, new_callable=AsyncMock)
     async def test_default_empty_parameters(
@@ -81,7 +81,7 @@ class TestHandleWorkflow:
         assert call_kwargs["args"]["parameters"] == {}
 
     @pytest.mark.asyncio
-    @patch(_ANTHROPIC_PATH)
+    @patch(_LLM_CLIENT_PATH)
     @patch(_SYSTEM_CLIENT_PATH, new_callable=AsyncMock)
     @patch(_DISPATCH_PATH, new_callable=AsyncMock)
     async def test_raises_on_unknown_workflow(

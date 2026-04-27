@@ -16,6 +16,7 @@ export interface ChatMessage {
   timestamp: Date;
   tool_name?: string;
   tool_input?: Record<string, unknown>;
+  tool_calls?: Array<{ id: string; name: string }>;
   // Notification fields (when sender = 'notification' | 'approval')
   notification_id?: string;
   notification_category?: string;
@@ -43,6 +44,7 @@ interface ChatStore {
   triggerWakeup: () => Promise<void>;
 
   addMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>, senderType?: ChatMessage['sender']) => Promise<void>;
+  updateLastAiMessage: (update: Partial<Pick<ChatMessage, 'text' | 'tool_name' | 'tool_calls'>>) => void;
   toggleChatPanel: () => void;
   setChatPanelOpen: (isOpen: boolean) => void;
   setScope: (scope: ChatScope) => void; // SPEC-049
@@ -226,6 +228,19 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         // Non-critical, chat continues locally
       }
     }
+  },
+
+  updateLastAiMessage: (update) => {
+    set((state) => {
+      const messages = [...state.messages];
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].sender === 'ai') {
+          messages[i] = { ...messages[i], ...update };
+          break;
+        }
+      }
+      return { messages };
+    });
   },
 
   toggleChatPanel: () => set((state) => ({ isChatPanelOpen: !state.isChatPanelOpen })),

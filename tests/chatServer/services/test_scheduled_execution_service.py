@@ -423,7 +423,7 @@ async def test_execute_stores_metadata_with_model(service, mock_supabase):
         ScheduledExecutionService,
         "_execute_agent",
         new_callable=AsyncMock,
-        return_value=("response", "claude-haiku-4-5-20251001"),
+        return_value=("response", "test-model-v1"),
     )
     with (
         patches["execute_agent"],
@@ -450,7 +450,7 @@ async def test_execute_stores_metadata_with_model(service, mock_supabase):
     result_inserts = [c for c in insert_calls if "metadata" in c[0][0]]
     assert len(result_inserts) >= 1
     stored = result_inserts[0][0][0]
-    assert stored["metadata"]["model"] == "claude-haiku-4-5-20251001"
+    assert stored["metadata"]["model"] == "test-model-v1"
 
 
 def test_no_load_ltm_method(service):

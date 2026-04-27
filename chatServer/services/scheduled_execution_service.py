@@ -17,9 +17,11 @@ from ..database.supabase_client import create_user_scoped_client
 from ..services.audit_service import AuditService
 from ..services.pending_actions import PendingActionsService
 
+from chatServer.config.settings import get_settings
+
 logger = logging.getLogger(__name__)
 
-DEFAULT_SCHEDULED_MODEL = "claude-haiku-4-5-20251001"
+DEFAULT_SCHEDULED_MODEL = get_settings().llm_default_model
 
 
 class ScheduledExecutionService:

@@ -202,3 +202,18 @@ def _content_to_dicts(content: list) -> list[dict]:
                 "input": block.input,
             })
     return result
+
+
+def create_engine(
+    client: Any,
+    tool_schemas: list[dict],
+    tool_executors: dict[str, Callable[..., Coroutine[Any, Any, str]]],
+    user_id: str = "",
+):
+    """Factory that returns AnthropicEngine or OpenAIEngine based on client type."""
+    from chatServer.services.llm_client import is_openai_client
+
+    if is_openai_client(client):
+        from .openai_engine import OpenAIEngine
+        return OpenAIEngine(client, tool_schemas, tool_executors, user_id)
+    return AnthropicEngine(client, tool_schemas, tool_executors, user_id)

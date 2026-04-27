@@ -7,7 +7,10 @@ identity:
   description: your personal chief of staff — thinks about what you should be doing, manages what you don't have time for,
     and gets better every week
 llm:
-  model: claude-opus-4-20250514
+  # Model is omitted — falls back to LLM_DEFAULT_MODEL env var so the agent
+  # works regardless of which provider (Anthropic, OpenAI, OpenCode) is configured.
+  # To pin a specific model, use the provider:model format, e.g.:
+  #   model: openai:kimi-k2.6
 soul_file: soul.md
 tools:
 - type: CreateMemoriesTool

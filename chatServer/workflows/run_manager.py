@@ -12,7 +12,7 @@ from typing import Any, Callable, Coroutine, Optional
 
 from .builder import GraphBuilder
 from .checkpointer import get_workflow_checkpointer
-from .engine import AnthropicEngine
+from .engine import create_engine
 from .models import (
     MissingParameterError,
     WorkflowRunRecord,
@@ -29,12 +29,12 @@ class WorkflowRunManager:
     def __init__(
         self,
         db_client: Any,
-        anthropic_client: Any,
+        llm_client: Any,
         tool_schemas: list[dict],
         tool_executors: dict[str, Callable[..., Coroutine[Any, Any, str]]],
     ):
         self._db = db_client
-        self._anthropic_client = anthropic_client
+        self._llm_client = llm_client
         self._tool_schemas = tool_schemas
         self._tool_executors = tool_executors
         self._active_tasks: dict[str, asyncio.Task] = {}
@@ -94,8 +94,8 @@ class WorkflowRunManager:
         }).execute()
 
         # Build engine and graph
-        engine = AnthropicEngine(
-            client=self._anthropic_client,
+        engine = create_engine(
+            client=self._llm_client,
             tool_schemas=self._tool_schemas,
             tool_executors=self._tool_executors,
             user_id=user_id,

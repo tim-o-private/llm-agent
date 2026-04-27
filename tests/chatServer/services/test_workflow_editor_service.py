@@ -381,7 +381,7 @@ class TestRunWorkflow:
                 user_id=TEST_USER,
                 template_name="morning-briefing",
                 db_client=MagicMock(),
-                anthropic_client=MagicMock(),
+                llm_client=MagicMock(),
             )
 
         assert run_id == "abc-123"
@@ -398,7 +398,7 @@ class TestRunWorkflow:
                 user_id=TEST_USER,
                 template_name="nonexistent",
                 db_client=MagicMock(),
-                anthropic_client=MagicMock(),
+                llm_client=MagicMock(),
             )
         assert exc_info.value.status_code == 404
 
@@ -409,7 +409,7 @@ class TestRunWorkflow:
         _write_workflow(user_root, "morning-briefing", VALID_TEMPLATE)
 
         service = WorkflowEditorService(vault=vault)
-        # No db_client or anthropic_client → 503
+        # No db_client or llm_client → 503
         with pytest.raises(HTTPException) as exc_info:
             await service.run_workflow(
                 user_id=TEST_USER,
@@ -435,7 +435,7 @@ class TestRunWorkflow:
                     user_id=TEST_USER,
                     template_name="morning-briefing",
                     db_client=MagicMock(),
-                    anthropic_client=MagicMock(),
+                    llm_client=MagicMock(),
                 )
             assert exc_info.value.status_code == 422
 

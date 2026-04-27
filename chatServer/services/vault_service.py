@@ -332,7 +332,7 @@ class VaultService:
         shutil.move(str(source), str(target))
         if self._sync is not None:
             try:
-                asyncio.create_task(self._sync.sync_file(user_id, source_rel))
+                asyncio.create_task(self._sync.delete_remote_file(user_id, source_rel))
                 asyncio.create_task(self._sync.sync_file(user_id, target_rel))
             except Exception:
                 logger.warning(
@@ -340,6 +340,69 @@ class VaultService:
                     source_rel,
                     target_rel,
                 )
+
+    async def move_folder(
+        self, user_id: str, source_rel: str, target_rel: str
+    ) -> None:
+        """Move/rename a folder within the user's vault.
+
+        Both paths go through ``_resolve`` for containment safety.
+        Raises 404 if source is missing, 409 if target exists.
+        """
+        source = self._resolve(user_id, source_rel)
+        target = self._resolve(user_id, target_rel)
+        if not source.exists() or not source.is_dir():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        if target.exists():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Target folder already exists",
+            )
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(source), str(target))
+
+    async def rename(
+        self, user_id: str, source_rel: str, target_rel: str
+    ) -> None:
+        """Rename/move a file or folder. Dispatches to move_file or move_folder."""
+        source = self._resolve(user_id, source_rel)
+        if not source.exists():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        if source.is_dir():
+            await self.move_folder(user_id, source_rel, target_rel)
+        else:
+            await self.move_file(user_id, source_rel, target_rel)
+
+    async def create_file(self, user_id: str, rel_path: str, content: str = "") -> float:
+        """Create a new file. Raises 409 if it already exists."""
+        path = self._resolve(user_id, rel_path)
+        if path.exists():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="File already exists",
+            )
+        encoded = content.encode("utf-8")
+        if len(encoded) > _MAX_WRITE_BYTES:
+            raise HTTPException(status_code=413, detail="File too large")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(encoded)
+        new_mtime = path.stat().st_mtime
+        if self._sync is not None:
+            try:
+                asyncio.create_task(self._sync.sync_file(user_id, rel_path))
+            except Exception:
+                logger.warning("Failed to schedule sync_file for %s", rel_path)
+        return new_mtime
+
+    async def create_folder(self, user_id: str, rel_path: str) -> None:
+        """Create a new folder. Raises 409 if it already exists."""
+        path = self._resolve(user_id, rel_path)
+        if path.exists():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Folder already exists",
+            )
+        path.mkdir(parents=True, exist_ok=True)
 
     # ------------------------------------------------------------------
     # Tree / folder listing (SPEC-046 FU-1)

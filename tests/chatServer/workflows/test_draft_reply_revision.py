@@ -24,7 +24,7 @@ def _make_manager(run_record=None):
 
     manager = WorkflowRunManager(
         db_client=db_client,
-        anthropic_client=MagicMock(),
+        llm_client=MagicMock(),
         tool_schemas=[],
         tool_executors={},
     )

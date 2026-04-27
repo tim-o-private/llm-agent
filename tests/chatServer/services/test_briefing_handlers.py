@@ -35,7 +35,7 @@ async def test_ac_13_morning_handler_self_schedules_with_expires():
         patch("chatServer.services.job_service.JobService", return_value=mock_job_service),
         patch("chatServer.database.connection.get_database_manager", return_value=mock_db_manager),
         patch("chatServer.workflows.dispatch.dispatch_workflow", new_callable=AsyncMock, return_value="Started workflow 'morning-briefing' (run_id: r1)."),  # noqa: E501
-        patch("chatServer.services.job_handlers._get_anthropic_client_for_workflow", return_value=MagicMock()),
+        patch("chatServer.services.job_handlers._get_llm_client_for_workflow", return_value=MagicMock()),
     ):
         from chatServer.services.job_handlers import handle_morning_briefing
         result = await handle_morning_briefing(job)
@@ -80,7 +80,7 @@ async def test_ac_14_evening_handler_self_schedules():
         patch("chatServer.services.job_service.JobService", return_value=mock_job_service),
         patch("chatServer.database.connection.get_database_manager", return_value=mock_db_manager),
         patch("chatServer.workflows.dispatch.dispatch_workflow", new_callable=AsyncMock, return_value="Started workflow 'evening-briefing' (run_id: r2)."),  # noqa: E501
-        patch("chatServer.services.job_handlers._get_anthropic_client_for_workflow", return_value=MagicMock()),
+        patch("chatServer.services.job_handlers._get_llm_client_for_workflow", return_value=MagicMock()),
     ):
         from chatServer.services.job_handlers import handle_evening_briefing
         result = await handle_evening_briefing(job)
@@ -121,7 +121,7 @@ async def test_ac_16_failed_briefing_schedules_next_day():
         patch("chatServer.services.job_service.JobService", return_value=mock_job_service),
         patch("chatServer.database.connection.get_database_manager", return_value=mock_db_manager),
         patch("chatServer.workflows.dispatch.dispatch_workflow", new_callable=AsyncMock, return_value="Failed to start workflow: LLM API error"),  # noqa: E501
-        patch("chatServer.services.job_handlers._get_anthropic_client_for_workflow", return_value=MagicMock()),
+        patch("chatServer.services.job_handlers._get_llm_client_for_workflow", return_value=MagicMock()),
     ):
         from chatServer.services.job_handlers import handle_morning_briefing
 

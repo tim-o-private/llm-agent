@@ -17,7 +17,7 @@ from httpx import ASGITransport, AsyncClient
 from chatServer.database.supabase_client import get_user_scoped_client
 from chatServer.dependencies.auth import get_current_user
 from chatServer.routers.today_router import (
-    get_anthropic_client,
+    get_llm_client,
     get_today_service,
     router,
 )
@@ -39,10 +39,10 @@ async def test_regenerate_endpoint_returns_run_id_from_dispatch():
 
     service = MagicMock()
     service.regenerate = AsyncMock(return_value="run-abc")
-    anthropic_client = MagicMock()
+    llm_client = MagicMock()
 
     app.dependency_overrides[get_today_service] = lambda: service
-    app.dependency_overrides[get_anthropic_client] = lambda: anthropic_client
+    app.dependency_overrides[get_llm_client] = lambda: llm_client
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
@@ -53,8 +53,8 @@ async def test_regenerate_endpoint_returns_run_id_from_dispatch():
     service.regenerate.assert_awaited_once()
     call_args = service.regenerate.await_args.args
     assert call_args[0] == USER_A
-    # db_client and anthropic_client are forwarded to the service.
-    assert call_args[2] is anthropic_client
+    # db_client and llm_client are forwarded to the service.
+    assert call_args[2] is llm_client
 
 
 # ---------------------------------------------------------------------------

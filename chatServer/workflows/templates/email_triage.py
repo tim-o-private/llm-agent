@@ -26,22 +26,21 @@ and surfaces items needing attention.
 - **agent:** email-fetcher
 - **depends_on:** []
 - **tools:** [search_gmail, get_gmail]
-- **description:** Search all connected Gmail accounts for recent unread emails. Read the top messages by recency. Output structured data: sender, subject, snippet, date, message_id, account.
+- **description:** Search all connected Gmail accounts for recent unread emails. Read the top messages by recency. Output structured data: sender, subject, snippet, date, message_id, account.  # noqa: E501
 - **gate:** none
 
 ### step-2: Categorize
 - **agent:** email-classifier
 - **depends_on:** [fetch-emails]
 - **tools:** []
-- **model:** claude-haiku-4-5-20251001
-- **description:** Classify each email into urgent/actionable/informational/ignorable. Provide one-sentence reasoning per email. Suggest concrete next actions for urgent items.
+- **description:** Classify each email into urgent/actionable/informational/ignorable. Provide one-sentence reasoning per email. Suggest concrete next actions for urgent items.  # noqa: E501
 - **gate:** none
 
 ### step-3: Summarize
 - **agent:** triage-composer
 - **depends_on:** [categorize]
 - **tools:** [create_memories]
-- **description:** Compose a triage summary. Urgent items first with suggested actions. Actionable items with context. Informational as one-liners. Store urgent/actionable items as memories for future reference.
+- **description:** Compose a triage summary. Urgent items first with suggested actions. Actionable items with context. Informational as one-liners. Store urgent/actionable items as memories for future reference.  # noqa: E501
 - **gate:** none
 """
 
@@ -52,10 +51,10 @@ You are classifying emails by urgency for the user's daily triage.
 
 ## Categories
 
-- **urgent**: Needs response within hours. Examples: client escalations, time-sensitive requests, meeting conflicts, financial matters requiring action.
-- **actionable**: Needs response but not time-sensitive. Examples: project updates requiring feedback, scheduling requests, non-urgent questions.
-- **informational**: Worth knowing, no action needed. Examples: team announcements, status updates, newsletters the user subscribed to intentionally.
-- **ignorable**: No value. Examples: automated notifications, marketing emails, newsletters they didn't subscribe to, social media alerts.
+- **urgent**: Needs response within hours. Examples: client escalations, time-sensitive requests, meeting conflicts, financial matters requiring action.  # noqa: E501
+- **actionable**: Needs response but not time-sensitive. Examples: project updates requiring feedback, scheduling requests, non-urgent questions.  # noqa: E501
+- **informational**: Worth knowing, no action needed. Examples: team announcements, status updates, newsletters the user subscribed to intentionally.  # noqa: E501
+- **ignorable**: No value. Examples: automated notifications, marketing emails, newsletters they didn't subscribe to, social media alerts.  # noqa: E501
 
 ## Instructions
 
@@ -72,7 +71,7 @@ Return a structured list:
 - [INFORMATIONAL] sender: subject (one line)
 - [IGNORABLE] (count only, don't list individual emails)
 
-Keep total output under 500 words. Be decisive — when in doubt between actionable and informational, choose informational.
+Keep total output under 500 words. Be decisive — when in doubt between actionable and informational, choose informational.  # noqa: E501
 """
 
 PROMPT_SUMMARIZE = """\

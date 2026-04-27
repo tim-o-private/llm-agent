@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback, useRef, useState, Component, type ErrorInfo, type ReactNode } from 'react';
-import { AssistantRuntimeProvider, useMessage } from '@assistant-ui/react';
+import { AssistantRuntimeProvider, useMessage, makeAssistantToolUI } from '@assistant-ui/react';
 import { useExternalStoreRuntime } from '@assistant-ui/react';
 import type { ThreadMessageLike, AppendMessage } from '@assistant-ui/react';
 import { Thread, Composer } from '@assistant-ui/react-ui';
@@ -11,7 +11,13 @@ import type { ChatScope } from '@/api/types/chat';
 import { NotificationInlineMessage } from '@/components/ui/chat/NotificationInlineMessage';
 import { ApprovalInlineMessage } from '@/components/ui/chat/ApprovalInlineMessage';
 import { ConversationList } from '@/components/features/Conversations';
-import { supabase } from '@/lib/supabaseClient';
+import { authHeaders } from '@/lib/apiClient';
+import { ToolFallback } from '@/components/assistantui/ToolCallIndicator';
+
+const GenericToolUI = makeAssistantToolUI({
+  toolName: '*',
+  render: (props) => <ToolFallback toolName={props.toolName} status={props.status} />,
+});
 
 // Error boundary to catch assistant-ui rendering errors (e.g., "can't access property 'role'")
 // and prevent black screen. Shows error in console and allows retry without hard refresh.
@@ -69,6 +75,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ agentId: agentIdProp, scop
     sendHeartbeatAsync,
     clearCurrentSessionAsync,
     addMessage,
+    updateLastAiMessage,
     refreshMessages,
   } = useChatStore();
   const { setInputFocusState } = useTaskViewStore();
@@ -93,17 +100,34 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ agentId: agentIdProp, scop
           metadata: { custom: { ...msg } },
         };
       }
+      if (!msg.tool_calls?.length) {
+        return {
+          role: msg.sender === 'user' ? 'user' : 'assistant',
+          content: msg.text || '',
+          id: msg.id,
+          createdAt: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
+          metadata: { custom: { ...msg } },
+        };
+      }
+      const parts: ThreadMessageLike['content'] & unknown[] = [];
+      if (msg.text) {
+        parts.push({ type: 'text' as const, text: msg.text });
+      }
+      for (const tc of msg.tool_calls) {
+        parts.push({ type: 'tool-call' as const, toolCallId: tc.id, toolName: tc.name });
+      }
       return {
-        role: msg.sender === 'user' ? 'user' : 'assistant',
-        content: msg.text,
+        role: 'assistant' as const,
+        content: parts,
         id: msg.id,
         createdAt: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
+        metadata: { custom: { ...msg } },
       };
     },
     [],
   );
 
-  // onNew handler - sends message via /api/chat
+  // onNew handler - sends message via /api/chat with SSE streaming
   const onNew = useCallback(
     async (message: AppendMessage) => {
       // Extract text from content parts
@@ -118,20 +142,14 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ agentId: agentIdProp, scop
         // Add user message to store
         await addMessage({ text: userText, sender: 'user' });
 
-        // Call /api/chat
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        const accessToken = session?.access_token;
-        if (!accessToken) throw new Error('Not authenticated');
+        // Add empty AI placeholder for streaming updates
+        await addMessage({ text: '', sender: 'ai' });
 
+        const headers = await authHeaders();
         const apiUrl = `${import.meta.env.VITE_API_BASE_URL || ''}/api/chat`;
         const response = await fetch(apiUrl, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${accessToken}`,
-          },
+          headers: { ...headers, Accept: 'text/event-stream' },
           body: JSON.stringify({
             agent_name: agentId,
             message: userText,
@@ -151,22 +169,63 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ agentId: agentIdProp, scop
           } catch {
             // Ignore if error response is not JSON
           }
+          updateLastAiMessage({ text: errorDetail });
           throw new Error(errorDetail);
         }
 
-        const data = await response.json();
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error('No response body');
 
-        if (data.error) {
-          throw new Error(data.error);
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let accumulated = '';
+        const toolCalls: Array<{ id: string; name: string }> = [];
+        let textDirty = false;
+        let rafId = 0;
+
+        const flushText = () => {
+          if (textDirty) {
+            updateLastAiMessage({ text: accumulated });
+            textDirty = false;
+          }
+        };
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() ?? '';
+
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              try {
+                const payload = JSON.parse(line.slice(6));
+                if (payload.type === 'text_delta' && payload.text) {
+                  accumulated += payload.text;
+                  textDirty = true;
+                  if (!rafId) {
+                    rafId = requestAnimationFrame(() => { rafId = 0; flushText(); });
+                  }
+                } else if (payload.type === 'tool_start' && payload.tool_name) {
+                  flushText();
+                  toolCalls.push({ id: payload.tool_call_id || `tc_${toolCalls.length}`, name: payload.tool_name });
+                  updateLastAiMessage({ tool_calls: [...toolCalls] });
+                } else if (payload.type === 'error') {
+                  accumulated += `\n\n*Error: ${payload.message}*`;
+                  textDirty = true;
+                  flushText();
+                }
+              } catch { /* malformed SSE line */ }
+            }
+          }
+        } finally {
+          cancelAnimationFrame(rafId);
+          reader.releaseLock();
         }
-
-        // Add AI response to store
-        await addMessage({
-          text: data.response,
-          sender: 'ai',
-          tool_name: data.tool_name || undefined,
-          tool_input: data.tool_input || undefined,
-        });
+        flushText();
         await sendHeartbeatAsync();
       } catch (error) {
         console.error('ChatPanel: Error sending message:', error);
@@ -175,7 +234,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ agentId: agentIdProp, scop
         setIsRunning(false);
       }
     },
-    [agentId, activeChatId, addMessage, sendHeartbeatAsync],
+    [agentId, activeChatId, addMessage, updateLastAiMessage, sendHeartbeatAsync],
   );
 
   // Create runtime using useExternalStoreRuntime.
@@ -341,6 +400,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ agentId: agentIdProp, scop
 
       <div className="flex-1 min-h-0 relative">
         <AssistantRuntimeProvider runtime={runtime}>
+          <GenericToolUI />
           <ThreadErrorBoundary>
             <div className="h-full">
               <Thread.Root>

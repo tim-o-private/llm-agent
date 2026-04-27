@@ -103,13 +103,13 @@ export const CommandPalette: React.FC = () => {
 
       {/* Dialog body */}
       <div className="fixed inset-0 flex items-start justify-center pt-[20vh] pointer-events-none">
-        <div className="relative w-full max-w-[640px] bg-ui-bg border border-ui-border rounded-lg shadow-elevated pointer-events-auto mx-4">
+        <div className="relative w-full max-w-[640px] bg-ui-bg border border-dashed border-ui-border rounded-lg shadow-elevated pointer-events-auto mx-4">
           <Command.Input
             value={search}
             onValueChange={setSearch}
             placeholder="Ask Clarity anything..."
             aria-label="Ask or search..."
-            className="w-full px-4 py-3 text-base bg-transparent border-b border-ui-border outline-none text-text-primary placeholder:text-text-muted"
+            className="w-full px-4 py-3 text-base bg-transparent border-b border-dashed border-ui-border outline-none text-text-primary placeholder:text-text-muted"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && search.trim()) {
                 // If there are no visible items (cmdk filters to empty), send as chat

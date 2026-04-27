@@ -153,14 +153,14 @@ async def test_toggle_todo_missing_line_raises_409(service):
 @pytest.mark.asyncio
 async def test_regenerate_dispatches_and_returns_run_id(service):
     db = MagicMock()
-    anthropic = MagicMock()
+    llm = MagicMock()
     with patch(
         "chatServer.services.today_service.dispatch_workflow",
         new=AsyncMock(
             return_value="Started workflow 'regenerate-today' (run_id: run-123). I'll keep you updated on progress.",
         ),
     ) as mock_dispatch:
-        run_id = await service.regenerate(USER_A, db, anthropic)
+        run_id = await service.regenerate(USER_A, db, llm)
 
     assert run_id == "run-123"
     mock_dispatch.assert_awaited_once()
@@ -168,7 +168,7 @@ async def test_regenerate_dispatches_and_returns_run_id(service):
     assert kwargs["args"] == {"workflow_name": "regenerate-today", "parameters": {}}
     assert kwargs["user_id"] == USER_A
     assert kwargs["db_client"] is db
-    assert kwargs["anthropic_client"] is anthropic
+    assert kwargs["llm_client"] is llm
 
 
 @pytest.mark.asyncio

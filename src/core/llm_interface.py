@@ -26,6 +26,20 @@ class LLMInterface:
                 anthropic_api_key=self.api_key,
                 temperature=self.temperature,
             )
+        elif self.provider == 'openai':
+            from langchain_openai import ChatOpenAI
+            self.api_key = os.getenv("OPENAI_API_KEY") or self.config.get('OPENAI_API_KEY')
+            base_url = os.getenv("LLM_BASE_URL") or self.config.get('LLM_BASE_URL')
+            if not self.api_key:
+                raise ValueError("OPENAI_API_KEY not found. Please set it in your .env file.")
+            kwargs = {
+                'model': self.model_name,
+                'api_key': self.api_key,
+                'temperature': self.temperature,
+            }
+            if base_url:
+                kwargs['base_url'] = base_url
+            self.llm = ChatOpenAI(**kwargs)
         else:
             from langchain_google_genai import ChatGoogleGenerativeAI
             self.api_key = self.config.get('GOOGLE_API_KEY')

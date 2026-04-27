@@ -214,7 +214,7 @@ class WorkflowEditorService:
         template_name: str,
         parameters: Optional[dict] = None,
         db_client: Any = None,
-        anthropic_client: Any = None,
+        llm_client: Any = None,
     ) -> str:
         """Delegate to ``dispatch_workflow`` (same path as today regenerate).
 
@@ -235,7 +235,7 @@ class WorkflowEditorService:
             raise
 
         effective_db = db_client or self._db
-        if effective_db is None or anthropic_client is None:
+        if effective_db is None or llm_client is None:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Workflow engine unavailable",
@@ -249,7 +249,7 @@ class WorkflowEditorService:
                 },
                 user_id=user_id,
                 db_client=effective_db,
-                anthropic_client=anthropic_client,
+                llm_client=llm_client,
                 tool_schemas=[],
                 tool_executors={},
             )

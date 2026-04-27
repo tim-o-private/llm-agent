@@ -33,10 +33,10 @@ class TestEmailTriageTemplate:
         assert fetch.tools == ["search_gmail", "get_gmail"]
         assert fetch.depends_on == []
 
-    def test_categorize_uses_haiku(self):
+    def test_categorize_uses_default_model(self):
         tpl = parse_template(EMAIL_TRIAGE, "email-triage")
         categorize = tpl.steps[1]
-        assert categorize.model == "claude-haiku-4-5-20251001"
+        assert categorize.model is None
         assert categorize.tools == []
         assert categorize.depends_on == ["fetch-emails"]
 
@@ -212,7 +212,7 @@ class TestServiceNodeInBuilder:
 
         manager = WorkflowRunManager(
             db_client=MagicMock(),
-            anthropic_client=MagicMock(),
+            llm_client=MagicMock(),
             tool_schemas=[],
             tool_executors={},
         )

@@ -5,6 +5,7 @@ from typing import Any, Dict
 
 from ..database.connection import get_database_manager
 from ..database.supabase_client import create_system_client
+from chatServer.config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +78,7 @@ ONBOARDING_PROMPT_TEMPLATE = (
 class EmailOnboardingService:
     """Orchestrates email onboarding: triggers agent to process email and store insights."""
 
-    DEFAULT_MODEL = "claude-sonnet-4-5-20250514"
+    DEFAULT_MODEL = get_settings().llm_default_model
 
     async def process_job(self, job: Dict[str, Any]) -> Dict[str, Any]:
         """Process a single email onboarding job.

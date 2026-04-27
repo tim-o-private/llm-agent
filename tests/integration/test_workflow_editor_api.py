@@ -16,7 +16,7 @@ from httpx import ASGITransport, AsyncClient
 from chatServer.database.supabase_client import get_user_scoped_client
 from chatServer.dependencies.auth import get_current_user
 from chatServer.routers.workflow_editor_router import (
-    get_anthropic_client,
+    get_llm_client,
     get_workflow_editor_service,
 )
 from chatServer.routers.workflow_editor_router import (
@@ -86,7 +86,7 @@ def _build_app(user_id: str, vault: VaultService) -> FastAPI:
     service = WorkflowEditorService(vault=vault)
     app.dependency_overrides[get_current_user] = lambda: user_id
     app.dependency_overrides[get_workflow_editor_service] = lambda: service
-    app.dependency_overrides[get_anthropic_client] = lambda: MagicMock()
+    app.dependency_overrides[get_llm_client] = lambda: MagicMock()
     scoped_client = MagicMock(user_id=user_id)
     app.dependency_overrides[get_user_scoped_client] = lambda: scoped_client
     return app
