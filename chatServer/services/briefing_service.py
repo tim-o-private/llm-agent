@@ -9,6 +9,8 @@ import logging
 import re
 from datetime import date, datetime, timedelta, timezone
 
+from chatServer.config.settings import get_settings
+
 logger = logging.getLogger(__name__)
 
 TELEGRAM_CHAR_LIMIT = 4000  # Hard limit is 4096, bot truncates at 4000
@@ -548,12 +550,13 @@ class BriefingService:
             ScheduledExecutionService,
         )
 
+        settings = get_settings()
         return await ScheduledExecutionService().execute({
             "user_id": user_id,
             "agent_name": "assistant",
             "prompt": prompt,
             "config": {
-                "model_override": "claude-haiku-4-5-20251001",
+                "model_override": settings.llm_default_model,
                 "skip_notification": True,
                 "schedule_type": "briefing",
             },

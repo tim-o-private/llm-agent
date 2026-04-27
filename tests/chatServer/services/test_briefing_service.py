@@ -10,6 +10,9 @@ from chatServer.services.briefing_service import (
     compute_first_briefing_time,
     compute_next_briefing_time,
 )
+from chatServer.config.settings import get_settings
+
+settings = get_settings()
 
 
 @pytest.fixture
@@ -245,7 +248,7 @@ async def test_ac_38_briefing_uses_skip_notification_and_chat_message(service, d
     call_args = mock_ses.execute.call_args[0][0]
     assert call_args["config"]["skip_notification"] is True
     assert call_args["config"]["schedule_type"] == "briefing"
-    assert call_args["config"]["model_override"] == "claude-haiku-4-5-20251001"
+    assert call_args["config"]["model_override"] == settings.llm_default_model
     assert call_args["id"] is None
 
 

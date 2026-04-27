@@ -122,16 +122,16 @@ async def handle_workflow(job: dict) -> dict:
     return {"status": "started", "message": result_msg}
 
 
-_workflow_anthropic_client = None
+_workflow_llm_client = None
 
 
 def _get_anthropic_client_for_workflow():
-    """Get or create a shared Anthropic client for workflow execution."""
-    global _workflow_anthropic_client
-    if _workflow_anthropic_client is None:
-        import anthropic
-        _workflow_anthropic_client = anthropic.AsyncAnthropic()
-    return _workflow_anthropic_client
+    """Get or create a shared LLM client for workflow execution."""
+    global _workflow_llm_client
+    if _workflow_llm_client is None:
+        from chatServer.services.llm_client import get_llm_client
+        _workflow_llm_client = get_llm_client()
+    return _workflow_llm_client
 
 
 async def _run_scheduled_workflow(

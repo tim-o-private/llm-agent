@@ -12,7 +12,7 @@ from typing import Any, Callable, Coroutine, Optional
 
 from .builder import GraphBuilder
 from .checkpointer import get_workflow_checkpointer
-from .engine import AnthropicEngine
+from .engine import create_engine
 from .models import (
     MissingParameterError,
     WorkflowRunRecord,
@@ -94,7 +94,7 @@ class WorkflowRunManager:
         }).execute()
 
         # Build engine and graph
-        engine = AnthropicEngine(
+        engine = create_engine(
             client=self._anthropic_client,
             tool_schemas=self._tool_schemas,
             tool_executors=self._tool_executors,

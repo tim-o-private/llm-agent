@@ -8,7 +8,7 @@ export const ScopeIndicator: React.FC<{ scope: ChatScope }> = ({ scope }) => {
 
   return (
     <p
-      className="text-xs text-text-muted font-mono truncate"
+      className="text-[10px] text-text-muted font-mono truncate"
       aria-label={`Chat scope: ${label}`}
     >
       {label}

@@ -10,6 +10,7 @@ from typing import Any, Callable, Optional, TypedDict
 from langgraph.constants import END, START
 from langgraph.graph import StateGraph
 
+from chatServer.config.settings import get_settings
 from .engine import AnthropicEngine
 from .models import GraphTemplate, StepDef
 
@@ -166,12 +167,13 @@ class GraphBuilder:
 
             prompt = "\n".join(prompt_parts)
 
+            settings = get_settings()
             # Run engine with step-specific config and system prompt
             result = await engine.run(
                 prompt=prompt,
                 tools=step.tools,
                 system_prompt=system_prompt,
-                model=step.model or "claude-sonnet-4-5-20250514",
+                model=step.model or settings.llm_default_model,
                 max_tokens=step.max_tokens or 4096,
                 temperature=step.temperature if step.temperature is not None else 0.5,
             )

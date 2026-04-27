@@ -29,6 +29,8 @@ export default [
         clearTimeout: 'readonly',
         setInterval: 'readonly',
         clearInterval: 'readonly',
+        requestAnimationFrame: 'readonly',
+        cancelAnimationFrame: 'readonly',
         URLSearchParams: 'readonly',
         // DOM types
         HTMLElement: 'readonly',
@@ -43,6 +45,8 @@ export default [
         HTMLSpanElement: 'readonly',
         SVGSVGElement: 'readonly',
         AbortSignal: 'readonly',
+        TextDecoder: 'readonly',
+        ReadableStreamDefaultReader: 'readonly',
         IntersectionObserver: 'readonly',
         IntersectionObserverEntry: 'readonly',
         RequestMode: 'readonly',

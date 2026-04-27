@@ -89,6 +89,25 @@ settings.reload_from_env()
 _clarity_key = os.getenv("CLARITY_ANTHROPIC_API_KEY")
 if _clarity_key and not os.getenv("ANTHROPIC_API_KEY"):
     os.environ["ANTHROPIC_API_KEY"] = _clarity_key
+
+# Propagate LLM_API_KEY / LLM_BASE_URL to provider-specific env vars.
+# When LLM_API_KEY is set, it takes precedence — override the provider-specific
+# var even if it's already set (it may point to a different provider's key).
+_llm_key = os.getenv("LLM_API_KEY")
+if _llm_key:
+    settings = get_settings()
+    if settings.llm_provider == "anthropic":
+        os.environ["ANTHROPIC_API_KEY"] = _llm_key
+    elif settings.llm_provider == "openai":
+        os.environ["OPENAI_API_KEY"] = _llm_key
+
+_llm_base_url = os.getenv("LLM_BASE_URL")
+if _llm_base_url:
+    settings = get_settings()
+    if settings.llm_provider == "anthropic":
+        os.environ["ANTHROPIC_BASE_URL"] = _llm_base_url
+    elif settings.llm_provider == "openai":
+        os.environ["OPENAI_BASE_URL"] = _llm_base_url
 # --- END Inserted Environment & Path Setup ---
 
 # --- Global Cache and Configuration ---

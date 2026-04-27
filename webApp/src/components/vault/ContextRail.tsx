@@ -39,7 +39,7 @@ const RailSection: React.FC<{
     <section aria-labelledby={labelId} className="py-3 px-3">
       <h3
         id={labelId}
-        className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-2"
+        className="text-[10px] font-mono font-semibold text-text-muted uppercase tracking-wider mb-2"
       >
         {title}
       </h3>
@@ -235,7 +235,7 @@ export const ContextRail: React.FC<ContextRailProps> = ({
     return (
       <div
         aria-label={`AI context for ${filename}`}
-        className="flex flex-col items-center justify-start py-4 w-8 border-l border-ui-border bg-ui-element-bg/30 h-full cursor-pointer"
+        className="flex flex-col items-center justify-start py-4 w-8 border-l border-dashed border-ui-border bg-ui-element-bg/30 h-full cursor-pointer"
         onClick={toggleCollapsed}
         role="complementary"
       >
@@ -263,11 +263,11 @@ export const ContextRail: React.FC<ContextRailProps> = ({
     <div
       aria-label={`AI context for ${filename}`}
       role="complementary"
-      className="h-full border-l border-ui-border bg-ui-element-bg/10 overflow-y-auto w-[220px] min-w-[180px] flex flex-col"
+      className="h-full border-l border-dashed border-ui-border bg-ui-element-bg/10 overflow-y-auto w-[220px] min-w-[180px] flex flex-col"
     >
       {/* Collapse toggle */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-ui-border flex-shrink-0">
-        <span className="text-xs font-semibold text-text-muted uppercase tracking-wide">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-dashed border-ui-border flex-shrink-0">
+        <span className="text-[10px] font-mono font-semibold text-text-muted uppercase tracking-wider">
           Context
         </span>
         <button
@@ -280,7 +280,7 @@ export const ContextRail: React.FC<ContextRailProps> = ({
       </div>
 
       {/* Sections */}
-      <div className="flex-1 overflow-y-auto divide-y divide-ui-border/50">
+      <div className="flex-1 overflow-y-auto divide-y divide-dashed divide-ui-border/50">
         <SummarySection content={editorContent} />
         <CitationsSection citations={citations} />
         <LinkedBySection path={path} />

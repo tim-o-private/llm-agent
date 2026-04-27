@@ -30,7 +30,7 @@ and surfaces items needing attention.
 - **agent:** email-classifier
 - **depends_on:** [fetch-emails]
 - **tools:** []
-- **model:** claude-haiku-4-5-20251001
+- **model:** openai:gpt-4o-mini
 - **description:** Classify each email into urgent/actionable/informational/ignorable. Provide one-sentence reasoning per email. Suggest concrete next actions for urgent items.
 - **gate:** none
 

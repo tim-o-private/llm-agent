@@ -37,7 +37,7 @@ const AppShell: React.FC = () => {
     <>
       <div className="h-screen flex flex-col bg-ui-bg">
         {/* AC-04: TopBar spans full width above all panes */}
-        <header className="relative z-20 flex-shrink-0 flex h-14 bg-ui-element-bg border-b border-ui-border">
+        <header className="relative z-20 flex-shrink-0 flex h-14 bg-ui-element-bg border-b border-dashed border-ui-border">
           <TopBar />
         </header>
 
@@ -51,7 +51,7 @@ const AppShell: React.FC = () => {
             collapsedSize={0}
             className="hidden md:block"
           >
-            <div className="h-full overflow-hidden border-r border-ui-border">
+            <div className="h-full overflow-hidden border-r border-dashed border-ui-border">
               <FileTree />
             </div>
           </Panel>

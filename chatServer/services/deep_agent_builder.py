@@ -686,8 +686,20 @@ async def _build_agent(
 
     # 7. Resolve model — Deep Agents uses "provider:model" format
     llm_config = agent_config.get("llm_config") or {}
-    model_name = llm_config.get("model", "claude-sonnet-4-20250514")
-    model = model_name if ":" in model_name else f"anthropic:{model_name}"
+    model_name = llm_config.get("model", settings.llm_default_model)
+    default_prefix = "anthropic" if settings.llm_provider == "anthropic" else "openai"
+    model = model_name if ":" in model_name else f"{default_prefix}:{model_name}"
+
+    # ChatOpenAI drops reasoning_content from thinking models (DeepSeek, Kimi, etc.).
+    # Use ChatOpenRouter which preserves it round-trip.
+    if default_prefix == "openai":
+        from langchain_openrouter import ChatOpenRouter
+        init_kwargs: dict = {"model": model_name}
+        if settings.llm_api_key:
+            init_kwargs["api_key"] = settings.llm_api_key
+        if settings.llm_base_url:
+            init_kwargs["base_url"] = settings.llm_base_url
+        model = ChatOpenRouter(**init_kwargs)
 
     # 8. Resolve checkpointer (if initialized)
     checkpointer = None

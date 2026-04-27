@@ -71,6 +71,12 @@ def _standard_patches(agent_config=None, mock_graph=None, mock_backend=None, too
     if mock_backend is None:
         mock_backend = MagicMock()
 
+    mock_settings = MagicMock()
+    mock_settings.llm_provider = "openai"
+    mock_settings.llm_default_model = "kimi-k2.6"
+    mock_settings.supabase_url = ""
+    mock_settings.supabase_service_key = ""
+
     mock_loader = MagicMock()
     mock_loader.load.return_value = agent_config
 
@@ -86,7 +92,8 @@ def _standard_patches(agent_config=None, mock_graph=None, mock_backend=None, too
         patch("chatServer.services.notification_service.NotificationService", return_value=MagicMock()),
         patch("chatServer.security.tool_wrapper.ApprovalContext", return_value=MagicMock()),
         patch.object(mod, "_create_backend", return_value=mock_backend),
-        patch("chatServer.services.storage_sync.StorageSync"),
+        patch("chatServer.config.settings.get_settings", return_value=mock_settings),
+        patch("chatServer.services.storage_sync.StorageSync", return_value=MagicMock(hydrate_user=AsyncMock())),
         patch.dict(os.environ, {"SUPABASE_URL": "", "SUPABASE_SERVICE_ROLE_KEY": "", "SANDBOX_DATA_DIR": "/tmp/test-sandbox"}),  # noqa: E501
         patch("deepagents.create_deep_agent", return_value=mock_graph),
     ]
@@ -181,10 +188,10 @@ async def test_build_deep_agent_constructs_backend():
 
 
 @pytest.mark.asyncio
-async def test_build_deep_agent_model_prefixed_with_anthropic():
-    """Model from config is prefixed with 'anthropic:' when no provider prefix present."""
+async def test_build_deep_agent_model_prefixed_with_openai():
+    """Model from config is prefixed with 'openai:' when no provider prefix present (default provider)."""
     config = _make_agent_config()
-    config["llm_config"] = {"model": "claude-sonnet-4-20250514"}
+    config["llm_config"] = {"model": "gpt-4o"}
     mock_graph = _make_mock_graph()
     patches = _standard_patches(agent_config=config, mock_graph=mock_graph)
 
@@ -195,7 +202,7 @@ async def test_build_deep_agent_model_prefixed_with_anthropic():
         await mod.build_deep_agent("user-1", "clarity", "session-1", "web")
 
     call_kwargs = mock_create.call_args.kwargs
-    assert call_kwargs["model"] == "anthropic:claude-sonnet-4-20250514"
+    assert call_kwargs["model"] == "openai:gpt-4o"
 
 
 @pytest.mark.asyncio

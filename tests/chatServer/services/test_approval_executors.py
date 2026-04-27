@@ -295,7 +295,6 @@ class TestWorkflowProposalExecutor:
         user_root.mkdir(parents=True)
 
         executor = WorkflowProposalExecutor()
-        executor._get_vault_service = lambda: vault
 
         card = _card("workflow_proposal", {
             "filename": "daily-review.flow.md",
@@ -303,7 +302,8 @@ class TestWorkflowProposalExecutor:
             "pattern_observed": "Every day the user reviews",
         })
 
-        result = await executor.execute(card, "user-a")
+        with patch("chatServer.services.approval_executors.workflow_proposal.create_vault_service", return_value=vault):
+            result = await executor.execute(card, "user-a")
 
         assert result.success is True
         assert result.result["path"] == "_workflows/daily-review.flow.md"
@@ -322,7 +322,6 @@ class TestWorkflowProposalExecutor:
         (user_root / "existing.flow.md").write_text("old content")
 
         executor = WorkflowProposalExecutor()
-        executor._get_vault_service = lambda: vault
 
         card = _card("workflow_proposal", {
             "filename": "existing.flow.md",
@@ -330,7 +329,8 @@ class TestWorkflowProposalExecutor:
             "pattern_observed": "pattern",
         })
 
-        result = await executor.execute(card, "user-a")
+        with patch("chatServer.services.approval_executors.workflow_proposal.create_vault_service", return_value=vault):
+            result = await executor.execute(card, "user-a")
 
         assert result.success is False
         assert "already exists" in result.error
@@ -373,7 +373,6 @@ class TestConfigChangeExecutor:
         (user_root / "assistant.md").write_text("old content")
 
         executor = ConfigChangeExecutor()
-        executor._get_vault_service = lambda: vault
 
         card = _card("config_change", {
             "file_path": "agents/assistant.md",
@@ -381,7 +380,8 @@ class TestConfigChangeExecutor:
             "summary": "Updated agent config",
         })
 
-        result = await executor.execute(card, "user-a")
+        with patch("chatServer.services.approval_executors.config_change.create_vault_service", return_value=vault):
+            result = await executor.execute(card, "user-a")
 
         assert result.success is True
         assert result.result["path"] == "agents/assistant.md"
@@ -400,7 +400,6 @@ class TestConfigChangeExecutor:
         user_root.mkdir(parents=True)
 
         executor = ConfigChangeExecutor()
-        executor._get_vault_service = lambda: vault
 
         card = _card("config_change", {
             "file_path": "nonexistent.md",
@@ -408,7 +407,8 @@ class TestConfigChangeExecutor:
             "summary": "test",
         })
 
-        result = await executor.execute(card, "user-a")
+        with patch("chatServer.services.approval_executors.config_change.create_vault_service", return_value=vault):
+            result = await executor.execute(card, "user-a")
 
         assert result.success is False
         assert "not found" in result.error.lower()
@@ -433,14 +433,14 @@ class TestFileOperationExecutor:
         (user_root / "notes.md").write_text("some notes")
 
         executor = FileOperationExecutor()
-        executor._get_vault_service = lambda: vault
 
         card = _card("file_operation", {
             "operation": "delete",
             "source": "notes.md",
         })
 
-        result = await executor.execute(card, "user-a")
+        with patch("chatServer.services.approval_executors.file_operation.create_vault_service", return_value=vault):
+            result = await executor.execute(card, "user-a")
 
         assert result.success is True
         assert result.result["operation"] == "delete"
@@ -459,7 +459,6 @@ class TestFileOperationExecutor:
         (user_root / "old.md").write_text("content")
 
         executor = FileOperationExecutor()
-        executor._get_vault_service = lambda: vault
 
         card = _card("file_operation", {
             "operation": "move",
@@ -467,7 +466,8 @@ class TestFileOperationExecutor:
             "target": "archive/old.md",
         })
 
-        result = await executor.execute(card, "user-a")
+        with patch("chatServer.services.approval_executors.file_operation.create_vault_service", return_value=vault):
+            result = await executor.execute(card, "user-a")
 
         assert result.success is True
         assert result.result["target"] == "archive/old.md"

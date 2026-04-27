@@ -13,6 +13,8 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from chatServer.dependencies.llm import get_llm_client_dep as get_anthropic_client
+
 from ..config.paths import get_data_dir
 from ..database.scoped_client import UserScopedClient
 from ..database.supabase_client import get_user_scoped_client
@@ -107,16 +109,6 @@ def get_workflow_editor_service(
 
     vault = VaultService(storage_sync=sync, data_dir=data_dir)
     return WorkflowEditorService(vault=vault, db=db)
-
-
-def get_anthropic_client():
-    """FastAPI dependency that returns an AsyncAnthropic client.
-
-    Tests override with ``app.dependency_overrides[get_anthropic_client]``.
-    """
-    from anthropic import AsyncAnthropic
-
-    return AsyncAnthropic()
 
 
 # --- Endpoints ----------------------------------------------------------------

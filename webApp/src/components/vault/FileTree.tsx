@@ -1,8 +1,8 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useRef, useEffect, createContext, useContext } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Tree } from 'react-arborist';
 import type { NodeRendererProps } from 'react-arborist';
-import { useVaultTree } from '@/api/hooks/useVaultHooks';
+import { useVaultTree, useRenameItem } from '@/api/hooks/useVaultHooks';
 import { useEntityIndex } from '@/api/hooks/useEntityHooks';
 import type { TreeNode } from '@/api/types/vault';
 import type { EntitySummary } from '@/api/types/entity';
@@ -15,6 +15,24 @@ import {
   GearIcon,
 } from '@radix-ui/react-icons';
 import { FolderIcon } from '@/components/ui/icons/FolderIcon';
+import { NewItemDropdown } from './NewItemDropdown';
+import { toast } from '@/components/ui/toast';
+
+interface TreeRenameCtx {
+  editingId: string | null;
+  startEditing: (id: string, name: string) => void;
+  commitRename: (node: ArboristNode) => void;
+  cancelEditing: () => void;
+  editValueRef: React.MutableRefObject<string>;
+}
+
+const RenameContext = createContext<TreeRenameCtx>({
+  editingId: null,
+  startEditing: () => {},
+  commitRename: () => {},
+  cancelEditing: () => {},
+  editValueRef: { current: '' },
+});
 
 /**
  * Entity type folder icons: person / project / company (AC-21).
@@ -144,14 +162,27 @@ function partitionTree(nodes: ArboristNode[]) {
 
 /**
  * Custom node renderer for the tree.
- * SPEC-053 AC-21: Entity-specific icons and display names.
+ * Supports inline rename via double-click.
  */
 function NodeRenderer({ node, style, dragHandle }: NodeRendererProps<ArboristNode>) {
   const data = node.data;
   const indent = node.level * 16;
+  const { editingId, editValueRef, startEditing, commitRename, cancelEditing } =
+    useContext(RenameContext);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const isEditing = editingId === data.id;
+  const [localValue, setLocalValue] = useState('');
 
-  // Pick icon: entity type folders get their type icon; entity files
-  // get a type-specific icon; everything else uses default file/folder icons.
+  useEffect(() => {
+    if (isEditing) {
+      setLocalValue(editValueRef.current);
+      setTimeout(() => {
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      }, 0);
+    }
+  }, [isEditing, editValueRef]);
+
   let FolderIconComponent: React.FC<{ className?: string }> = FolderIcon;
   let FileIconComponent: React.FC<{ className?: string }> = FileTextIcon;
 
@@ -163,6 +194,14 @@ function NodeRenderer({ node, style, dragHandle }: NodeRendererProps<ArboristNod
     }
   }
 
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (data.name === 'today.md') return;
+    const dotIdx = data.name.lastIndexOf('.');
+    const nameOnly = dotIdx > 0 ? data.name.slice(0, dotIdx) : data.name;
+    startEditing(data.id, nameOnly);
+  };
+
   return (
     <div
       ref={dragHandle}
@@ -170,7 +209,8 @@ function NodeRenderer({ node, style, dragHandle }: NodeRendererProps<ArboristNod
       className={`flex items-center gap-1.5 py-1 px-2 cursor-pointer text-sm rounded-sm transition-colors group
         ${node.isSelected ? 'bg-accent-surface text-text-accent' : 'text-text-secondary hover:bg-ui-interactive-bg-hover hover:text-text-primary'}
       `}
-      onClick={() => node.activate()}
+      onClick={() => { if (!isEditing) node.activate(); }}
+      onDoubleClick={handleDoubleClick}
     >
       {data.isFolder ? (
         <>
@@ -195,7 +235,23 @@ function NodeRenderer({ node, style, dragHandle }: NodeRendererProps<ArboristNod
           <FileIconComponent className="h-4 w-4 flex-shrink-0 text-text-muted" />
         </>
       )}
-      <span className="truncate">{data.displayName}</span>
+      {isEditing ? (
+        <input
+          ref={inputRef}
+          type="text"
+          value={localValue}
+          onChange={(e) => { setLocalValue(e.target.value); editValueRef.current = e.target.value; }}
+          onBlur={() => commitRename(data)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { e.preventDefault(); commitRename(data); }
+            else if (e.key === 'Escape') cancelEditing();
+          }}
+          onClick={(e) => e.stopPropagation()}
+          className="flex-1 min-w-0 bg-transparent border-b border-dashed border-brand-primary outline-none text-sm text-text-primary px-0"
+        />
+      ) : (
+        <span className="truncate">{data.displayName}</span>
+      )}
     </div>
   );
 }
@@ -209,6 +265,9 @@ export const FileTree: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [search, setSearch] = useState('');
+  const renameMutation = useRenameItem();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editValueRef = useRef('');
 
   const entitySlugMap = useMemo(() => {
     if (!entityIndex) return undefined;
@@ -264,6 +323,64 @@ export const FileTree: React.FC = () => {
     return '';
   }, [location.pathname]);
 
+  const startEditing = useCallback((id: string, name: string) => {
+    editValueRef.current = name;
+    setEditingId(id);
+  }, []);
+
+  const cancelEditing = useCallback(() => {
+    setEditingId(null);
+    editValueRef.current = '';
+  }, []);
+
+  const commitRename = useCallback(
+    (node: ArboristNode) => {
+      const trimmed = editValueRef.current.trim();
+      const dotIdx = node.name.lastIndexOf('.');
+      const ext = dotIdx > 0 ? node.name.slice(dotIdx) : '';
+      const nameOnly = dotIdx > 0 ? node.name.slice(0, dotIdx) : node.name;
+
+      if (!trimmed || trimmed === nameOnly) {
+        cancelEditing();
+        return;
+      }
+
+      if (/[/\\]/.test(trimmed)) {
+        toast.error('Name cannot contain slashes');
+        return;
+      }
+
+      const newFilename = ext ? `${trimmed}${ext}` : trimmed;
+      const parts = node.vaultPath.split('/');
+      parts[parts.length - 1] = newFilename;
+      const newPath = parts.join('/');
+
+      renameMutation.mutate(
+        { source: node.vaultPath, target: newPath },
+        {
+          onSuccess: (result) => {
+            cancelEditing();
+            if (node.isFolder) {
+              navigate(`/vault/${result.path}/`, { replace: true });
+            } else {
+              navigate(`/vault/${result.path}`, { replace: true });
+            }
+          },
+          onError: (err) => {
+            toast.error(err.message);
+            cancelEditing();
+          },
+        },
+      );
+    },
+    [renameMutation, navigate, cancelEditing],
+  );
+
+  const renameCtx = useMemo<TreeRenameCtx>(
+    () => ({ editingId, editValueRef, startEditing, commitRename, cancelEditing }),
+    [editingId, startEditing, commitRename, cancelEditing],
+  );
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full text-text-muted text-sm">
@@ -281,11 +398,13 @@ export const FileTree: React.FC = () => {
   }
 
   return (
+    <RenameContext.Provider value={renameCtx}>
     <div className="flex flex-col h-full bg-ui-element-bg/50">
       {/* Header + search (AC-07) */}
-      <div className="p-2 border-b border-ui-border space-y-2">
+      <div className="p-2 border-b border-dashed border-ui-border space-y-2">
         <div className="flex items-center justify-between px-1">
           <span className="text-xs font-medium text-text-muted uppercase tracking-wider">Vault</span>
+          <NewItemDropdown />
         </div>
         <div className="relative">
           <MagnifyingGlassIcon className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted" />
@@ -294,7 +413,7 @@ export const FileTree: React.FC = () => {
             placeholder="search files & content"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-7 pr-2 py-1.5 text-xs rounded-md bg-ui-bg border border-ui-border text-text-primary placeholder:text-text-muted focus:outline-none focus:border-brand-primary transition-colors"
+            className="w-full pl-7 pr-2 py-1.5 text-xs rounded-md bg-ui-bg border border-dashed border-ui-border text-text-primary placeholder:text-text-muted focus:outline-none focus:border-brand-primary transition-colors"
           />
         </div>
       </div>
@@ -334,7 +453,7 @@ export const FileTree: React.FC = () => {
       </div>
 
       {/* Pinned: _workflows section (AC-09) — always visible */}
-      <div className="border-t border-ui-border">
+      <div className="border-t border-dashed border-ui-border">
         <div className="px-3 py-1.5 text-xs font-medium text-text-muted uppercase tracking-wider">
           Pinned Workflows
         </div>
@@ -367,6 +486,8 @@ export const FileTree: React.FC = () => {
           </button>
         </div>
       </div>
+
     </div>
+    </RenameContext.Provider>
   );
 };

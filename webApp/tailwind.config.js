@@ -108,7 +108,10 @@ export default {
         'elevated': '0 4px 12px -2px rgba(0, 0, 0, 0.15)',
       },
 
-      fontFamily: {},
+      fontFamily: {
+        serif: ["'Source Serif 4'", 'Georgia', 'serif'],
+        mono: ["'JetBrains Mono'", 'ui-monospace', 'monospace'],
+      },
     },
   },
   plugins: [

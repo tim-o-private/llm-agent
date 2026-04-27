@@ -14,6 +14,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from chatServer.dependencies.llm import get_llm_client_dep as get_anthropic_client
+
 from ..database.scoped_client import UserScopedClient
 from ..database.supabase_client import (
     create_system_client,
@@ -118,15 +120,6 @@ async def get_today_service(
     return TodayService(vault=vault, approvals=approvals)
 
 
-def get_anthropic_client():
-    """FastAPI dependency that returns an AsyncAnthropic client.
-
-    ``ANTHROPIC_API_KEY`` is read from the environment. Tests override with
-    ``app.dependency_overrides[get_anthropic_client]``.
-    """
-    from anthropic import AsyncAnthropic
-
-    return AsyncAnthropic()
 
 
 # --- Endpoints --------------------------------------------------------------

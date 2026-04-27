@@ -113,6 +113,17 @@ class StorageSync:
 
         logger.info("Pulled %d system config files", len(files))
 
+    async def delete_remote_file(self, user_id: str, relative_path: str) -> None:
+        """Delete a file from Storage. Fire-and-forget: logs on failure."""
+        storage_path = f"users/{user_id}/{relative_path}"
+        try:
+            client = await self._ensure_client()
+            bucket = client.storage.from_(BUCKET)
+            await bucket.remove([storage_path])
+            logger.info("Deleted remote %s", storage_path)
+        except Exception:
+            logger.warning("Failed to delete %s from Storage", relative_path, exc_info=True)
+
     async def sync_file(self, user_id: str, relative_path: str) -> None:
         """Upload a single changed file back to Storage.
 

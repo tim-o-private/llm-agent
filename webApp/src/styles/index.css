@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
 @import "@radix-ui/themes/styles.css";
 @import "@assistant-ui/react-ui/styles/index.css";
 @import "./assistant-ui-theme.css";
@@ -8,8 +10,7 @@
 
 @layer base {
   html {
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-      'Helvetica Neue', Arial, sans-serif;
+    font-family: 'Source Serif 4', Georgia, serif;
   }
 
   /* Override browser default focus styles for inputs */
@@ -38,4 +39,11 @@
   --color-background: #161618;
   --color-panel-solid: #1c1c1f;
   --color-surface: #222225;
+
+  /* wireframe ink colors */
+  --gray-12: #ede7d9;
+  --gray-11: #a8a395;
+  --gray-9: #6b6860;
+  --gray-6: #59564d;
+  --gray-7: #8a8578;
 }

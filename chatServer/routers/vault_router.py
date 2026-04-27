@@ -54,6 +54,33 @@ class FolderResponse(BaseModel):
     entries: list[FolderEntryModel]
 
 
+class CreateFileRequest(BaseModel):
+    path: str
+    content: str = ""
+
+
+class CreateFolderRequest(BaseModel):
+    path: str
+
+
+class CreateFileResponse(BaseModel):
+    path: str
+    mtime: float
+
+
+class CreateFolderResponse(BaseModel):
+    path: str
+
+
+class RenameRequest(BaseModel):
+    source: str
+    target: str
+
+
+class RenameResponse(BaseModel):
+    path: str
+
+
 # --- VaultService dependency ------------------------------------------------
 
 
@@ -134,6 +161,40 @@ async def get_vault_file(
         raise HTTPException(status_code=500, detail="Failed to read vault file")
 
 
+@router.post("/file", response_model=CreateFileResponse, status_code=201)
+async def create_vault_file(
+    body: CreateFileRequest,
+    user_id: str = Depends(get_current_user),
+    vault=Depends(get_vault_service),
+):
+    """Create a new file in the user's vault."""
+    try:
+        mtime = await vault.create_file(user_id, body.path, body.content)
+        return CreateFileResponse(path=body.path, mtime=mtime)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("create_vault_file failed for %s: %s", user_id, exc, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to create file")
+
+
+@router.post("/folder", response_model=CreateFolderResponse, status_code=201)
+async def create_vault_folder(
+    body: CreateFolderRequest,
+    user_id: str = Depends(get_current_user),
+    vault=Depends(get_vault_service),
+):
+    """Create a new folder in the user's vault."""
+    try:
+        await vault.create_folder(user_id, body.path)
+        return CreateFolderResponse(path=body.path)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("create_vault_folder failed for %s: %s", user_id, exc, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to create folder")
+
+
 @router.get("/folder", response_model=FolderResponse)
 async def get_vault_folder(
     path: str = Query("", description="Relative folder path (empty for root)"),
@@ -160,3 +221,20 @@ async def get_vault_folder(
     except Exception as exc:
         logger.error("get_vault_folder failed for %s: %s", user_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to list vault folder")
+
+
+@router.patch("/rename", response_model=RenameResponse)
+async def rename_vault_item(
+    body: RenameRequest,
+    user_id: str = Depends(get_current_user),
+    vault=Depends(get_vault_service),
+):
+    """Rename/move a file or folder in the user's vault."""
+    try:
+        await vault.rename(user_id, body.source, body.target)
+        return RenameResponse(path=body.target)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("rename_vault_item failed for %s: %s", user_id, exc, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to rename item")
