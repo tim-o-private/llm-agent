@@ -108,19 +108,7 @@ async def handle_workflow(job: dict) -> dict:
 
     db_client = await create_system_client()
 
-    agent_name = "assistant"
-    try:
-        tool_schemas, tool_executors, _ = await resolve_tools_for_agent(
-            user_id, agent_name
-        )
-    except Exception as exc:
-        logger.error(
-            "Failed to resolve tools for workflow '%s': %s",
-            template_name,
-            exc,
-            exc_info=True,
-        )
-        tool_schemas, tool_executors = [], {}
+    tool_schemas, tool_executors, _ = await resolve_tools_for_agent(user_id, "assistant")
 
     # Use dispatch_workflow which handles all the setup
     result_msg = await dispatch_workflow(
@@ -195,19 +183,7 @@ async def _run_scheduled_workflow(
             max_retries=2,
         )
 
-    agent_name = "assistant"
-    try:
-        tool_schemas, tool_executors, _ = await resolve_tools_for_agent(
-            user_id, agent_name
-        )
-    except Exception as exc:
-        logger.error(
-            "Failed to resolve tools for workflow '%s': %s",
-            workflow_name,
-            exc,
-            exc_info=True,
-        )
-        tool_schemas, tool_executors = [], {}
+    tool_schemas, tool_executors, _ = await resolve_tools_for_agent(user_id, "assistant")
 
     result_msg = await dispatch_workflow(
         args={"workflow_name": workflow_name, "parameters": build_parameters(user_id, prefs)},

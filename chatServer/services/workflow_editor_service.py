@@ -243,19 +243,7 @@ class WorkflowEditorService:
                 detail="Workflow engine unavailable",
             )
 
-        agent_name = "assistant"
-        try:
-            tool_schemas, tool_executors, _ = await resolve_tools_for_agent(
-                user_id, agent_name
-            )
-        except Exception as exc:
-            logger.error(
-                "Failed to resolve tools for workflow '%s': %s",
-                template_name,
-                exc,
-                exc_info=True,
-            )
-            tool_schemas, tool_executors = [], {}
+        tool_schemas, tool_executors, _ = await resolve_tools_for_agent(user_id, "assistant")
 
         try:
             result_msg = await dispatch_workflow(

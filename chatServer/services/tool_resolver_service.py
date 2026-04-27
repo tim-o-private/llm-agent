@@ -127,7 +127,7 @@ class ToolResolverService:
 async def resolve_tools_for_agent(
     user_id: str, agent_name: str
 ) -> tuple[list[dict], dict[str, Callable], list[Any]]:
-    """Convenience function to resolve tools for an agent.
+    """Resolve tools for an agent. Never raises — returns empty on failure.
 
     Args:
         user_id: The user ID.
@@ -136,5 +136,9 @@ async def resolve_tools_for_agent(
     Returns:
         Tuple of (tool_schemas, tool_executors, instantiated_tools).
     """
-    service = ToolResolverService()
-    return await service.resolve_for_agent(user_id, agent_name)
+    try:
+        service = ToolResolverService()
+        return await service.resolve_for_agent(user_id, agent_name)
+    except Exception as exc:
+        logger.error("resolve_tools_for_agent failed for (%s, %s): %s", user_id, agent_name, exc, exc_info=True)
+        return [], {}, []

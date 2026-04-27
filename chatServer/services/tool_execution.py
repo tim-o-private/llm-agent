@@ -34,7 +34,7 @@ class ToolExecutionService:
     Executes tools by name outside the LangChain agent loop.
 
     Used by PendingActionsService after user approval. Instantiates tool
-    classes from TOOL_REGISTRY with proper user context.
+    classes from the decorator registry with proper user context.
     """
 
     def __init__(self, db_client):
@@ -51,7 +51,7 @@ class ToolExecutionService:
         Execute a tool by name.
 
         1. Look up tool type + config from `tools` table by name
-        2. Resolve Python class from TOOL_REGISTRY (with GmailTool dynamic import)
+        2. Resolve Python class from decorator registry (with GmailTool dynamic import)
         3. Reject memory tools (need MCP client unavailable here)
         4. Instantiate with user context (no approval wrapper)
         5. Call _arun(**tool_args) directly
