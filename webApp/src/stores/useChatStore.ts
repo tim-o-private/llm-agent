@@ -18,6 +18,15 @@ export interface ChatMessage {
   tool_name?: string;
   tool_input?: Record<string, unknown>;
   tool_calls?: Array<{ id: string; name: string }>;
+  /**
+   * Interleaved content parts for assistant-ui ThreadMessageLike.
+   * When present, convertMessage uses this directly instead of reconstructing
+   * from text + tool_calls (which loses chronological ordering).
+   */
+  contentParts?: Array<
+    | { type: 'text'; text: string }
+    | { type: 'tool-call'; toolCallId: string; toolName: string }
+  >;
   // Notification fields (when sender = 'notification' | 'approval')
   notification_id?: string;
   notification_category?: string;
@@ -45,7 +54,7 @@ interface ChatStore {
   triggerWakeup: () => Promise<void>;
 
   addMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>, senderType?: ChatMessage['sender']) => Promise<void>;
-  updateLastAiMessage: (update: Partial<Pick<ChatMessage, 'text' | 'tool_name' | 'tool_calls'>>) => void;
+  updateLastAiMessage: (update: Partial<Pick<ChatMessage, 'text' | 'tool_name' | 'tool_calls' | 'contentParts'>>) => void;
   toggleChatPanel: () => void;
   setChatPanelOpen: (isOpen: boolean) => void;
   setScope: (scope: ChatScope) => void; // SPEC-049
