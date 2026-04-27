@@ -22,6 +22,7 @@ async def dispatch_workflow(
     llm_client: Any,
     tool_schemas: list[dict],
     tool_executors: dict,
+    service_registry: dict | None = None,
 ) -> str:
     """Execute the dispatch_workflow tool.
 
@@ -32,6 +33,7 @@ async def dispatch_workflow(
         llm_client: LLM client for engine (Anthropic or OpenAI).
         tool_schemas: Available tool schemas for the engine.
         tool_executors: Available tool executors for the engine.
+        service_registry: Optional custom service registry for workflow nodes.
 
     Returns:
         Status message string.
@@ -42,11 +44,14 @@ async def dispatch_workflow(
     if not workflow_name:
         return "Error: workflow_name is required."
 
+    from .services import DEFAULT_SERVICE_REGISTRY
+
     manager = WorkflowRunManager(
         db_client=db_client,
         llm_client=llm_client,
         tool_schemas=tool_schemas,
         tool_executors=tool_executors,
+        service_registry=service_registry or DEFAULT_SERVICE_REGISTRY,
     )
 
     try:

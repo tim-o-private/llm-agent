@@ -16,6 +16,7 @@ from fastapi import HTTPException, status
 from ..lib.frontmatter import parse_frontmatter
 from ..services.vault_service import VaultService
 from ..workflows.models import TemplateParseError
+from ..workflows.services import DEFAULT_SERVICE_REGISTRY
 from ..workflows.template_parser import parse_template
 
 logger = logging.getLogger(__name__)
@@ -252,6 +253,7 @@ class WorkflowEditorService:
                 llm_client=llm_client,
                 tool_schemas=[],
                 tool_executors={},
+                service_registry=DEFAULT_SERVICE_REGISTRY,
             )
         except Exception as exc:
             logger.error("run_workflow dispatch failed: %s", exc, exc_info=True)

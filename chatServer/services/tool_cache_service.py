@@ -125,6 +125,7 @@ class ToolCacheService:
                         JOIN tools t ON at.tool_id = t.id
                         WHERE at.is_active = true
                         AND at.is_deleted = false
+                        AND (at.status = 'granted' OR at.status IS NULL)
                         AND t.is_active = true
                         AND t.is_deleted = false
                     """)
@@ -183,6 +184,7 @@ class ToolCacheService:
                         WHERE at.agent_id = %s
                         AND at.is_active = true
                         AND at.is_deleted = false
+                        AND (at.status = 'granted' OR at.status IS NULL)
                         AND t.is_active = true
                         AND t.is_deleted = false
                     """, (agent_id,))

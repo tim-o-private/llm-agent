@@ -32,6 +32,7 @@ class WorkflowRunManager:
         llm_client: Any,
         tool_schemas: list[dict],
         tool_executors: dict[str, Callable[..., Coroutine[Any, Any, str]]],
+        service_registry: dict[str, Callable[..., Coroutine[Any, Any, str]]] | None = None,
     ):
         self._db = db_client
         self._llm_client = llm_client
@@ -40,10 +41,10 @@ class WorkflowRunManager:
         self._active_tasks: dict[str, asyncio.Task] = {}
         self._builder = GraphBuilder()
 
-        # Service node handlers for templates that use Python service steps
-        from .nodes.deliver_briefing import deliver_briefing
+        from .services import DEFAULT_SERVICE_REGISTRY
 
-        self._builder.register_service("deliver", deliver_briefing)
+        for name, handler in (service_registry or DEFAULT_SERVICE_REGISTRY).items():
+            self._builder.register_service(name, handler)
 
     async def start_run(
         self,

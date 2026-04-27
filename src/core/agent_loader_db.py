@@ -218,6 +218,11 @@ def load_tools_from_db(
     """
     tools: List[Any] = []
     for tool_row in tools_data:
+        if "status" in tool_row and tool_row["status"] not in ("granted", None):
+            logger.warning(
+                f"Skipping tool '{tool_row.get('name')}' because status is '{tool_row['status']}' (not granted)."
+            )
+            continue
         db_tool_type_str = str(tool_row["type"]) # 'type' column from agent_tools table
         db_tool_config_json = tool_row.get("config") or {} # JSONB 'config' column from agent_tools
 
