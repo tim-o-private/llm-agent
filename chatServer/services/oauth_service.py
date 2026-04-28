@@ -176,18 +176,7 @@ class OAuthService:
                     error_message="Maximum of 5 Gmail accounts reached. Please disconnect one first."
                 )
 
-            # 7. Check for duplicate
-            duplicate = self.supabase.table("external_api_connections").select("id").eq(
-                "user_id", user_id
-            ).eq("service_name", "gmail").eq("service_user_id", google_sub).execute()
-
-            if duplicate.data:
-                return OAuthResult(
-                    status="error",
-                    error_message=f"Gmail account {google_email} is already connected."
-                )
-
-            # 8. Store tokens via RPC
+            # 7. Store tokens via RPC (upserts if account already connected — refreshes tokens)
             expires_at_str = None
             if token_data.get("expires_in"):
                 from datetime import timedelta
@@ -370,18 +359,7 @@ class OAuthService:
                     error_message="Maximum of 5 Calendar accounts reached. Please disconnect one first."
                 )
 
-            # Check for duplicate
-            duplicate = self.supabase.table("external_api_connections").select("id").eq(
-                "user_id", user_id
-            ).eq("service_name", "google_calendar").eq("service_user_id", google_sub).execute()
-
-            if duplicate.data:
-                return OAuthResult(
-                    status="error",
-                    error_message=f"Calendar account {google_email} is already connected."
-                )
-
-            # Store tokens
+            # Store tokens (upserts if account already connected — refreshes tokens)
             expires_at_str = None
             if token_data.get("expires_in"):
                 from datetime import timedelta
