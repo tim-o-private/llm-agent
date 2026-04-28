@@ -107,8 +107,13 @@ async def deep_agent_stream_to_sse(
 
             if tool_calls:
                 for tc in tool_calls:
-                    name = tc.get("name", "") if isinstance(tc, dict) else ""
-                    tc_id = tc.get("id", "") if isinstance(tc, dict) else ""
+                    if isinstance(tc, dict):
+                        name = tc.get("name", "")
+                        tc_id = tc.get("id", "")
+                    else:
+                        # Handle Pydantic model / dataclass / object with attributes
+                        name = getattr(tc, "name", None) or ""
+                        tc_id = getattr(tc, "id", None) or ""
                     if name:
                         yield _format_sse(StreamEvent(
                             type="tool_start",

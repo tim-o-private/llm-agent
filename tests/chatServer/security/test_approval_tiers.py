@@ -13,9 +13,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-sys.path.insert(0, 'chatServer')
+sys.path.insert(0, "chatServer")
 
 from chatServer.security.approval_tiers import (
+    DEFAULT_UNKNOWN_TIER,
     TOOL_APPROVAL_DEFAULTS,
     ApprovalTier,
     get_effective_tier,
@@ -23,6 +24,26 @@ from chatServer.security.approval_tiers import (
     requires_approval,
     set_user_preference,
 )
+
+
+def _make_db_mock(preference_data=None, tool_tier_data=None):
+    """Create a mock Supabase client with method chaining for both queries."""
+    mock_db = MagicMock()
+
+    # user_tool_preferences query: table(...).select(...).eq(...).eq(...).single().execute()
+    pref_chain = (
+        mock_db.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value
+    )
+    pref_chain.execute = AsyncMock(return_value=MagicMock(data=preference_data))
+
+    # tools query: table(...).select(...).eq(...).single().execute()
+    tool_chain = mock_db.table.return_value.select.return_value.eq.return_value.single.return_value
+    tool_chain.execute = AsyncMock(return_value=MagicMock(data=tool_tier_data))
+
+    # upsert query
+    mock_db.table.return_value.upsert.return_value.execute = AsyncMock(return_value=MagicMock())
+
+    return mock_db
 
 
 class TestApprovalTierEnum:
@@ -59,37 +80,65 @@ class TestToolApprovalDefaults:
 
     def test_memory_tools_are_auto_approve(self):
         memory_tools = [
-            "create_memories", "search_memories", "get_memories",
-            "update_memories", "delete_memories", "set_project",
-            "link_memories", "get_entities", "search_entities", "get_context",
+            "create_memories",
+            "search_memories",
+            "get_memories",
+            "update_memories",
+            "delete_memories",
+            "set_project",
+            "link_memories",
+            "get_entities",
+            "search_entities",
+            "get_context",
         ]
         for tool_name in memory_tools:
             tier, _ = TOOL_APPROVAL_DEFAULTS.get(tool_name, (None, None))
             assert tier == ApprovalTier.AUTO_APPROVE, f"{tool_name} should be auto-approve"
 
+
 class TestGetToolDefaultTier:
-    def test_known_tool(self):
-        tier, default = get_tool_default_tier("search_gmail")
+    @pytest.mark.asyncio
+    async def test_known_tool_no_db_client(self):
+        tier, default = await get_tool_default_tier("search_gmail")
         assert tier == ApprovalTier.AUTO_APPROVE
 
-    def test_unknown_tool_defaults_to_requires_approval(self):
-        tier, default = get_tool_default_tier("unknown_dangerous_tool")
+    @pytest.mark.asyncio
+    async def test_unknown_tool_defaults_to_requires_approval(self):
+        tier, default = await get_tool_default_tier("unknown_dangerous_tool")
         assert tier == ApprovalTier.REQUIRES_APPROVAL
         assert default == ApprovalTier.REQUIRES_APPROVAL
 
+    @pytest.mark.asyncio
+    async def test_db_tier_used_when_available(self):
+        mock_db = _make_db_mock(tool_tier_data={"approval_tier": "auto"})
+        tier, default = await get_tool_default_tier("some_dynamic_tool", mock_db)
+        assert tier == ApprovalTier.AUTO_APPROVE
+        assert default == DEFAULT_UNKNOWN_TIER
+
+    @pytest.mark.asyncio
+    async def test_db_tier_with_known_tool_uses_hardcoded_default(self):
+        mock_db = _make_db_mock(tool_tier_data={"approval_tier": "user_configurable"})
+        tier, default = await get_tool_default_tier("create_tasks", mock_db)
+        assert tier == ApprovalTier.USER_CONFIGURABLE
+        assert default == ApprovalTier.AUTO_APPROVE
+
+    @pytest.mark.asyncio
+    async def test_db_failure_falls_back_to_hardcoded(self):
+        mock_db = MagicMock()
+        mock_db.table.return_value.select.return_value.eq.return_value.single.return_value.execute = AsyncMock(
+            side_effect=Exception("DB error")
+        )
+        tier, default = await get_tool_default_tier("search_gmail", mock_db)
+        assert tier == ApprovalTier.AUTO_APPROVE
+
+    @pytest.mark.asyncio
+    async def test_db_null_tier_falls_back_to_hardcoded(self):
+        mock_db = _make_db_mock(tool_tier_data={"approval_tier": None})
+        tier, default = await get_tool_default_tier("search_gmail", mock_db)
+        assert tier == ApprovalTier.AUTO_APPROVE
+
 
 class TestGetEffectiveTier:
-    @staticmethod
-    def _make_db_mock(execute_data=None):
-        """Create a mock Supabase client with sync chain and async execute."""
-        mock_db = MagicMock()
-        mock_execute = AsyncMock(return_value=MagicMock(data=execute_data))
-        chain = mock_db.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value
-        chain.execute = mock_execute
-        upsert_execute = AsyncMock(return_value=MagicMock())
-        mock_db.table.return_value.upsert.return_value.execute = upsert_execute
-        return mock_db
-
     @pytest.mark.asyncio
     async def test_auto_approve_always_auto(self):
         tier = await get_effective_tier(
@@ -101,7 +150,7 @@ class TestGetEffectiveTier:
 
     @pytest.mark.asyncio
     async def test_user_configurable_with_no_override(self):
-        mock_db = self._make_db_mock(None)
+        mock_db = _make_db_mock()
 
         tier = await get_effective_tier(
             user_id="search_test_user",
@@ -109,12 +158,12 @@ class TestGetEffectiveTier:
             db_client=mock_db,
         )
 
-        _, default = get_tool_default_tier("create_tasks")
+        _, default = await get_tool_default_tier("create_tasks")
         assert tier == default
 
     @pytest.mark.asyncio
     async def test_user_configurable_with_auto_override(self):
-        mock_db = self._make_db_mock({"approval_tier": "auto"})
+        mock_db = _make_db_mock(preference_data={"approval_tier": "auto"})
 
         tier = await get_effective_tier(
             user_id="search_test_user",
@@ -126,7 +175,7 @@ class TestGetEffectiveTier:
 
     @pytest.mark.asyncio
     async def test_user_configurable_with_requires_approval_override(self):
-        mock_db = self._make_db_mock({"approval_tier": "requires_approval"})
+        mock_db = _make_db_mock(preference_data={"approval_tier": "requires_approval"})
 
         tier = await get_effective_tier(
             user_id="search_test_user",
@@ -149,7 +198,7 @@ class TestGetEffectiveTier:
 class TestSetUserPreference:
     @pytest.mark.asyncio
     async def test_cannot_set_preference_for_auto_approve(self):
-        mock_db = AsyncMock()
+        mock_db = _make_db_mock()
 
         result = await set_user_preference(
             db_client=mock_db,
@@ -162,8 +211,7 @@ class TestSetUserPreference:
 
     @pytest.mark.asyncio
     async def test_can_set_preference_for_user_configurable(self):
-        mock_db = MagicMock()
-        mock_db.table.return_value.upsert.return_value.execute = AsyncMock(return_value=MagicMock())
+        mock_db = _make_db_mock()
 
         result = await set_user_preference(
             db_client=mock_db,
@@ -173,11 +221,11 @@ class TestSetUserPreference:
         )
 
         assert result is True
-        mock_db.table.assert_called_once_with("user_tool_preferences")
+        mock_db.table.assert_any_call("user_tool_preferences")
 
     @pytest.mark.asyncio
     async def test_invalid_preference_rejected(self):
-        mock_db = AsyncMock()
+        mock_db = _make_db_mock()
 
         result = await set_user_preference(
             db_client=mock_db,

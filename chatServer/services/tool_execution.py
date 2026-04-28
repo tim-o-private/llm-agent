@@ -10,6 +10,8 @@ import importlib
 import logging
 from typing import Optional
 
+from ..exceptions import ReauthRequiredError
+
 logger = logging.getLogger(__name__)
 
 # Memory tools require an MCP memory_client that doesn't exist outside
@@ -32,7 +34,7 @@ class ToolExecutionService:
     Executes tools by name outside the LangChain agent loop.
 
     Used by PendingActionsService after user approval. Instantiates tool
-    classes from TOOL_REGISTRY with proper user context.
+    classes from the decorator registry with proper user context.
     """
 
     def __init__(self, db_client):
@@ -49,12 +51,12 @@ class ToolExecutionService:
         Execute a tool by name.
 
         1. Look up tool type + config from `tools` table by name
-        2. Resolve Python class from TOOL_REGISTRY (with GmailTool dynamic import)
+        2. Resolve Python class from decorator registry (with GmailTool dynamic import)
         3. Reject memory tools (need MCP client unavailable here)
         4. Instantiate with user context (no approval wrapper)
         5. Call _arun(**tool_args) directly
         """
-        from src.core.agent_loader_db import TOOL_REGISTRY
+        from chatServer.tools.registry import get_tool_class
 
         from ..config.settings import get_settings
 
@@ -82,7 +84,7 @@ class ToolExecutionService:
             )
 
         # Step 3: Resolve Python class
-        tool_class = TOOL_REGISTRY.get(tool_type)
+        tool_class = get_tool_class(tool_type)
 
         if tool_class is None and tool_type == "GmailTool":
             # GmailTool uses dynamic import from config.tool_class
@@ -101,7 +103,7 @@ class ToolExecutionService:
                 ) from e
         elif tool_class is None:
             raise ToolExecutionError(
-                f"Tool type '{tool_type}' for '{tool_name}' not in TOOL_REGISTRY"
+                f"Tool type '{tool_type}' for '{tool_name}' not in tool registry"
             )
 
         # Step 4: Build constructor kwargs
@@ -130,6 +132,8 @@ class ToolExecutionService:
             result = await tool_instance._arun(**tool_args)
             logger.info(f"Post-approval execution of '{tool_name}' succeeded for user {user_id}")
             return result
+        except ReauthRequiredError:
+            raise
         except Exception as e:
             logger.error(f"Post-approval execution of '{tool_name}' failed: {e}")
             raise ToolExecutionError(

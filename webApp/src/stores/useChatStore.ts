@@ -4,7 +4,8 @@ import { queryClient } from '@/lib/queryClient';
 import { useAuthStore } from '@/features/auth/useAuthStore';
 import { generateNewChatId } from '@/api/hooks/useChatSessionHooks';
 import { useEffect } from 'react';
-import { toast } from '@/components/ui/toast';
+import { toast, ToastAction } from '@/components/ui/toast';
+import React from 'react';
 import { v4 as uuidv4 } from 'uuid'; // For client-side message IDs
 import type { ChatScope } from '@/api/types/chat';
 
@@ -17,6 +18,15 @@ export interface ChatMessage {
   tool_name?: string;
   tool_input?: Record<string, unknown>;
   tool_calls?: Array<{ id: string; name: string }>;
+  /**
+   * Interleaved content parts for assistant-ui ThreadMessageLike.
+   * When present, convertMessage uses this directly instead of reconstructing
+   * from text + tool_calls (which loses chronological ordering).
+   */
+  contentParts?: Array<
+    | { type: 'text'; text: string }
+    | { type: 'tool-call'; toolCallId: string; toolName: string }
+  >;
   // Notification fields (when sender = 'notification' | 'approval')
   notification_id?: string;
   notification_category?: string;
@@ -44,7 +54,7 @@ interface ChatStore {
   triggerWakeup: () => Promise<void>;
 
   addMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>, senderType?: ChatMessage['sender']) => Promise<void>;
-  updateLastAiMessage: (update: Partial<Pick<ChatMessage, 'text' | 'tool_name' | 'tool_calls'>>) => void;
+  updateLastAiMessage: (update: Partial<Pick<ChatMessage, 'text' | 'tool_name' | 'tool_calls' | 'contentParts'>>) => void;
   toggleChatPanel: () => void;
   setChatPanelOpen: (isOpen: boolean) => void;
   setScope: (scope: ChatScope) => void; // SPEC-049
@@ -55,6 +65,7 @@ interface ChatStore {
   startNewConversationAsync: (agentName: string) => Promise<void>;
   switchToConversationAsync: (chatId: string) => Promise<void>;
   refreshMessages: () => Promise<void>;
+  handleReauthError: (error: Error) => void;
 }
 
 const CHAT_ID_LOCAL_STORAGE_PREFIX = 'chatUI_activeChatId';
@@ -328,33 +339,37 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         `Successfully created new session instance in DB. ID: ${newSessionInstanceId}, Chat ID: ${chatIdToUse}`,
       );
 
-      // 5. Load historical messages — prefer React Query cache (populated by prefetch)
+      // 5. Load historical messages — show immediately, don't wait for session_open
       const cached = chatIdToUse
         ? queryClient.getQueryData<ChatMessage[]>([PARSED_MESSAGES_QUERY_KEY, chatIdToUse])
         : undefined;
       const historicalMessages = chatIdToUse ? (cached ?? await loadHistoricalMessages(chatIdToUse)) : [];
 
-      // Session open wakeup — always fires on init; agent decides whether to respond
-      const sessionOpenResult = await callSessionOpen(agentName, chatIdToUse);
-      const messagesToShow = [...historicalMessages];
-      const hasWakeupGreeting = sessionOpenResult && !sessionOpenResult.silent;
-      if (hasWakeupGreeting) {
-        messagesToShow.push({
-          id: uuidv4(),
-          text: sessionOpenResult.response,
-          sender: 'ai' as const,
-          timestamp: new Date(),
-        });
-      }
-
+      // Render history immediately so the user sees their conversation
       set({
         activeChatId: chatIdToUse,
         currentSessionInstanceId: newSessionInstanceId,
         currentAgentName: agentName,
-        messages: messagesToShow,
+        messages: historicalMessages,
         lastWakeupAt: Date.now(),
-        // Always open panel on session init — show history + any new greeting
         isChatPanelOpen: true,
+      });
+
+      // 6. Session open wakeup — runs in background, appends greeting if any
+      callSessionOpen(agentName, chatIdToUse).then((sessionOpenResult) => {
+        if (sessionOpenResult && !sessionOpenResult.silent) {
+          const { messages: currentMessages } = get();
+          set({
+            messages: [...currentMessages, {
+              id: uuidv4(),
+              text: sessionOpenResult.response,
+              sender: 'ai' as const,
+              timestamp: new Date(),
+            }],
+          });
+        }
+      }).catch((err) => {
+        console.warn('session_open failed (non-fatal):', err);
       });
       console.log(
         `Chat store initialized. Agent: ${agentName}, Active Chat ID: ${chatIdToUse}, Session Instance ID: ${newSessionInstanceId}, Historical messages: ${historicalMessages.length}`,
@@ -573,6 +588,39 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     } catch (error) {
       console.error('Error refreshing messages:', error);
     }
+  },
+
+  handleReauthError: (error: Error) => {
+    const reauthMatch = error.message.match(/^\[REAUTH_REQUIRED:([^\]]+)\]\s*(.*)$/);
+    if (!reauthMatch) return;
+
+    const service = reauthMatch[1];
+    const message = reauthMatch[2] || `Please reconnect your ${service} account in Settings > Integrations.`;
+    const displayService = service === 'google_calendar' ? 'Google Calendar' : service.charAt(0).toUpperCase() + service.slice(1);
+
+    // Show toast with action button
+    toast.error(
+      `Your ${displayService} connection expired.`,
+      message,
+      {
+        action: React.createElement(
+          ToastAction,
+          { altText: 'Go to Settings', onClick: () => { window.location.href = '/settings'; } },
+          'Go to Settings',
+        ) as unknown as React.ReactElement<typeof ToastAction>,
+        duration: 10000,
+      },
+    );
+
+    // Add a system notification message to the chat
+    const { messages } = get();
+    const notificationMessage: ChatMessage = {
+      id: uuidv4(),
+      text: `Your ${displayService} connection expired. [Reconnect in Settings](/settings)`,
+      sender: 'notification',
+      timestamp: new Date(),
+    };
+    set({ messages: [...messages, notificationMessage] });
   },
 }));
 

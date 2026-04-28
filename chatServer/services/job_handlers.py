@@ -5,6 +5,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable, Tuple
 
 from ..database.supabase_client import create_system_client
+from ..services.tool_resolver_service import resolve_tools_for_agent
+from ..workflows.services import DEFAULT_SERVICE_REGISTRY
 
 logger = logging.getLogger(__name__)
 
@@ -106,14 +108,17 @@ async def handle_workflow(job: dict) -> dict:
 
     db_client = await create_system_client()
 
+    tool_schemas, tool_executors, _ = await resolve_tools_for_agent(user_id, "assistant")
+
     # Use dispatch_workflow which handles all the setup
     result_msg = await dispatch_workflow(
         args={"workflow_name": template_name, "parameters": parameters},
         user_id=user_id,
         db_client=db_client,
         llm_client=_get_llm_client_for_workflow(),
-        tool_schemas=[],
-        tool_executors={},
+        tool_schemas=tool_schemas,
+        tool_executors=tool_executors,
+        service_registry=DEFAULT_SERVICE_REGISTRY,
     )
 
     if "Failed" in result_msg or "Error" in result_msg or "Unknown" in result_msg:
@@ -178,13 +183,16 @@ async def _run_scheduled_workflow(
             max_retries=2,
         )
 
+    tool_schemas, tool_executors, _ = await resolve_tools_for_agent(user_id, "assistant")
+
     result_msg = await dispatch_workflow(
         args={"workflow_name": workflow_name, "parameters": build_parameters(user_id, prefs)},
         user_id=user_id,
         db_client=db_client,
         llm_client=_get_llm_client_for_workflow(),
-        tool_schemas=[],
-        tool_executors={},
+        tool_schemas=tool_schemas,
+        tool_executors=tool_executors,
+        service_registry=DEFAULT_SERVICE_REGISTRY,
     )
 
     if any(keyword in result_msg for keyword in failure_keywords):

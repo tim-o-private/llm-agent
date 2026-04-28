@@ -100,25 +100,38 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ agentId: agentIdProp, scop
           metadata: { custom: { ...msg } },
         };
       }
-      if (!msg.tool_calls?.length) {
+      // Use pre-built contentParts when available (preserves chronological order
+      // of text and tool calls from the SSE stream).
+      if (msg.contentParts?.length) {
         return {
           role: msg.sender === 'user' ? 'user' : 'assistant',
-          content: msg.text || '',
+          content: msg.contentParts as ThreadMessageLike['content'],
           id: msg.id,
           createdAt: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
           metadata: { custom: { ...msg } },
         };
       }
-      const parts: ThreadMessageLike['content'] & unknown[] = [];
-      if (msg.text) {
-        parts.push({ type: 'text' as const, text: msg.text });
-      }
-      for (const tc of msg.tool_calls) {
-        parts.push({ type: 'tool-call' as const, toolCallId: tc.id, toolName: tc.name });
+      // Fallback for historical messages loaded without contentParts:
+      // reconstruct from text + tool_calls (all text first, then all tools).
+      if (msg.tool_calls?.length) {
+        const parts: ThreadMessageLike['content'] & unknown[] = [];
+        if (msg.text) {
+          parts.push({ type: 'text' as const, text: msg.text });
+        }
+        for (const tc of msg.tool_calls) {
+          parts.push({ type: 'tool-call' as const, toolCallId: tc.id, toolName: tc.name });
+        }
+        return {
+          role: 'assistant' as const,
+          content: parts,
+          id: msg.id,
+          createdAt: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
+          metadata: { custom: { ...msg } },
+        };
       }
       return {
-        role: 'assistant' as const,
-        content: parts,
+        role: msg.sender === 'user' ? 'user' : 'assistant',
+        content: msg.text || '',
         id: msg.id,
         createdAt: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
         metadata: { custom: { ...msg } },
@@ -180,12 +193,19 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ agentId: agentIdProp, scop
         let buffer = '';
         let accumulated = '';
         const toolCalls: Array<{ id: string; name: string }> = [];
+        const contentParts: Array<
+          | { type: 'text'; text: string }
+          | { type: 'tool-call'; toolCallId: string; toolName: string }
+        > = [];
         let textDirty = false;
         let rafId = 0;
 
         const flushText = () => {
           if (textDirty) {
-            updateLastAiMessage({ text: accumulated });
+            updateLastAiMessage({
+              text: accumulated,
+              contentParts: [...contentParts, ...(accumulated ? [{ type: 'text' as const, text: accumulated }] : [])],
+            });
             textDirty = false;
           }
         };
@@ -211,12 +231,27 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ agentId: agentIdProp, scop
                   }
                 } else if (payload.type === 'tool_start' && payload.tool_name) {
                   flushText();
-                  toolCalls.push({ id: payload.tool_call_id || `tc_${toolCalls.length}`, name: payload.tool_name });
-                  updateLastAiMessage({ tool_calls: [...toolCalls] });
+                  // Finalize pre-tool text as a content part
+                  if (accumulated) {
+                    contentParts.push({ type: 'text', text: accumulated });
+                    accumulated = '';
+                  }
+                  const tcId = payload.tool_call_id || `tc_${toolCalls.length}`;
+                  toolCalls.push({ id: tcId, name: payload.tool_name });
+                  contentParts.push({ type: 'tool-call', toolCallId: tcId, toolName: payload.tool_name });
+                  updateLastAiMessage({
+                    tool_calls: [...toolCalls],
+                    contentParts: [...contentParts],
+                  });
                 } else if (payload.type === 'error') {
                   accumulated += `\n\n*Error: ${payload.message}*`;
                   textDirty = true;
                   flushText();
+                  if (payload.error_type === 'reauth_required') {
+                    useChatStore.getState().handleReauthError(
+                      new Error(`[REAUTH_REQUIRED:${payload.service}] ${payload.message}`),
+                    );
+                  }
                 }
               } catch { /* malformed SSE line */ }
             }

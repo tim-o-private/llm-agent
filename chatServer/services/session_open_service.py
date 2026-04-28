@@ -194,11 +194,31 @@ class SessionOpenService:
             last_message_at=last_message_at,
         )
 
+        # Pre-warm the "web" channel agent in the background so the first
+        # chat message doesn't pay the cold-build cost again.
+        asyncio.create_task(self._warm_web_agent(user_id, agent_name, session_id))
+
         # AC-32: empty history for session_open
         messages = [{"role": "user", "content": trigger_prompt}]
         config = {"configurable": {"thread_id": session_id}}
         result = await agent.ainvoke({"messages": messages}, config=config)
         return extract_agent_response(result)
+
+    @staticmethod
+    async def _warm_web_agent(user_id: str, agent_name: str, session_id: str) -> None:
+        """Fire-and-forget warm-up of the web channel agent cache."""
+        try:
+            from ..services.deep_agent_builder import build_deep_agent
+
+            await build_deep_agent(
+                user_id=user_id,
+                agent_name=agent_name,
+                session_id=session_id,
+                channel="web",
+            )
+            logger.debug("Pre-warmed web agent for user %s", user_id)
+        except Exception as e:
+            logger.warning("Web agent pre-warm failed (non-fatal): %s", e)
 
     async def _persist_ai_message(self, session_id: str, content: str) -> None:
         """Persist AI opening message."""

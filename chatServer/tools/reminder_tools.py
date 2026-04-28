@@ -11,8 +11,9 @@ from typing import Optional, Type
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
-logger = logging.getLogger(__name__)
+from .registry import register_tool_type
 
+logger = logging.getLogger(__name__)
 
 # --- GetRemindersTool ---
 
@@ -23,6 +24,7 @@ class GetRemindersInput(BaseModel):
     limit: int = Field(default=10, ge=1, le=50, description="Maximum number of reminders to return (1-50)")
 
 
+@register_tool_type("GetRemindersTool")
 class GetRemindersTool(BaseTool):
     """Get reminders for the user. Optionally filter by ID for a single reminder."""
 
@@ -121,6 +123,7 @@ class CreateRemindersInput(BaseModel):
     )
 
 
+@register_tool_type("CreateRemindersTool")
 class CreateRemindersTool(BaseTool):
     """Create one or more reminders for the user."""
 
@@ -202,6 +205,7 @@ class DeleteRemindersInput(BaseModel):
     ids: list[str] = Field(..., description="List of reminder IDs to delete")
 
 
+@register_tool_type("DeleteRemindersTool")
 class DeleteRemindersTool(BaseTool):
     """Delete (cancel) one or more reminders."""
 

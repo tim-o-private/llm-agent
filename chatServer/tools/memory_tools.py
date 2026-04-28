@@ -10,11 +10,12 @@ from typing import Any, Type
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
+from .registry import register_tool_type
+
 logger = logging.getLogger(__name__)
 
-
 # ---------------------------------------------------------------------------
-# Base class — all memory tools share this pattern
+# Base class -- all memory tools share this pattern
 # ---------------------------------------------------------------------------
 
 class _MemoryToolBase(BaseTool):
@@ -122,6 +123,7 @@ class EmptyInput(BaseModel):
 # Tools
 # ---------------------------------------------------------------------------
 
+@register_tool_type("CreateMemoriesTool")
 class CreateMemoriesTool(_MemoryToolBase):
     """Store a memory about the user or a project."""
 
@@ -167,6 +169,7 @@ class CreateMemoriesTool(_MemoryToolBase):
             return f"Error in {self.name}: {e}"
 
 
+@register_tool_type("SearchMemoriesTool")
 class SearchMemoriesTool(_MemoryToolBase):
     """Search memories relevant to a query with optional filtering."""
 
@@ -196,6 +199,7 @@ class SearchMemoriesTool(_MemoryToolBase):
             return f"Error in {self.name}: {e}"
 
 
+@register_tool_type("GetMemoriesTool")
 class GetMemoriesTool(_MemoryToolBase):
     """Fetch a specific memory by ID."""
 
@@ -208,6 +212,7 @@ class GetMemoriesTool(_MemoryToolBase):
         return await self._call_mcp({"id": id})
 
 
+@register_tool_type("DeleteMemoriesTool")
 class DeleteMemoriesTool(_MemoryToolBase):
     """Soft-delete a memory by ID."""
 
@@ -223,6 +228,7 @@ class DeleteMemoriesTool(_MemoryToolBase):
         return await self._call_mcp({"memory_id": memory_id})
 
 
+@register_tool_type("UpdateMemoriesTool")
 class UpdateMemoriesTool(_MemoryToolBase):
     """Update an existing memory's text and/or metadata."""
 
@@ -264,6 +270,7 @@ class UpdateMemoriesTool(_MemoryToolBase):
             return f"Error in {self.name}: {e}"
 
 
+@register_tool_type("SetProjectTool")
 class SetProjectTool(_MemoryToolBase):
     """Validate or create a project scope."""
 
@@ -276,6 +283,7 @@ class SetProjectTool(_MemoryToolBase):
         return await self._call_mcp({"project": project})
 
 
+@register_tool_type("LinkMemoriesTool")
 class LinkMemoriesTool(_MemoryToolBase):
     """Create a relationship between two memories."""
 
@@ -291,6 +299,7 @@ class LinkMemoriesTool(_MemoryToolBase):
         return await self._call_mcp({"memory_id": memory_id, "related_id": related_id, "relation_type": relation_type})
 
 
+@register_tool_type("GetEntitiesTool")
 class GetEntitiesTool(_MemoryToolBase):
     """List all known entities."""
 
@@ -314,6 +323,7 @@ class GetEntitiesTool(_MemoryToolBase):
             return f"Error in {self.name}: {e}"
 
 
+@register_tool_type("SearchEntitiesTool")
 class SearchEntitiesTool(_MemoryToolBase):
     """Fuzzy search for entity names."""
 
@@ -326,6 +336,7 @@ class SearchEntitiesTool(_MemoryToolBase):
         return await self._call_mcp({"query": query, "limit": limit})
 
 
+@register_tool_type("GetContextTool")
 class GetContextTool(_MemoryToolBase):
     """Get environment context info."""
 

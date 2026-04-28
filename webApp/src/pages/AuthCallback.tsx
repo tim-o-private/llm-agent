@@ -1,7 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { supabase } from '@/lib/supabaseClient';
-import { useStoreTokens } from '@/api/hooks/useExternalConnectionsHooks';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { CheckCircle, AlertCircle, Loader2, Mail, ArrowLeft } from 'lucide-react';
@@ -25,8 +23,6 @@ export const AuthCallback: React.FC = () => {
   });
   const hasProcessedRef = useRef(false);
 
-  const storeTokensMutation = useStoreTokens();
-
   useEffect(() => {
     // Ref guard survives React StrictMode double-effect (state doesn't)
     if (hasProcessedRef.current) return;
@@ -40,7 +36,6 @@ export const AuthCallback: React.FC = () => {
 
     try {
       const service = searchParams.get('service');
-      const source = searchParams.get('source');
       const callbackStatus = searchParams.get('status');
       const errorMessage = searchParams.get('error_message');
 
@@ -49,12 +44,13 @@ export const AuthCallback: React.FC = () => {
         message: 'Verifying authentication...',
       }));
 
-      // Handle standalone OAuth callback (additional Gmail accounts via backend flow)
-      if (service === 'gmail' && source === 'standalone') {
+      // Handle backend OAuth callback (Gmail, Calendar — all via standalone flow)
+      if (service === 'gmail' || service === 'google_calendar') {
+        const displayService = service === 'google_calendar' ? 'Calendar' : 'Gmail';
         setStatus((prev) => ({
           ...prev,
-          message: 'Processing Gmail account connection...',
-          service: 'gmail',
+          message: `Processing ${displayService} account connection...`,
+          service,
         }));
 
         if (callbackStatus === 'success') {
@@ -62,94 +58,17 @@ export const AuthCallback: React.FC = () => {
             isProcessing: false,
             isComplete: true,
             isError: false,
-            message: 'Gmail account connected successfully!',
-            service: 'gmail',
+            message: `${displayService} account connected successfully!`,
+            service,
           });
         } else {
           throw new Error(
             errorMessage
               ? decodeURIComponent(errorMessage)
-              : 'Failed to connect Gmail account. Please try again.'
+              : `Failed to connect ${displayService} account. Please try again.`
           );
         }
 
-        setTimeout(() => {
-          navigate('/today');
-        }, 2000);
-
-        return;
-      }
-
-      // Handle Gmail OAuth callback (first account via Supabase OAuth)
-      if (service === 'gmail') {
-        setStatus((prev) => ({
-          ...prev,
-          message: 'Processing Gmail authentication...',
-          service: 'gmail',
-        }));
-
-        // First, let Supabase handle the OAuth callback
-        const { error } = await supabase.auth.getSession();
-
-        if (error) {
-          throw new Error(`Session error: ${error.message}`);
-        }
-
-        // Wait a moment for the session to be fully established
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-
-        // Get the updated session
-        const {
-          data: { session },
-          error: sessionError,
-        } = await supabase.auth.getSession();
-
-        if (sessionError) {
-          throw new Error(`Session error: ${sessionError.message}`);
-        }
-
-        if (!session) {
-          throw new Error('No authentication session found');
-        }
-
-        console.log('Session data:', {
-          hasProviderToken: !!session.provider_token,
-          hasProviderRefreshToken: !!session.provider_refresh_token,
-          expiresAt: session.expires_at,
-          userEmail: session.user?.email,
-          providerId: session.user?.user_metadata?.provider_id,
-        });
-
-        // Check if we have provider tokens
-        if (!session.provider_token) {
-          throw new Error('No Gmail access token received from Google. Please try connecting again.');
-        }
-
-        setStatus((prev) => ({
-          ...prev,
-          message: 'Storing Gmail tokens securely...',
-        }));
-
-        // Store Gmail tokens using RPC function
-        await storeTokensMutation.mutateAsync({
-          serviceName: 'gmail',
-          accessToken: session.provider_token,
-          refreshToken: session.provider_refresh_token || undefined,
-          expiresAt: session.expires_at ? new Date(session.expires_at * 1000) : undefined,
-          scopes: ['https://www.googleapis.com/auth/gmail.readonly'],
-          serviceUserId: session.user?.user_metadata?.provider_id || undefined,
-          serviceUserEmail: session.user?.email || undefined,
-        });
-
-        setStatus({
-          isProcessing: false,
-          isComplete: true,
-          isError: false,
-          message: 'Gmail connected successfully! You can now access your email digest.',
-          service: 'gmail',
-        });
-
-        // Redirect to today view after a short delay
         setTimeout(() => {
           navigate('/today');
         }, 2000);

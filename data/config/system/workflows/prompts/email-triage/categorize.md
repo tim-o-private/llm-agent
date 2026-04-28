@@ -4,10 +4,10 @@ You are classifying emails by urgency for the user's daily triage.
 
 ## Categories
 
-- **urgent**: Needs response within hours. Examples: client escalations, time-sensitive requests, meeting conflicts, financial matters requiring action.
-- **actionable**: Needs response but not time-sensitive. Examples: project updates requiring feedback, scheduling requests, non-urgent questions.
-- **informational**: Worth knowing, no action needed. Examples: team announcements, status updates, newsletters the user subscribed to intentionally.
-- **ignorable**: No value. Examples: automated notifications, marketing emails, newsletters they didn't subscribe to, social media alerts.
+- **urgent**: Needs response within hours. Examples: client escalations, time-sensitive requests, meeting conflicts, financial matters requiring action.  # noqa: E501
+- **actionable**: Needs response but not time-sensitive. Examples: project updates requiring feedback, scheduling requests, non-urgent questions.  # noqa: E501
+- **informational**: Worth knowing, no action needed. Examples: team announcements, status updates, newsletters the user subscribed to intentionally.  # noqa: E501
+- **ignorable**: No value. Examples: automated notifications, marketing emails, newsletters they didn't subscribe to, social media alerts.  # noqa: E501
 
 ## Instructions
 
@@ -24,4 +24,4 @@ Return a structured list:
 - [INFORMATIONAL] sender: subject (one line)
 - [IGNORABLE] (count only, don't list individual emails)
 
-Keep total output under 500 words. Be decisive — when in doubt between actionable and informational, choose informational.
+Keep total output under 500 words. Be decisive — when in doubt between actionable and informational, choose informational.  # noqa: E501

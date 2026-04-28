@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 import { authHeaders } from '@/lib/apiClient';
 import { toast } from '@/components/ui/toast';
+import { useChatStore } from '@/stores/useChatStore';
 import { sendMessageApi } from './useChatApiHooks';
 
 const ACTIONS_QUERY_KEY = 'actions';
@@ -103,6 +104,7 @@ export function useApproveAction() {
       queryClient.invalidateQueries({ queryKey: [NOTIFICATIONS_QUERY_KEY] });
     },
     onError: (error) => {
+      useChatStore.getState().handleReauthError(error);
       toast.error('Failed to approve action', error.message);
     },
   });
@@ -123,6 +125,7 @@ export function useRejectAction() {
       queryClient.invalidateQueries({ queryKey: [NOTIFICATIONS_QUERY_KEY] });
     },
     onError: (error) => {
+      useChatStore.getState().handleReauthError(error);
       toast.error('Failed to reject action', error.message);
     },
   });
