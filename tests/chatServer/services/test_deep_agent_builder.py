@@ -282,7 +282,6 @@ async def test_build_deep_agent_passes_tools_backend_skills_memory():
 def test_system_prompt_includes_soul():
     prompt = _build_system_prompt(soul="Be deeply helpful.")
     assert "Be deeply helpful." in prompt
-    assert "Soul" in prompt
 
 
 def test_system_prompt_includes_identity():
@@ -291,14 +290,14 @@ def test_system_prompt_includes_identity():
     assert "warm" in prompt
 
 
-def test_system_prompt_includes_channel():
+def test_system_prompt_includes_channel_note():
     prompt = _build_system_prompt(channel="web")
-    assert "Channel" in prompt
+    assert "web app" in prompt.lower() or "markdown" in prompt.lower()
 
 
 def test_system_prompt_includes_time():
     prompt = _build_system_prompt(channel="web")
-    assert "Current Time" in prompt
+    assert "Current time:" in prompt
 
 
 def test_system_prompt_includes_user_instructions():
@@ -308,7 +307,7 @@ def test_system_prompt_includes_user_instructions():
 
 def test_system_prompt_scheduled_mode():
     prompt = _build_system_prompt(channel="scheduled")
-    assert "automated" in prompt.lower() or "scheduled" in prompt.lower()
+    assert "scheduled" in prompt.lower() or "no one" in prompt.lower()
 
 
 def test_system_prompt_heartbeat_mode():
@@ -318,8 +317,7 @@ def test_system_prompt_heartbeat_mode():
 
 def test_system_prompt_session_open_new_user():
     prompt = _build_system_prompt(channel="session_open", user_instructions=None)
-    assert "Session Open" in prompt
-    assert "first time" in prompt.lower()
+    assert "first session" in prompt.lower() or "no prior history" in prompt.lower()
 
 
 def test_system_prompt_telegram_channel():
@@ -329,7 +327,7 @@ def test_system_prompt_telegram_channel():
 
 
 def test_system_prompt_includes_tool_guidance_when_provided():
-    """When tool_guidance is passed in, it appears in the prompt under its own heading."""
+    """When tool_guidance is passed in, it appears in the prompt."""
     guidance = "## Tool Guidance\nTasks: act on them."
     prompt = _build_system_prompt(channel="web", tool_guidance=guidance)
     assert "## Tool Guidance" in prompt
@@ -344,29 +342,19 @@ def test_system_prompt_omits_tool_guidance_when_empty():
     assert "## Tool Guidance" not in prompt2
 
 
-def test_system_prompt_session_open_returning_user_forbids_narration():
-    """Returning-user session_open instructions must tell the agent not to narrate."""
+def test_system_prompt_session_open_returning_user():
+    """Returning-user session_open includes pre-fetched signals and WAKEUP_SILENT protocol."""
     from datetime import timedelta
     lm = datetime.now(timezone.utc) - timedelta(hours=2)
     prompt = _build_system_prompt(
         channel="session_open",
-        user_instructions=None,
+        user_instructions="some instructions",
         last_message_at=lm,
         bootstrap_context="- 1 overdue task: Follow up with Mike",
     )
-    assert "Session Open" in prompt
-    # Must not hand the model a "Decision rules:" checklist to narrate.
-    assert "Decision rules:" not in prompt
-    # Must explicitly forbid narrated reasoning.
-    assert "Do not narrate" in prompt
-    assert "Based on..." in prompt or "Based on" in prompt
-
-
-def test_system_prompt_web_channel_forbids_menu_behavior():
-    """Web channel header must push against chatbot menu behavior."""
-    prompt = _build_system_prompt(channel="web")
-    assert "Don't list capabilities" in prompt
-    assert "Don't narrate" in prompt.lower() or "don't narrate" in prompt.lower()
+    assert "2 hour" in prompt
+    assert "Follow up with Mike" in prompt
+    assert "WAKEUP_SILENT" in prompt
 
 
 # ---------------------------------------------------------------------------
@@ -566,3 +554,80 @@ class TestDetectAgentPhase:
             "## Key Context\n"
         )
         assert _detect_agent_phase(content) == "orientation"
+
+
+# ---------------------------------------------------------------------------
+# File-based prompt loading tests
+# ---------------------------------------------------------------------------
+
+
+class TestPhaseSkillInjection:
+    """Tests for phase-specific skill injection."""
+
+    def test_management_injects_operating_skill(self, tmp_path):
+        """Management phase injects operating skill from file."""
+        skills_dir = tmp_path / "skills" / "operating"
+        skills_dir.mkdir(parents=True)
+        (skills_dir / "SKILL.md").write_text(
+            "---\nname: operating\n---\n\nConnect before you respond."
+        )
+
+        prompt = _build_system_prompt(phase="management", system_dir=tmp_path)
+        assert "Connect before you respond" in prompt
+
+    def test_orientation_injects_bootstrapping_skill(self, tmp_path):
+        """Orientation phase injects bootstrapping skill from file."""
+        skills_dir = tmp_path / "skills" / "bootstrapping"
+        skills_dir.mkdir(parents=True)
+        (skills_dir / "SKILL.md").write_text(
+            "---\nname: bootstrapping\n---\n\nBuild a world model."
+        )
+
+        prompt = _build_system_prompt(phase="orientation", system_dir=tmp_path)
+        assert "Build a world model" in prompt
+
+    def test_orientation_does_not_include_operating(self, tmp_path):
+        """Orientation phase does not inject operating skill."""
+        for name in ("bootstrapping", "operating"):
+            d = tmp_path / "skills" / name
+            d.mkdir(parents=True)
+            (d / "SKILL.md").write_text(f"---\nname: {name}\n---\n\n{name} content.")
+
+        prompt = _build_system_prompt(phase="orientation", system_dir=tmp_path)
+        assert "bootstrapping content" in prompt
+        assert "operating content" not in prompt
+
+    def test_no_skill_injection_without_system_dir(self):
+        """Without system_dir, no skills are injected (no crash)."""
+        prompt = _build_system_prompt(phase="management", system_dir=None)
+        assert prompt  # still produces something
+
+    def test_session_open_new_user(self):
+        """New user session_open includes 'first session' marker."""
+        prompt = _build_system_prompt(
+            channel="session_open", user_instructions=None,
+        )
+        assert "first session" in prompt.lower() or "no prior history" in prompt.lower()
+
+    def test_session_open_returning_user(self):
+        """Returning user session_open includes signals and WAKEUP_SILENT."""
+        from datetime import timedelta
+        lm = datetime.now(timezone.utc) - timedelta(hours=3)
+        prompt = _build_system_prompt(
+            channel="session_open",
+            user_instructions="yes",
+            last_message_at=lm,
+            bootstrap_context="2 overdue tasks",
+        )
+        assert "3 hour" in prompt
+        assert "2 overdue tasks" in prompt
+        assert "WAKEUP_SILENT" in prompt
+
+    def test_seed_file_reading(self, tmp_path):
+        """_read_system_file reads files and strips frontmatter."""
+        from chatServer.services.deep_agent_builder import _read_system_file
+
+        path = tmp_path / "test.md"
+        path.write_text("---\nname: test\n---\n\nActual content.")
+        assert "Actual content." in _read_system_file(path)
+        assert "name: test" not in _read_system_file(path)

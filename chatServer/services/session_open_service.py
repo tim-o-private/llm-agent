@@ -124,7 +124,7 @@ class SessionOpenService:
         if is_new_user:
             trigger_prompt = "[SYSTEM: First session. No user message. Begin bootstrap.]"
         else:
-            trigger_prompt = "[SYSTEM: User returned to app. No user message. Check tools and decide whether to greet.]"  # noqa: E501
+            trigger_prompt = "[SYSTEM: User returned to app. No user message. Surface what matters or stay silent.]"  # noqa: E501
 
         try:
             output = await self._invoke_agent(

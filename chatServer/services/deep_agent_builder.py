@@ -59,37 +59,16 @@ _agent_locks: Dict[Tuple[str, str, str], asyncio.Lock] = {}
 # System prompt — always-present identity + runtime context
 # ---------------------------------------------------------------------------
 
-_CHANNEL_HEADERS = {
-    "web": (
-        "User is on the web app. Markdown formatting is supported.\n"
-        "You are mid-conversation with a human who chose to come here. Respond like a person "
-        "with context, not a menu. Don't list capabilities. Don't narrate your reasoning. "
-        "Lead with the answer, the signal, or the action."
-    ),
-    "telegram": (
-        "User is on Telegram. Keep responses under 4096 characters. Use simple markdown "
-        "(bold, italic, code). No tables.\n"
-        "Lead with the answer. Don't list capabilities. Don't narrate reasoning."
-    ),
-    "scheduled": (
-        "Automated scheduled run. No one is waiting.\n"
-        "Do the work thoroughly. Use your tools. Don't ask follow-up questions — make "
-        "reasonable assumptions and note them. The response delivers as a notification, "
-        "so make it self-contained."
-    ),
+_CHANNEL_NOTES = {
+    "web": "User is on the web app. Markdown supported.",
+    "telegram": "User is on Telegram. Max 4096 chars, simple markdown, no tables.",
+    "scheduled": "Automated scheduled run. No one is waiting. Be thorough and self-contained.",
     "heartbeat": (
-        "Automated heartbeat check. No one is waiting.\n"
-        "Review working memory for active plans and open threads. Then check signals: "
-        "calendar (next 4 hours), email (unread from key people), overdue tasks.\n"
-        "- Nothing needs attention → respond exactly HEARTBEAT_OK\n"
-        "- Something does → state the thing and what you'd do, in 2-3 sentences. Be specific.\n"
-        "- Target 3-5 proactive messages per day. Silence is usually correct.\n"
-        "- Never fabricate. If a tool fails, skip that check and note it."
+        "Automated heartbeat. Check working memory + signals (calendar, tasks, email).\n"
+        "Nothing needs attention → respond HEARTBEAT_OK\n"
+        "Something does → state it and what you'd do, in 2-3 sentences."
     ),
-    "session_open": (
-        "The user just returned to the app. No message typed yet — you're deciding whether "
-        "to open. Use the pre-fetched signals below."
-    ),
+    "session_open": "User just returned to the app. No message typed yet.",
 }
 
 
@@ -214,71 +193,51 @@ def _build_system_prompt(
     tool_guidance: str | None = None,
     scope_context: str | None = None,
 ) -> str:
-    """Assemble the full system prompt with always-present identity + runtime context.
-
-    Includes:
-    - Soul (personality, values, operating model)
-    - Identity (name, description, vibe)
-    - Orientation guidance (auto-injected when phase="orientation")
-    - Channel-specific guidance
-    - Current time
-    - User custom instructions
-    - Tool guidance (per-tool prompt_section content, collected from instantiated tools)
-    - Workflow creation mandate
-    - Session/onboarding flow
+    """Assemble the system prompt: soul + phase skill + runtime context.
 
     Memory (AGENTS.md) is handled separately by MemoryMiddleware.
     Skills are handled separately by SkillsMiddleware.
     """
     sections: list[str] = []
 
+    # Identity and behavior
     if soul:
-        sections.append(f"## Soul\n{soul}")
+        sections.append(soul)
 
+    # Phase-specific procedure (from skill files)
     if phase == "orientation" and system_dir:
         skill_path = system_dir / "skills" / "bootstrapping" / "SKILL.md"
-        orientation_text = _read_system_file(skill_path)
-        if orientation_text:
-            sections.append(f"## Orientation\n{orientation_text}")
+        text = _read_system_file(skill_path)
+        if text:
+            sections.append(text)
+    elif phase == "management" and system_dir:
+        skill_path = system_dir / "skills" / "operating" / "SKILL.md"
+        text = _read_system_file(skill_path)
+        if text:
+            sections.append(text)
 
+    # Runtime context
     identity_text = _format_identity(identity)
     if identity_text:
-        sections.append(f"## Identity\n{identity_text}")
+        sections.append(identity_text)
 
-    channel_text = _CHANNEL_HEADERS.get(channel, _CHANNEL_HEADERS["web"])
-    sections.append(f"## Channel\n{channel_text}")
+    channel_note = _CHANNEL_NOTES.get(channel, _CHANNEL_NOTES["web"])
+    sections.append(channel_note)
 
-    # SPEC-049: scope context — what the user is currently looking at
     if scope_context:
-        sections.append(f"## Current Context\n{scope_context}")
+        sections.append(scope_context)
 
     now = datetime.now(timezone.utc)
-    time_str = now.strftime("%A, %B %d, %Y %I:%M %p (UTC)")
-    sections.append(f"## Current Time\n{time_str}")
+    sections.append(now.strftime("Current time: %A, %B %d, %Y %I:%M %p UTC"))
 
     if user_instructions:
-        instr = user_instructions[:2000]
-        sections.append(f"## User Instructions\n{instr}")
+        sections.append(f"User instructions: {user_instructions[:2000]}")
 
-    # Per-tool behavioral guidance (operational mandate, not API docs)
     if tool_guidance:
         sections.append(tool_guidance)
 
-    # Workflow + skill creation — you build your own capabilities
-    sections.append(
-        "## Extending Yourself\n"
-        "You can create skills at `/user/skills/{name}/SKILL.md` and workflow templates at "
-        "`/user/workflows/{name}.md`. When you catch yourself following the same multi-step "
-        "pattern twice, write it down — that's how you get better at this job over time. "
-        "Pre-built workflows at `/system/workflows/` (email-triage, morning-briefing, "
-        "evening-briefing, draft-reply) run automatically on schedule; read any of them "
-        "with `read_file` to see the format. You have standing to do this without asking."
-    )
-
     if channel == "session_open":
-        _add_session_open_section(
-            sections, user_instructions, last_message_at, bootstrap_context
-        )
+        _add_session_open_section(sections, user_instructions, last_message_at, bootstrap_context)
 
     return "\n\n".join(sections)
 
@@ -289,18 +248,14 @@ def _add_session_open_section(
     last_message_at: datetime | None = None,
     bootstrap_context: str | None = None,
 ) -> None:
-    """Append the session_open opening block to sections."""
+    """Append session_open runtime data. Behavioral guidance comes from soul + skills."""
     is_new_user = not user_instructions and last_message_at is None
+
     if is_new_user:
-        sections.append(
-            "## Session Open\n"
-            "First time meeting this user. You're opening the conversation.\n"
-            "Introduce yourself in one or two sentences — you're their chief of staff, "
-            "starting from zero. Then ask one real question about their life. No menus. "
-            "No 'how can I help.' Lead with curiosity."
-        )
+        sections.append("First session. No prior history with this user.")
         return
 
+    # Time since last interaction
     if last_message_at:
         lm = last_message_at if last_message_at.tzinfo else last_message_at.replace(tzinfo=timezone.utc)
         elapsed_min = int((datetime.now(timezone.utc) - lm).total_seconds() / 60)
@@ -312,20 +267,13 @@ def _add_session_open_section(
             hrs = elapsed_min // 60
             time_ctx = f"Last interaction {hrs} hour{'s' if hrs > 1 else ''} ago."
     else:
-        time_ctx = "First session opening."
+        time_ctx = "No prior messages in this session."
 
-    ctx = bootstrap_context or "(no bootstrap context)"
+    ctx = bootstrap_context or "(no signals available)"
     sections.append(
-        f"## Session Open\n{time_ctx} No message typed — you're opening.\n\n"
+        f"{time_ctx}\n\n"
         f"Pre-fetched signals:\n{ctx}\n\n"
-        "Open with the single most load-bearing thing in the signals — an overdue task, a "
-        "meeting starting soon, an unread email from a key person, a deadline you know about "
-        "the user hasn't referenced. One sentence of signal, one sentence of what you'd do. "
-        "If nothing qualifies and it's been <30 min since last message, respond exactly "
-        "WAKEUP_SILENT.\n"
-        "Do not narrate the decision. Do not list the checks you ran. Do not preface with "
-        "'Based on...' or 'I notice...'. Lead with the thing. Don't re-call tools to fetch "
-        "what's already above."
+        "If something warrants a greeting, lead with it. Otherwise respond WAKEUP_SILENT."
     )
 
 
@@ -635,11 +583,13 @@ async def _build_agent(
         sync = StorageSync(supabase_url=settings.supabase_url, supabase_key=settings.supabase_service_key, data_dir=data_dir)  # noqa: E501
         await sync.hydrate_user(user_id)
 
-    # Seed AGENTS.md for new users
+    # Seed AGENTS.md for new users — load from file, fall back to constant
+    agent_dir = system_dir / "agents" / agent_name
     agents_md_path = user_dir / "memory" / "AGENTS.md"
     if not agents_md_path.exists():
         agents_md_path.parent.mkdir(parents=True, exist_ok=True)
-        agents_md_path.write_text(_SEED_AGENTS_MD, encoding="utf-8")
+        seed_content = _read_system_file(agent_dir / "seed.md") or _SEED_AGENTS_MD
+        agents_md_path.write_text(seed_content, encoding="utf-8")
         logger.info("Seeded AGENTS.md for user %s", user_id)
 
     # Try BwrapBackend (OS-level isolation), fall back to FilesystemBackend
