@@ -94,101 +94,70 @@ async def test_get_provider_for_account_raises_on_miss(mock_connections):
 
 
 @pytest.mark.asyncio
-async def test_token_refresh_triggered_when_expired():
-    """Credentials should be refreshed when token is near expiry."""
-    expired_token_data = {
-        "connection_id": "conn-1",
-        "service_user_email": "work@gmail.com",
-        "access_token": "ya29.expired",
-        "refresh_token": "1//refresh",
-        "expires_at": (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat(),
-    }
+async def test_get_credentials_delegates_to_credential_service():
+    """GmailToolProvider._get_google_credentials delegates to GoogleCredentialService."""
+    mock_creds = MagicMock()
+    mock_creds.token = "ya29.valid"
 
     provider = GmailToolProvider("user-1", "conn-1")
-    provider._token_data = expired_token_data
 
-    with patch.dict("os.environ", {
-        "GOOGLE_CLIENT_ID": "test-client-id",
-        "GOOGLE_CLIENT_SECRET": "test-client-secret",
-        "SUPABASE_URL": "https://test.supabase.co",
-        "SUPABASE_SERVICE_ROLE_KEY": "test-key",
-    }):
-        with patch("chatServer.tools.gmail_tools.Credentials") as mock_creds_cls:
-            mock_creds = MagicMock()
-            mock_creds.expired = True
-            mock_creds.token = "ya29.refreshed"
-            mock_creds.expiry = datetime.now(timezone.utc) + timedelta(hours=1)
-            mock_creds.refresh_token = "1//refresh"
-            mock_creds_cls.return_value = mock_creds
+    with patch(
+        "chatServer.services.google_credential_service.get_google_credential_service"
+    ) as mock_factory:
+        mock_service = MagicMock()
+        mock_service.get_credentials = AsyncMock(return_value=mock_creds)
+        mock_factory.return_value = mock_service
 
-            with patch("google.auth.transport.requests.Request"):
-                with patch.object(provider, "_update_stored_token", new_callable=AsyncMock) as mock_update:
-                    creds = await provider._get_google_credentials()  # noqa: F841
+        creds = await provider._get_google_credentials()
 
-                    mock_creds.refresh.assert_called_once()
-                    mock_update.assert_called_once_with(
-                        mock_creds.token,
-                        mock_creds.expiry,
-                    )
+    assert creds is mock_creds
+    mock_service.get_credentials.assert_awaited_once_with(
+        user_id="user-1",
+        service_name="gmail",
+        connection_id="conn-1",
+        scopes=["https://www.googleapis.com/auth/gmail.readonly"],
+    )
 
 
 @pytest.mark.asyncio
-async def test_token_refresh_not_triggered_when_valid():
-    """Credentials should NOT be refreshed when token is still valid."""
-    valid_token_data = {
-        "connection_id": "conn-1",
-        "service_user_email": "work@gmail.com",
-        "access_token": "ya29.valid",
-        "refresh_token": "1//refresh",
-        "expires_at": (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
-    }
+async def test_get_credentials_caches_result():
+    """Second call returns cached credentials without calling service again."""
+    mock_creds = MagicMock()
 
     provider = GmailToolProvider("user-1", "conn-1")
-    provider._token_data = valid_token_data
 
-    with patch.dict("os.environ", {
-        "GOOGLE_CLIENT_ID": "test-client-id",
-        "GOOGLE_CLIENT_SECRET": "test-client-secret",
-    }):
-        with patch("chatServer.tools.gmail_tools.Credentials") as mock_creds_cls:
-            mock_creds = MagicMock()
-            mock_creds.expired = False
-            mock_creds_cls.return_value = mock_creds
+    with patch(
+        "chatServer.services.google_credential_service.get_google_credential_service"
+    ) as mock_factory:
+        mock_service = MagicMock()
+        mock_service.get_credentials = AsyncMock(return_value=mock_creds)
+        mock_factory.return_value = mock_service
 
-            creds = await provider._get_google_credentials()  # noqa: F841
+        creds1 = await provider._get_google_credentials()
+        creds2 = await provider._get_google_credentials()
 
-            mock_creds.refresh.assert_not_called()
+    assert creds1 is creds2
+    assert mock_service.get_credentials.await_count == 1
 
 
 @pytest.mark.asyncio
-async def test_token_refresh_no_refresh_token_logs_warning():
-    """Expired token with no refresh token should log warning, not crash."""
-    expired_token_data = {
-        "connection_id": "conn-1",
-        "service_user_email": "work@gmail.com",
-        "access_token": "ya29.expired",
-        "refresh_token": None,
-        "expires_at": (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat(),
-    }
+async def test_get_credentials_propagates_reauth_error():
+    """Expired token with no refresh token raises ReauthRequiredError."""
+    from chatServer.exceptions import ReauthRequiredError
 
     provider = GmailToolProvider("user-1", "conn-1")
-    provider._token_data = expired_token_data
 
-    with patch.dict("os.environ", {
-        "GOOGLE_CLIENT_ID": "test-client-id",
-        "GOOGLE_CLIENT_SECRET": "test-client-secret",
-    }):
-        with patch("chatServer.tools.gmail_tools.Credentials") as mock_creds_cls:
-            mock_creds = MagicMock()
-            mock_creds.expired = True
-            mock_creds.token = "ya29.expired"
-            mock_creds_cls.return_value = mock_creds
+    with patch(
+        "chatServer.services.google_credential_service.get_google_credential_service"
+    ) as mock_factory:
+        mock_service = MagicMock()
+        mock_service.get_credentials = AsyncMock(
+            side_effect=ReauthRequiredError("gmail", "Token expired, no refresh token")
+        )
+        mock_factory.return_value = mock_service
 
-            # Should not crash — returns credentials as-is and logs warning
-            creds = await provider._get_google_credentials()
-
-            mock_creds.refresh.assert_not_called()
-            assert creds is mock_creds
+        with pytest.raises(ReauthRequiredError):
+            await provider._get_google_credentials()
 
 
 # --- GmailSearchTool tests ---
