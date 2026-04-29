@@ -118,9 +118,8 @@ class OpenAIEngine:
                 )
 
             if finish_reason == "tool_calls" and message.tool_calls:
-                messages.append({
+                assistant_msg: dict[str, Any] = {
                     "role": "assistant",
-                    "content": message.content or "",
                     "tool_calls": [
                         {
                             "id": tc.id,
@@ -132,7 +131,10 @@ class OpenAIEngine:
                         }
                         for tc in message.tool_calls
                     ],
-                })
+                }
+                if message.content:
+                    assistant_msg["content"] = message.content
+                messages.append(assistant_msg)
 
                 tool_results = await asyncio.gather(
                     *[self._execute_tool(tc) for tc in message.tool_calls]
@@ -155,7 +157,6 @@ class OpenAIEngine:
                         "role": "tool",
                         "tool_call_id": tc.id,
                         "content": result_str,
-                        "is_error": is_error,
                     })
                 continue
 
