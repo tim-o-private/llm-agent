@@ -345,8 +345,10 @@ def load_tools_from_db(
                 "ListEntitiesTool", "GetContextInfoTool",
             )
             if db_tool_type_str in _memory_tool_types:
-                if memory_client:
-                    tool_constructor_kwargs["memory_client"] = memory_client
+                if not memory_client:
+                    logger.info("Skipping memory tool '%s' — no memory server configured", db_tool_name)
+                    continue
+                tool_constructor_kwargs["memory_client"] = memory_client
                 tool_constructor_kwargs.pop("supabase_url", None)
                 tool_constructor_kwargs.pop("supabase_key", None)
 
