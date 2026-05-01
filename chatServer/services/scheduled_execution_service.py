@@ -13,11 +13,11 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
+from chatServer.config.settings import get_settings
+
 from ..database.supabase_client import create_user_scoped_client
 from ..services.audit_service import AuditService
 from ..services.pending_actions import PendingActionsService
-
-from chatServer.config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,6 @@ class ScheduledExecutionService:
         config = schedule.get("config", {})
         schedule_id = schedule.get("id")
 
-        session_id = f"scheduled_{agent_name}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
         start_time = datetime.now(timezone.utc)
         model_override = config.get("model_override")
 
@@ -60,22 +59,15 @@ class ScheduledExecutionService:
             schedule_type = config.get("schedule_type", "scheduled")
             channel = "heartbeat" if schedule_type == "heartbeat" else "scheduled"
 
+            supabase_client = await create_user_scoped_client(user_id)
+
+            # Use the user's main chat thread so output appears in web + Telegram
+            session_id = await self._resolve_main_thread(supabase_client, user_id, agent_name)
+
             logger.info(
                 f"Executing scheduled agent '{agent_name}' for user {user_id} "
-                f"(schedule {schedule_id}, channel={channel})"
+                f"(schedule {schedule_id}, channel={channel}, thread={session_id})"
             )
-
-            # 2. Create chat_sessions row for this scheduled run
-            supabase_client = await create_user_scoped_client(user_id)
-            await supabase_client.table("chat_sessions").insert(
-                {
-                    "user_id": user_id,
-                    "session_id": session_id,
-                    "channel": "scheduled",
-                    "agent_name": agent_name,
-                    "is_active": True,
-                }
-            ).execute()
 
             # Build effective prompt (heartbeat gets a structured checklist)
             if schedule_type == "heartbeat":
@@ -121,9 +113,9 @@ class ScheduledExecutionService:
                             "source": "heartbeat",
                         }).execute()
                         logger.info(f"Deferred heartbeat finding for {user_id} to next briefing")
-                        # Mark session inactive and return early
+                        # Touch session updated_at for recency tracking
                         await supabase_client.table("chat_sessions").update(
-                            {"is_active": False}
+                            {"updated_at": datetime.now(timezone.utc).isoformat()}
                         ).eq("session_id", session_id).execute()
 
                         # Still store the execution result for audit
@@ -174,29 +166,29 @@ class ScheduledExecutionService:
                 metadata=execution_metadata,
             )
 
-            # 11. Notify user (skip when HEARTBEAT_OK or caller handles its own notification)
+            # 11. Persist output to main thread + notify via Telegram
             skip_notification = config.get("skip_notification", False)
             if is_heartbeat_ok:
                 logger.info(
                     f"Heartbeat OK for '{agent_name}' — suppressing notification"
                 )
-            elif skip_notification:
-                logger.info(
-                    f"Notification suppressed for '{agent_name}' (caller handles notification)"
-                )
             else:
-                await self._notify_user(
-                    supabase_client=supabase_client,
-                    user_id=user_id,
-                    agent_name=agent_name,
-                    result_content=output,
-                    pending_count=pending_count,
-                    config=config,
-                )
+                # Persist as chat message so it appears in web UI
+                await self._persist_to_thread(session_id, output)
 
-            # 12. Mark session inactive after completion
+                if not skip_notification:
+                    await self._notify_user(
+                        supabase_client=supabase_client,
+                        user_id=user_id,
+                        agent_name=agent_name,
+                        result_content=output,
+                        pending_count=pending_count,
+                        config=config,
+                    )
+
+            # Touch session updated_at (don't deactivate — it's the main thread)
             await supabase_client.table("chat_sessions").update(
-                {"is_active": False}
+                {"updated_at": datetime.now(timezone.utc).isoformat()}
             ).eq("session_id", session_id).execute()
 
             logger.info(
@@ -375,3 +367,60 @@ class ScheduledExecutionService:
 
         except Exception as e:
             logger.warning(f"Failed to send notification (non-fatal): {e}")
+
+    async def _resolve_main_thread(
+        self, supabase_client, user_id: str, agent_name: str
+    ) -> str:
+        """Find or create the user's main chat thread.
+
+        Looks for the most recent chat_sessions row with a chat_id.
+        If none exists, creates one. Returns the chat_id (used as
+        session_id / thread_id for the agent).
+        """
+        import uuid
+
+        result = (
+            await supabase_client.table("chat_sessions")
+            .select("chat_id")
+            .eq("user_id", user_id)
+            .not_.is_("chat_id", "null")
+            .order("updated_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+
+        if result.data and result.data[0].get("chat_id"):
+            chat_id = str(result.data[0]["chat_id"])
+            logger.info(f"Scheduled run using main thread {chat_id} for user {user_id}")
+            return chat_id
+
+        chat_id = str(uuid.uuid4())
+        await supabase_client.table("chat_sessions").insert(
+            {
+                "user_id": user_id,
+                "chat_id": chat_id,
+                "session_id": chat_id,
+                "channel": "scheduled",
+                "agent_name": agent_name,
+                "is_active": True,
+            }
+        ).execute()
+        logger.info(f"Created main thread {chat_id} for user {user_id}")
+        return chat_id
+
+    async def _persist_to_thread(self, session_id: str, content: str) -> None:
+        """Persist agent output as a chat message in the main thread."""
+        try:
+            from ..database.connection import get_database_manager
+            from ..services.message_history_adapter import MessageHistoryAdapter
+
+            db_manager = get_database_manager()
+            await db_manager.ensure_initialized()
+            async with db_manager.pool.connection() as pg_conn:
+                await MessageHistoryAdapter.save_messages(
+                    session_id=session_id,
+                    messages=[{"role": "assistant", "content": content}],
+                    pg_connection=pg_conn,
+                )
+        except Exception as e:
+            logger.warning(f"Failed to persist scheduled output to thread (non-fatal): {e}")

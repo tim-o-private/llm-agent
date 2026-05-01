@@ -45,6 +45,17 @@ def _standard_patches():
             new_callable=AsyncMock,
             return_value=("Test response", "test-model"),
         ),
+        "resolve_thread": patch.object(
+            ScheduledExecutionService,
+            "_resolve_main_thread",
+            new_callable=AsyncMock,
+            return_value="main-thread-123",
+        ),
+        "persist_thread": patch.object(
+            ScheduledExecutionService,
+            "_persist_to_thread",
+            new_callable=AsyncMock,
+        ),
         "get_supabase": patch(
             "chatServer.services.scheduled_execution_service.create_user_scoped_client",
             new_callable=AsyncMock,
@@ -67,6 +78,8 @@ async def test_execute_success(service, mock_schedule, mock_supabase):
     patches = _standard_patches()
     with (
         patches["execute_agent"] as mock_exec_v2,
+        patches["resolve_thread"],
+        patches["persist_thread"],
         patches["get_supabase"] as mock_get_sb,
         patches["pending_svc"] as mock_pending_cls,
         patches["audit_svc"],
@@ -125,6 +138,8 @@ async def test_execute_passes_channel_based_on_schedule_type(service, mock_supab
         patches = _standard_patches()
         with (
             patches["execute_agent"] as mock_exec_v2,
+            patches["resolve_thread"],
+            patches["persist_thread"],
             patches["get_supabase"] as mock_get_sb,
             patches["pending_svc"] as mock_pending_cls,
             patches["audit_svc"],
@@ -149,6 +164,8 @@ async def test_execute_does_not_prepend_ltm(service, mock_schedule, mock_supabas
     patches = _standard_patches()
     with (
         patches["execute_agent"] as mock_exec_v2,
+        patches["resolve_thread"],
+        patches["persist_thread"],
         patches["get_supabase"] as mock_get_sb,
         patches["pending_svc"] as mock_pending_cls,
         patches["audit_svc"],
@@ -173,6 +190,8 @@ async def test_execute_error(service, mock_schedule, mock_supabase):
     patches = _standard_patches()
     with (
         patches["execute_agent"] as mock_exec_v2,
+        patches["resolve_thread"],
+        patches["persist_thread"],
         patches["get_supabase"] as mock_get_sb,
         patches["pending_svc"],
         patches["audit_svc"],
@@ -186,12 +205,12 @@ async def test_execute_error(service, mock_schedule, mock_supabase):
     assert result["success"] is False
     assert "Agent not found" in result["error"]
 
-    # Error result stored in DB (second insert; first is chat_sessions row)
-    insert_call = mock_supabase.table.return_value.insert
-    assert insert_call.call_count == 2
-    stored_data = insert_call.call_args_list[1][0][0]
-    assert stored_data["status"] == "error"
-    assert "Agent not found" in stored_data["result_content"]
+    # Error result stored in DB
+    mock_supabase.table.assert_any_call("agent_execution_results")
+    insert_calls = mock_supabase.table.return_value.insert.call_args_list
+    error_inserts = [c for c in insert_calls if isinstance(c[0][0], dict) and c[0][0].get("status") == "error"]
+    assert len(error_inserts) == 1
+    assert "Agent not found" in error_inserts[0][0][0]["result_content"]
 
 
 @pytest.mark.asyncio
@@ -207,6 +226,8 @@ async def test_execute_normalizes_content_blocks(service, mock_schedule, mock_su
     )
     with (
         patches["execute_agent"],
+        patches["resolve_thread"],
+        patches["persist_thread"],
         patches["get_supabase"] as mock_get_sb,
         patches["pending_svc"] as mock_pending_cls,
         patches["audit_svc"],
@@ -230,6 +251,8 @@ async def test_execute_stores_duration_ms(service, mock_schedule, mock_supabase)
     patches = _standard_patches()
     with (
         patches["execute_agent"],
+        patches["resolve_thread"],
+        patches["persist_thread"],
         patches["get_supabase"] as mock_get_sb,
         patches["pending_svc"] as mock_pending_cls,
         patches["audit_svc"],
@@ -261,6 +284,8 @@ async def test_execute_truncates_result_at_50000_chars(service, mock_schedule, m
     )
     with (
         patches["execute_agent"],
+        patches["resolve_thread"],
+        patches["persist_thread"],
         patches["get_supabase"] as mock_get_sb,
         patches["pending_svc"] as mock_pending_cls,
         patches["audit_svc"],
@@ -278,42 +303,19 @@ async def test_execute_truncates_result_at_50000_chars(service, mock_schedule, m
 
 
 @pytest.mark.asyncio
-async def test_execute_creates_chat_session(service, mock_schedule):
-    """Execute should insert a chat_sessions row with channel='scheduled'."""
-    chat_sessions_insert = MagicMock()
-    chat_sessions_insert.execute = AsyncMock(return_value=MagicMock(data=[]))
-    chat_sessions_update_chain = MagicMock()
-    chat_sessions_update_chain.eq.return_value = chat_sessions_update_chain
-    chat_sessions_update_chain.execute = AsyncMock(return_value=MagicMock(data=[]))
-    chat_sessions_mock = MagicMock()
-    chat_sessions_mock.insert.return_value = chat_sessions_insert
-    chat_sessions_mock.update.return_value = chat_sessions_update_chain
-
-    results_insert = MagicMock()
-    results_insert.execute = AsyncMock(return_value=MagicMock(data=[{"id": "result-1"}]))
-    results_mock = MagicMock()
-    results_mock.insert.return_value = results_insert
-
-    supabase_client = MagicMock()
-
-    def table_side_effect(table_name):
-        if table_name == "chat_sessions":
-            return chat_sessions_mock
-        elif table_name == "agent_execution_results":
-            return results_mock
-        return MagicMock()
-
-    supabase_client.table.side_effect = table_side_effect
-
+async def test_execute_resolves_main_thread(service, mock_schedule, mock_supabase):
+    """Execute should use _resolve_main_thread to find the user's main chat thread."""
     patches = _standard_patches()
     with (
         patches["execute_agent"],
+        patches["resolve_thread"] as mock_resolve,
+        patches["persist_thread"],
         patches["get_supabase"] as mock_get_sb,
         patches["pending_svc"] as mock_pending_cls,
         patches["audit_svc"],
         patches["notification_svc"] as mock_notif_cls,
     ):
-        mock_get_sb.return_value = supabase_client
+        mock_get_sb.return_value = mock_supabase
         mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
         mock_notif_cls.return_value.notify_user = AsyncMock()
         mock_notif_cls.return_value.notify_pending_actions = AsyncMock()
@@ -321,64 +323,37 @@ async def test_execute_creates_chat_session(service, mock_schedule):
         result = await service.execute(mock_schedule)
 
     assert result["success"] is True
-
-    chat_sessions_mock.insert.assert_called_once()
-    session_data = chat_sessions_mock.insert.call_args[0][0]
-    assert session_data["user_id"] == "user-123"
-    assert session_data["channel"] == "scheduled"
-    assert session_data["agent_name"] == "assistant"
-    assert session_data["is_active"] is True
-    assert session_data["session_id"].startswith("scheduled_assistant_")
+    mock_resolve.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_execute_marks_session_inactive_after_completion(service, mock_schedule):
-    """After successful execution, the session should be marked is_active=False."""
-    chat_sessions_insert = MagicMock()
-    chat_sessions_insert.execute = AsyncMock(return_value=MagicMock(data=[]))
-    chat_sessions_update_chain = MagicMock()
-    chat_sessions_update_chain.eq.return_value = chat_sessions_update_chain
-    chat_sessions_update_chain.execute = AsyncMock(return_value=MagicMock(data=[]))
-    chat_sessions_mock = MagicMock()
-    chat_sessions_mock.insert.return_value = chat_sessions_insert
-    chat_sessions_mock.update.return_value = chat_sessions_update_chain
-
-    results_insert = MagicMock()
-    results_insert.execute = AsyncMock(return_value=MagicMock(data=[{"id": "result-1"}]))
-    results_mock = MagicMock()
-    results_mock.insert.return_value = results_insert
-
-    supabase_client = MagicMock()
-
-    def table_side_effect(table_name):
-        if table_name == "chat_sessions":
-            return chat_sessions_mock
-        elif table_name == "agent_execution_results":
-            return results_mock
-        return MagicMock()
-
-    supabase_client.table.side_effect = table_side_effect
-
+async def test_execute_persists_output_to_thread(service, mock_supabase):
+    """Non-heartbeat-OK output should be persisted to the main thread as a chat message."""
+    schedule = {
+        "id": "schedule-123",
+        "user_id": "user-123",
+        "agent_name": "assistant",
+        "prompt": "briefing",
+        "config": {"schedule_type": "scheduled"},
+    }
     patches = _standard_patches()
     with (
         patches["execute_agent"],
+        patches["resolve_thread"],
+        patches["persist_thread"] as mock_persist,
         patches["get_supabase"] as mock_get_sb,
         patches["pending_svc"] as mock_pending_cls,
         patches["audit_svc"],
         patches["notification_svc"] as mock_notif_cls,
     ):
-        mock_get_sb.return_value = supabase_client
+        mock_get_sb.return_value = mock_supabase
         mock_pending_cls.return_value.get_pending_count = AsyncMock(return_value=0)
         mock_notif_cls.return_value.notify_user = AsyncMock()
         mock_notif_cls.return_value.notify_pending_actions = AsyncMock()
 
-        await service.execute(mock_schedule)
+        await service.execute(schedule)
 
-    chat_sessions_mock.update.assert_called_once_with({"is_active": False})
-    eq_calls = [call.args for call in chat_sessions_update_chain.eq.call_args_list]
-    assert len(eq_calls) == 1
-    assert eq_calls[0][0] == "session_id"
-    assert eq_calls[0][1].startswith("scheduled_assistant_")
+    mock_persist.assert_awaited_once_with("main-thread-123", "Test response")
 
 
 @pytest.mark.asyncio
@@ -398,6 +373,8 @@ async def test_execute_logs_model_override_warning(service, mock_supabase, caplo
     patches = _standard_patches()
     with (
         patches["execute_agent"],
+        patches["resolve_thread"],
+        patches["persist_thread"],
         patches["get_supabase"] as mock_get_sb,
         patches["pending_svc"] as mock_pending_cls,
         patches["audit_svc"],
@@ -427,6 +404,8 @@ async def test_execute_stores_metadata_with_model(service, mock_supabase):
     )
     with (
         patches["execute_agent"],
+        patches["resolve_thread"],
+        patches["persist_thread"],
         patches["get_supabase"] as mock_get_sb,
         patches["pending_svc"] as mock_pending_cls,
         patches["audit_svc"],
